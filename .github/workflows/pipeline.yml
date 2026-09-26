@@ -11,10 +11,16 @@ on:
 permissions:
   contents: read
 
+# One run at a time: parallel runs would double the requests to rate-limited sources.
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
 jobs:
   build:
     # Pinned: ubuntu-latest moves to 26.04 during Oct-Nov 2026.
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     env:
       # .lintr's error_on_lint is reset by lintr before it is checked; the env var is honoured.
       LINTR_ERROR_ON_LINT: "true"
@@ -36,8 +42,27 @@ jobs:
       - name: Test R
         run: Rscript -e 'testthat::test_local()'
 
+      # Rolling key: each run restores the newest cache and saves an updated copy,
+      # so downloads (MeSH, ChEMBL) are refetched only when their source changes.
+      - name: Restore download cache
+        id: restore-downloads
+        uses: actions/cache/restore@v6
+        with:
+          path: .cache/downloads
+          key: downloads-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: downloads-v1-
+
       - name: Run EMA pipeline
+        id: pipeline
         run: Rscript scripts/run-pipeline.R
+
+      # Save even when validation fails, so finished downloads are not repeated.
+      - name: Save download cache
+        if: always() && steps.pipeline.outcome != 'skipped'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/downloads
+          key: ${{ steps.restore-downloads.outputs.cache-primary-key }}
 
       - uses: actions/setup-node@v7
         with:
