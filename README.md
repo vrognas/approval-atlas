@@ -3,17 +3,24 @@ Cross-jurisdiction explorer of approved medicines: approval dates, sponsors, the
 
 **Status:** EMA (European Medicines Agency) human medicines only; Milestone 2 (enrichment, lifecycle events, MAH map) in progress. FDA and other regulators are planned.
 
+**Site:** https://approval-atlas.vrognas.com
+
 ## Run locally
-Requires R (with [renv](https://rstudio.github.io/renv/)) and Node.js 24+.
+Requires Node.js 24+. R (with [renv](https://rstudio.github.io/renv/)) is needed only to regenerate the data: CI refreshes `site/public/data/` daily and commits changes.
 
 ```sh
-Rscript -e "renv::restore()"       # once
-Rscript scripts/run-pipeline.R      # download EMA, MeSH (~313 MB unpacked, first run) and ChEMBL ATC data, validate, write site/public/data/
 npm ci
 npm run dev                         # open the printed localhost URL
+
+# Optional: regenerate the data (don't commit it by hand; `git restore site/public/data`)
+Rscript -e "renv::restore()"       # once
+Rscript scripts/run-pipeline.R      # download EMA, MeSH (~313 MB unpacked, first run) and ChEMBL ATC data, validate, write site/public/data/
 ```
 
 Tests: `Rscript -e "testthat::test_local()"` and `npm test`.
+
+## Security and privacy
+Report vulnerabilities as described in [SECURITY.md](SECURITY.md). Self-assessment against the Minimum Viable Secure Product checklist: [docs/mvsp.md](docs/mvsp.md). The site sets no cookies and has no analytics; see "About this site" in its footer.
 
 ## Data sources and licences
 | Source | Used for | Terms | Credit |
@@ -26,5 +33,6 @@ Tests: `Rscript -e "testthat::test_local()"` and `npm test`.
 
 - **Data files** (`site/public/data/`): a compilation licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). ChEMBL-derived values are adapted from ChEMBL (CC BY-SA 3.0) and modified (selected and mapped). Values from other sources are not relicensed and keep their own terms (table above).
 - **Code**: MIT (see `LICENSE`). The MIT licence does not cover any data.
+- **Test fixtures** (`tests/testthat/fixtures/`, except `fold-cases.json`) are excerpts of EMA data (Source: European Medicines Agency), the Union Register (© European Union, CC BY 4.0), MeSH 2026 (courtesy of the U.S. National Library of Medicine) and ChEMBL ([CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); ATC names © WHOCC, verbatim); they keep those terms and are not MIT-licensed.
 - **Regulatory-protection dates** are not legal advice: data exclusivity and market protection are estimates computed by this project from EU authorization dates; orphan market exclusivity ends at the Union Register's end date or, without one, its link date + 10 years + extension. **Patents and supplementary protection certificates are not included**: no open EU-wide source exists.
 - This project is not affiliated with or endorsed by EMA, the European Commission, EMBL-EBI, WHO or NLM.
