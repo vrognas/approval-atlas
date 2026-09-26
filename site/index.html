@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>approval-atlas</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>approval-atlas</h1>
+      <p class="subtitle">EMA human medicines</p>
+      <p id="data-date" class="muted"></p>
+    </header>
+
+    <main>
+      <p id="message" hidden></p>
+
+      <div id="app" hidden>
+        <section class="filters" aria-label="Filters">
+          <fieldset id="status-filter">
+            <legend>Medicine status</legend>
+          </fieldset>
+          <div class="area-filter">
+            <label for="area-input">Therapeutic area</label>
+            <input id="area-input" type="search" list="area-options" placeholder="All areas" autocomplete="off" />
+            <datalist id="area-options"></datalist>
+          </div>
+        </section>
+
+        <section class="chart-card" aria-labelledby="chart-title">
+          <h2 id="chart-title">Approvals per year by medicine type</h2>
+          <p class="muted">Year of EU marketing authorisation; each medicine counted once.</p>
+          <ul id="legend" class="legend"></ul>
+          <div id="chart" class="chart"></div>
+          <p id="undated-note" class="muted"></p>
+        </section>
+
+        <section aria-labelledby="table-title">
+          <h2 id="table-title">Medicines</h2>
+          <div class="table-scroll">
+            <table id="medicines-table"></table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <p id="attribution"></p>
+      <p>
+        <a href="https://www.ema.europa.eu/en/medicines/download-medicine-data" rel="noopener noreferrer" target="_blank">EMA medicine data download page</a>
+      </p>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,255 @@
+/* Tokens follow the dataviz reference palette; categorical slots validated with its
+   validate_palette.js (adjacent pairs, light and dark). Slot 1 goes to "Other",
+   the largest group, so the dominant fill is the calmest hue. */
+:root {
+  color-scheme: light;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-secondary: #52514e;
+  --muted: #6f6d68;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --wash: rgba(11, 11, 11, 0.04);
+  --link: #1c5cab;
+  --type-other: #2a78d6;
+  --type-generic: #eb6834;
+  --type-biosimilar: #1baf7a;
+  --type-advanced-therapy: #eda100;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --wash: rgba(255, 255, 255, 0.06);
+    --link: #6da7ec;
+    --type-other: #3987e5;
+    --type-generic: #d95926;
+    --type-biosimilar: #199e70;
+    --type-advanced-therapy: #c98500;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 24px 16px;
+  background: var(--page);
+  color: var(--ink);
+  font: 16px/1.5 var(--font);
+}
+
+a {
+  color: var(--link);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 1.125rem;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.muted {
+  margin: 4px 0;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+main {
+  margin: 24px 0;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend,
+.area-filter label {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+fieldset label {
+  white-space: nowrap;
+}
+
+.area-filter input {
+  width: min(360px, 100%);
+  padding: 6px 8px;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.area-filter {
+  flex: 1 1 240px;
+}
+
+.chart-card {
+  margin-bottom: 32px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.chart svg {
+  display: block;
+  max-width: 100%;
+}
+
+.axis {
+  color: var(--muted);
+  font: 12px var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.y-axis line {
+  stroke: var(--grid);
+}
+
+.baseline {
+  stroke: var(--axis);
+}
+
+.hit {
+  fill: transparent;
+}
+
+.year:hover .hit {
+  fill: var(--wash);
+}
+
+.table-scroll {
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+caption {
+  padding: 8px 12px;
+  color: var(--ink-secondary);
+  text-align: left;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grid);
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Sticky cells lose collapsed borders, so the header rule is an inset shadow. */
+th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  box-shadow: inset 0 -1px var(--axis);
+  font-weight: 600;
+}
+
+/* "anywhere" lets long slash-joined names wrap, but it also drops the column's
+   minimum width to one character; the floor keeps ordinary words whole. */
+td.breakable {
+  min-width: 18ch;
+  overflow-wrap: anywhere;
+}
+
+td.date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+footer {
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+code {
+  font-size: 0.9em;
+}
