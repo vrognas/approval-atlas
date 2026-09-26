@@ -67,14 +67,13 @@ function loadFile(file) {
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js"));
-  // First visit: everything loaded before the worker took control bypassed its cache; hand it
-  // those URLs (in-flight data files included) so the site opens offline after one visit.
-  if (!navigator.serviceWorker.controller) {
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      const loaded = performance.getEntriesByType("resource").map((entry) => entry.name);
-      navigator.serviceWorker.controller.postMessage([...loaded, ...[...files.keys()].map((file) => `/data/${file}`)]);
-    }, { once: true });
-  }
+  // A worker taking control (first visit, or a new build whose worker deleted the old asset cache)
+  // lacks what was loaded before; hand it those URLs (in-flight data files included) so the
+  // site opens offline after one visit.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    const loaded = performance.getEntriesByType("resource").map((entry) => entry.name);
+    navigator.serviceWorker.controller?.postMessage([...loaded, ...[...files.keys()].map((file) => `/data/${file}`)]);
+  });
 }
 
 // One state for the lookup (q/med/sub/cond) and the filters. Until the dashboard's data has
@@ -142,6 +141,14 @@ function renderFooter(meta) {
   d3.select("#credit-chembl").text(UI.footer.chembl(versionOf(/chembl/i)));
   d3.select("#credit-atc").text(UI.footer.atc);
   d3.select("#credit-union-register").text(UI.footer.unionRegister);
+}
+
+// Filled before any data loads, so it shows even when the data files are missing.
+function renderAbout() {
+  d3.select("#about-summary").text(UI.about.summary);
+  d3.select("#about-use").text(UI.about.intendedUse);
+  d3.select("#about-privacy").text(UI.about.privacy);
+  d3.select("#about-security").text(UI.about.security);
 }
 
 function showOfflineNote(meta) {
@@ -383,4 +390,5 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   }, () => {});
 }
 
+renderAbout();
 Promise.all(FIRST_FILES.map(loadFile)).then(startLookup, showMissingData);

@@ -250,4 +250,12 @@ export const UI = {
     atc: "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology; names reproduced verbatim in the data; level-1 names displayed in title case.",
     unionRegister: "Orphan market exclusivity dates and EU register status: © European Union, Union Register of medicinal products, CC BY 4.0; changes made.",
   },
+
+  about: {
+    summary: "About this site",
+    intendedUse: "Informational only — not medical or legal advice; not a medical device. Data can lag EMA.",
+    privacy:
+      "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device.",
+    security: "Security policy and how to report a vulnerability (GitHub)",
+  },
 };

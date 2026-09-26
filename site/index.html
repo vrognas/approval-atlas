@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- GitHub Pages cannot set headers; a meta policy cannot set frame-ancestors (docs/mvsp.md). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)" />
@@ -126,6 +131,12 @@
     </main>
 
     <footer>
+      <details class="about">
+        <summary id="about-summary"></summary>
+        <p id="about-use"></p>
+        <p id="about-privacy"></p>
+        <p><a id="about-security" href="https://github.com/vrognas/approval-atlas/blob/main/SECURITY.md" rel="noopener noreferrer" target="_blank"></a></p>
+      </details>
       <p id="attribution"></p>
       <p id="credit-mesh"></p>
       <p id="credit-chembl"></p>

@@ -80,6 +80,14 @@ test("the Union Register chip and note use U.S. labels", () => {
   assert.equal(labels.UI.register.notAuthorized(1), "1 of these is no longer authorized according to the EU Union Register.");
 });
 
+test("the About disclosure states intended use and privacy", () => {
+  assert.equal(labels.UI.about.intendedUse, "Informational only — not medical or legal advice; not a medical device. Data can lag EMA.");
+  assert.equal(
+    labels.UI.about.privacy,
+    "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device.",
+  );
+});
+
 test("breakdown notes say how many authorized medicines have no value", () => {
   assert.equal(labels.UI.breakdown.atc.excluded(20), "20 authorized medicines without an ATC code are not shown.");
   assert.equal(labels.UI.breakdown.area.excluded(1), "1 authorized medicine without a therapeutic area is not shown.");
