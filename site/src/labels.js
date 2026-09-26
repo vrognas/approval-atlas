@@ -1,6 +1,6 @@
 // The one display map: raw EMA values -> U.S. labels, plus all UI copy written from JS.
-// Raw values stay unchanged in the data and the URL. WHO ATC names are shown verbatim
-// (WHOCC forbids modification), so they never pass through here.
+// Raw values stay unchanged in the data and the URL. WHO ATC names are shown verbatim, except
+// level-1 group names, displayed in title case (user decision 2026-09-26, noted in the credit).
 
 const formatCount = new Intl.NumberFormat("en-US").format;
 const plural = (count, one, many) => `${formatCount(count)} ${count === 1 ? one : many}`;
@@ -11,6 +11,22 @@ export const STATUS_LABELS = {
 
 export function statusLabel(status) {
   return STATUS_LABELS[status] ?? status;
+}
+
+const MINOR_WORDS = new Set(["and", "or", "for", "of", "the", "in", "to"]);
+const capitalize = (word) => word.charAt(0).toUpperCase() + word.slice(1);
+
+// "MUSCULO-SKELETAL SYSTEM" -> "Musculo-Skeletal System"; "excl." -> "Excl.".
+export function titleCaseAtcName(name) {
+  return name
+    .toLowerCase()
+    .split(" ")
+    .map((word, position) => (position > 0 && MINOR_WORDS.has(word) ? word : word.split("-").map(capitalize).join("-")))
+    .join(" ");
+}
+
+export function atcLevelOneLabel(code, name) {
+  return name ? `${code} — ${titleCaseAtcName(name)}` : code;
 }
 
 export const SOURCE_LABELS = {
@@ -57,9 +73,27 @@ export const UI = {
   undatedAuthorized: (count) =>
     `${plural(count, "authorized medicine", "authorized medicines")} without an approval date ${count === 1 ? "is" : "are"} not counted.`,
 
+  // Union Register (the Commission's legal record) vs EMA's status: shown only when they disagree.
+  register: {
+    chip: (status, date) => `EU register: ${statusLabel(status)}${date ? ` (${date})` : ""}`,
+    // Neutral: either source can be the one behind (e.g. Suboxone: EMA withdrawn, register still active).
+    note: "EMA and the Commission's Union Register (the legal record) show different statuses; either can lag behind a recent decision.",
+    marker: "⚠ register differs",
+    notAuthorized: (count) => `${formatCount(count)} of these ${count === 1 ? "is" : "are"} no longer authorized according to the EU Union Register.`,
+  },
+
   breakdown: {
-    atc: { title: "Authorized products by ATC level 1", note: "A medicine with codes in several ATC groups appears in each." },
-    area: { title: "Authorized products by therapeutic area group (MeSH branch)", note: "A medicine can appear in several areas." },
+    atc: {
+      title: "Authorized products by ATC level 1",
+      note: "A medicine with codes in several ATC groups appears in each.",
+      excluded: (count) => `${plural(count, "authorized medicine", "authorized medicines")} without an ATC code ${count === 1 ? "is" : "are"} not shown.`,
+    },
+    area: {
+      title: "Authorized products by therapeutic area group (MeSH branch)",
+      note: "A medicine can appear in several areas.",
+      excluded: (count) => `${plural(count, "authorized medicine", "authorized medicines")} without a therapeutic area ${count === 1 ? "is" : "are"} not shown.`,
+    },
+    // A missing holder is counted as "Not stated", so no medicine is left out.
     mah: { title: "Authorized products by marketing authorization holder", note: "" },
     empty: "No authorized products match the current filters.",
   },
@@ -108,9 +142,112 @@ export const UI = {
     noBranch: "No MeSH branch matched",
   },
 
+  filtersSummary: (count) => (count ? `Filters (${formatCount(count)} active)` : "Filters"),
+  offline: (date) => `Offline — data as of ${date}`,
+
+  lookup: {
+    groups: { medicines: "Medicines", substances: "Substances", conditions: "Conditions" },
+    medicineMeta: (status, year) => [statusLabel(status), year].filter(Boolean).join(" · "),
+    substanceMeta: (count) => plural(count, "medicine", "medicines"),
+    conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
+    noMatches: "No matches",
+    matches: (count) => plural(count, "suggestion", "suggestions"),
+    loading: "Loading…",
+    notAvailable: "Not available right now.",
+  },
+
+  card: {
+    notFoundTitle: "Not found",
+    notFound: (kind, value) => `No ${kind} “${value}” in the EMA data.`,
+    noDate: "no approval date",
+    kinds: { medicine: "medicine", substance: "substance", condition: "condition" },
+    approved: (date) => `EU approval ${date ?? "date not stated"}`,
+    statusEnded: (label, date) => `${label} on ${date}`,
+    holder: "Marketing authorization holder",
+    substances: "Active substance(s)",
+    type: "Medicine type",
+    atc: "ATC",
+    areas: "Therapeutic areas",
+    indication: "Indication",
+    documents: "Documents",
+    pdf: "PDF",
+    updated: (date) => `updated ${date}`,
+    medicinePage: "EMA medicine page",
+    noDocuments: "No EPAR documents listed.",
+    flags: {
+      orphan_medicine: "Orphan",
+      conditional_approval: "Conditional approval",
+      exceptional_circumstances: "Exceptional circumstances",
+      additional_monitoring: "Additional monitoring",
+      prime_priority_medicine: "PRIME",
+      accelerated_assessment: "Accelerated assessment",
+    },
+  },
+
+  documents: {
+    productInformation: "Product information (SmPC)",
+    epar: "EPAR public assessment report",
+    scientificDiscussion: "Scientific discussion",
+    variations: (count) => `Assessment reports for variations and extensions (${formatCount(count)})`,
+    overview: "Summary for the public",
+    rmpSummary: "Risk management plan (RMP) summary",
+    proceduralSteps: "Procedural steps after authorization",
+    archive: (label) => `${label} (archive)`,
+  },
+
+  protection: {
+    title: "EU regulatory protection (estimate)",
+    status: { protected: "Protected", ended: "Ended", unclear: "Unclear" },
+    // Names what the chip covers, so it is not read as covering orphan exclusivity too.
+    chip: (status) => `Data/market protection: ${status}`,
+    dataExclusivity: (date) => `Data exclusivity ends (est.) ${date}`,
+    marketProtection: (min, max) => `Market protection ends (est.) ${min} – ${max}`,
+    countedFrom: (substance, name, date) => `Counted from the first EU approval of ${substance}: ${name}, ${date}`,
+    thisSubstance: "this active substance",
+    follows: (name) => `No protection of its own; follows ${name}`,
+    referenceNotFound: "No protection of its own; reference product not found in EU central authorizations",
+    orphan: (condition, date, source, ended) =>
+      `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${date} ${source === "register" ? "(register)" : "(estimate)"}`,
+    orphanNoEnd: (condition, designationStatus) =>
+      `Orphan designation for ${condition}: ${designationStatus.toLowerCase()} (end date not published)`,
+    patents: "Patents and supplementary protection certificates: not shown — no open EU-wide source.",
+    espacenet: "Search patents on Espacenet",
+    caveatsTitle: "Caveats",
+    caveats: [
+      "Not legal advice.",
+      "Based only on EU central authorization dates.",
+      "Ignores earlier national authorizations, the possible extra year (shown as a range), pediatric rewards, orphan exclusivity reductions and derogations.",
+      "The legal basis is inferred from EMA flags.",
+      "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
+    ],
+  },
+
+  substance: {
+    firstApproval: (date, name) => (date ? `First EU approval: ${date} (${name})` : "No EU approval date"),
+    products: (count) => plural(count, "medicine", "medicines"),
+  },
+
+  condition: {
+    heading: (name, narrower) => `Approved for ${name}${narrower ? ` (includes ${plural(narrower, "narrower term", "narrower terms")})` : ""}`,
+    textHeading: (query) => `Mentioned in indication texts: “${query}”`,
+    tagged: "Tagged by EMA with this condition",
+    alsoMentioned: "Also mentioned in indication text",
+    mentioned: "Mentioned in indication text",
+    showAll: "Show all statuses",
+    none: "None.",
+    relatedConditions: "Matching conditions",
+  },
+
+  timeline: {
+    summary: (count, first, last, lanes) =>
+      `Timeline of ${plural(count, "approval", "approvals")} from ${first} to ${last}: ${lanes}.`,
+    undated: (count) => `${plural(count, "medicine", "medicines")} without an approval date ${count === 1 ? "is" : "are"} not shown.`,
+  },
+
   footer: {
     mesh: (version) => `MeSH® courtesy of the U.S. National Library of Medicine${version ? ` (${version})` : ""}.`,
     chembl: (version) => `ATC classification from ChEMBL${version ? ` (${version})` : ""}. ChEMBL data is from https://www.ebi.ac.uk/chembl.`,
-    atc: "ATC level names © WHO Collaborating Centre for Drug Statistics Methodology, reproduced verbatim and excluded from the data license.",
+    atc: "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology; names reproduced verbatim in the data; level-1 names displayed in title case.",
+    unionRegister: "Orphan market exclusivity dates and EU register status: © European Union, Union Register of medicinal products, CC BY 4.0; changes made.",
   },
 };

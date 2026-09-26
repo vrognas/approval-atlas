@@ -26,6 +26,7 @@
   --out-of-range: #c3c2b7;
   --range-band: rgba(42, 120, 214, 0.1);
   --option-active: #cde2fb;
+  --mark: #fde7a6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,6 +53,7 @@
     --out-of-range: #52514e;
     --range-band: rgba(57, 135, 229, 0.18);
     --option-active: #184f95;
+    --mark: #5c4300;
   }
 }
 
@@ -674,6 +676,325 @@ td.area {
 
 .more {
   margin-top: 8px;
+}
+
+/* Lookup: the search box first, the result panel between it and the dashboard. */
+.lookup {
+  margin-bottom: 16px;
+}
+
+.lookup > label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.lookup-box {
+  position: relative;
+}
+
+.lookup-box input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.0625rem;
+}
+
+.lookup [role="listbox"] {
+  max-height: min(440px, 65vh);
+}
+
+[role="group"] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group-label {
+  padding: 6px 8px 2px;
+  color: var(--ink-secondary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lookup [role="option"] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 12px;
+  padding: 6px 8px;
+}
+
+.option-meta {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
+.card {
+  margin: 0 0 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.card h2 {
+  font-size: 1.375rem;
+}
+
+/* Focus moves to the result heading only to announce it; it is not a control. */
+.card h2:focus {
+  outline: none;
+}
+
+.card h3 {
+  margin: 16px 0 4px;
+  font-size: 1rem;
+}
+
+.card p {
+  margin: 4px 0;
+}
+
+.badge,
+.chip {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1px solid var(--axis);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.badge {
+  border-color: var(--ink-secondary);
+  font-weight: 600;
+}
+
+/* Union Register disagrees with EMA's status. Link text uses --ink: --link on --mark is
+   below 4.5:1 in dark mode. */
+.chip.warning {
+  border-color: transparent;
+  border-radius: 8px;
+  background: var(--mark);
+  color: var(--ink);
+  white-space: normal;
+}
+
+.chip.warning a {
+  color: inherit;
+}
+
+.register-flag {
+  display: inline-block;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 12px 0;
+}
+
+.facts dt {
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+.facts dd {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .facts {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+.plain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atc-levels {
+  margin: 0 0 4px;
+  padding-left: 16px;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
+details > summary {
+  cursor: pointer;
+}
+
+.doc-list > li {
+  margin: 4px 0;
+}
+
+/* "updated 2026-07-01" wraps as one unit on phones. */
+.doc-list span.muted {
+  white-space: nowrap;
+}
+
+.doc-sublist {
+  padding-left: 16px;
+  font-size: 0.875rem;
+}
+
+.doc-sublist li {
+  margin: 4px 0;
+}
+
+.pdf {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 0.6875rem;
+  vertical-align: 1px;
+}
+
+.protection ul {
+  margin: 4px 0;
+  padding-left: 20px;
+  font-size: 0.875rem;
+}
+
+.toggle-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  margin: 8px 0;
+  font-size: 0.875rem;
+}
+
+.related a {
+  display: inline-block;
+  margin: 2px 0;
+  padding: 0 8px;
+  border: 1px solid var(--axis);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.result-list > li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--grid);
+}
+
+.result-list p {
+  margin: 0;
+}
+
+.result-name {
+  font-weight: 600;
+}
+
+.result-name .muted {
+  font-weight: 400;
+}
+
+.result-meta,
+.snippet {
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+mark {
+  background: var(--mark);
+  color: var(--ink);
+}
+
+/* Results timeline */
+.timeline {
+  margin: 12px 0;
+}
+
+.lane-line {
+  stroke: var(--grid);
+}
+
+.lane-label {
+  fill: var(--ink-secondary);
+  font: 12px var(--font);
+}
+
+.family-line {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+
+.dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.dot.active {
+  stroke: var(--ink);
+}
+
+.timeline-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  font-size: 0.8125rem;
+  pointer-events: none;
+}
+
+.timeline-tip.pinned {
+  pointer-events: auto;
+}
+
+.timeline-tip p {
+  margin: 0;
+}
+
+.tip-name a {
+  display: inline-block;
+  min-height: 24px;
+  font-weight: 600;
+}
+
+.tip-holder {
+  color: var(--ink-secondary);
+}
+
+/* Filters: a closed disclosure on phones, always open (no toggle) on wider screens. */
+.filters-disclosure > summary {
+  margin-bottom: 8px;
+  padding: 8px 0;
+  font-weight: 600;
+}
+
+@media (min-width: 721px) {
+  .filters-disclosure > summary {
+    display: none;
+  }
 }
 
 footer {

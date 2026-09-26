@@ -3,6 +3,7 @@ import {
   MEDICINE_TYPES,
   authorizedSeries,
   breakdownCounts,
+  breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
   countApprovalsByYear,
@@ -14,16 +15,29 @@ import {
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend } from "./chart.js";
 import { filterProducts, makePredicates, parseAtcQuery } from "./filters.js";
-import { UI, statusLabel } from "./labels.js";
+import { UI, atcLevelOneLabel, statusLabel } from "./labels.js";
+import { createLookup } from "./lookup.js";
 import { createMultiSelect } from "./multi-select.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
+import { createSearchBox } from "./search-box.js";
+import { buildLookupIndex, suggest } from "./search.js";
 import { createTable } from "./table.js";
 import { initTabs } from "./tabs.js";
 import { renderTiles } from "./tiles.js";
-import { ATC_QUERY_MAX, decodeState, normalizeYearRange, scheduleUrlWrite } from "./url.js";
+import {
+  ATC_QUERY_MAX,
+  DEFAULT_LOOKUP,
+  DEFAULT_STATE,
+  decodeLookup,
+  decodeState,
+  normalizeYearRange,
+  scheduleUrlWrite,
+  withoutLookup,
+} from "./url.js";
 
-const DATA_FILES = [
-  "meta.json",
+// First load: enough for the search box. Everything else loads in the background or on demand.
+const FIRST_FILES = ["meta.json", "ema_search_index.json", "mesh_entry_terms.json"];
+const DASHBOARD_FILES = [
   "ema_medicines.json",
   "ema_medicine_therapeutic_areas.json",
   "ema_medicine_active_substances.json",
@@ -32,10 +46,84 @@ const DATA_FILES = [
   "ema_therapeutic_area_branches.json",
   "ema_authorized_series.json",
 ];
+// Loaded after the dashboard's first render; shared with the medicine card (same loadFile promise).
+const REGISTER_FILE = "ema_medicine_register_status.json";
 // The filter each breakdown ignores and toggles.
 const BREAKDOWN_FILTER = { atc: "atc", area: "branch", mah: "mah" };
+const WIDE = window.matchMedia("(min-width: 721px)");
 
 const $ = (selector) => document.querySelector(selector);
+
+const files = new Map();
+function loadFile(file) {
+  if (!files.has(file)) {
+    files.set(file, d3.json(`/data/${file}`).catch((error) => {
+      files.delete(file); // a failed load (flaky network) is retried by the next caller
+      throw error;
+    }));
+  }
+  return files.get(file);
+}
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js"));
+  // First visit: everything loaded before the worker took control bypassed its cache; hand it
+  // those URLs (in-flight data files included) so the site opens offline after one visit.
+  if (!navigator.serviceWorker.controller) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      const loaded = performance.getEntriesByType("resource").map((entry) => entry.name);
+      navigator.serviceWorker.controller.postMessage([...loaded, ...[...files.keys()].map((file) => `/data/${file}`)]);
+    }, { once: true });
+  }
+}
+
+// One state for the lookup (q/med/sub/cond) and the filters. Until the dashboard's data has
+// loaded, the filter domain is unknown, so the URL's filter part is kept verbatim.
+let state = { ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP };
+let dashboard = null;
+let pendingFilters = new URLSearchParams();
+let lookup = null;
+let frame = 0;
+const urlNote = $("#url-note");
+
+function applyUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const lookupState = decodeLookup(params);
+  if (!dashboard) {
+    pendingFilters = withoutLookup(params);
+    state = { ...state, ...lookupState };
+    return;
+  }
+  const decoded = decodeState(params, dashboard.domain);
+  state = { ...decoded.state, ...lookupState };
+  urlNote.hidden = decoded.dropped.length === 0;
+  urlNote.textContent = UI.ignoredValues(decoded.dropped.length);
+}
+
+function render() {
+  lookup.render(state);
+  dashboard?.render();
+}
+
+function scheduleRender() {
+  if (!frame) frame = requestAnimationFrame(() => {
+    frame = 0;
+    render();
+  });
+}
+
+function setState(patch, push = false) {
+  state = { ...state, ...patch };
+  urlNote.hidden = true;
+  scheduleRender();
+  scheduleUrlWrite(state, push, dashboard ? null : pendingFilters);
+}
+
+// Opening a card or result: one history entry, focus moves to its heading.
+function navigate(patch) {
+  lookup.focusOnNextRender();
+  setState({ ...DEFAULT_LOOKUP, ...patch }, true);
+}
 
 function showMissingData() {
   const [before, command, after] = UI.missingData;
@@ -44,6 +132,7 @@ function showMissingData() {
     .call((message) => message.append("span").text(before))
     .call((message) => message.append("code").text(command))
     .call((message) => message.append("span").text(after));
+  d3.select("#app-loading").attr("hidden", "");
 }
 
 function renderFooter(meta) {
@@ -52,9 +141,79 @@ function renderFooter(meta) {
   d3.select("#credit-mesh").text(UI.footer.mesh(versionOf(/mesh/i)));
   d3.select("#credit-chembl").text(UI.footer.chembl(versionOf(/chembl/i)));
   d3.select("#credit-atc").text(UI.footer.atc);
+  d3.select("#credit-union-register").text(UI.footer.unionRegister);
 }
 
-function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows]) {
+function showOfflineNote(meta) {
+  const note = $("#offline-note");
+  const update = () => {
+    note.hidden = navigator.onLine;
+    note.textContent = UI.offline(meta.snapshot_date);
+  };
+  window.addEventListener("online", update);
+  window.addEventListener("offline", update);
+  update();
+}
+
+function suggestionGroups(result) {
+  const copy = UI.lookup;
+  return [
+    {
+      key: "medicines",
+      label: copy.groups.medicines,
+      options: result.medicines.map((row) => ({
+        label: row.name_of_medicine,
+        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4)),
+        value: row.ema_product_number,
+      })),
+    },
+    {
+      key: "substances",
+      label: copy.groups.substances,
+      options: result.substances.map((substance) => ({ label: substance.name, meta: copy.substanceMeta(substance.products.length), value: substance.key })),
+    },
+    {
+      key: "conditions",
+      label: copy.groups.conditions,
+      options: result.conditions.map((condition) => ({ label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui })),
+    },
+  ];
+}
+
+function startLookup([meta, searchRows, entryTermRows]) {
+  d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
+  renderFooter(meta);
+  showOfflineNote(meta);
+
+  const index = buildLookupIndex(searchRows, entryTermRows);
+  lookup = createLookup($("#result"), { index, loadFile, navigate, snapshotDate: meta.snapshot_date });
+  const input = $("#lookup-input");
+  const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
+    suggestionsFor: (query) => suggestionGroups(suggest(index, lookup.conditions(), query)),
+    onPick: (group, value) => navigate(group === "medicines" ? { med: value } : group === "substances" ? { sub: value } : { cond: value }),
+    onSubmit: (text) => navigate({ q: text }),
+  });
+  lookup.onData((name) => {
+    if (name === "conditions") searchBox.refresh();
+  });
+  lookup.need("conditions");
+
+  applyUrl();
+  searchBox.setText(state.q);
+  scheduleUrlWrite(state, false, pendingFilters);
+  window.addEventListener("popstate", () => {
+    applyUrl();
+    searchBox.setText(state.q);
+    scheduleRender();
+  });
+  $("#lookup").hidden = false;
+  input.disabled = false;
+  render();
+
+  Promise.all(DASHBOARD_FILES.map(loadFile)).then((rows) => startDashboard(meta, rows), showMissingData);
+}
+
+function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows]) {
   const products = buildProducts(medicines, { areaRows, branchRows, atcRows });
   const seriesDates = seriesRows.map((row) => row.date);
   const approvalYears = d3.extent(products, (product) => product.year);
@@ -82,37 +241,21 @@ function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, b
     years: approvalYears,
   };
   const breakdownLabel = {
-    atc: (code) => atcNames.get(code) ?? code,
+    atc: (code) => atcLevelOneLabel(code, atcNames.get(code)),
     area: (branch) => branchNames.get(branch) ?? branch,
     mah: (mah) => mah,
   };
 
-  let state;
-  let frame = 0;
-  const urlNote = $("#url-note");
-  function applyUrl() {
-    const decoded = decodeState(new URLSearchParams(window.location.search), domain);
-    state = decoded.state;
-    urlNote.hidden = decoded.dropped.length === 0;
-    urlNote.textContent = UI.ignoredValues(decoded.dropped.length);
-  }
-  function scheduleRender() {
-    if (!frame) frame = requestAnimationFrame(() => {
-      frame = 0;
-      render();
-    });
-  }
-  function setState(patch, push = false) {
-    state = { ...state, ...patch };
-    urlNote.hidden = true;
-    scheduleRender();
-    scheduleUrlWrite(state, push);
-  }
-
-  d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
-  renderFooter(meta);
   renderLegend($("#legend"));
   renderOverTimeLegend($("#over-time-legend"));
+
+  // Phones: the filter row collapses into a closed disclosure; wider screens keep it open.
+  const disclosure = $("#filters");
+  const syncDisclosure = () => {
+    disclosure.open = WIDE.matches;
+  };
+  WIDE.addEventListener("change", syncDisclosure);
+  syncDisclosure();
 
   const selects = Object.fromEntries(Object.keys(options).map((key) => [key, createMultiSelect($(`#filter-${key}`), {
     label: UI.filters[key],
@@ -165,8 +308,15 @@ function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, b
     setState({ [filter]: values.includes(key) ? values.filter((value) => value !== key) : [...values, key] });
   }
 
+  // Union Register rows by product; null until the file has loaded (or if it failed).
+  let register = null;
+  const registerDiffers = (product) => register?.get(product.ema_product_number)?.agrees_with_ema === false;
+  const showCount = (selector, count, text) => d3.select(selector).text(count ? text(count) : "").attr("hidden", count ? null : "");
+
   function renderNow(predicates, filtered, withoutDateFilter) {
-    renderTiles($("#tiles"), countTiles(filtered.filter(isAuthorizedNow)));
+    const authorizedNow = filtered.filter(isAuthorizedNow);
+    renderTiles($("#tiles"), countTiles(authorizedNow));
+    showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
     const undated = withoutDateFilter.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
     d3.select("#undated-authorized").text(UI.undatedAuthorized(undated.length));
 
@@ -180,6 +330,8 @@ function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, b
       isSelected: isBreakdownSelected,
       onToggle: toggleBreakdown,
     });
+    const { excluded } = UI.breakdown[state.by];
+    showCount("#breakdown-excluded", excluded ? breakdownExcluded(population, state.by) : 0, excluded);
   }
 
   function renderYears(withoutDateFilter) {
@@ -189,7 +341,7 @@ function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, b
     d3.select("#undated-note").text(UI.years.undated(withoutDateFilter.length - dated.length));
   }
 
-  function render() {
+  function renderDashboard() {
     renderTabs(state.view);
     for (const [key, select] of Object.entries(selects)) select.update(options[key], state[key]);
     if (atcInput.value !== state.atc) atcInput.value = state.atc;
@@ -199,6 +351,7 @@ function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, b
     showReadout(state.from ?? approvalYears[0], state.to ?? approvalYears[1]);
 
     const predicates = makePredicates(state, atcClasses);
+    d3.select("#filters-summary").text(UI.filtersSummary(Object.keys(predicates).length));
     // The per-year chart and the over-time line ignore the approval-year filter and mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
@@ -213,19 +366,21 @@ function start([meta, medicines, areaRows, substanceRows, atcRows, atcClasses, b
       ? filtered.filter(isAuthorizedNow)
       : filtered.filter((product) => product.year !== null);
     const caption = state.view === "now" ? UI.table.captionNow(tableRows.length) : UI.table.captionYears(tableRows.length);
-    table(newestFirst(tableRows), caption);
+    table(newestFirst(tableRows), caption, register);
   }
 
+  dashboard = { domain, render: renderDashboard };
   applyUrl();
   scheduleUrlWrite(state); // canonical form, invalid values removed
-  window.addEventListener("popstate", () => {
-    applyUrl();
-    scheduleRender();
-  });
+  d3.select("#app-loading").attr("hidden", "");
   d3.select("#app").attr("hidden", null);
   const resizeObserver = new ResizeObserver(scheduleRender);
   for (const selector of ["#chart", "#over-time"]) resizeObserver.observe($(selector));
   render();
+  loadFile(REGISTER_FILE).then((rows) => {
+    register = new Map(rows.map((row) => [row.ema_product_number, row]));
+    scheduleRender();
+  }, () => {});
 }
 
-Promise.all(DATA_FILES.map((file) => d3.json(`/data/${file}`))).then(start, showMissingData);
+Promise.all(FIRST_FILES.map(loadFile)).then(startLookup, showMissingData);

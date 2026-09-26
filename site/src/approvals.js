@@ -135,6 +135,11 @@ const BREAKDOWN_VALUES = {
   mah: (product) => [product.mah],
 };
 
+// Products with no value for the breakdown, so the page can say they are not shown.
+export function breakdownExcluded(products, by) {
+  return products.filter((product) => BREAKDOWN_VALUES[by](product).length === 0).length;
+}
+
 // Products per value (a product counts once per distinct value), top n by count then label,
 // plus one Other row counting the distinct products that have any value outside the top n.
 export function breakdownCounts(products, by, labelOf = (key) => key, n = 20) {

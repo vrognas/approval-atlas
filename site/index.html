@@ -4,8 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
     <title>approval-atlas</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -13,29 +16,58 @@
       <h1>approval-atlas</h1>
       <p class="subtitle">EMA human medicines</p>
       <p id="data-date" class="muted"></p>
+      <p id="offline-note" class="note" role="status" hidden></p>
     </header>
 
     <main>
       <p id="message" hidden></p>
 
+      <section id="lookup" class="lookup" hidden>
+        <label id="lookup-label" for="lookup-input">Look up a medicine, substance or condition</label>
+        <div class="lookup-box">
+          <input
+            id="lookup-input"
+            type="search"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="lookup-listbox"
+            autocomplete="off"
+            spellcheck="false"
+            enterkeyhint="search"
+            placeholder="e.g. Keytruda, adalimumab, psoriasis"
+            disabled
+          />
+          <div id="lookup-listbox" role="listbox" aria-labelledby="lookup-label" hidden></div>
+        </div>
+        <p id="lookup-status" class="visually-hidden" aria-live="polite"></p>
+      </section>
+
+      <section id="result" class="result" aria-label="Lookup result" hidden></section>
+
+      <p id="app-loading" class="muted">Loading charts…</p>
+
       <div id="app" hidden>
-        <section class="filters" aria-label="Filters">
-          <fieldset class="year-range">
-            <legend>Approval years</legend>
-            <label>From <input id="year-from" type="number" inputmode="numeric" step="1" /></label>
-            <label>To <input id="year-to" type="number" inputmode="numeric" step="1" /></label>
-            <button id="year-reset" type="button">Reset</button>
-          </fieldset>
-          <div id="filter-mah"></div>
-          <div id="filter-branch"></div>
-          <div id="filter-area"></div>
-          <div class="text-filter">
-            <label for="atc-input">ATC code or name</label>
-            <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
-          </div>
-          <div id="filter-type"></div>
-          <div id="filter-status"></div>
-        </section>
+        <details id="filters" class="filters-disclosure">
+          <summary id="filters-summary">Filters</summary>
+          <section class="filters" aria-label="Filters">
+            <fieldset class="year-range">
+              <legend>Approval years</legend>
+              <label>From <input id="year-from" type="number" inputmode="numeric" step="1" /></label>
+              <label>To <input id="year-to" type="number" inputmode="numeric" step="1" /></label>
+              <button id="year-reset" type="button">Reset</button>
+            </fieldset>
+            <div id="filter-mah"></div>
+            <div id="filter-branch"></div>
+            <div id="filter-area"></div>
+            <div class="text-filter">
+              <label for="atc-input">ATC code or name</label>
+              <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
+            </div>
+            <div id="filter-type"></div>
+            <div id="filter-status"></div>
+          </section>
+        </details>
         <p id="url-note" class="note" role="status" hidden></p>
 
         <div role="tablist" aria-label="View" class="tabs">
@@ -45,6 +77,7 @@
 
         <section role="tabpanel" id="panel-now" aria-labelledby="tab-now" tabindex="0">
           <div id="tiles" class="tiles"></div>
+          <p id="register-note" class="muted" hidden></p>
           <p id="undated-authorized" class="muted"></p>
           <div class="chart-card">
             <div class="card-head">
@@ -57,6 +90,7 @@
             </div>
             <p id="breakdown-note" class="muted"></p>
             <div id="breakdown" class="breakdown"></div>
+            <p id="breakdown-excluded" class="muted" hidden></p>
           </div>
         </section>
 
@@ -96,6 +130,7 @@
       <p id="credit-mesh"></p>
       <p id="credit-chembl"></p>
       <p id="credit-atc"></p>
+      <p id="credit-union-register"></p>
       <p>
         Data files: a compilation licensed
         <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener noreferrer" target="_blank">CC BY-SA 4.0</a>;

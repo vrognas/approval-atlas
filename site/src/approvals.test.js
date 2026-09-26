@@ -5,6 +5,7 @@ import {
   MEDICINE_TYPES,
   authorizedSeries,
   breakdownCounts,
+  breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
   countApprovalsByYear,
@@ -178,6 +179,24 @@ test("breakdownCounts counts a product once per distinct ATC level 1", () => {
     { key: "L", label: "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS", count: 2 },
     { key: "A", label: "ALIMENTARY TRACT AND METABOLISM", count: 1 },
   ]);
+});
+
+test("breakdownExcluded counts the products a breakdown cannot show", () => {
+  const products = buildProducts(
+    [medicine("P1", { marketing_authorisation_developer_applicant_holder: null }), medicine("P2", {}), medicine("P3", {})],
+    {
+      areaRows: [
+        { ema_product_number: "P2", therapeutic_area_mesh: "Lymphoma" },
+        { ema_product_number: "P3", therapeutic_area_mesh: "Unmatched term" },
+      ],
+      branchRows: [{ therapeutic_area_mesh: "Lymphoma", branch: "C04" }, { therapeutic_area_mesh: "Unmatched term", branch: null }],
+      atcRows: [{ ema_product_number: "P3", atc_code_human: "L01XE", atc_incomplete: true, source: "ema" }],
+    },
+  );
+  assert.equal(breakdownExcluded(products, "atc"), 2);
+  assert.equal(breakdownExcluded(products, "area"), 2);
+  // A missing holder is counted as "Not stated".
+  assert.equal(breakdownExcluded(products, "mah"), 0);
 });
 
 test("breakdownCounts counts a product in every branch it touches", () => {

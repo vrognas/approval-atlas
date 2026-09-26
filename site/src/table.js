@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import { UI, statusLabel } from "./labels.js";
+import { UI, atcLevelOneLabel, statusLabel } from "./labels.js";
 
 const PAGE_SIZE = 100;
 const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7];
@@ -19,13 +19,14 @@ function toggleIndication(event, product) {
   d3.select(document.getElementById(indicationRowId(product))).attr("hidden", expanded ? null : "");
 }
 
-// "L01FA01" -> one line per level found in atc_classes (names verbatim), then the source.
+// "L01FA01" -> one line per level found in atc_classes (level 1 in title case, the others
+// verbatim), then the source.
 function atcTitle(row, atcNames) {
   const lines = ATC_PREFIX_LENGTHS
     .filter((length) => length <= row.atc_code_human.length)
     .map((length) => row.atc_code_human.slice(0, length))
     .filter((prefix) => atcNames.has(prefix))
-    .map((prefix) => `${prefix} ${atcNames.get(prefix)}`);
+    .map((prefix) => (prefix.length === 1 ? atcLevelOneLabel(prefix, atcNames.get(prefix)) : `${prefix} ${atcNames.get(prefix)}`));
   if (row.atc_incomplete) lines.push(UI.table.incompleteTitle);
   return [...lines, UI.table.source(row.source)].join("\n");
 }
@@ -47,6 +48,17 @@ function renderAtcCell(cell, product, atcNames) {
   const codes = cell.selectAll("span.code").data(product.atc).join("span").attr("class", "code").attr("title", (row) => atcTitle(row, atcNames));
   codes.append("span").text((row) => row.atc_code_human);
   codes.filter((row) => row.atc_incomplete).append("span").attr("class", "flag").text(UI.table.incomplete);
+}
+
+// Union Register disagreement: a visible marker, the full text as tooltip and for screen readers.
+function renderStatusCell(cell, product, register) {
+  cell.text(statusLabel(product.medicine_status));
+  const row = register?.get(product.ema_product_number);
+  if (row?.agrees_with_ema !== false) return;
+  const text = `${UI.register.chip(row.register_status, row.register_last_decision_date)}. ${UI.register.note}`;
+  const flag = cell.append("span").attr("class", "flag register-flag").attr("title", text);
+  flag.append("span").attr("aria-hidden", "true").text(UI.register.marker);
+  flag.append("span").attr("class", "visually-hidden").text(text);
 }
 
 function renderAreaCell(cell, product, branchNamesByTerm) {
@@ -75,7 +87,9 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
     rows.append("td").attr("class", "breakable").text((product) => (substanceIndex.get(product.ema_product_number) ?? []).join("; "));
     rows.append("td").text((product) => product.marketing_authorisation_developer_applicant_holder);
     rows.append("td").attr("class", "date").text((product) => product.authorized_from);
-    rows.append("td").text((product) => statusLabel(product.medicine_status));
+    rows.append("td").each(function statusCell(product) {
+      renderStatusCell(d3.select(this), product, current.register);
+    });
     rows.append("td").text((product) => product.medicine_type);
     rows.append("td").attr("class", "atc").each(function atcCell(product) {
       renderAtcCell(d3.select(this), product, atcNames);
@@ -114,12 +128,13 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
 
   d3.select(moreButton).on("click", showMore);
 
-  // Rebuilds only when the rows or caption changed, so resizes keep the pages already shown.
-  return function update(products, caption) {
-    const unchanged = current !== null && current.caption === caption &&
+  // Rebuilds only when the rows, caption or register (ema_medicine_register_status.json rows by
+  // product, null until loaded) changed, so resizes keep the pages already shown.
+  return function update(products, caption, register) {
+    const unchanged = current !== null && current.caption === caption && current.register === register &&
       current.products.length === products.length && current.products.every((product, index) => product === products[index]);
     if (unchanged) return;
-    current = { products, caption };
+    current = { products, caption, register };
     shown = 0;
     const root = d3.select(table);
     root.selectChildren().remove();

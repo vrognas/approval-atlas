@@ -1,6 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ATC_QUERY_MAX, DEFAULT_STATE, decodeState, encodeState, normalizeYearRange } from "./url.js";
+import {
+  ATC_QUERY_MAX,
+  DEFAULT_LOOKUP,
+  DEFAULT_STATE,
+  LOOKUP_QUERY_MAX,
+  decodeLookup,
+  decodeState,
+  encodeState,
+  encodeUrl,
+  lookupView,
+  normalizeYearRange,
+  withoutLookup,
+} from "./url.js";
 
 const domain = {
   mahs: new Set(["Merck Sharp & Dohme B.V.", "Sanofi Pasteur MSD, SNC", "Pfizer Europe MA EEIG", "Not stated"]),
@@ -77,4 +89,40 @@ test("the ATC text is trimmed in the URL but kept as typed in state", () => {
 test("a full ATC class name typed in the filter survives the URL round trip", () => {
   const name = "SYSTEMIC HORMONAL PREPARATIONS, EXCL. SEX HORMONES AND INSULINS";
   assert.deepEqual(decode(encode({ atc: name })), { state: { ...structuredClone(DEFAULT_STATE), atc: name }, dropped: [] });
+});
+
+// Lookup keys: q (free text), med (EMA product number), sub (substance_key), cond (MeSH descriptor UI).
+const lookupOf = (search) => decodeLookup(new URLSearchParams(search));
+
+test("lookup keys decode trimmed, with empty values as absent", () => {
+  assert.deepEqual(lookupOf(""), DEFAULT_LOOKUP);
+  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943" });
+  assert.equal(lookupOf(`q=${"x".repeat(LOOKUP_QUERY_MAX + 20)}`).q.length, LOOKUP_QUERY_MAX);
+});
+
+test("lookup keys come first in the URL, then the filters; values round-trip", () => {
+  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924" };
+  const query = encodeUrl({ ...structuredClone(DEFAULT_STATE), ...lookup, view: "years", mah: ["A & B, C"] }).toString();
+  assert.equal(query, "q=type+2+diabetes&med=EMEA%2FH%2FC%2F003820&sub=tenofovir+disoproxil&cond=D003924&view=years&mah=A+%26+B%2C+C");
+  assert.deepEqual(lookupOf(query), lookup);
+  assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP }).toString(), "");
+});
+
+test("before the filter domain is known, the URL's filter part is passed through verbatim", () => {
+  const filters = withoutLookup(new URLSearchParams("q=x&mah=B&med=M1&mah=A&from=2010"));
+  assert.equal(filters.toString(), "mah=B&mah=A&from=2010");
+  const query = encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, med: "M2" }, filters).toString();
+  assert.equal(query, "med=M2&mah=B&mah=A&from=2010");
+});
+
+test("the filter decoder ignores lookup keys", () => {
+  assert.deepEqual(decode("q=hiv&med=M1&sub=s&cond=D1"), { state: structuredClone(DEFAULT_STATE), dropped: [] });
+});
+
+test("lookupView shows one result: medicine > substance > condition > free text of 2+ characters", () => {
+  assert.deepEqual(lookupView({ q: "x", med: "M1", sub: "s", cond: "D1" }), { kind: "medicine", value: "M1" });
+  assert.deepEqual(lookupView({ q: "x", med: null, sub: "s", cond: "D1" }), { kind: "substance", value: "s" });
+  assert.deepEqual(lookupView({ q: "breast", med: null, sub: null, cond: "D1" }), { kind: "condition", value: "D1" });
+  assert.deepEqual(lookupView({ q: "breast", med: null, sub: null, cond: null }), { kind: "text", value: "breast" });
+  assert.deepEqual(lookupView({ q: "b", med: null, sub: null, cond: null }), { kind: null, value: null });
 });

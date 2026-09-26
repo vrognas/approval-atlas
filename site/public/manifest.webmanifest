@@ -1,0 +1,11 @@
+{
+  "name": "approval-atlas",
+  "short_name": "approval-atlas",
+  "description": "Look up EU approvals of human medicines: status, indication, documents.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9f9f7",
+  "theme_color": "#f9f9f7",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
