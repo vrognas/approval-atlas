@@ -1,0 +1,49 @@
+name: pipeline
+
+on:
+  # UTC. After EMA's 06:00 Amsterdam refresh in both CET and CEST; off the hour to avoid schedule delays.
+  schedule:
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Pinned: ubuntu-latest moves to 26.04 during Oct-Nov 2026.
+    runs-on: ubuntu-24.04
+    env:
+      # .lintr's error_on_lint is reset by lintr before it is checked; the env var is honoured.
+      LINTR_ERROR_ON_LINT: "true"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: renv
+
+      - uses: r-lib/actions/setup-renv@v2
+        with:
+          # Keep the package cache even when validation fails, so the next run is fast.
+          bypass-cache: never
+
+      - name: Lint R
+        run: Rscript -e 'pkgload::load_all(quiet = TRUE); lintr::lint_package()'
+
+      - name: Test R
+        run: Rscript -e 'testthat::test_local()'
+
+      - name: Run EMA pipeline
+        run: Rscript scripts/run-pipeline.R
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
