@@ -5,13 +5,25 @@ ema_attribution <- paste(
   "not affiliated with or endorsed by EMA."
 )
 
+# One record per line so git diffs of the committed data show changed rows;
+# LF and UTF-8 on every OS so identical data gives identical bytes.
 write_json_table <- function(data, path) {
-  jsonlite::write_json(
+  # collapse = FALSE (as in jsonlite::stream_out) returns one string per row.
+  records <- jsonlite::toJSON(
     data,
-    path,
     dataframe = "rows",
     na = "null",
-    digits = NA
+    digits = NA,
+    collapse = FALSE
+  )
+  separators <- ifelse(seq_along(records) < length(records), ",", "")
+  connection <- file(path, open = "wb")
+  on.exit(close(connection))
+  writeLines(
+    enc2utf8(c("[", paste0(records, separators), "]")),
+    connection,
+    sep = "\n",
+    useBytes = TRUE
   )
 }
 

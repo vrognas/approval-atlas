@@ -147,6 +147,3 @@ vite.config.ts.timestamp-*
 .RData
 .Rproj.user/
 .Renviron
-
-# approval-atlas: pipeline output (regenerate with Rscript scripts/run-pipeline.R)
-site/public/data/

@@ -21,8 +21,66 @@ test_that("write_json_table writes rows with nulls, ISO dates, plain types", {
   expect_null(rows[[2]]$revision_number)
 
   text <- readLines(path, encoding = "UTF-8", warn = FALSE)
-  expect_match(text, "\"name_of_medicine\":null", fixed = TRUE)
+  expect_match(text, "\"name_of_medicine\":null", fixed = TRUE, all = FALSE)
   expect_no_match(text, "\"\"", fixed = TRUE)
+})
+
+test_that("write_json_table writes one record per line between brackets", {
+  data <- dplyr::tibble(
+    ema_product_number = c("A", "B", "C"),
+    active_substance = c("x", NA, "z")
+  )
+  path <- tempfile(fileext = ".json")
+  write_json_table(data, path)
+  expect_identical(
+    readLines(path, warn = FALSE),
+    c(
+      "[",
+      "{\"ema_product_number\":\"A\",\"active_substance\":\"x\"},",
+      "{\"ema_product_number\":\"B\",\"active_substance\":null},",
+      "{\"ema_product_number\":\"C\",\"active_substance\":\"z\"}",
+      "]"
+    )
+  )
+})
+
+test_that("write_json_table parses to the same data as a one-line array", {
+  data <- dplyr::tibble(
+    ema_product_number = c("EMEA/H/C/000001", "EMEA/H/C/000002"),
+    name_of_medicine = c("Taï; \"quoted\"\nnext", NA),
+    marketing_authorisation_date = as.Date(c("2023-09-22", NA)),
+    generic = c(TRUE, NA),
+    revision_number = c(12L, NA),
+    share = c(0.123456789, NA)
+  )
+  path <- tempfile(fileext = ".json")
+  write_json_table(data, path)
+  one_line <- jsonlite::toJSON(
+    data,
+    dataframe = "rows",
+    na = "null",
+    digits = NA
+  )
+  expect_identical(
+    jsonlite::fromJSON(path, simplifyVector = FALSE),
+    jsonlite::fromJSON(one_line, simplifyVector = FALSE)
+  )
+  expect_length(readLines(path, warn = FALSE), nrow(data) + 2)
+})
+
+test_that("write_json_table writes UTF-8 with LF line endings only", {
+  data <- dplyr::tibble(name_of_medicine = c("Taï", "Ébène"))
+  path <- tempfile(fileext = ".json")
+  write_json_table(data, path)
+  bytes <- readBin(path, "raw", file.size(path))
+  expect_false(as.raw(0x0d) %in% bytes)
+  expect_identical(
+    bytes,
+    charToRaw(enc2utf8(paste0(
+      "[\n{\"name_of_medicine\":\"Taï\"},\n",
+      "{\"name_of_medicine\":\"Ébène\"}\n]\n"
+    )))
+  )
 })
 
 test_that("write_json_table round-trips through jsonlite", {
@@ -41,7 +99,8 @@ test_that("write_json_table round-trips through jsonlite", {
 test_that("write_json_table writes an empty table as an empty array", {
   path <- tempfile(fileext = ".json")
   write_json_table(dplyr::tibble(ema_product_number = character()), path)
-  expect_identical(readLines(path, warn = FALSE), "[]")
+  expect_identical(readLines(path, warn = FALSE), c("[", "]"))
+  expect_identical(jsonlite::fromJSON(path, simplifyVector = FALSE), list())
 })
 
 example_sources <- function() {
