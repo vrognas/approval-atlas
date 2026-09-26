@@ -1,0 +1,9 @@
+linters: lintr::linters_with_defaults(
+    lintr::undesirable_function_linter(fun = c(
+      map_dfr = "use purrr::map() + purrr::list_rbind()",
+      map_dfc = "use purrr::map() + purrr::list_cbind()",
+      library = "call package::function() instead",
+      require = "call package::function() instead"
+    ))
+  )
+encoding: "UTF-8"

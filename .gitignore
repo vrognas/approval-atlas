@@ -141,3 +141,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+.Renviron
+
+# approval-atlas: pipeline output (regenerate with Rscript scripts/run-pipeline.R)
+site/public/data/

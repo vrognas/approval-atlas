@@ -1,0 +1,22 @@
+Package: approvalatlas
+Title: Data Pipeline for approval-atlas
+Version: 0.0.0.9000
+Authors@R: person("Viktor", "Rognås", email = "viktor.rognas@gmail.com", role = c("aut", "cre"))
+Description: Internal pipeline (never built or released) that downloads
+    official medicines data, cleans it and writes tidy JSON for the
+    approval-atlas frontend.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    cli,
+    dplyr,
+    httr2 (>= 1.3.0),
+    jsonlite,
+    stringr,
+    tidyr
+Suggests:
+    covr,
+    lintr,
+    pkgload,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
