@@ -1,13 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import {
   MEDICINE_TYPES,
-  areaTermsFor,
-  buildAreaIndex,
+  authorizedSeries,
+  breakdownCounts,
+  buildProducts,
   buildSubstanceIndex,
   countApprovalsByYear,
+  countTiles,
   distinctSorted,
-  filterMedicines,
+  isAuthorizedNow,
   newestFirst,
 } from "./approvals.js";
 
@@ -19,61 +22,19 @@ const medicines = [
   { ema_product_number: "EMEA/H/C/000005", name_of_medicine: "Epsilon", medicine_status: "Authorised", marketing_authorisation_date: null, medicine_type: "Advanced therapy" },
 ];
 
-const areaRows = [
-  { ema_product_number: "EMEA/H/C/000001", therapeutic_area_mesh: "Diabetes Mellitus, Type 2" },
-  { ema_product_number: "EMEA/H/C/000002", therapeutic_area_mesh: "Arthritis, Rheumatoid" },
-  { ema_product_number: "EMEA/H/C/000002", therapeutic_area_mesh: "Psoriasis" },
-  { ema_product_number: "EMEA/H/C/000003", therapeutic_area_mesh: "Psoriasis" },
-  { ema_product_number: "EMEA/H/C/000004", therapeutic_area_mesh: "Hepatitis C" },
-];
-
 const substanceRows = [
   { ema_product_number: "EMEA/H/C/000001", active_substance: "metformin" },
   { ema_product_number: "EMEA/H/C/000001", active_substance: "sitagliptin" },
   { ema_product_number: "EMEA/H/C/000002", active_substance: "adalimumab" },
 ];
 
-const allStatuses = new Set(["Authorised", "Withdrawn", "Refused"]);
 const ids = (rows) => rows.map((row) => row.ema_product_number);
-
-test("buildAreaIndex maps each term to the set of product numbers", () => {
-  const index = buildAreaIndex(areaRows);
-  assert.deepEqual([...index.get("Psoriasis")], ["EMEA/H/C/000002", "EMEA/H/C/000003"]);
-  assert.deepEqual([...index.get("Hepatitis C")], ["EMEA/H/C/000004"]);
-  assert.equal(index.size, 4);
-});
 
 test("buildSubstanceIndex maps each product number to its substances", () => {
   const index = buildSubstanceIndex(substanceRows);
   assert.deepEqual(index.get("EMEA/H/C/000001"), ["metformin", "sitagliptin"]);
   assert.deepEqual(index.get("EMEA/H/C/000002"), ["adalimumab"]);
   assert.equal(index.get("EMEA/H/C/000003"), undefined);
-});
-
-test("filterMedicines keeps only the selected statuses", () => {
-  const areaIndex = buildAreaIndex(areaRows);
-  const result = filterMedicines(medicines, { statuses: new Set(["Withdrawn"]), therapeuticArea: "" }, areaIndex);
-  assert.deepEqual(ids(result), ["EMEA/H/C/000002"]);
-});
-
-test("filterMedicines with an empty area keeps every area", () => {
-  const areaIndex = buildAreaIndex(areaRows);
-  const result = filterMedicines(medicines, { statuses: allStatuses, therapeuticArea: "" }, areaIndex);
-  assert.equal(result.length, 5);
-});
-
-test("filterMedicines matches the therapeutic area exactly", () => {
-  const areaIndex = buildAreaIndex(areaRows);
-  const psoriasis = filterMedicines(medicines, { statuses: allStatuses, therapeuticArea: "Psoriasis" }, areaIndex);
-  assert.deepEqual(ids(psoriasis), ["EMEA/H/C/000002", "EMEA/H/C/000003"]);
-  const partial = filterMedicines(medicines, { statuses: allStatuses, therapeuticArea: "Psoria" }, areaIndex);
-  assert.deepEqual(partial, []);
-});
-
-test("filterMedicines combines status and area filters", () => {
-  const areaIndex = buildAreaIndex(areaRows);
-  const result = filterMedicines(medicines, { statuses: new Set(["Authorised"]), therapeuticArea: "Psoriasis" }, areaIndex);
-  assert.deepEqual(ids(result), ["EMEA/H/C/000003"]);
 });
 
 test("countApprovalsByYear fills years without approvals with zeros", () => {
@@ -91,17 +52,6 @@ test("countApprovalsByYear excludes medicines without an approval date", () => {
   assert.deepEqual(countApprovalsByYear([], MEDICINE_TYPES), []);
 });
 
-test("a medicine with several therapeutic areas is counted once", () => {
-  const areaIndex = buildAreaIndex(areaRows);
-  const all = filterMedicines(medicines, { statuses: allStatuses, therapeuticArea: "" }, areaIndex);
-  const total = countApprovalsByYear(all, MEDICINE_TYPES)
-    .reduce((sum, row) => sum + MEDICINE_TYPES.reduce((rowSum, type) => rowSum + row[type], 0), 0);
-  assert.equal(total, 3);
-  const psoriasis = filterMedicines(medicines, { statuses: allStatuses, therapeuticArea: "Psoriasis" }, areaIndex);
-  const year2020 = countApprovalsByYear(psoriasis, MEDICINE_TYPES).find((row) => row.year === "2020");
-  assert.equal(year2020.Biosimilar, 1);
-});
-
 test("newestFirst sorts by approval date descending, then by name", () => {
   const dated = medicines.filter((medicine) => medicine.marketing_authorisation_date !== null);
   const tie = { ...dated[1], ema_product_number: "EMEA/H/C/000009", name_of_medicine: "Aardvark" };
@@ -113,7 +63,139 @@ test("distinctSorted removes duplicates and sorts", () => {
   assert.deepEqual(distinctSorted(["Withdrawn", "Authorised", "Withdrawn"]), ["Authorised", "Withdrawn"]);
 });
 
-test("areaTermsFor lists the distinct terms of the given medicines only", () => {
-  const dated = medicines.filter((medicine) => medicine.marketing_authorisation_date !== null);
-  assert.deepEqual(areaTermsFor(areaRows, dated), ["Arthritis, Rheumatoid", "Diabetes Mellitus, Type 2", "Psoriasis"]);
+test("countApprovalsByYear fills a given year range with zeros", () => {
+  const counts = countApprovalsByYear(medicines, MEDICINE_TYPES, [2017, 2021]);
+  assert.deepEqual(counts.map((row) => row.year), ["2017", "2018", "2019", "2020", "2021"]);
+  assert.equal(counts[0].Other, 0);
+  assert.equal(countApprovalsByYear([], MEDICINE_TYPES, [2019, 2020]).length, 2);
+});
+
+// Phase 1: products joined with lookups, tiles, breakdowns and the authorized series.
+const medicine = (id, fields) => ({
+  ema_product_number: id,
+  medicine_status: "Authorised",
+  marketing_authorisation_developer_applicant_holder: "Holder A",
+  authorized_from: "2010-05-01",
+  authorized_until: null,
+  series_exclusion: null,
+  substance_set_key: `key-${id}`,
+  orphan_medicine: false,
+  biosimilar: false,
+  generic: false,
+  advanced_therapy: false,
+  ...fields,
+});
+
+test("buildProducts joins holder, year, MeSH terms, branches and ATC rows", () => {
+  const [first, second] = buildProducts(
+    [
+      medicine("P1", { marketing_authorisation_developer_applicant_holder: null }),
+      medicine("P2", { authorized_from: null }),
+    ],
+    {
+      areaRows: [
+        { ema_product_number: "P1", therapeutic_area_mesh: "Lymphoma" },
+        { ema_product_number: "P1", therapeutic_area_mesh: "Leukemia" },
+        { ema_product_number: "P1", therapeutic_area_mesh: "Unmatched term" },
+      ],
+      branchRows: [
+        { therapeutic_area_mesh: "Leukemia", branch: "C04" },
+        { therapeutic_area_mesh: "Leukemia", branch: "C15" },
+        { therapeutic_area_mesh: "Lymphoma", branch: "C04" },
+        { therapeutic_area_mesh: "Lymphoma", branch: "C15" },
+        { therapeutic_area_mesh: "Lymphoma", branch: "C20" },
+        { therapeutic_area_mesh: "Unmatched term", branch: null },
+      ],
+      atcRows: [{ ema_product_number: "P2", atc_code_human: "L01XE", atc_incomplete: true, source: "ema" }],
+    },
+  );
+  assert.equal(first.mah, "Not stated");
+  assert.equal(first.year, 2010);
+  assert.deepEqual(first.areas, ["Lymphoma", "Leukemia", "Unmatched term"]);
+  assert.deepEqual(first.branches, ["C04", "C15", "C20"]);
+  assert.deepEqual(first.atc, []);
+  assert.equal(second.mah, "Holder A");
+  assert.equal(second.year, null);
+  assert.deepEqual(second.atc.map((row) => row.atc_code_human), ["L01XE"]);
+  assert.deepEqual([second.areas, second.branches], [[], []]);
+});
+
+test("isAuthorizedNow needs status Authorised and an approval date", () => {
+  assert.equal(isAuthorizedNow(medicine("P1", {})), true);
+  assert.equal(isAuthorizedNow(medicine("P2", { authorized_from: null })), false);
+  assert.equal(isAuthorizedNow(medicine("P3", { medicine_status: "Withdrawn" })), false);
+});
+
+test("countTiles counts products, distinct substance sets and flags", () => {
+  const tiles = countTiles([
+    medicine("P1", { substance_set_key: "a|b", orphan_medicine: true }),
+    medicine("P2", { substance_set_key: "a|b", biosimilar: true }),
+    medicine("P3", { substance_set_key: null, generic: true }),
+    medicine("P4", { substance_set_key: "c", advanced_therapy: true, orphan_medicine: true }),
+  ]);
+  assert.deepEqual(tiles, { products: 4, substances: 2, orphan: 2, biosimilar: 1, generic: 1, advancedTherapy: 1 });
+});
+
+test("authorizedSeries counts products whose interval covers each date", () => {
+  const dates = ["2009-12-31", "2010-05-01", "2012-01-31", "2015-06-30", "2020-01-01"];
+  const series = authorizedSeries([
+    medicine("P1", { authorized_from: "2010-05-01", substance_set_key: "a" }),
+    medicine("P2", { authorized_from: "2012-01-31", authorized_until: "2015-06-30", substance_set_key: "a" }),
+    medicine("P3", { authorized_from: "2012-01-01", authorized_until: "2020-01-02", substance_set_key: null }),
+    medicine("P4", { authorized_from: "2011-01-01", series_exclusion: "ended_without_end_date" }),
+    medicine("P5", { authorized_from: null, series_exclusion: "no_approval_date" }),
+    medicine("P6", { authorized_from: "2012-01-01", authorized_until: "2011-01-01", substance_set_key: "z" }),
+  ], dates);
+  assert.deepEqual(series, [
+    { date: "2009-12-31", authorized_products: 0, authorized_substances: 0 },
+    { date: "2010-05-01", authorized_products: 1, authorized_substances: 1 },
+    { date: "2012-01-31", authorized_products: 3, authorized_substances: 1 },
+    { date: "2015-06-30", authorized_products: 2, authorized_substances: 1 },
+    { date: "2020-01-01", authorized_products: 2, authorized_substances: 1 },
+  ]);
+});
+
+const dataDir = new URL("../public/data/", import.meta.url);
+const seriesFile = new URL("ema_authorized_series.json", dataDir);
+test(
+  "the unfiltered browser series equals the pipeline's ema_authorized_series.json",
+  { skip: existsSync(seriesFile) ? false : "site/public/data/ema_authorized_series.json not found: run the pipeline first" },
+  () => {
+    const expected = JSON.parse(readFileSync(seriesFile, "utf8"));
+    const all = JSON.parse(readFileSync(new URL("ema_medicines.json", dataDir), "utf8"));
+    assert.deepEqual(authorizedSeries(all, expected.map((row) => row.date)), expected);
+  },
+);
+
+test("breakdownCounts counts a product once per distinct ATC level 1", () => {
+  const products = [
+    { atc: [{ atc_code_human: "L01XE" }, { atc_code_human: "L04AA" }] },
+    { atc: [{ atc_code_human: "A10BA02" }, { atc_code_human: "L01FA01" }] },
+    { atc: [] },
+  ];
+  const names = new Map([["L", "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS"], ["A", "ALIMENTARY TRACT AND METABOLISM"]]);
+  assert.deepEqual(breakdownCounts(products, "atc", (key) => names.get(key)), [
+    { key: "L", label: "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS", count: 2 },
+    { key: "A", label: "ALIMENTARY TRACT AND METABOLISM", count: 1 },
+  ]);
+});
+
+test("breakdownCounts counts a product in every branch it touches", () => {
+  const rows = breakdownCounts([{ branches: ["C04", "C15"] }, { branches: ["C04"] }], "area");
+  assert.deepEqual(rows, [{ key: "C04", label: "C04", count: 2 }, { key: "C15", label: "C15", count: 1 }]);
+});
+
+test("breakdownCounts keeps the top n and folds distinct remaining products into Other", () => {
+  const products = [
+    ...["A", "A", "A", "B", "B", "C", "D"].map((mah) => ({ mah, branches: [mah] })),
+    { mah: "E", branches: ["C", "D"] },
+  ];
+  assert.deepEqual(breakdownCounts(products, "mah", undefined, 2), [
+    { key: "A", label: "A", count: 3 },
+    { key: "B", label: "B", count: 2 },
+    { key: null, label: "Other", count: 3, other: true },
+  ]);
+  // Ties sort by label; Other counts each product once even when it has two tail branches.
+  assert.deepEqual(breakdownCounts(products, "area", undefined, 2).at(-1), { key: null, label: "Other", count: 3, other: true });
+  assert.deepEqual(breakdownCounts(products, "area", undefined, 2).map((row) => row.key), ["A", "B", null]);
 });

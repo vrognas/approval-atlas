@@ -20,22 +20,65 @@
 
       <div id="app" hidden>
         <section class="filters" aria-label="Filters">
-          <fieldset id="status-filter">
-            <legend>Medicine status</legend>
+          <fieldset class="year-range">
+            <legend>Approval years</legend>
+            <label>From <input id="year-from" type="number" inputmode="numeric" step="1" /></label>
+            <label>To <input id="year-to" type="number" inputmode="numeric" step="1" /></label>
+            <button id="year-reset" type="button">Reset</button>
           </fieldset>
-          <div class="area-filter">
-            <label for="area-input">Therapeutic area</label>
-            <input id="area-input" type="search" list="area-options" placeholder="All areas" autocomplete="off" />
-            <datalist id="area-options"></datalist>
+          <div id="filter-mah"></div>
+          <div id="filter-branch"></div>
+          <div id="filter-area"></div>
+          <div class="text-filter">
+            <label for="atc-input">ATC code or name</label>
+            <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
+          </div>
+          <div id="filter-type"></div>
+          <div id="filter-status"></div>
+        </section>
+        <p id="url-note" class="note" role="status" hidden></p>
+
+        <div role="tablist" aria-label="View" class="tabs">
+          <button role="tab" type="button" id="tab-now" data-view="now" aria-controls="panel-now">Authorized now</button>
+          <button role="tab" type="button" id="tab-years" data-view="years" aria-controls="panel-years">Approvals per year</button>
+        </div>
+
+        <section role="tabpanel" id="panel-now" aria-labelledby="tab-now" tabindex="0">
+          <div id="tiles" class="tiles"></div>
+          <p id="undated-authorized" class="muted"></p>
+          <div class="chart-card">
+            <div class="card-head">
+              <h2 id="breakdown-title"></h2>
+              <div id="breakdown-by" class="segmented" role="group" aria-label="Break down by">
+                <button type="button" data-by="atc">ATC</button>
+                <button type="button" data-by="area">Therapeutic area</button>
+                <button type="button" data-by="mah">Holder</button>
+              </div>
+            </div>
+            <p id="breakdown-note" class="muted"></p>
+            <div id="breakdown" class="breakdown"></div>
           </div>
         </section>
 
-        <section class="chart-card" aria-labelledby="chart-title">
-          <h2 id="chart-title">Approvals per year by medicine type</h2>
-          <p class="muted">Year of EU marketing authorisation; each medicine counted once.</p>
-          <ul id="legend" class="legend"></ul>
-          <div id="chart" class="chart"></div>
-          <p id="undated-note" class="muted"></p>
+        <section role="tabpanel" id="panel-years" aria-labelledby="tab-years" tabindex="0" hidden>
+          <div class="chart-card">
+            <h2>Approvals per year by medicine type</h2>
+            <p class="muted">Year of EU marketing authorization; each medicine counted once. Drag across the chart to select approval years.</p>
+            <div class="legend-row">
+              <ul id="legend" class="legend"></ul>
+              <output id="year-readout" class="readout" aria-live="polite"></output>
+            </div>
+            <div id="chart" class="chart"></div>
+            <p id="undated-note" class="muted"></p>
+          </div>
+        </section>
+
+        <section class="chart-card" aria-labelledby="over-time-title">
+          <h2 id="over-time-title">Authorized over time</h2>
+          <p class="muted">Authorized products and distinct active substances at each month end. All filters apply except approval years, which are shaded.</p>
+          <ul id="over-time-legend" class="legend"></ul>
+          <div id="over-time" class="chart"></div>
+          <p id="over-time-note" class="muted"></p>
         </section>
 
         <section aria-labelledby="table-title">
@@ -43,12 +86,22 @@
           <div class="table-scroll">
             <table id="medicines-table"></table>
           </div>
+          <button id="table-more" class="more" type="button" hidden></button>
         </section>
       </div>
     </main>
 
     <footer>
       <p id="attribution"></p>
+      <p id="credit-mesh"></p>
+      <p id="credit-chembl"></p>
+      <p id="credit-atc"></p>
+      <p>
+        Data files: a compilation licensed
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener noreferrer" target="_blank">CC BY-SA 4.0</a>;
+        ChEMBL-derived values are adapted from ChEMBL (CC BY-SA 3.0). Values from other sources keep their own terms. Code: MIT license.
+      </p>
+      <p>Not affiliated with or endorsed by EMA, NLM, EMBL-EBI or WHO.</p>
       <p>
         <a href="https://www.ema.europa.eu/en/medicines/download-medicine-data" rel="noopener noreferrer" target="_blank">EMA medicine data download page</a>
       </p>
