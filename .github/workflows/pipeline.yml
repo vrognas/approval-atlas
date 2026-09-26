@@ -43,7 +43,9 @@ jobs:
         run: Rscript -e 'testthat::test_local()'
 
       # Rolling key: each run restores the newest cache and saves an updated copy,
-      # so downloads (MeSH, ChEMBL) are refetched only when their source changes.
+      # so MeSH and ChEMBL are refetched only when their source changes and the
+      # EPAR documents index, orphan designations and Union Register get one
+      # conditional GET per run (sidecars restored with old mtimes; R/http.R).
       - name: Restore download cache
         id: restore-downloads
         uses: actions/cache/restore@v6
