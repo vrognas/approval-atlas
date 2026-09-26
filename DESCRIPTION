@@ -12,8 +12,10 @@ Imports:
     dplyr,
     httr2 (>= 1.3.0),
     jsonlite,
+    purrr,
     stringr,
-    tidyr
+    tidyr,
+    xml2
 Suggests:
     covr,
     lintr,

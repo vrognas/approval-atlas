@@ -170,3 +170,59 @@ test_that("check_single_medicine_type_flag aborts when flags co-occur", {
   expect_match(conditionMessage(error), "\"A\"")
   expect_match(conditionMessage(error), "\"B\"")
 })
+
+series_check_medicines <- function() {
+  dplyr::tibble(
+    ema_product_number = sprintf("EMEA/H/C/00000%d", 1:4),
+    name_of_medicine = c("Alpha", "Beta {odd}", "Gamma", "Delta"),
+    medicine_status = c("Authorised", "Withdrawn", "Authorised", "Withdrawn"),
+    authorized_from = as.Date(
+      c("2020-01-01", "2001-01-01", "2026-01-01", "2005-01-01")
+    ),
+    authorized_until = as.Date(c(NA, "2010-01-01", NA, "2012-01-01")),
+    series_exclusion = NA_character_
+  )
+}
+
+test_that("check_tile_matches_series passes when the counts agree", {
+  medicines <- series_check_medicines()
+  expect_invisible(check_tile_matches_series(medicines, as.Date("2026-09-26")))
+  expect_identical(
+    check_tile_matches_series(medicines, as.Date("2026-09-26")),
+    medicines
+  )
+})
+
+test_that("check_tile_matches_series lists rows counted by only one side", {
+  medicines <- series_check_medicines()
+  medicines$series_exclusion[1] <- "ended_without_end_date"
+  medicines$authorized_until[2] <- NA
+  medicines$authorized_until[4] <- NA
+  error <- expect_error(
+    check_tile_matches_series(medicines, as.Date("2026-09-26")),
+    class = "rlang_error"
+  )
+  # cli wraps long lines, so compare with whitespace collapsed.
+  message <- stringr::str_squish(conditionMessage(error))
+  expect_match(message, "tile counts 2 ", fixed = TRUE)
+  expect_match(message, "series counts 3 ", fixed = TRUE)
+  expect_match(message, "2026-09-26", fixed = TRUE)
+  expect_match(
+    message,
+    paste(
+      "EMEA/H/C/000001 Alpha: Authorised; authorized 2020-01-01 to NA;",
+      "series_exclusion ended_without_end_date; in the tile only"
+    ),
+    fixed = TRUE
+  )
+  expect_match(
+    message,
+    paste(
+      "EMEA/H/C/000002 Beta {odd}: Withdrawn; authorized 2001-01-01 to NA;",
+      "series_exclusion NA; in the series only"
+    ),
+    fixed = TRUE
+  )
+  expect_match(message, "EMEA/H/C/000004 Delta", fixed = TRUE)
+  expect_no_match(message, "Gamma", fixed = TRUE)
+})

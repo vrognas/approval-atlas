@@ -1,0 +1,62 @@
+[
+  {
+    "level1": "A",
+    "level1_description": "ALIMENTARY TRACT AND METABOLISM",
+    "level2": "A10",
+    "level2_description": "DRUGS USED IN DIABETES",
+    "level3": "A10A",
+    "level3_description": "INSULINS AND ANALOGUES",
+    "level4": "A10AB",
+    "level4_description": "Insulins and analogues for injection, fast-acting",
+    "level5": "A10AB04",
+    "who_name": "insulin lispro"
+  },
+  {
+    "level1": "C",
+    "level1_description": "CARDIOVASCULAR SYSTEM",
+    "level2": "C03",
+    "level2_description": "DIURETICS",
+    "level3": "C03X",
+    "level3_description": "OTHER DIURETICS",
+    "level4": "C03XA",
+    "level4_description": "Vasopressin antagonists",
+    "level5": "C03XA01",
+    "who_name": "tolvaptan"
+  },
+  {
+    "level1": "L",
+    "level1_description": "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS",
+    "level2": "L01",
+    "level2_description": "ANTINEOPLASTIC AGENTS",
+    "level3": "L01F",
+    "level3_description": "MONOCLONAL ANTIBODIES AND ANTIBODY DRUG CONJUGATES",
+    "level4": "L01FA",
+    "level4_description": "CD20 (Clusters of Differentiation 20) inhibitors",
+    "level5": "L01FA01",
+    "who_name": "rituximab"
+  },
+  {
+    "level1": "L",
+    "level1_description": "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS",
+    "level2": "L04",
+    "level2_description": "IMMUNOSUPPRESSANTS",
+    "level3": "L04A",
+    "level3_description": "IMMUNOSUPPRESSANTS",
+    "level4": "L04AG",
+    "level4_description": "Monoclonal antibodies",
+    "level5": "L04AG03",
+    "who_name": "natalizumab"
+  },
+  {
+    "level1": "N",
+    "level1_description": "NERVOUS SYSTEM",
+    "level2": "N07",
+    "level2_description": "OTHER NERVOUS SYSTEM DRUGS",
+    "level3": "N07B",
+    "level3_description": "DRUGS USED IN ADDICTIVE DISORDERS",
+    "level4": "N07BC",
+    "level4_description": "Drugs used in opioid dependence",
+    "level5": "N07BC51",
+    "who_name": "buprenorphine, combinations"
+  }
+]

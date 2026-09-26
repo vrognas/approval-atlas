@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE DescriptorRecordSet SYSTEM "https://www.nlm.nih.gov/databases/dtd/nlmdescriptorrecordset_20260101.dtd">
+<DescriptorRecordSet LanguageCode="eng">
+  <DescriptorRecord DescriptorClass="1">
+    <DescriptorUI>D009369</DescriptorUI>
+    <DescriptorName>
+      <String>Neoplasms</String>
+    </DescriptorName>
+    <LastUpdated>
+      <Year>2021</Year>
+      <Month>06</Month>
+      <Day>30</Day>
+    </LastUpdated>
+    <DateIntroduced>
+      <Year>1966</Year>
+      <Month>01</Month>
+      <Day>01</Day>
+    </DateIntroduced>
+    <TreeNumberList>
+      <TreeNumber>C04</TreeNumber>
+    </TreeNumberList>
+    <ConceptList>
+      <Concept PreferredConceptYN="Y">
+        <ConceptUI>M0014585</ConceptUI>
+        <ConceptName>
+          <String>Neoplasms</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
+            <TermUI>T027926</TermUI>
+            <String>Neoplasms</String>
+          </Term>
+          <Term ConceptPreferredTermYN="N" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="N">
+            <TermUI>T027929</TermUI>
+            <String>Tumors</String>
+          </Term>
+        </TermList>
+      </Concept>
+      <Concept PreferredConceptYN="N">
+        <ConceptUI>M0014584</ConceptUI>
+        <ConceptName>
+          <String>Cancer</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="N">
+            <TermUI>T027925</TermUI>
+            <String>Cancer</String>
+          </Term>
+        </TermList>
+      </Concept>
+    </ConceptList>
+  </DescriptorRecord>
+  <DescriptorRecord DescriptorClass="1">
+    <DescriptorUI>D009422</DescriptorUI>
+    <DescriptorName>
+      <String>Nervous System Diseases</String>
+    </DescriptorName>
+    <LastUpdated>
+      <Year>2018</Year>
+      <Month>02</Month>
+      <Day>28</Day>
+    </LastUpdated>
+    <DateIntroduced>
+      <Year>1965</Year>
+      <Month>01</Month>
+      <Day>01</Day>
+    </DateIntroduced>
+    <TreeNumberList>
+      <TreeNumber>C10</TreeNumber>
+    </TreeNumberList>
+    <ConceptList>
+      <Concept PreferredConceptYN="Y">
+        <ConceptUI>M0014667</ConceptUI>
+        <ConceptName>
+          <String>Nervous System Diseases</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
+            <TermUI>T028092</TermUI>
+            <String>Nervous System Diseases</String>
+          </Term>
+          <Term ConceptPreferredTermYN="N" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="N">
+            <TermUI>T372291</TermUI>
+            <String>Neurologic Disorders</String>
+          </Term>
+        </TermList>
+      </Concept>
+    </ConceptList>
+  </DescriptorRecord>
+  <DescriptorRecord DescriptorClass="1">
+    <DescriptorUI>D001523</DescriptorUI>
+    <DescriptorName>
+      <String>Mental Disorders</String>
+    </DescriptorName>
+    <LastUpdated>
+      <Year>2020</Year>
+      <Month>02</Month>
+      <Day>21</Day>
+    </LastUpdated>
+    <DateIntroduced>
+      <Year>1998</Year>
+      <Month>01</Month>
+      <Day>01</Day>
+    </DateIntroduced>
+    <TreeNumberList>
+      <TreeNumber>F03</TreeNumber>
+    </TreeNumberList>
+    <ConceptList>
+      <Concept PreferredConceptYN="Y">
+        <ConceptUI>M0002289</ConceptUI>
+        <ConceptName>
+          <String>Mental Disorders</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
+            <TermUI>T004427</TermUI>
+            <String>Mental Disorders</String>
+          </Term>
+          <Term ConceptPreferredTermYN="N" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="N">
+            <TermUI>T000956615</TermUI>
+            <String>Psychiatric Illness</String>
+          </Term>
+        </TermList>
+      </Concept>
+    </ConceptList>
+  </DescriptorRecord>
+  <DescriptorRecord DescriptorClass="1">
+    <DescriptorUI>D000544</DescriptorUI>
+    <DescriptorName>
+      <String>Alzheimer Disease</String>
+    </DescriptorName>
+    <LastUpdated>
+      <Year>2020</Year>
+      <Month>01</Month>
+      <Day>16</Day>
+    </LastUpdated>
+    <DateIntroduced>
+      <Year>1984</Year>
+      <Month>01</Month>
+      <Day>01</Day>
+    </DateIntroduced>
+    <SeeRelatedList>
+      <SeeRelatedDescriptor>
+        <DescriptorReferredTo>
+          <DescriptorUI>D016229</DescriptorUI>
+          <DescriptorName>
+            <String>Amyloid beta-Peptides</String>
+          </DescriptorName>
+        </DescriptorReferredTo>
+      </SeeRelatedDescriptor>
+    </SeeRelatedList>
+    <TreeNumberList>
+      <TreeNumber>C10.228.140.380.100</TreeNumber>
+      <TreeNumber>C10.574.945.249</TreeNumber>
+      <TreeNumber>F03.615.400.100</TreeNumber>
+    </TreeNumberList>
+    <ConceptList>
+      <Concept PreferredConceptYN="Y">
+        <ConceptUI>M0000842</ConceptUI>
+        <ConceptName>
+          <String>Alzheimer Disease</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="EPO" RecordPreferredTermYN="Y">
+            <TermUI>T001655</TermUI>
+            <String>Alzheimer Disease</String>
+          </Term>
+          <Term ConceptPreferredTermYN="N" IsPermutedTermYN="N" LexicalTag="EPO" RecordPreferredTermYN="N">
+            <TermUI>T001654</TermUI>
+            <String>Alzheimer's Disease</String>
+          </Term>
+          <Term ConceptPreferredTermYN="N" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="N">
+            <TermUI>T010820</TermUI>
+            <String>Dementia, Senile</String>
+          </Term>
+        </TermList>
+      </Concept>
+    </ConceptList>
+  </DescriptorRecord>
+  <DescriptorRecord DescriptorClass="1">
+    <DescriptorUI>D009542</DescriptorUI>
+    <DescriptorName>
+      <String>Niemann-Pick Diseases</String>
+    </DescriptorName>
+    <LastUpdated>
+      <Year>2024</Year>
+      <Month>08</Month>
+      <Day>09</Day>
+    </LastUpdated>
+    <DateIntroduced>
+      <Year>2000</Year>
+      <Month>01</Month>
+      <Day>01</Day>
+    </DateIntroduced>
+    <TreeNumberList>
+      <TreeNumber>C10.228.140.163.100.435.825.700</TreeNumber>
+    </TreeNumberList>
+    <ConceptList>
+      <Concept PreferredConceptYN="Y">
+        <ConceptUI>M0014846</ConceptUI>
+        <ConceptName>
+          <String>Niemann-Pick Diseases</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
+            <TermUI>T365793</TermUI>
+            <String>Niemann-Pick Diseases</String>
+          </Term>
+        </TermList>
+      </Concept>
+      <Concept PreferredConceptYN="N">
+        <ConceptUI>M000763277</ConceptUI>
+        <ConceptName>
+          <String>Acid Sphingomyelinase-Deficient Niemann-Pick Disease</String>
+        </ConceptName>
+        <TermList>
+          <Term ConceptPreferredTermYN="N" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="N">
+            <TermUI>T001124733</TermUI>
+            <String>Acid Sphingomyelinase Deficiency</String>
+          </Term>
+        </TermList>
+      </Concept>
+    </ConceptList>
+  </DescriptorRecord>
+</DescriptorRecordSet>

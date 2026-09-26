@@ -127,3 +127,35 @@ check_single_medicine_type_flag <- function(medicines) {
   }
   invisible(medicines)
 }
+
+escape_cli_braces <- function(x) {
+  x |>
+    stringr::str_replace_all(stringr::fixed("{"), "{{") |>
+    stringr::str_replace_all(stringr::fixed("}"), "}}")
+}
+
+check_tile_matches_series <- function(medicines, snapshot_date) {
+  in_tile <- is_authorized_now(medicines)
+  in_series <- is_counted_in_series(medicines, snapshot_date)
+  if (sum(in_tile) != sum(in_series)) {
+    is_offender <- in_tile != in_series
+    offenders <- medicines[is_offender, ]
+    descriptions <- paste0(
+      offenders$ema_product_number, " ", offenders$name_of_medicine, ": ",
+      offenders$medicine_status, "; authorized ",
+      format(offenders$authorized_from), " to ",
+      format(offenders$authorized_until), "; series_exclusion ",
+      offenders$series_exclusion, "; in the ",
+      dplyr::if_else(in_tile[is_offender], "tile", "series"), " only"
+    )
+    cli::cli_abort(c(
+      "The \"Authorized now\" tile counts {sum(in_tile)} medicine{?s} but the
+      authorized series counts {sum(in_series)} on {snapshot_date}.",
+      stats::setNames(
+        escape_cli_braces(descriptions),
+        rep("x", length(descriptions))
+      )
+    ))
+  }
+  invisible(medicines)
+}
