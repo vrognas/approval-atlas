@@ -334,3 +334,129 @@ build_area_branches_table <- function(term_matches, mesh) {
     ) |>
     dplyr::arrange(.data$therapeutic_area_mesh, .data$branch)
 }
+
+# Search folding, shared with the browser: both sides apply exactly these
+# steps in this order, so R-folded data and a browser-folded query compare
+# as equal strings.
+# 1. Lower-case (str_to_lower in R, toLowerCase in the browser).
+# 2. Replace every match of /ae|oe/ with "e" in ONE left-to-right pass
+#    ("haemophilia" -> "hemophilia", "oedema" -> "edema", "oae" -> "oe").
+# 3. Replace every hyphen-minus and dash U+2010 to U+2015 with a space.
+# 4. Trim, and collapse each run of whitespace (/\s+/) to one space.
+fold_search_text <- function(x) {
+  x |>
+    stringr::str_to_lower() |>
+    stringr::str_replace_all("ae|oe", "e") |>
+    stringr::str_replace_all("[\\-\\x{2010}-\\x{2015}]", " ") |>
+    stringr::str_squish()
+}
+
+tree_number_prefixes <- function(tree_number) {
+  parts <- strsplit(tree_number, ".", fixed = TRUE)[[1]]
+  vapply(
+    seq_along(parts),
+    function(depth) paste(parts[seq_len(depth)], collapse = "."),
+    character(1)
+  )
+}
+
+# Descriptors of the EMA terms plus every ancestor in the MeSH trees, so a
+# broad query ("Neoplasms") finds the narrower terms EMA uses.
+find_relevant_descriptors <- function(descriptor_uis, mesh) {
+  descriptor_uis <- unique(descriptor_uis[!is.na(descriptor_uis)])
+  own_tree_numbers <- mesh$tree_numbers$tree_number[
+    mesh$tree_numbers$descriptor_ui %in% descriptor_uis
+  ]
+  ancestor_tree_numbers <- unique(unlist(
+    purrr::map(own_tree_numbers, tree_number_prefixes)
+  ))
+  ancestors <- mesh$tree_numbers$descriptor_ui[
+    mesh$tree_numbers$tree_number %in% ancestor_tree_numbers
+  ]
+  sort(unique(c(descriptor_uis, ancestors)), method = "radix")
+}
+
+word_set_key <- function(text) {
+  words <- stringr::str_split(text, "[^\\p{L}\\p{N}]+")
+  purrr::map_chr(words, function(term_words) {
+    term_words <- unique(term_words[term_words != ""])
+    paste(sort(term_words, method = "radix"), collapse = " ")
+  })
+}
+
+build_mesh_entry_terms <- function(descriptor_uis, mesh) {
+  # Descriptor names come first, so the preferred wording is the one kept
+  # when terms differ only in word order ("Neoplasms, Breast"); the browser
+  # matches words in any order, so no match is lost.
+  descriptor_names <- mesh$descriptors |>
+    dplyr::filter(.data$descriptor_ui %in% descriptor_uis) |>
+    dplyr::select("descriptor_ui", term = "descriptor_name")
+  entry_terms <- mesh$terms |>
+    dplyr::filter(.data$descriptor_ui %in% descriptor_uis) |>
+    dplyr::select("descriptor_ui", "term")
+  dplyr::bind_rows(descriptor_names, entry_terms) |>
+    dplyr::mutate(
+      entry_term = fold_search_text(.data$term),
+      word_set = word_set_key(.data$entry_term)
+    ) |>
+    dplyr::distinct(.data$descriptor_ui, .data$word_set, .keep_all = TRUE) |>
+    dplyr::transmute(
+      .data$entry_term,
+      mesh_descriptor_ui = .data$descriptor_ui
+    ) |>
+    dplyr::arrange(.data$entry_term, .data$mesh_descriptor_ui)
+}
+
+# One row per relevant descriptor and EMA term in its subtree (itself
+# included), so the browser needs no tree logic.
+build_mesh_descriptor_areas <- function(term_matches, mesh) {
+  matched <- term_matches |>
+    dplyr::filter(!is.na(.data$mesh_descriptor_ui)) |>
+    dplyr::select("therapeutic_area_mesh", "mesh_descriptor_ui")
+  descriptor_by_tree_number <- dplyr::select(
+    mesh$tree_numbers,
+    ancestor_tree_number = "tree_number",
+    ancestor_ui = "descriptor_ui"
+  )
+  matched_trees <- dplyr::inner_join(
+    matched,
+    mesh$tree_numbers,
+    by = c(mesh_descriptor_ui = "descriptor_ui"),
+    relationship = "many-to-many"
+  )
+  prefixes <- purrr::map(matched_trees$tree_number, tree_number_prefixes)
+  ancestors <- dplyr::tibble(
+    therapeutic_area_mesh = rep(
+      matched_trees$therapeutic_area_mesh,
+      lengths(prefixes)
+    ),
+    ancestor_tree_number = as.character(unlist(prefixes))
+  ) |>
+    dplyr::inner_join(
+      descriptor_by_tree_number,
+      by = "ancestor_tree_number",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::transmute(
+      .data$therapeutic_area_mesh,
+      mesh_descriptor_ui = .data$ancestor_ui
+    )
+  descriptor_names <- dplyr::select(
+    mesh$descriptors,
+    mesh_descriptor_ui = "descriptor_ui",
+    mesh_descriptor_name = "descriptor_name"
+  )
+  dplyr::bind_rows(matched, ancestors) |>
+    dplyr::distinct() |>
+    dplyr::left_join(
+      descriptor_names,
+      by = "mesh_descriptor_ui",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::select(
+      "mesh_descriptor_ui",
+      "mesh_descriptor_name",
+      "therapeutic_area_mesh"
+    ) |>
+    dplyr::arrange(.data$mesh_descriptor_ui, .data$therapeutic_area_mesh)
+}

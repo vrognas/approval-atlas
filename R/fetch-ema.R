@@ -11,8 +11,13 @@ download_ema_json <- function(url = ema_medicines_url,
     return(destination)
   }
   cli::cli_inform("Downloading EMA data from {.url {url}}.")
-  download_to_file(throttled_request(url), destination)
+  download_to_file(ema_request(url), destination)
   destination
+}
+
+# One realm for every EMA file, so all EMA requests share the 2 s spacing.
+ema_request <- function(url) {
+  throttled_request(url, spacing_seconds = 2, realm = "ema.europa.eu")
 }
 
 is_recent_file <- function(path, max_age_hours) {

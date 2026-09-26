@@ -1,0 +1,22 @@
+[
+  { "input": "Haemophilia A", "expected": "hemophilia a" },
+  { "input": "Oedema", "expected": "edema" },
+  { "input": "Oesophageal Cancer", "expected": "esophageal cancer" },
+  { "input": "oae", "expected": "oe" },
+  { "input": "AEOE", "expected": "ee" },
+  { "input": "AAE", "expected": "ae" },
+  { "input": "Non-Small-Cell Lung", "expected": "non small cell lung" },
+  { "input": "a‐b‑c‒d–e—f―g", "expected": "a b c d e f g" },
+  { "input": "COVID‐19", "expected": "covid 19" },
+  { "input": "a−b", "expected": "a−b" },
+  { "input": "  Multiple   spaces\there \n ", "expected": "multiple spaces here" },
+  { "input": "Type 2 diabetes", "expected": "type 2 diabetes" },
+  { "input": "HIV-1 -- Infection", "expected": "hiv 1 infection" },
+  { "input": "Arthritis, Rheumatoid", "expected": "arthritis, rheumatoid" },
+  { "input": "Guillain–Barré Syndrome", "expected": "guillain barré syndrome" },
+  { "input": "Sjögren's Syndrome", "expected": "sjögren's syndrome" },
+  { "input": "Treprostinil SciPharm Sàrl", "expected": "treprostinil scipharm sàrl" },
+  { "input": "Crohn’s Disease", "expected": "crohn’s disease" },
+  { "input": "ΟΔΟΣ", "expected": "οδος" },
+  { "input": "", "expected": "" }
+]

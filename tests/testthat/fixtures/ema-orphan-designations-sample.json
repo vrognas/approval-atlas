@@ -1,0 +1,164 @@
+{
+  "meta": {
+    "total_records": 13,
+    "timestamp": "2026-09-26T18:10:39Z"
+  },
+  "data": [
+    {
+      "medicine_name": "",
+      "related_ema_product_number": "",
+      "active_substance": "daratumumab",
+      "date_of_designation_or_refusal": "25/05/2018",
+      "intended_use": "Treatment of AL amyloidosis",
+      "eu_designation_number": "EU/3/18/2020",
+      "status": "Withdrawn",
+      "first_published_date": "23/07/2018",
+      "last_updated_date": "26/08/2026",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-18-2020"
+    },
+    {
+      "medicine_name": "",
+      "related_ema_product_number": "",
+      "active_substance": "satralizumab",
+      "date_of_designation_or_refusal": "22/06/2026",
+      "intended_use": "Treatment of myelin oligodendrocyte glycoprotein antibody-associated disease",
+      "eu_designation_number": "EU/3/26/3249",
+      "status": "Positive",
+      "first_published_date": "24/08/2026",
+      "last_updated_date": "",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-26-3249"
+    },
+    {
+      "medicine_name": "Vijoice; Vijoice",
+      "related_ema_product_number": "EMEA/H/C/005468; EMEA/H/C/006539",
+      "active_substance": "alpelisib",
+      "date_of_designation_or_refusal": "26/03/2021",
+      "intended_use": "Treatment of PIK3CA related overgrowth spectrum",
+      "eu_designation_number": "EU/3/21/2420",
+      "status": "Positive",
+      "first_published_date": "19/01/2022",
+      "last_updated_date": "22/05/2026",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-21-2420"
+    },
+    {
+      "medicine_name": "Adcetris",
+      "related_ema_product_number": "EMEA/H/C/002455",
+      "active_substance": "monoclonal antibody against human CD30 covalently linked to the cytotoxin monomethylauristatin E (brentuximab vedotin)",
+      "date_of_designation_or_refusal": "15/01/2009",
+      "intended_use": "Treatment of Hodgkin's lymphoma",
+      "eu_designation_number": "EU/3/08/596",
+      "status": "Withdrawn",
+      "first_published_date": "15/05/2009",
+      "last_updated_date": "26/06/2024",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-08-596"
+    },
+    {
+      "medicine_name": "Fintepla",
+      "related_ema_product_number": "EMEA/H/C/003933",
+      "active_substance": "fenfluramine hydrochloride",
+      "date_of_designation_or_refusal": "20/03/2023",
+      "intended_use": "Treatment of CDKL5 deficiency disorder",
+      "eu_designation_number": "EU/3/23/2768",
+      "status": "Positive",
+      "first_published_date": "31/01/2024",
+      "last_updated_date": "",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-23-2768"
+    },
+    {
+      "medicine_name": "Tibsovo",
+      "related_ema_product_number": "EMEA/H/C/005936",
+      "active_substance": "Ivosidenib",
+      "date_of_designation_or_refusal": "21/03/2018",
+      "intended_use": "Treatment of biliary tract cancer",
+      "eu_designation_number": "EU/3/18/1994",
+      "status": "Positive",
+      "first_published_date": "08/05/2018",
+      "last_updated_date": "12/05/2023",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-18-1994"
+    },
+    {
+      "medicine_name": "Tibsovo; Tidhesco",
+      "related_ema_product_number": "EMEA/H/C/005936; EMEA/H/C/006174",
+      "active_substance": "Ivosidenib",
+      "date_of_designation_or_refusal": "12/12/2016",
+      "intended_use": "Treatment of acute myeloid leukaemia",
+      "eu_designation_number": "EU/3/16/1802",
+      "status": "Positive",
+      "first_published_date": "09/01/2017",
+      "last_updated_date": "12/05/2023",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-16-1802"
+    },
+    {
+      "medicine_name": "Fintepla",
+      "related_ema_product_number": "EMEA/H/C/003933",
+      "active_substance": "fenfluramine hydrochloride",
+      "date_of_designation_or_refusal": "27/02/2017",
+      "intended_use": "Treatment of Lennox-Gastaut syndrome",
+      "eu_designation_number": "EU/3/17/1836",
+      "status": "Positive",
+      "first_published_date": "31/03/2017",
+      "last_updated_date": "25/04/2023",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-17-1836"
+    },
+    {
+      "medicine_name": "Fintepla",
+      "related_ema_product_number": "EMEA/H/C/003933",
+      "active_substance": "fenfluramine hydrochloride",
+      "date_of_designation_or_refusal": "18/12/2013",
+      "intended_use": "Treatment of Dravet syndrome",
+      "eu_designation_number": "EU/3/13/1219",
+      "status": "Positive",
+      "first_published_date": "23/01/2014",
+      "last_updated_date": "25/04/2023",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-13-1219"
+    },
+    {
+      "medicine_name": "Kymriah",
+      "related_ema_product_number": "EMEA/H/C/004090",
+      "active_substance": "tisagenlecleucel",
+      "date_of_designation_or_refusal": "19/07/2021",
+      "intended_use": "Treatment of follicular lymphoma",
+      "eu_designation_number": "EU/3/21/2464",
+      "status": "Positive",
+      "first_published_date": "12/11/2021",
+      "last_updated_date": "19/05/2022",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-21-2464"
+    },
+    {
+      "medicine_name": "Kymriah",
+      "related_ema_product_number": "EMEA/H/C/004090",
+      "active_substance": "autologous T cells transduced with lentiviral vector containing a chimeric antigen receptor directed against CD19 (tisagenlecleucel)",
+      "date_of_designation_or_refusal": "29/04/2014",
+      "intended_use": "Treatment of B-lymphoblastic leukaemia/lymphoma",
+      "eu_designation_number": "EU/3/14/1266",
+      "status": "Positive",
+      "first_published_date": "04/06/2014",
+      "last_updated_date": "13/06/2018",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-14-1266"
+    },
+    {
+      "medicine_name": "",
+      "related_ema_product_number": "",
+      "active_substance": "autologous T cells transduced with lentiviral vector containing a chimeric antigen receptor directed against CD19 (tisagenlecleucel)",
+      "date_of_designation_or_refusal": "14/10/2016",
+      "intended_use": "Treatment of diffuse large B-cell lymphoma",
+      "eu_designation_number": "EU/3/16/1745",
+      "status": "Positive",
+      "first_published_date": "14/11/2016",
+      "last_updated_date": "13/06/2018",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-16-1745"
+    },
+    {
+      "medicine_name": "",
+      "related_ema_product_number": "",
+      "active_substance": "allogeneic T cells encoding an exogenous TK gene",
+      "date_of_designation_or_refusal": "21/06/2011",
+      "intended_use": "Treatment of acute lymphoblastic leukaemia",
+      "eu_designation_number": "EU/3/11/878)",
+      "status": "Positive",
+      "first_published_date": "12/07/2011",
+      "last_updated_date": "12/07/2011",
+      "orphan_designation_url": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-11-878"
+    }
+  ]
+}

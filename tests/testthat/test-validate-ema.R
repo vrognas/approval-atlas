@@ -226,3 +226,22 @@ test_that("check_tile_matches_series lists rows counted by only one side", {
   expect_match(message, "EMEA/H/C/000004 Delta", fixed = TRUE)
   expect_no_match(message, "Gamma", fixed = TRUE)
 })
+
+test_that("check_source_fields returns data with every field invisibly", {
+  data <- dplyr::tibble(type = "overview", name = "x", extra = 1)
+  expect_invisible(check_source_fields(data, c("name", "type"), "Documents"))
+  expect_identical(check_source_fields(data, "type", "Documents"), data)
+})
+
+test_that("check_source_fields names the source and each missing field", {
+  data <- dplyr::tibble(type = "overview")
+  error <- expect_error(
+    check_source_fields(data, c("type", "name", "document_url"), "Documents"),
+    class = "rlang_error"
+  )
+  expect_match(
+    conditionMessage(error),
+    "Documents is missing 2 expected fields"
+  )
+  expect_match(conditionMessage(error), "\"name\".*\"document_url\"")
+})

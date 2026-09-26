@@ -39,7 +39,45 @@ seed_downloads_directory <- function() {
     fixture_atc_class_path(),
     file.path(release_directory, "atc_class.json")
   )
+  seed_cached_source(
+    file.path(downloads_directory, "ema-documents", "epar_documents.json"),
+    fixture_epar_documents_path(),
+    list(
+      url = epar_documents_url,
+      etag = "\"1790394761\"",
+      last_modified = "Sat, 26 Sep 2026 03:52:41 GMT",
+      retrieved = "2026-09-26T15:30:56Z"
+    )
+  )
+  seed_cached_source(
+    file.path(
+      downloads_directory, "ema-orphans", "orphan_designations.json"
+    ),
+    fixture_ema_orphan_path(),
+    list(
+      url = ema_orphan_designations_url,
+      etag = NA_character_,
+      last_modified = "Sat, 26 Sep 2026 16:10:39 GMT",
+      retrieved = "2026-09-26T16:45:21Z"
+    )
+  )
+  seed_cached_source(
+    file.path(downloads_directory, "union-register", "ods_products.json"),
+    fixture_union_register_path(),
+    list(
+      url = union_register_url,
+      etag = "\"ff8867-65c507c733087\"",
+      last_modified = "Fri, 25 Sep 2026 15:36:55 GMT",
+      retrieved = "2026-09-26T15:31:22Z"
+    )
+  )
   downloads_directory
+}
+
+seed_cached_source <- function(destination, fixture_path, source) {
+  dir.create(dirname(destination), recursive = TRUE)
+  file.copy(fixture_path, destination)
+  write_source_sidecar(source, file.path(dirname(destination), "source.json"))
 }
 
 forbid_network <- function(env = parent.frame()) {
@@ -67,7 +105,14 @@ output_stems <- c(
   "ema_medicine_substances",
   "atc_classes",
   "ema_therapeutic_area_branches",
-  "ema_authorized_series"
+  "ema_authorized_series",
+  "ema_medicine_documents",
+  "mesh_entry_terms",
+  "mesh_descriptor_areas",
+  "ema_search_index",
+  "ema_medicine_protection",
+  "ema_medicine_orphan_exclusivity",
+  "ema_medicine_register_status"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -91,13 +136,58 @@ test_that("run_ema_pipeline writes every table and meta.json from caches", {
   expect_identical(meta$snapshot_date, "2026-09-26")
   expect_identical(
     vapply(meta$sources, function(source) source$version, character(1)),
-    c("2026-09-26T06:02:29Z", "MeSH 2026", "ChEMBL_37")
+    c(
+      "2026-09-26T06:02:29Z", "MeSH 2026", "ChEMBL_37",
+      "2026-09-26T05:49:47Z", "2026-09-26T18:10:39Z",
+      "Fri, 25 Sep 2026 15:36:55 GMT"
+    )
   )
   expect_identical(
     meta$sources[[2]]$last_modified,
     "Wed, 12 Aug 2026 18:05:02 GMT"
   )
+  expect_identical(
+    vapply(meta$sources[4:6], function(source) source$url, character(1)),
+    c(epar_documents_url, ema_orphan_designations_url, union_register_url)
+  )
+  expect_identical(meta$sources[[6]]$retrieved, "2026-09-26")
+  expect_match(meta$sources[[6]]$attribution, "Union Register", fixed = TRUE)
   expect_identical(meta$licence, data_licence)
+})
+
+test_that("run_ema_pipeline builds the lookup tables from cached sources", {
+  forbid_network()
+  tables <- suppressMessages(
+    run_fixture_pipeline(file.path(tempfile(), "data"))
+  )
+  documents <- tables$ema_medicine_documents
+  expect_setequal(
+    unique(documents$ema_product_number),
+    paste0("EMEA/H/C/", c("000112", "000697", "003933", "004090"))
+  )
+  expect_identical(nrow(tables$ema_search_index), 19L)
+  expect_identical(nrow(tables$ema_medicine_protection), 14L)
+  tyruko <- tables$ema_medicine_protection[
+    tables$ema_medicine_protection$ema_product_number == "EMEA/H/C/005752",
+  ]
+  expect_identical(tyruko$basis, "reference_not_found")
+  expect_identical(
+    unique(tables$ema_medicine_orphan_exclusivity$ema_product_number),
+    c("EMEA/H/C/003933", "EMEA/H/C/004090")
+  )
+  expect_identical(nrow(tables$ema_medicine_orphan_exclusivity), 5L)
+  register_status <- tables$ema_medicine_register_status
+  expect_identical(
+    register_status$ema_product_number,
+    paste0("EMEA/H/C/", c("000697", "003933", "004090", "005282"))
+  )
+  expect_identical(
+    register_status$agrees_with_ema,
+    c(FALSE, TRUE, TRUE, FALSE)
+  )
+  # The fixture MeSH has none of the fixture EMA terms.
+  expect_identical(nrow(tables$mesh_entry_terms), 0L)
+  expect_identical(nrow(tables$mesh_descriptor_areas), 0L)
 })
 
 test_that("run_ema_pipeline returns the tables invisibly", {
@@ -126,6 +216,29 @@ test_that("run_ema_pipeline reports files, MeSH matches and the series", {
   expect_match(
     messages,
     "Authorized on 2026-09-26: series 12 products .* tile 12",
+    all = FALSE
+  )
+  expect_match(messages, "Using cached EMA EPAR documents index", all = FALSE)
+  expect_match(messages, "Using cached EMA orphan designations", all = FALSE)
+  expect_match(messages, "Using cached Union Register products", all = FALSE)
+  expect_match(
+    messages,
+    "Documents: 3 of 14 Authorised medicines have product information",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "Protection estimates: 6 protected, 4 ended, 4 unclear",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "Orphan exclusivity: 2 of 2 Authorised orphan medicines linked",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "Union Register status: 4 EMA products linked \\(2 of 14 Authorised\\)",
     all = FALSE
   )
 })
@@ -181,7 +294,12 @@ test_that("run_ema_pipeline output follows the data contract", {
     "ema_medicine_therapeutic_areas",
     "ema_medicine_active_substances",
     "ema_medicine_atc_codes",
-    "ema_medicine_substances"
+    "ema_medicine_substances",
+    "ema_medicine_documents",
+    "ema_search_index",
+    "ema_medicine_protection",
+    "ema_medicine_orphan_exclusivity",
+    "ema_medicine_register_status"
   )
   for (stem in product_lookups) {
     lookup <- read_output(stem)

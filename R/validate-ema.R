@@ -61,6 +61,18 @@ check_expected_columns <- function(data) {
   invisible(data)
 }
 
+check_source_fields <- function(data, fields, source_name) {
+  missing_fields <- setdiff(fields, names(data))
+  if (length(missing_fields) > 0) {
+    cli::cli_abort(c(
+      "{source_name} is missing {length(missing_fields)} expected
+      field{?s}; has its format changed?",
+      x = "{.val {offender_values(missing_fields)}}"
+    ))
+  }
+  invisible(data)
+}
+
 check_record_count <- function(data, meta) {
   if (!isTRUE(nrow(data) == meta$total_records)) {
     cli::cli_abort(

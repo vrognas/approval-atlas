@@ -422,3 +422,171 @@ test_that("build_area_branches_table aborts on a descriptor missing in MeSH", {
   expect_match(conditionMessage(error), "D999999")
   expect_match(conditionMessage(error), "Retired Term")
 })
+
+test_that("fold_search_text lower-cases and folds ae, oe and dashes", {
+  expect_identical(
+    fold_search_text(c(
+      "Haemophilia A",
+      "Oedema",
+      "Non-Hodgkin  Lymphoma",
+      "Guillain–Barré Syndrome",
+      "  COVID‐19 ",
+      "Alzheimer's Disease",
+      NA
+    )),
+    c(
+      "hemophilia a",
+      "edema",
+      "non hodgkin lymphoma",
+      "guillain barré syndrome",
+      "covid 19",
+      "alzheimer's disease",
+      NA
+    )
+  )
+})
+
+test_that("fold_search_text replaces ae and oe in one left-to-right pass", {
+  expect_identical(fold_search_text(c("oae", "AEOE")), c("oe", "ee"))
+})
+
+# The browser's foldSearchText is tested against the same file.
+test_that("fold_search_text folds every case of the shared fixture", {
+  cases <- jsonlite::fromJSON(fixture_fold_cases_path())
+  expect_gt(nrow(cases), 15)
+  expect_identical(fold_search_text(cases$input), cases$expected)
+})
+
+asmd_term <- "Acid sphingomyelinase deficiency (ASMD) type A/B or type B"
+
+fixture_term_matches <- function(mesh) {
+  match_mesh_terms(c("Alzheimer Disease", asmd_term, "Psoriasis"), mesh)
+}
+
+test_that("tree_number_prefixes lists a tree number and its ancestors", {
+  expect_identical(
+    tree_number_prefixes("C10.228.140"),
+    c("C10", "C10.228", "C10.228.140")
+  )
+})
+
+test_that("find_relevant_descriptors adds every ancestor descriptor", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  expect_identical(
+    find_relevant_descriptors(c("D000544", "D009542", NA), mesh),
+    c("D000544", "D001523", "D009422", "D009542")
+  )
+})
+
+test_that("build_mesh_entry_terms folds every term of relevant descriptors", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  expect_identical(
+    build_mesh_entry_terms(c("D000544", "D001523", "D009422", "D009542"), mesh),
+    dplyr::tibble(
+      entry_term = c(
+        "acid sphingomyelinase deficiency",
+        "alzheimer disease",
+        "alzheimer's disease",
+        "dementia, senile",
+        "mental disorders",
+        "nervous system diseases",
+        "neurologic disorders",
+        "niemann pick diseases",
+        "psychiatric illness"
+      ),
+      mesh_descriptor_ui = c(
+        "D009542", "D000544", "D000544", "D000544", "D001523", "D009422",
+        "D009422", "D009542", "D001523"
+      )
+    )
+  )
+})
+
+test_that("build_mesh_entry_terms keeps one term per descriptor word set", {
+  mesh <- list(
+    descriptors = dplyr::tibble(
+      descriptor_ui = c("D1", "D2"),
+      descriptor_name = c("Breast Neoplasms", "Mammary Neoplasms")
+    ),
+    tree_numbers = dplyr::tibble(
+      descriptor_ui = character(),
+      tree_number = character()
+    ),
+    terms = dplyr::tibble(
+      descriptor_ui = c("D1", "D1", "D1", "D2"),
+      term = c(
+        "Breast Neoplasms", "Neoplasms, Breast", "Breast Cancer",
+        "Breast Cancer"
+      )
+    )
+  )
+  expect_identical(
+    build_mesh_entry_terms(c("D1", "D2"), mesh),
+    dplyr::tibble(
+      entry_term = c(
+        "breast cancer", "breast cancer", "breast neoplasms",
+        "mammary neoplasms"
+      ),
+      mesh_descriptor_ui = c("D1", "D2", "D1", "D2")
+    )
+  )
+})
+
+test_that("build_mesh_descriptor_areas lists EMA terms in each subtree", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  expect_identical(
+    build_mesh_descriptor_areas(fixture_term_matches(mesh), mesh),
+    dplyr::tibble(
+      mesh_descriptor_ui = c(
+        "D000544", "D001523", "D009422", "D009422", "D009542"
+      ),
+      mesh_descriptor_name = c(
+        "Alzheimer Disease",
+        "Mental Disorders",
+        "Nervous System Diseases",
+        "Nervous System Diseases",
+        "Niemann-Pick Diseases"
+      ),
+      therapeutic_area_mesh = c(
+        "Alzheimer Disease",
+        "Alzheimer Disease",
+        asmd_term,
+        "Alzheimer Disease",
+        asmd_term
+      )
+    )
+  )
+})
+
+test_that("the MeSH lookup tables are empty when no EMA term matches", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  matches <- match_mesh_terms("Psoriasis", mesh)
+  areas <- build_mesh_descriptor_areas(matches, mesh)
+  expect_identical(nrow(areas), 0L)
+  expect_named(
+    areas,
+    c("mesh_descriptor_ui", "mesh_descriptor_name", "therapeutic_area_mesh")
+  )
+  entry_terms <- build_mesh_entry_terms(
+    find_relevant_descriptors(matches$mesh_descriptor_ui, mesh),
+    mesh
+  )
+  expect_identical(nrow(entry_terms), 0L)
+  expect_named(entry_terms, c("entry_term", "mesh_descriptor_ui"))
+})
+
+test_that("a matched descriptor without tree numbers still covers its term", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  mesh$tree_numbers <- mesh$tree_numbers[
+    mesh$tree_numbers$descriptor_ui != "D009542",
+  ]
+  areas <- build_mesh_descriptor_areas(fixture_term_matches(mesh), mesh)
+  expect_identical(
+    areas$therapeutic_area_mesh[areas$mesh_descriptor_ui == "D009542"],
+    asmd_term
+  )
+  expect_identical(
+    areas$therapeutic_area_mesh[areas$mesh_descriptor_ui == "D009422"],
+    "Alzheimer Disease"
+  )
+})

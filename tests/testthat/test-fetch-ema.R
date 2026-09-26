@@ -131,3 +131,31 @@ test_that("read_ema_json returns meta and a tibble of character columns", {
   expect_identical(nrow(ema$data), 21L)
   expect_true(all(vapply(ema$data, is.character, logical(1))))
 })
+
+test_that("ema_request allows one request per 2 s across all EMA files", {
+  requested <- new.env()
+  testthat::local_mocked_bindings(
+    throttled_request = function(url, spacing_seconds, realm) {
+      requested$spacing_seconds <- spacing_seconds
+      requested$realm <- realm
+    }
+  )
+  ema_request(ema_medicines_url)
+  expect_identical(requested$spacing_seconds, 2)
+  expect_identical(requested$realm, "ema.europa.eu")
+})
+
+test_that("download_ema_json uses the EMA request", {
+  destination <- file.path(tempfile(), "medicines.json")
+  requested <- new.env()
+  testthat::local_mocked_bindings(
+    req_perform = function(req, path = NULL, ...) {
+      requested$realm <- req$policies$throttle_realm
+      writeLines("{}", path)
+      httr2::response(status_code = 200)
+    },
+    .package = "httr2"
+  )
+  suppressMessages(download_ema_json(destination = destination))
+  expect_identical(requested$realm, "ema.europa.eu")
+})

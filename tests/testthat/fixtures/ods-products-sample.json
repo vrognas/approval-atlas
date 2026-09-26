@@ -1,0 +1,2595 @@
+{
+  "data": [
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/ho26270.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "20% I.V. fat emulsion consisting of 20% soybean oil, 1.2% egg yolk phospholipids, 2.25% glycerin, and water for injection"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Refused",
+      "EUNumber": null,
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "20% intravenous fat emulsion consisting of 20% soybean oil, 1.2% egg yolk phospholipids, 2.25% glycerin, and water for injection"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of poisoning by local anesthetics"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh22279.htm",
+        "Name": "Alan Boyd Consultants Ltd",
+        "Address": "Electra House, Crewe Business Park, Crewe, Cheshire CW1 6GL, United Kingdom"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/refusal-orphan-designation-treatment-poisoning-local-anaesthetics",
+      "AuthorisationDate": null,
+      "LastDecisionDate": "2017-04-20",
+      "TotalProcedures": "1",
+      "TotalDecisions": "1",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h794.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "ADCETRIS"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o595.htm",
+          "LinkDate": "2012-10-30",
+          "ExtensionLength": "24",
+          "ExtensionDate": "2021-12-14",
+          "EndDate": "2024-06-20"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o596.htm",
+          "LinkDate": "2012-10-30",
+          "ExtensionLength": "24",
+          "ExtensionDate": "2021-12-14",
+          "EndDate": "2024-06-20"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o939.htm",
+          "LinkDate": "2017-12-19",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": "2024-06-20"
+        }
+      ],
+      "Status": "Active",
+      "EUNumber": "EU/1/12/794",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Brentuximab vedotin"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Hodgkin lymphoma\r\nADCETRIS is indicated for adult patients with previously untreated CD30+ Stage III or IV Hodgkin lymphoma (HL) in combination with doxorubicin, vinblastine and dacarbazine (AVD).\r\nADCETRIS is indicated for adult patients with previously untreated CD30+ Stage IIB with risk factors, Stage III or Stage IV HL in combination with etoposide, cyclophosphamide, doxorubicin, dacarbazine, dexamethasone (BrECADD). \r\nADCETRIS is indicated for the treatment of adult patients with CD30+ HL at increased risk of relapse or progression following autologous stem cell transplant (ASCT).\r\nADCETRIS is indicated for the treatment of adult patients with relapsed or refractory CD30+ Hodgkin lymphoma (HL): \r\n1. following ASCT, or\r\n2. following at least two prior therapies when ASCT or multi agent chemotherapy is not a treatment option.\r\n\r\nSystemic anaplastic large cell lymphoma\r\nADCETRIS in combination with cyclophosphamide, doxorubicin and prednisone (CHP) is indicated for adult patients with previously untreated systemic anaplastic large cell lymphoma (sALCL).\r\nADCETRIS is indicated for the treatment of adult patients with relapsed or refractory sALCL.\r\n\r\nCutaneous T cell lymphoma \r\nADCETRIS is indicated for the treatment of adult patients with CD30+ cutaneous T cell lymphoma (CTCL) after at least 1 prior systemic therapy."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26317.htm",
+        "Name": "Takeda Pharma A/S",
+        "Address": "Delta Park 45, 2665 Vallensbaek Strand, Danmark"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "L01FX05",
+          "Description": "brentuximab vedotin"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/adcetris",
+      "AuthorisationDate": "2012-10-25",
+      "LastDecisionDate": "2025-06-02",
+      "TotalProcedures": "60",
+      "TotalDecisions": "25",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250602166239/anx_166239_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/vo15001.htm",
+      "Type": "Veterinary",
+      "Category": "Nationally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "APPM Respipharm"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": null,
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": null
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "For active immunisation of sows and piglets from the age of 6 weeks against pleuropneumonia caused by Actinobacillus pleuropneumoniae and against secondary infection of Pasteurella multocida."
+        }
+      ],
+      "MAH": null,
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/veterinary/referrals/appm-respipharm",
+      "AuthorisationDate": null,
+      "LastDecisionDate": "2010-01-27",
+      "TotalProcedures": "1",
+      "TotalDecisions": "1",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2010/2010012772070/anx_72070_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h890.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Cometriq"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o610.htm",
+          "LinkDate": "2014-03-26",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": "2024-03-26"
+        }
+      ],
+      "Status": "Active",
+      "EUNumber": "EU/1/13/890",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "cabozantinib"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "COMETRIQ is indicated for the treatment of adult patients with progressive, unresectable locally advanced or metastatic medullary thyroid carcinoma.\r\n\r\nFor patients in whom rearranged during transfection (RET) mutation status is not known or is negative, a possible lower benefit should be taken into account before individual treatment decision"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh27923.htm",
+        "Name": "Ipsen Pharma",
+        "Address": "70 rue Balard, 75015 Paris, France"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "L01EX07",
+          "Description": "cabozantinib"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/cometriq",
+      "AuthorisationDate": "2014-03-21",
+      "LastDecisionDate": "2026-05-26",
+      "TotalProcedures": "41",
+      "TotalDecisions": "18",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260526169598/anx_169598_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o018.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/01/018"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Expired / Sunset clause",
+      "EUNumber": "EU/3/01/018",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Recombinant human acid alpha-glucosidase"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of Glycogen Storage Disease type II (Pompe´s disease)"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh800.htm",
+        "Name": "Genzyme Europe B.V.",
+        "Address": "Gooimeer 10, 1411 DD Naarden, Nederland"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-01-018",
+      "AuthorisationDate": "2001-02-14",
+      "LastDecisionDate": "2002-04-15",
+      "TotalProcedures": "3",
+      "TotalDecisions": "2",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o595.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/08/595"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Withdrawn",
+      "EUNumber": "EU/3/08/595",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Monoclonal antibody against human CD30 covalently linked to the cytotoxin monomethylauristatin E"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of peripheral T-cell lymphoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26333.htm",
+        "Name": "Takeda Pharma A/S",
+        "Address": "Delta Park 45, 2665 Vallensbaek Strand, Hovedstaden. Danmark"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-08-595",
+      "AuthorisationDate": "2009-01-15",
+      "LastDecisionDate": "2019-08-21",
+      "TotalProcedures": "8",
+      "TotalDecisions": "4",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o596.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/08/596"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Withdrawn",
+      "EUNumber": "EU/3/08/596",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Monoclonal antibody against human CD30 covalently linked to the cytotoxin monomethylauristatin E"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of Hodgkin lymphoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26333.htm",
+        "Name": "Takeda Pharma A/S",
+        "Address": "Delta Park 45, 2665 Vallensbaek Strand, Hovedstaden. Danmark"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-08-596",
+      "AuthorisationDate": "2009-01-15",
+      "LastDecisionDate": "2013-10-21",
+      "TotalProcedures": "8",
+      "TotalDecisions": "3",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o610.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/08/610"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Expired / Sunset clause",
+      "EUNumber": "EU/3/08/610",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Cyclopropane-1,1-dicarboxylic acid [4-(6,7-dimethoxy-quinolin-4-yloxy)-phenyl]-amide (4-fluoro-phenyl)-amide, (L)-malate salt"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of medullary thyroid carcinoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh11579.htm",
+        "Name": "Ipsen Pharma",
+        "Address": "65 quai Georges Gorse, 92100 Boulogne-Billancourt, France"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-08-610",
+      "AuthorisationDate": "2011-08-30",
+      "LastDecisionDate": "2016-09-26",
+      "TotalProcedures": "3",
+      "TotalDecisions": "3",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o878.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/11/878"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/11/878",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Allogeneic T cells encoding an exogenous TK gene"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of acute lymphoblastic leukaemia"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh16060.htm",
+        "Name": "LTKFarma",
+        "Address": "4 rue Pierre Fontaine, 91000 Evry, France"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-11-878",
+      "AuthorisationDate": "2011-06-21",
+      "LastDecisionDate": "2011-06-21",
+      "TotalProcedures": "1",
+      "TotalDecisions": "1",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o939.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/11/939"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Withdrawn",
+      "EUNumber": "EU/3/11/939",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Brentuximab vedotin"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of cutaneous T-cell lymphoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26333.htm",
+        "Name": "Takeda Pharma A/S",
+        "Address": "Delta Park 45, 2665 Vallensbaek Strand, Hovedstaden. Danmark"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-11-939",
+      "AuthorisationDate": "2012-01-11",
+      "LastDecisionDate": "2013-10-21",
+      "TotalProcedures": "6",
+      "TotalDecisions": "2",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1219.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/13/1219"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/13/1219",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fenfluramine hydrochloride"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of Dravet syndrome"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26987.htm",
+        "Name": "UCB Pharma",
+        "Address": "Allee De La Recherche 60, 1070 Anderlecht, Brussels-Capital Region, Belgique/Researchdreef 60, 1070 Anderlecht, Brussels-Capital Region, België"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-13-1219",
+      "AuthorisationDate": "2013-12-18",
+      "LastDecisionDate": "2023-04-21",
+      "TotalProcedures": "6",
+      "TotalDecisions": "4",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1266.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/14/1266"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/14/1266",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Autologous T cells transduced with lentiviral vector containing a chimeric antigen receptor directed against CD19"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of B-lymphoblastic leukaemia/lymphoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh25271.htm",
+        "Name": "Novartis Europharm Limited",
+        "Address": "Vista Building, Elm Park, Merrion Road, Dublin 4, Ireland"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-14-1266",
+      "AuthorisationDate": "2014-04-29",
+      "LastDecisionDate": "2018-05-16",
+      "TotalProcedures": "4",
+      "TotalDecisions": "2",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1372.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/14/1372"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/14/1372",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "(2R,3S)-2-(4-cyclopentylaminophenyl)-1-(2-fluoro-6-methylbenzoyl)piperidine-3-carboxylic acid(4-methyl-3-trifluoromethylphenyl)amide"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of microscopic polyangiitis"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26323.htm",
+        "Name": "Vifor Fresenius Medical Care Renal Pharma France",
+        "Address": "Tour Franklin La Defense 8, 100 Terrasse Boieldieu, Paris La Defense Cedex, 92042, France"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-14-1372",
+      "AuthorisationDate": "2014-11-19",
+      "LastDecisionDate": "2020-10-09",
+      "TotalProcedures": "4",
+      "TotalDecisions": "3",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1373.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/14/1373"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/14/1373",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "(2R,3S)-2-(4-cyclopentylaminophenyl)-1-(2-fluoro-6-methylbenzoyl)piperidine-3-carboxylic acid(4-methyl-3-trifluoromethylphenyl)amide"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of granulomatosis with polyangiitis"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26323.htm",
+        "Name": "Vifor Fresenius Medical Care Renal Pharma France",
+        "Address": "Tour Franklin La Defense 8, 100 Terrasse Boieldieu, Paris La Defense Cedex, 92042, France"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-14-1373",
+      "AuthorisationDate": "2014-11-19",
+      "LastDecisionDate": "2020-10-09",
+      "TotalProcedures": "5",
+      "TotalDecisions": "3",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1745.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/16/1745"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/16/1745",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Autologous T cells transduced with lentiviral vector containing a chimeric antigen receptor directed against CD19"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of diffuse large B-cell lymphoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh25271.htm",
+        "Name": "Novartis Europharm Limited",
+        "Address": "Vista Building, Elm Park, Merrion Road, Dublin 4, Ireland"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-16-1745",
+      "AuthorisationDate": "2016-10-14",
+      "LastDecisionDate": "2018-05-16",
+      "TotalProcedures": "3",
+      "TotalDecisions": "2",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1802.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/16/1802"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/16/1802",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Ivosidenib"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of acute myeloid leukaemia"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh25604.htm",
+        "Name": "Les Laboratoires Servier",
+        "Address": "50 rue Carnot, 92284 Suresnes Cedex, France"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-16-1802",
+      "AuthorisationDate": "2016-12-12",
+      "LastDecisionDate": "2021-06-01",
+      "TotalProcedures": "5",
+      "TotalDecisions": "5",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1836.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/17/1836"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/17/1836",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fenfluramine hydrochloride"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of Lennox-Gastaut syndrome"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26987.htm",
+        "Name": "UCB Pharma",
+        "Address": "Allee De La Recherche 60, 1070 Anderlecht, Brussels-Capital Region, Belgique/Researchdreef 60, 1070 Anderlecht, Brussels-Capital Region, België"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-17-1836",
+      "AuthorisationDate": "2017-02-27",
+      "LastDecisionDate": "2023-04-21",
+      "TotalProcedures": "5",
+      "TotalDecisions": "4",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o1994.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/18/1994"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/18/1994",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Ivosidenib"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of biliary tract cancer"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh25604.htm",
+        "Name": "Les Laboratoires Servier",
+        "Address": "50 rue Carnot, 92284 Suresnes Cedex, France"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-18-1994",
+      "AuthorisationDate": "2018-03-21",
+      "LastDecisionDate": "2021-06-01",
+      "TotalProcedures": "5",
+      "TotalDecisions": "4",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o2420.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/21/2420"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/21/2420",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Alpelisib"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of PIK3CA related overgrowth spectrum"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26395.htm",
+        "Name": "Novartis Europharm Limited",
+        "Address": "Vista Building, Elmpark, Merrion Road, Dublin 4 D04 A9N6, Ireland"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-21-2420",
+      "AuthorisationDate": "2021-03-26",
+      "LastDecisionDate": "2021-03-26",
+      "TotalProcedures": "2",
+      "TotalDecisions": "1",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o2464.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/21/2464"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/21/2464",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Tisagenlecleucel"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of follicular lymphoma"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26395.htm",
+        "Name": "Novartis Europharm Limited",
+        "Address": "Vista Building, Elmpark, Merrion Road, Dublin 4 D04 A9N6, Ireland"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-21-2464",
+      "AuthorisationDate": "2021-07-19",
+      "LastDecisionDate": "2021-07-19",
+      "TotalProcedures": "2",
+      "TotalDecisions": "1",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/o2768.htm",
+      "Type": "Orphan designation",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "EU/3/23/2768"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/3/23/2768",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fenfluramine hydrochloride"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Treatment of CDKL5 deficiency disorder"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26987.htm",
+        "Name": "UCB Pharma",
+        "Address": "Allee De La Recherche 60, 1070 Anderlecht, Brussels-Capital Region, Belgique/Researchdreef 60, 1070 Anderlecht, Brussels-Capital Region, België"
+      },
+      "ATC": [],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/orphan-designations/eu-3-23-2768",
+      "AuthorisationDate": "2023-03-20",
+      "LastDecisionDate": "2023-04-21",
+      "TotalProcedures": "2",
+      "TotalDecisions": "2",
+      "CurrentAnnexLink": []
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h1491.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fintepla"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1219.htm",
+          "LinkDate": "2020-12-21",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1836.htm",
+          "LinkDate": "2023-01-31",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        }
+      ],
+      "Status": "Active",
+      "EUNumber": "EU/1/20/1491",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "fenfluramine"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fintepla is indicated for the treatment of seizures associated with Dravet syndrome and Lennox-Gastaut syndrome as an add-on therapy to other anti-epileptic medicines for patients 2 years of age and older."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh5078.htm",
+        "Name": "UCB Pharma S.A.",
+        "Address": "Allée de la Recherche 60, 1070 Bruxelles, Belgique/Researchdreef 60, 1070 Brussel, België"
+      },
+      "ATC": [
+        {
+          "Level": "4",
+          "Code": "N03AX",
+          "Description": "Other antiepileptics"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/fintepla",
+      "AuthorisationDate": "2020-12-18",
+      "LastDecisionDate": "2026-03-30",
+      "TotalProcedures": "21",
+      "TotalDecisions": "11",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260330169043/anx_169043_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h1297.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Kymriah"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1266.htm",
+          "LinkDate": "2018-08-27",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1745.htm",
+          "LinkDate": "2018-08-27",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o2464.htm",
+          "LinkDate": "2022-05-03",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        }
+      ],
+      "Status": "Active",
+      "EUNumber": "EU/1/18/1297",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "tisagenlecleucel"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Kymriah is indicated for the treatment of:\r\n• Paediatric and young adult patients up to and including 25 years of age with B cell acute lymphoblastic leukaemia (ALL) that is refractory, in relapse post transplant or in second or later relapse.\r\n• Adult patients with relapsed or refractory diffuse large B cell lymphoma (DLBCL) after two or more lines of systemic therapy.\r\n• Adult patients with relapsed or refractory follicular lymphoma (FL) after two or more lines of systemic therapy."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh25271.htm",
+        "Name": "Novartis Europharm Limited",
+        "Address": "Vista Building, Elm Park, Merrion Road, Dublin 4, Ireland"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "L01XL04",
+          "Description": "tisagenlecleucel"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/kymriah",
+      "AuthorisationDate": "2018-08-23",
+      "LastDecisionDate": "2026-05-06",
+      "TotalProcedures": "35",
+      "TotalDecisions": "8",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260506169591/anx_169591_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h333.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Myozyme"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o018.htm",
+          "LinkDate": "2006-03-31",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": "2016-03-31"
+        }
+      ],
+      "Status": "Active",
+      "EUNumber": "EU/1/06/333",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "alglucosidase alfa"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Myozyme is indicated for long-term enzyme replacement therapy (ERT) in patients with a confirmed diagnosis of Pompe disease (acid α-glucosidase deficiency).\r\nMyozyme is indicated in adults and paediatric patients of all ages."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh27263.htm",
+        "Name": "Sanofi B.V.",
+        "Address": "Paasheuvelweg 25, 1105 BP Amsterdam, Nederland"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "A16AB07",
+          "Description": "alglucosidase alfa"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/myozyme",
+      "AuthorisationDate": "2006-03-29",
+      "LastDecisionDate": "2024-09-30",
+      "TotalProcedures": "57",
+      "TotalDecisions": "19",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240930164105/anx_164105_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h1605.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Tavneos"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1372.htm",
+          "LinkDate": null,
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": "2022-01-19"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1373.htm",
+          "LinkDate": null,
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": "2022-01-19"
+        }
+      ],
+      "Status": "Revoked",
+      "EUNumber": "EU/1/21/1605",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "avacopan"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Tavneos, in combination with a rituximab or cyclophosphamide regimen, is indicated for the treatment of adult patients with severe, active granulomatosis with polyangiitis (GPA) or microscopic polyangiitis (MPA)"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh24795.htm",
+        "Name": "Vifor Fresenius Medical Care Renal Pharma France",
+        "Address": "100-101 terrasse Boieldieu, Tour Franklin La Défense 8, 92042 Paris la Défense Cedex, France"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "L04AJ05",
+          "Description": "avacopan"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/tavneos",
+      "AuthorisationDate": "2022-01-11",
+      "LastDecisionDate": "2026-08-04",
+      "TotalProcedures": "11",
+      "TotalDecisions": "5",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260804170469/anx_170469_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h1728.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Tibsovo"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1802.htm",
+          "LinkDate": "2023-05-08",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/html/o1994.htm",
+          "LinkDate": "2023-05-08",
+          "ExtensionLength": null,
+          "ExtensionDate": null,
+          "EndDate": null
+        }
+      ],
+      "Status": "Active",
+      "EUNumber": "EU/1/23/1728",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "ivosidenib"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Tibsovo in combination with azacitidine is indicated for the treatment of adult patients with newly diagnosed acute myeloid leukaemia (AML) with an isocitrate dehydrogenase-1 (IDH1) R132 mutation who are not eligible to receive standard induction chemotherapy.\r\nTibsovo monotherapy is indicated for the treatment of adult patients with locally advanced or metastatic cholangiocarcinoma with an IDH1 R132 mutation who were previously treated by at least one prior line of systemic therapy."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh20858.htm",
+        "Name": "Les Laboratoires Servier",
+        "Address": "50 rue Carnot, 92284 Suresnes CEDEX, France"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "L01XM02",
+          "Description": "ivosidenib"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/tibsovo",
+      "AuthorisationDate": "2023-05-04",
+      "LastDecisionDate": "2024-12-12",
+      "TotalProcedures": "7",
+      "TotalDecisions": "3",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230704159375/anx_159375_ga.pdf",
+          "LanguageCode": "GA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20241212164768/anx_164768_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h852.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Atosiban SUN"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/1/13/852",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "atosiban"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Atosiban is indicated to delay imminent pre-term birth in pregnant adult women with:\r\n- regular uterine contractions of at least 30 seconds duration at a rate of ≥ 4 per 30 minutes\r\n- a cervical dilation of 1 to 3 cm (0 3 for nulliparas) and effacement of ≥ 50%\r\n- a gestational age from 24 until 33 completed weeks\r\na normal foetal heart rate"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh20839.htm",
+        "Name": "Sun Pharmaceutical Industries Europe BV",
+        "Address": "Polarisavenue 87, 2132 JH Hoofddorp, Nederland"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "G02CX01",
+          "Description": "atosiban"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/atosiban-sun",
+      "AuthorisationDate": "2013-08-02",
+      "LastDecisionDate": "2023-02-23",
+      "TotalProcedures": "13",
+      "TotalDecisions": "4",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2023/20230223158548/anx_158548_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h1573.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fingolimod Mylan"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/1/21/1573",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "fingolimod"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Fingolimod Mylan is indicated as single disease modifying therapy in highly active relapsing remitting multiple sclerosis for the following groups of adult patients and paediatric patients aged 10 years and older:\r\n• Patients with highly active disease despite a full and adequate course of treatment with at least one disease modifying therapy (for exceptions and information about washout periods see sections 4.4 and 5.1).\r\nor\r\n• Patients with rapidly evolving severe relapsing remitting multiple sclerosis defined by 2 or more disabling relapses in one year and with 1 or more Gadolinium enhancing lesions on brain magnetic resonance imaging (MRI) or a significant increase in T2 lesion load as compared to a previous recent MRI."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26666.htm",
+        "Name": "Mylan Pharmaceuticals Limited",
+        "Address": "Damastown Industrial Park, Mulhuddart, Dublin 15, DUBLIN, Ireland"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "L04AE01",
+          "Description": "fingolimod"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/fingolimod-mylan",
+      "AuthorisationDate": "2021-08-18",
+      "LastDecisionDate": "2026-05-21",
+      "TotalProcedures": "11",
+      "TotalDecisions": "5",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260521169616/anx_169616_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h1470.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Lumeblue"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Withdrawn",
+      "EUNumber": "EU/1/20/1470",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "methylthioninium chloride"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Lumeblue is indicated as a diagnostic agent enhancing visualisation of colorectal lesions in adult patients undergoing screening or surveillance colonoscopy."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh26253.htm",
+        "Name": "Cosmo Technologies Ltd",
+        "Address": "Riverside II, Sir John Rogerson’s Quay, Dublin 2, Ireland"
+      },
+      "ATC": [
+        {
+          "Level": "4",
+          "Code": "V04CX",
+          "Description": "Other diagnostic agents"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/lumeblue-previously-known-methylthioninium-chloride-cosmo",
+      "AuthorisationDate": "2020-08-19",
+      "LastDecisionDate": "2026-08-05",
+      "TotalProcedures": "8",
+      "TotalDecisions": "7",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2025/20250522165967/anx_165967_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h089.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Pritor"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Withdrawn",
+      "EUNumber": "EU/1/98/089",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "telmisartan"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Hypertension: \r\nTreatment of essential hypertension in adults.\r\n\r\nCardiovascular prevention: \r\nReduction of cardiovascular morbidity in adults with:\r\n- manifest atherothrombotic cardiovascular disease (history of coronary heart disease, stroke, or peripheral arterial disease) or\r\n- type 2 diabetes mellitus with documented target organ damage"
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh911.htm",
+        "Name": "Bayer AG",
+        "Address": "D-51368 Leverkusen, Deutschland"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "C09CA07",
+          "Description": "telmisartan"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/pritor",
+      "AuthorisationDate": "1998-12-11",
+      "LastDecisionDate": "2026-05-04",
+      "TotalProcedures": "108",
+      "TotalDecisions": "38",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2026/20260218168683/anx_168683_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    },
+    {
+      "URI": "http://ec.europa.eu/health/documents/community-register/html/h359.htm",
+      "Type": "Human",
+      "Category": "Centrally authorised",
+      "Name": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Suboxone"
+        }
+      ],
+      "AssociatedNames": [],
+      "AssociatedOrphanDesignations": [],
+      "Status": "Active",
+      "EUNumber": "EU/1/06/359",
+      "ActiveSubstance": [
+        {
+          "LanguageCode": "EN",
+          "Text": "buprenorphine / naloxone"
+        }
+      ],
+      "Indication": [
+        {
+          "LanguageCode": "EN",
+          "Text": "Substitution treatment for opioid drug dependence, within a framework of medical, social and psychological treatment. The intention of the naloxone component is to deter intravenous misuse.\r\nSuboxone is indicated in adults and adolescents over 15 years of age who have agreed to be treated for addiction."
+        }
+      ],
+      "MAH": {
+        "URI": "http://ec.europa.eu/health/documents/community-register/html/mh25360.htm",
+        "Name": "Indivior Europe Limited",
+        "Address": "27 Windsor Place, Dublin 2, D02 DK44, Ireland"
+      },
+      "ATC": [
+        {
+          "Level": "5",
+          "Code": "N07BC51",
+          "Description": "buprenorphine, combinations"
+        }
+      ],
+      "EMALink": "https://www.ema.europa.eu/en/medicines/human/EPAR/suboxone",
+      "AuthorisationDate": "2006-09-26",
+      "LastDecisionDate": "2024-07-24",
+      "TotalProcedures": "31",
+      "TotalDecisions": "14",
+      "CurrentAnnexLink": [
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_bg.pdf",
+          "LanguageCode": "BG"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_cs.pdf",
+          "LanguageCode": "CS"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_da.pdf",
+          "LanguageCode": "DA"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_de.pdf",
+          "LanguageCode": "DE"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_el.pdf",
+          "LanguageCode": "EL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_en.pdf",
+          "LanguageCode": "EN"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_es.pdf",
+          "LanguageCode": "ES"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_et.pdf",
+          "LanguageCode": "ET"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_fi.pdf",
+          "LanguageCode": "FI"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_fr.pdf",
+          "LanguageCode": "FR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_hr.pdf",
+          "LanguageCode": "HR"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_hu.pdf",
+          "LanguageCode": "HU"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_it.pdf",
+          "LanguageCode": "IT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_lt.pdf",
+          "LanguageCode": "LT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_lv.pdf",
+          "LanguageCode": "LV"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_mt.pdf",
+          "LanguageCode": "MT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_nl.pdf",
+          "LanguageCode": "NL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_pl.pdf",
+          "LanguageCode": "PL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_pt.pdf",
+          "LanguageCode": "PT"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_ro.pdf",
+          "LanguageCode": "RO"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_sk.pdf",
+          "LanguageCode": "SK"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_sl.pdf",
+          "LanguageCode": "SL"
+        },
+        {
+          "URI": "http://ec.europa.eu/health/documents/community-register/2024/20240724163092/anx_163092_sv.pdf",
+          "LanguageCode": "SV"
+        }
+      ]
+    }
+  ]
+}
