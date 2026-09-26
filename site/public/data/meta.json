@@ -1,0 +1,78 @@
+{
+  "source_url": "https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json",
+  "source_timestamp": "2026-09-26T06:02:29Z",
+  "row_counts": {
+    "ema_medicines": 2351,
+    "ema_medicine_therapeutic_areas": 3967,
+    "ema_medicine_active_substances": 2722,
+    "ema_medicine_atc_codes": 2216,
+    "ema_medicine_substances": 2528,
+    "atc_classes": 6772,
+    "ema_therapeutic_area_branches": 1183,
+    "ema_authorized_series": 381,
+    "ema_medicine_documents": 13063,
+    "mesh_entry_terms": 8453,
+    "mesh_descriptor_areas": 5017,
+    "ema_search_index": 2351,
+    "ema_medicine_protection": 1985,
+    "ema_medicine_orphan_exclusivity": 358,
+    "ema_medicine_register_status": 1932
+  },
+  "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
+  "snapshot_date": "2026-09-26",
+  "sources": [
+    {
+      "name": "European Medicines Agency (EMA) medicines data",
+      "url": "https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json",
+      "version": "2026-09-26T06:02:29Z",
+      "retrieved": "2026-09-26",
+      "licence": "© European Medicines Agency; reuse with acknowledgement",
+      "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA."
+    },
+    {
+      "name": "Medical Subject Headings (MeSH)",
+      "url": "https://nlmpubs.nlm.nih.gov/projects/mesh/MESH_FILES/xmlmesh/desc2026.gz",
+      "version": "MeSH 2026",
+      "retrieved": "2026-09-26",
+      "licence": "NLM Terms and Conditions (free use; acknowledgement required)",
+      "attribution": "MeSH® Courtesy of the U.S. National Library of Medicine; not endorsed by NLM.",
+      "last_modified": "Wed, 12 Aug 2026 18:33:47 GMT"
+    },
+    {
+      "name": "ChEMBL",
+      "url": "https://www.ebi.ac.uk/chembl/api/data/atc_class.json",
+      "version": "ChEMBL_37",
+      "retrieved": "2026-09-26",
+      "licence": "CC BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/)",
+      "attribution": "ChEMBL data is from https://www.ebi.ac.uk/chembl (ChEMBL_37); used for ATC classification names. ATC level names © WHO Collaborating Centre for Drug Statistics Methodology, reproduced verbatim."
+    },
+    {
+      "name": "European Medicines Agency (EMA) EPAR documents index",
+      "url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
+      "version": "2026-09-26T05:49:47Z",
+      "retrieved": "2026-09-26",
+      "licence": "© European Medicines Agency; reuse with acknowledgement",
+      "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
+      "last_modified": "Sat, 26 Sep 2026 03:52:41 GMT"
+    },
+    {
+      "name": "European Medicines Agency (EMA) orphan designations",
+      "url": "https://www.ema.europa.eu/en/documents/report/medicines-output-orphan_designations-json-report_en.json",
+      "version": "2026-09-26T18:10:39Z",
+      "retrieved": "2026-09-26",
+      "licence": "© European Medicines Agency; reuse with acknowledgement",
+      "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
+      "last_modified": "Sat, 26 Sep 2026 16:10:39 GMT"
+    },
+    {
+      "name": "Union Register of medicinal products (European Commission)",
+      "url": "https://ec.europa.eu/health/documents/community-register/ods/ods_products.json",
+      "version": "Fri, 25 Sep 2026 15:36:55 GMT",
+      "retrieved": "2026-09-26",
+      "licence": "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+      "attribution": "© European Union, Union Register of medicinal products, CC BY 4.0; changes made",
+      "last_modified": "Fri, 25 Sep 2026 15:36:55 GMT"
+    }
+  ],
+  "licence": "Data files: compilation licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); ChEMBL-derived values adapted from ChEMBL (CC BY-SA 3.0) and modified (selected and mapped). Values from other sources keep their own terms: EMA content © European Medicines Agency (reuse with acknowledgement); Union Register values © European Union, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/), changes made; MeSH® courtesy of the U.S. National Library of Medicine; ATC classification codes from ChEMBL and ATC level names © WHO Collaborating Centre for Drug Statistics Methodology, reproduced verbatim and excluded from this licence."
+}
