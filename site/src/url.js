@@ -1,40 +1,50 @@
-// Filter/view and lookup state <-> URL query string. Encode/decode are pure; the writer touches history.
+// Filter and lookup state <-> URL query string. Encode/decode are pure; the writer touches history.
+import { splitAtcValues } from "./filters.js";
 
-export const VIEWS = ["now", "years"];
 export const BREAKDOWNS = ["atc", "area", "mah"];
-// Also the ATC input's maxLength, so typed text always survives the URL; the longest ATC class name is 113.
+// The longest ATC value a link may carry (a class-name query); the longest ATC class name is 113.
 export const ATC_QUERY_MAX = 120;
 
 export const DEFAULT_STATE = Object.freeze({
-  view: "now",
   mah: [],
   from: null, // whole years, inclusive; null = open end
   to: null,
   branch: [],
   area: [],
-  atc: "",
+  atc: [], // ATC codes at any level, or class-name queries (older links), combined with OR
   type: [],
   status: [], // empty = all statuses
   by: "atc",
 });
+
+// Keys of earlier versions, ignored without a note: view (the "Authorized now" / "Approvals per
+// year" tabs, replaced by one dashboard in phase 4a).
+const IGNORED_KEYS = ["view"];
 
 // Repeated keys, because MAH names and MeSH terms contain commas. Value = domain set name.
 const LIST_KEYS = { mah: "mahs", branch: "branches", area: "areas", type: "types", status: "statuses" };
 
 const sortedDistinct = (values) => [...new Set(values)].sort();
 
+// ATC values as the URL and state keep them: trimmed, codes upper-case, empty ones dropped, and no
+// selected class covering another (a code under a selected one is dropped, as toggleAtcCode()).
+function atcValues(values) {
+  const { codes, names } = splitAtcValues(values);
+  const covered = (code) => codes.some((other) => other.length < code.length && code.startsWith(other));
+  return sortedDistinct([...codes.filter((code) => !covered(code)), ...names]);
+}
+
 export function encodeState(state) {
   const params = new URLSearchParams();
-  const appendAll = (key) => {
-    for (const value of sortedDistinct(state[key])) params.append(key, value);
+  const appendAll = (key, values = sortedDistinct(state[key])) => {
+    for (const value of values) params.append(key, value);
   };
-  if (state.view !== DEFAULT_STATE.view) params.set("view", state.view);
   appendAll("mah");
   if (state.from !== null) params.set("from", String(state.from));
   if (state.to !== null) params.set("to", String(state.to));
   appendAll("branch");
   appendAll("area");
-  if (state.atc.trim()) params.set("atc", state.atc.trim());
+  appendAll("atc", atcValues(state.atc));
   appendAll("type");
   appendAll("status");
   if (state.by !== DEFAULT_STATE.by) params.set("by", state.by);
@@ -61,7 +71,6 @@ export function decodeState(params, domain) {
     dropped.push({ key, value });
     return DEFAULT_STATE[key];
   };
-  state.view = oneOf("view", VIEWS);
   state.by = oneOf("by", BREAKDOWNS);
 
   for (const [key, domainName] of Object.entries(LIST_KEYS)) {
@@ -79,16 +88,17 @@ export function decodeState(params, domain) {
   };
   Object.assign(state, normalizeYearRange(year("from"), year("to"), domain.years));
 
-  const atc = (params.get("atc") ?? "").trim();
-  if (atc.length > ATC_QUERY_MAX) dropped.push({ key: "atc", value: atc });
-  else state.atc = atc;
+  // One value (links from before phase 4a) or several; a value too long for a class name is dropped.
+  const atc = params.getAll("atc");
+  for (const value of atc.filter((item) => item.trim().length > ATC_QUERY_MAX)) dropped.push({ key: "atc", value });
+  state.atc = atcValues(atc.filter((item) => item.trim().length <= ATC_QUERY_MAX));
 
   return { state, dropped };
 }
 
 // A drug class opened from a suggestion, a card ladder or a Try link: the class alone (other
-// filters cleared, view "now", ATC breakdown), so the link's href and its click agree.
-export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: code });
+// filters cleared, ATC breakdown), so the link's href and its click agree.
+export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [code] });
 
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI. Kept verbatim:
 // an unknown value shows a "not found" result instead of being dropped.
@@ -110,9 +120,10 @@ export function lookupView({ q, med, sub, cond }) {
   return { kind: null, value: null };
 }
 
+// The URL's filter part: without the lookup keys and the ignored keys of earlier versions.
 export function withoutLookup(params) {
   const rest = new URLSearchParams(params);
-  for (const key of LOOKUP_KEYS) rest.delete(key);
+  for (const key of [...LOOKUP_KEYS, ...IGNORED_KEYS]) rest.delete(key);
   return rest;
 }
 
@@ -138,7 +149,7 @@ export function encodeUrl(state, filterParams = null) {
 }
 
 // At most one history write per animation frame (Chrome silently drops bursts of
-// replaceState calls). Filter edits replace the entry; a tab change or opened result pushes one.
+// replaceState calls). Filter edits replace the entry; an opened result or drug class pushes one.
 let pendingWrite = null;
 export function scheduleUrlWrite(state, push = false, filterParams = null) {
   if (pendingWrite) {

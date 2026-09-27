@@ -50,3 +50,27 @@ export function typeBadges(row) {
   if (row.orphan_medicine) badges.push({ label: UI.card.flags.orphan_medicine, hue: "pink" });
   return badges;
 }
+
+// Each EMA status in its own damped hue (dots, pills, the stacked approval-years strip); the two
+// pending opinions share gold, withdrawn applications and rolling reviews slate, as do unknown ones.
+const STATUS_HUES = {
+  Authorised: "green",
+  Withdrawn: "red",
+  Expired: "orange",
+  Lapsed: "brown",
+  Suspended: "pink",
+  Revoked: "plum",
+  Refused: "purple",
+  "Application withdrawn": "slate",
+  "Withdrawn from rolling review": "slate",
+  Opinion: "gold",
+  "Opinion under re-examination": "gold",
+};
+
+export function statusHue(status) {
+  return STATUS_HUES[status] ?? "slate";
+}
+
+// The element holding a type's explanation (UI.typeTips), which focusable carriers reference with
+// aria-describedby: "Advanced therapy" -> "type-tip-advanced-therapy".
+export const typeTipId = (label) => `type-tip-${label.toLowerCase().replaceAll(" ", "-")}`;

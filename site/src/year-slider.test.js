@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nearestThumb, startOnTop, thumbCenter, thumbRange, yearAt, yearTicks } from "./year-slider.js";
+import { nearestThumb, startOnTop, thumbCenter, thumbRange, toggleYear, yearAt, yearTicks } from "./year-slider.js";
 
 const YEARS = [1995, 2026];
 
@@ -74,6 +74,23 @@ test("startOnTop: where the thumbs overlap, the one that can move away lies on t
   assert.equal(startOnTop(1995, 1995, YEARS), false);
   assert.equal(startOnTop(1995, 1997, YEARS), false);
   assert.equal(startOnTop(1995, 2026, YEARS), false);
+});
+
+test("toggleYear: a year's bar selects that year alone", () => {
+  assert.deepEqual(toggleYear(2010, { from: null, to: null }, YEARS), { from: 2010, to: 2010 });
+  assert.deepEqual(toggleYear(2010, { from: 2005, to: 2015 }, YEARS), { from: 2010, to: 2010 });
+  assert.deepEqual(toggleYear(2011, { from: 2010, to: 2010 }, YEARS), { from: 2011, to: 2011 });
+  // A range starting or ending at that year is not that year alone.
+  assert.deepEqual(toggleYear(2010, { from: 2010, to: 2012 }, YEARS), { from: 2010, to: 2010 });
+  // The data's first or last year stays an open end, as normalizeYearRange().
+  assert.deepEqual(toggleYear(1995, { from: null, to: null }, YEARS), { from: null, to: 1995 });
+  assert.deepEqual(toggleYear(2026, { from: null, to: 2020 }, YEARS), { from: 2026, to: null });
+});
+
+test("toggleYear: the bar of the one selected year shows every year again", () => {
+  assert.deepEqual(toggleYear(2010, { from: 2010, to: 2010 }, YEARS), { from: null, to: null });
+  assert.deepEqual(toggleYear(1995, { from: null, to: 1995 }, YEARS), { from: null, to: null });
+  assert.deepEqual(toggleYear(2026, { from: 2026, to: null }, YEARS), { from: null, to: null });
 });
 
 test("yearTicks: every 5 years when the labels fit, else every 10", () => {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_STATE } from "./url.js";
-import { filterProducts, makePredicates, parseAtcQuery } from "./filters.js";
+import { filterProducts, makePredicates, parseAtcQuery, splitAtcValues } from "./filters.js";
 
 const product = (id, fields) => ({
   ema_product_number: id,
@@ -57,16 +57,36 @@ test("branch and area match a product with any selected value", () => {
 });
 
 test("an ATC code is a case-insensitive prefix of any of the product's codes", () => {
-  assert.deepEqual(run({ atc: "l01" }), ["P1", "P2"]);
-  assert.deepEqual(run({ atc: "L01F" }), ["P1"]);
-  assert.deepEqual(run({ atc: "A10BH01" }), ["P3"]);
+  assert.deepEqual(run({ atc: ["l01"] }), ["P1", "P2"]);
+  assert.deepEqual(run({ atc: ["L01F"] }), ["P1"]);
+  assert.deepEqual(run({ atc: ["A10BH01"] }), ["P3"]);
 });
 
 test("ATC text that is not a code matches class names at any level, case-insensitively", () => {
-  assert.deepEqual(run({ atc: "Antineoplastic" }), ["P1", "P2"]);
-  assert.deepEqual(run({ atc: "RITUX" }), ["P1"]);
-  assert.deepEqual(run({ atc: "diabetes" }), ["P3"]);
-  assert.deepEqual(run({ atc: "no such class" }), []);
+  assert.deepEqual(run({ atc: ["Antineoplastic"] }), ["P1", "P2"]);
+  assert.deepEqual(run({ atc: ["RITUX"] }), ["P1"]);
+  assert.deepEqual(run({ atc: ["diabetes"] }), ["P3"]);
+  assert.deepEqual(run({ atc: ["no such class"] }), []);
+});
+
+test("several ATC values combine with OR: codes and class-name queries alike", () => {
+  assert.deepEqual(run({ atc: ["L01F", "A10BH01"] }), ["P1", "P3"]);
+  assert.deepEqual(run({ atc: ["RITUX", "A10"] }), ["P1", "P3"]);
+  assert.deepEqual(run({ atc: ["L01XE", "no such class"] }), ["P2"]);
+  assert.deepEqual(makePredicates({ ...structuredClone(DEFAULT_STATE), atc: [] }, atcClasses), {});
+});
+
+test("ATC filters match valid code levels only: a malformed code (EMA's LX1XX02, VO4D) is in no class", () => {
+  const coded = [product("M1", { atc: atcRows("LX1XX02") }), product("M2", { atc: atcRows("VO4D", "L04AC05") })];
+  const match = (atc) => ids(filterProducts(coded, makePredicates({ ...structuredClone(DEFAULT_STATE), atc }, atcClasses)));
+  assert.deepEqual(match(["L"]), ["M2"]);
+  assert.deepEqual(match(["V"]), []);
+  assert.deepEqual(match(["Antineoplastic"]), ["M2"]);
+});
+
+test("splitAtcValues: the codes (upper case) and the class-name queries of an ATC selection", () => {
+  assert.deepEqual(splitAtcValues(["l04ac", "insulin", "C", " "]), { codes: ["L04AC", "C"], names: ["insulin"] });
+  assert.deepEqual(splitAtcValues([]), { codes: [], names: [] });
 });
 
 test("type and status match the selected raw values", () => {
@@ -77,7 +97,7 @@ test("type and status match the selected raw values", () => {
 test("filters combine, and except skips one dimension", () => {
   assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], branch: ["C04"] }), ["P2"]);
   assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], branch: ["C04"] }, "mah"), ["P1", "P2"]);
-  assert.deepEqual(run({ from: 2018, atc: "L" }, "date"), ["P1", "P2"]);
+  assert.deepEqual(run({ from: 2018, atc: ["L"] }, "date"), ["P1", "P2"]);
 });
 
 test("parseAtcQuery tells code prefixes from names", () => {

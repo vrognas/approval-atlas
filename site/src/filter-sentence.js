@@ -3,19 +3,23 @@
 // while any filter is active. Rebuilt on every render; focus goes back to the same control, else
 // to a token opening the same sheet, else to the first token.
 import * as d3 from "d3";
+import { typeTipId } from "./badges.js";
 import { UI } from "./labels.js";
 
 // sheetOf(key): the filter a token opens (tokens opening the same one share it; none for the year
 // tokens, which focus the approval-years slider); popup: tokens with a sheet open a dialog (the
-// sheets below 1024px); onOpen(key), onRemove(token), onReset().
+// sheets below 1024px); onOpen(key), onRemove(token) (token.value: remove only that ATC class),
+// onReset().
 export function renderSentence(container, parts, { anyActive, sheetOf, popup, onOpen, onRemove, onReset }) {
   const active = container.contains(document.activeElement) ? document.activeElement : null;
   container.replaceChildren(); // text nodes too
   const root = d3.select(container);
+  // A token for one of two ATC classes (part.value) keeps its own focus key.
+  const keyOf = (part, action) => `${part.key}${part.value === undefined ? "" : `=${part.value}`}:${action}`;
   const tokenButton = (parent, part) => parent.append("button")
     .attr("type", "button")
     .attr("class", "token")
-    .attr("data-focus-key", `${part.key}:open`)
+    .attr("data-focus-key", keyOf(part, "open"))
     .attr("data-sheet", sheetOf(part.key))
     .attr("aria-label", UI.sentence.tokenName(part.key, part.text))
     .attr("aria-haspopup", popup && sheetOf(part.key) ? "dialog" : null)
@@ -28,12 +32,13 @@ export function renderSentence(container, parts, { anyActive, sheetOf, popup, on
     if (typeof part === "string") {
       parent.node().append(part);
     } else if (part.active) {
-      const pill = parent.append("span").attr("class", "token-pill");
-      tokenButton(pill, part);
+      // A type's explanation (part.tip) on hover and focus, and as the token's description.
+      const pill = parent.append("span").attr("class", "token-pill").attr("data-tip", part.tip ? UI.typeTips[part.tip] : null);
+      tokenButton(pill, part).attr("aria-describedby", part.tip ? typeTipId(part.tip) : null);
       pill.append("button")
         .attr("type", "button")
         .attr("class", "token-remove")
-        .attr("data-focus-key", `${part.key}:remove`)
+        .attr("data-focus-key", keyOf(part, "remove"))
         .attr("data-sheet", sheetOf(part.key))
         .attr("aria-label", UI.sentence.remove(part.key, part.text))
         .text("×")

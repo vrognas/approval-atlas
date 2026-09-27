@@ -4,8 +4,8 @@
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { isAuthorizedNow, statusDate } from "./approvals.js";
 import { atcLadder, atcPrefixCounts, mainAtcCode } from "./atc.js";
-import { atcHue, atcSegments, typeBadges } from "./badges.js";
-import { groupDocuments, primaryDocuments } from "./documents.js";
+import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
+import { groupDocuments, primaryDocuments, quickDocuments } from "./documents.js";
 import { NOT_STATED, UI, atcName, formatDate, statusDateLine, statusKind, statusLabel, statusSentence, statusesByFrequency } from "./labels.js";
 import { espacenetUrl, protectionSummary } from "./protection.js";
 import { buildConditions, conditionPhrases, foldSearchText, suggest, textMatches } from "./search.js";
@@ -43,6 +43,15 @@ function externalLink(text, url) {
   return el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text, PDF_URL.test(url) ? el("span", { class: "pdf" }, UI.card.pdf) : null);
 }
 
+// "PI" and "EPAR": compact links to a medicine's current product information and latest public
+// assessment report. urls: quickDocuments() output, null while the documents index loads; a
+// missing document gets no link (none at all: null).
+export function documentLinks(name, urls) {
+  const links = Object.entries(UI.documentLinks).filter(([key]) => urls?.[key]?.startsWith("https://")).map(([key, copy]) =>
+    el("a", { class: "doc-link", href: urls[key], target: "_blank", rel: "noopener noreferrer", "aria-label": copy.label(name) }, copy.text));
+  return links.length ? el("span", { class: "doc-links" }, links) : null;
+}
+
 // Headline parts (labels.js UI.headline) -> text, with toned words in spans.
 export function headlineNodes(parts) {
   return parts.map((part) => (typeof part === "string" ? part : el("span", { class: `tone-${part.tone}` }, part.text)));
@@ -52,12 +61,21 @@ export function headlineNodes(parts) {
 const title = (content) => el("h2", { tabindex: "-1", "data-focus-key": "title" }, content);
 const kicker = (kind) => el("p", { class: "kicker" }, UI.kicker[kind]);
 
-// Dot and label in the status colour; pill: on its light fill (answer strip).
-const statusBadge = (status, pill = false) => el("span", { class: `status status-${statusKind(status)}${pill ? " pill" : ""}` }, statusLabel(status));
+// Dot and label in the status's hue; pill: on its light fill (answer strip).
+const statusBadge = (status, pill = false) => el("span", { class: `status hue-${statusHue(status)}${pill ? " pill" : ""}` }, statusLabel(status));
 
+// Each badge explains its type on hover and on a tap (tabindex -1: focusable, no tab stop).
 function typeBadgeList(row) {
   const badges = typeBadges(row);
-  return badges.length ? el("span", { class: "badges" }, badges.map((badge) => el("span", { class: `badge hue-${badge.hue}` }, badge.label))) : null;
+  return badges.length ? el("span", { class: "badges" }, badges.map((badge) =>
+    el("span", { class: `badge hue-${badge.hue}`, "data-tip": UI.typeTips[badge.label], tabindex: "-1" }, badge.label))) : null;
+}
+
+// The medicine card has room: each type badge with its explanation as visible text, one per line
+// (read by everyone, no tooltip needed).
+function explainedTypes(row) {
+  return typeBadges(row).map((badge) => el("span", { class: "type-explained" },
+    el("span", { class: `badge hue-${badge.hue}` }, badge.label), " ", el("span", { class: "muted" }, UI.typeTips[badge.label])));
 }
 
 // Segmented ATC badge (display only; lookup rows are links, the card has ladders): one segment
@@ -167,7 +185,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     return el("ol", { class: `plain atc-ladder hue-${atcHue(code)}`, "aria-label": UI.atc.ladder(code) }, levels.map((level) => el("li", null,
       internalLink([
         el("span", { class: "ladder-rail" }, el("span", { class: `code-badge level-${level.level}` }, level.code)),
-        el("span", { class: level.name ? "ladder-name" : "ladder-name no-name" }, atcName(level.code, level.name)),
+        el("span", { class: level.name ? "ladder-name" : "ladder-name no-name" }, atcName(level.name)),
         level.count === null ? null : el("span", { class: "ladder-count" }, UI.atc.count(level.count)),
       ], classState(level.code), "ladder-row", UI.atc.ladderLink(level.level, level.code, level.name, level.count)))));
   }
@@ -278,7 +296,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const registerRow = ready(register) ? register.get(number) : null;
     const registerDiffers = registerRow?.agrees_with_ema === false;
     const groups = ready(documents) ? groupDocuments(documents.get(number) ?? []) : [];
-    const { primary, rest } = primaryDocuments(groups);
+    const { primary, rest } = primaryDocuments(groups, row.medicine_status);
     const sentence = medicine ? statusSentence(row.medicine_status, statusDate(medicine), medicine.opinion_status) : null;
     // Order for a talk or poster: the answer, status and the SmPC / EPAR buttons on the first phone screen.
     return el("article", { class: "card" },
@@ -305,7 +323,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         // The type's name as text only when it has no badge (Other).
         fact(UI.card.type, [
           typeBadges({ medicine_type: row.medicine_type }).length ? null : [row.medicine_type, " "],
-          typeBadgeList(medicine ?? row),
+          explainedTypes(medicine ?? row),
           flags.map(([, label]) => [" ", el("span", { class: "chip" }, label)]),
         ]),
         ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null),
@@ -317,16 +335,19 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       protectionSection(row));
   }
 
-  // rows: search-index rows (+ snippet) -> rows linking to the medicine card: name, substances,
-  // status dot and date line with type badges, holder.
+  // rows: search-index rows (+ snippet) -> rows linking to the medicine card: name with its PI and
+  // EPAR links (once the documents index has loaded), substances, status dot and date line with
+  // type badges, holder.
   function resultList(entries, medicines, withHolder) {
     if (!entries.length) return el("p", { class: "muted" }, UI.condition.none);
+    const documents = need("documents");
     return el("ul", { class: "plain result-list" }, entries.map(({ row, snippet }) => {
       const medicine = ready(medicines) ? medicines.get(row.ema_product_number) : null;
       const dates = statusDateLine(row.medicine_status, row.marketing_authorisation_date, medicine?.authorized_until ?? null);
       const holder = withHolder ? medicine?.marketing_authorisation_developer_applicant_holder : null;
+      const urls = ready(documents) ? quickDocuments(documents.get(row.ema_product_number) ?? [], row.medicine_status) : null;
       return el("li", null,
-        el("p", { class: "result-name" }, internalLink(row.name_of_medicine, { med: row.ema_product_number })),
+        el("p", { class: "result-name" }, internalLink(row.name_of_medicine, { med: row.ema_product_number }), documentLinks(row.name_of_medicine, urls)),
         row.substances ? el("p", { class: "result-substances" }, row.substances) : null,
         el("p", { class: "result-meta" }, statusBadge(row.medicine_status), dates ? el("span", { class: "result-date" }, dates) : null, typeBadgeList(row)),
         holder ? el("p", { class: "result-holder" }, holder) : null,
@@ -378,7 +399,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         first ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(first.marketing_authorisation_date)] : null,
         // None authorized now: the statuses themselves (e.g. Withdrawn), which say more than "0 authorized".
         [UI.card.strip.status, authorized > 0
-          ? el("span", { class: "status pill status-authorized" }, UI.substance.authorized(authorized))
+          ? el("span", { class: `status pill hue-${statusHue("Authorised")}` }, UI.substance.authorized(authorized))
           : el("span", { class: "badges" }, statusesByFrequency(rows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true)))],
       ]),
       timelineBlock(rows, medicines),
@@ -484,6 +505,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     render,
     need,
     conditions: () => (ready(values.get("conditions")) ? values.get("conditions") : null),
+    // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
+    documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
     // Drug-class suggestions need the class names and today's counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [values.get("atc"), values.get("atcCounts")];

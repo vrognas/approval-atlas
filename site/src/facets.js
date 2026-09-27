@@ -1,6 +1,7 @@
-// Pure: counts for the facet sidebar and sheets, the filter sentence's tokens and the most
-// common conditions of a filtered view. No DOM. Products come from buildProducts().
-import { isAuthorizedNow } from "./approvals.js";
+// Pure: counts for the facet sidebar and sheets, the approval-years strip, the filter sentence's
+// tokens, the most common conditions and the holder activity of the filtered medicines. No DOM.
+// Products come from buildProducts(); every status counts (one dashboard, phase 4a).
+import { byStatusOrder } from "./approvals.js";
 import { filterProducts, parseAtcQuery } from "./filters.js";
 import { UI, atcClassLabel, statusLabel } from "./labels.js";
 
@@ -17,35 +18,67 @@ export const FACET_VALUES = {
   date: (product) => (product.year === null ? [] : [product.year]),
 };
 
-const everyProduct = () => true;
-const isDated = (product) => product.year !== null;
-
-// The products a facet counts. Authorized now: the authorized-now products (the view's own),
-// except Status, which counts every status (it could only ever show Authorized otherwise).
-// Approvals per year: the products with an approval date, as the per-year table, for every facet.
-export function facetPopulation(view, dimension) {
-  if (view === "years") return isDated;
-  return dimension === "status" ? everyProduct : isAuthorizedNow;
-}
-
-// Products per value of one dimension: every filter applies except that dimension's own, then
-// the population; a product counts once per distinct value (valuesOf: FACET_VALUES entry).
-export function facetCounts(products, predicates, dimension, valuesOf, population) {
+// key -> products, each product once per distinct key (keysOf(product): its keys).
+export function keyCounts(products, keysOf) {
   const counts = new Map();
-  for (const product of filterProducts(products, predicates, dimension)) {
-    if (!population(product)) continue;
-    for (const value of new Set(valuesOf(product))) counts.set(value, (counts.get(value) ?? 0) + 1);
+  for (const product of products) {
+    for (const key of new Set(keysOf(product))) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
 }
 
+// The n keys with the most products (ties by key).
+export function topKeys(counts, n = Infinity) {
+  return [...counts].sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b)).slice(0, n).map(([key]) => key);
+}
+
+// Products per value of one dimension: every filter applies except that dimension's own; a
+// product counts once per distinct value (valuesOf: FACET_VALUES entry).
+export function facetCounts(products, predicates, dimension, valuesOf) {
+  return keyCounts(filterProducts(products, predicates, dimension), valuesOf);
+}
+
 // The approval-years strip's histogram: products per approval year by the facet rule (every
-// filter but the year filter, the view's population), one row per year of [first, last].
-export function yearHistogram(products, predicates, view, [first, last]) {
-  const counts = facetCounts(products, predicates, "date", FACET_VALUES.date, facetPopulation(view, "date"));
+// filter but the year filter), one row per year of [first, last], each stacked by current status
+// in STATUS_ORDER (statuses: [{ status, count }], zeros left out).
+export function yearHistogram(products, predicates, [first, last]) {
+  const byYear = new Map();
+  for (const product of filterProducts(products, predicates, "date")) {
+    if (product.year === null) continue;
+    if (!byYear.has(product.year)) byYear.set(product.year, new Map());
+    const statuses = byYear.get(product.year);
+    statuses.set(product.medicine_status, (statuses.get(product.medicine_status) ?? 0) + 1);
+  }
   const rows = [];
-  for (let year = first; year <= last; year++) rows.push({ year, count: counts.get(year) ?? 0 });
+  for (let year = first; year <= last; year++) {
+    const statuses = [...(byYear.get(year) ?? [])]
+      .sort(([a], [b]) => byStatusOrder(a, b))
+      .map(([status, count]) => ({ status, count }));
+    rows.push({ year, count: statuses.reduce((sum, item) => sum + item.count, 0), statuses });
+  }
   return rows;
+}
+
+// Products per current status, most first (ties in stack order): the headline dek's breakdown.
+export function statusBreakdown(products) {
+  return [...keyCounts(products, FACET_VALUES.status)]
+    .sort(([a, countA], [b, countB]) => countB - countA || byStatusOrder(a, b))
+    .map(([status, count]) => ({ status, count }));
+}
+
+// "Who is active where": the n holders with the most products (ties by name), each with its
+// products per key (cells: key -> count; keysOf(product): its columns, a product counts once per
+// distinct key and can count in several).
+export function holderActivity(products, keysOf, n = 15) {
+  const byHolder = new Map();
+  for (const product of products) {
+    if (!byHolder.has(product.mah)) byHolder.set(product.mah, []);
+    byHolder.get(product.mah).push(product);
+  }
+  return [...byHolder]
+    .sort(([a, rowsA], [b, rowsB]) => rowsB.length - rowsA.length || a.localeCompare(b))
+    .slice(0, n)
+    .map(([mah, rows]) => ({ mah, count: rows.length, cells: keyCounts(rows, keysOf) }));
 }
 
 // Checkbox rows: values with products, most first (ties by label), matching the query. Selected
@@ -70,20 +103,25 @@ export function facetRows(counts, selected, { labelOf, query = "", limit = Infin
   };
 }
 
+// One selected ATC value: a class ("L04AC Interleukin Inhibitors"; the code alone when short, as
+// two classes read "C and H03") or a class-name query.
+function atcValueText(value, atcNames, short) {
+  const query = parseAtcQuery(value);
+  if (query.kind !== "code") return UI.sentence.atcName(value.trim());
+  return short ? query.value : atcClassLabel(query.value, atcNames.get(query.value));
+}
+
 // One sentence token's text: the default phrase, or the selection. lookups: { years: [min, max],
 // branchNames, atcNames: Map }.
 export function tokenLabel(dimension, state, { years, branchNames, atcNames }) {
   const copy = UI.sentence;
   if (dimension === "from") return String(state.from ?? years[0]);
   if (dimension === "to") return String(state.to ?? years[1]);
-  if (dimension === "atc") {
-    const query = parseAtcQuery(state.atc);
-    if (query.kind === "code") return atcClassLabel(query.value, atcNames.get(query.value));
-    return query.kind === "name" ? copy.atcName(state.atc.trim()) : copy.defaults.atc;
-  }
   const values = state[dimension];
   if (values.length === 0) return copy.defaults[dimension];
+  if (dimension === "atc" && values.length === 2) return values.map((value) => atcValueText(value, atcNames, true)).join(copy.words.and);
   if (values.length > 1) return copy.many[dimension](values.length);
+  if (dimension === "atc") return atcValueText(values[0], atcNames, false);
   if (dimension === "branch") return branchNames.get(values[0]) ?? values[0];
   if (dimension === "status") return copy.status(statusLabel(values[0]));
   return values[0];
@@ -91,24 +129,37 @@ export function tokenLabel(dimension, state, { years, branchNames, atcNames }) {
 
 function isActive(key, state) {
   if (key === "from" || key === "to") return state[key] !== null;
-  if (key === "atc") return state.atc.trim() !== "";
   return state[key].length > 0;
 }
 
 // "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic
 // areas], approved [1995]–[2026], with [any status]." as strings and tokens { key, text, active,
 // clears: the state keys its remove button (or Clear) resets }. Therapeutic area groups and areas
-// share one token until either is set.
+// share one token until either is set. The type token naming one type also has tip: that type
+// when it has an explanation (UI.typeTips), else null. Two ATC classes are two tokens ("[C] and
+// [H03]") with value: the one class their remove button removes; more are one token. One
+// approval year (a year bar clicked) is one token, "approved in [2024]", clearing both ends.
 export function sentenceParts(state, lookups) {
   const words = UI.sentence.words;
+  const [onlyType] = state.type.length === 1 ? state.type : [];
   const token = (key) => ({ key, text: tokenLabel(key, state, lookups), active: isActive(key, state), clears: [key] });
+  const typeToken = { ...token("type"), tip: UI.typeTips[onlyType] ? onlyType : null };
+  const joined = (tokens) => tokens.flatMap((part, index) => (index ? [words.and, part] : [part]));
+  const atc = state.atc.length === 2
+    ? joined(state.atc.map((value) => ({ key: "atc", text: atcValueText(value, lookups.atcNames, true), active: true, clears: ["atc"], value })))
+    : [token("atc")];
   const areaTokens = ["branch", "area"].filter((key) => isActive(key, state)).map(token);
   const areas = areaTokens.length
-    ? areaTokens.flatMap((part, index) => (index ? [words.and, part] : [part]))
+    ? joined(areaTokens)
     : [{ key: "areas", text: UI.sentence.defaults.area, active: false, clears: ["branch", "area"] }];
+  const from = tokenLabel("from", state, lookups);
+  const oneYear = (state.from !== null || state.to !== null) && from === tokenLabel("to", state, lookups);
+  const years = oneYear
+    ? [words.approvedIn, { key: "year", text: from, active: true, clears: ["from", "to"] }]
+    : [words.approved, token("from"), words.to, token("to")];
   return [
-    words.showing, token("type"), words.in, token("atc"), words.from, token("mah"), words.in, ...areas,
-    words.approved, token("from"), words.to, token("to"), words.with, token("status"), words.end,
+    words.showing, typeToken, words.in, ...atc, words.from, token("mah"), words.in, ...areas,
+    ...years, words.with, token("status"), words.end,
   ];
 }
 

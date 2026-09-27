@@ -2,8 +2,9 @@
 // sheets, which borrow the same section elements while open. Rows are real checkboxes with their
 // counts, updated in place on every render so focus and scroll stay put.
 import * as d3 from "d3";
+import { statusHue, typeTipId } from "./badges.js";
 import { TYPE_ORDER, facetRows } from "./facets.js";
-import { UI, statusKind, statusLabel } from "./labels.js";
+import { UI, statusLabel } from "./labels.js";
 
 // Rows shown before "Show all" / "Show more", and how many more each click shows.
 const TOP = 8;
@@ -12,7 +13,9 @@ const formatCount = d3.format(",");
 const slug = (text) => text.toLowerCase().replaceAll(" ", "-");
 
 // rows: facetRows() rows; dotClass(row): a colour key before the label (type or status), or null.
-function renderChecklist(list, rows, { onToggle, dotClass = () => null }) {
+// tipOf(row): the row value's explanation label (UI.typeTips key: medicine types), or null; shown
+// on hover and focus, and the checkbox's description.
+function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = () => null }) {
   const active = document.activeElement;
   const focused = list.contains(active) ? d3.select(active).datum()?.value : undefined;
   const items = d3.select(list)
@@ -29,7 +32,10 @@ function renderChecklist(list, rows, { onToggle, dotClass = () => null }) {
       return item;
     });
   items.classed("empty", (row) => row.count === 0 && !row.selected);
-  items.select("input").property("checked", (row) => row.selected);
+  items.select("label").attr("data-tip", (row) => (tipOf(row) ? UI.typeTips[tipOf(row)] : null));
+  items.select("input")
+    .property("checked", (row) => row.selected)
+    .attr("aria-describedby", (row) => (tipOf(row) ? typeTipId(tipOf(row)) : null));
   items.select(".facet-dot").attr("class", (row) => ["facet-dot", dotClass(row)].filter(Boolean).join(" ")).attr("hidden", (row) => (dotClass(row) ? null : ""));
   items.select(".facet-name").text((row) => row.label);
   items.select(".facet-count").text((row) => formatCount(row.count));
@@ -107,18 +113,23 @@ export function createFacetPanel(root, { onChange, labelOf }) {
     if (key === "branch") button.setAttribute("aria-expanded", String(limits.branch === Infinity));
   }
 
-  // model: { view, state, counts: { type, status, branch, area, mah } (facetCounts()),
-  // activeCount }. The approval years are the main column's strip (year-slider.js).
+  // model: { state, counts: { type, status, branch, area, mah } (facetCounts()), activeCount }.
+  // The approval years are the main column's strip (year-slider.js); the ATC section is the tree
+  // (atc-tree.js).
   function render(next) {
     model = next;
-    const { view, state, counts, activeCount } = model;
+    const { state, counts, activeCount } = model;
     const active = UI.facets.active(activeCount);
     d3.select(root.querySelector("#facets-active")).text(active ?? "").attr("hidden", active ? null : "");
     root.querySelector("#reset-all").disabled = activeCount === 0;
-    root.querySelector("#facets-note").textContent = UI.facets.counts(view);
+    root.querySelector("#facets-note").textContent = UI.facets.counts;
 
     const typeRows = TYPE_ORDER.map((type) => ({ value: type, label: type, count: counts.type.get(type) ?? 0, selected: state.type.includes(type) }));
-    renderChecklist(section("type").querySelector(".facet-list"), typeRows, { onToggle: toggle("type"), dotClass: (row) => `type-${slug(row.value)}` });
+    renderChecklist(section("type").querySelector(".facet-list"), typeRows, {
+      onToggle: toggle("type"),
+      dotClass: (row) => `type-${slug(row.value)}`,
+      tipOf: (row) => (UI.typeTips[row.value] ? row.value : null),
+    });
 
     const branch = facetRows(counts.branch, state.branch, { labelOf: labelOf.branch, limit: limits.branch, keep: kept.branch });
     renderChecklist(section("branch").querySelector(".facet-list"), branch.rows, { onToggle: toggle("branch") });
@@ -136,8 +147,7 @@ export function createFacetPanel(root, { onChange, labelOf }) {
     }
 
     const status = facetRows(counts.status, state.status, { labelOf: statusLabel, keep: kept.status });
-    renderChecklist(section("status").querySelector(".facet-list"), status.rows, { onToggle: toggle("status"), dotClass: (row) => `status-${statusKind(row.value)}` });
-    section("status").querySelector(".facet-note").textContent = view === "now" ? UI.facets.statusNote : "";
+    renderChecklist(section("status").querySelector(".facet-list"), status.rows, { onToggle: toggle("status"), dotClass: (row) => `hue-${statusHue(row.value)}` });
   }
 
   return { render };

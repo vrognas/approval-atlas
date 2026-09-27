@@ -36,12 +36,27 @@ export function countApprovalsByYear(medicines, medicineTypes, yearRange = null)
   return rows;
 }
 
+// Statuses in stack order (the approval-years strip bottom up, undated table rows, dek ties):
+// authorized, the ended authorizations, never authorized, pending; unknown ones last, by name.
+export const STATUS_ORDER = [
+  "Authorised", "Withdrawn", "Expired", "Lapsed", "Suspended", "Revoked",
+  "Refused", "Application withdrawn", "Withdrawn from rolling review", "Opinion", "Opinion under re-examination",
+];
+
+const statusRank = (status) => (STATUS_ORDER.includes(status) ? STATUS_ORDER.indexOf(status) : STATUS_ORDER.length);
+
+export function byStatusOrder(a, b) {
+  return statusRank(a) - statusRank(b) || a.localeCompare(b);
+}
+
+// Newest approval first (ties by name); medicines without an approval date last, by status then name.
 export function newestFirst(medicines) {
-  return [...medicines].sort(
-    (a, b) =>
-      b.marketing_authorisation_date.localeCompare(a.marketing_authorisation_date) ||
-      a.name_of_medicine.localeCompare(b.name_of_medicine),
-  );
+  return [...medicines].sort((a, b) => {
+    const [left, right] = [a.marketing_authorisation_date, b.marketing_authorisation_date];
+    if ((left === null) !== (right === null)) return left === null ? 1 : -1;
+    const byDate = left === null ? byStatusOrder(a.medicine_status, b.medicine_status) : right.localeCompare(left);
+    return byDate || a.name_of_medicine.localeCompare(b.name_of_medicine);
+  });
 }
 
 export function distinctSorted(values) {

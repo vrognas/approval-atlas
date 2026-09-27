@@ -52,7 +52,7 @@ export function createSheet(dialog, { onClear }) {
       if (dialog.open) dialog.close();
     },
     isOpen: () => dialog.open,
-    // count: the medicines the view shows with the filters as they are now.
+    // count: the medicines matching the filters as they are now.
     update(count) {
       done.textContent = UI.sheet.show(count);
     },
