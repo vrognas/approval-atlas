@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { ATC_CODE, ATC_GROUP_HUES, ATC_PREFIX_LENGTHS, atcHue, atcSegments, typeBadges } from "./badges.js";
+import { ATC_CODE, ATC_GROUP_HUES, ATC_PREFIX_LENGTHS, atcHue, atcSegments, statusHue, typeBadges, typeTipId } from "./badges.js";
 
 test("the ATC code shape and level lengths are defined once, here", () => {
   assert.deepEqual(ATC_PREFIX_LENGTHS, [1, 3, 4, 5, 7]);
@@ -69,4 +69,28 @@ test("type badges: Generic, Biosimilar and Advanced therapy get a badge, Other n
   ]);
   assert.deepEqual(typeBadges({ medicine_type: "Other", orphan_medicine: true }), [{ label: "Orphan", hue: "pink" }]);
   assert.deepEqual(typeBadges({ medicine_type: "Other", orphan_medicine: false }), []);
+});
+
+// Status colours (phase 4a review): one damped hue per status for dots, pills and the stacked strip.
+test("every status has its own hue; the two pending opinions share gold, the withdrawn applications slate", () => {
+  const hues = {
+    Authorised: "green",
+    Withdrawn: "red",
+    Expired: "orange",
+    Lapsed: "brown",
+    Suspended: "pink",
+    Revoked: "plum",
+    Refused: "purple",
+    "Application withdrawn": "slate",
+    "Withdrawn from rolling review": "slate",
+    Opinion: "gold",
+    "Opinion under re-examination": "gold",
+    "Something new": "slate",
+  };
+  assert.deepEqual(Object.fromEntries(Object.keys(hues).map((status) => [status, statusHue(status)])), hues);
+});
+
+test("each type explanation has one element id, which focusable carriers are described by", () => {
+  assert.equal(typeTipId("Advanced therapy"), "type-tip-advanced-therapy");
+  assert.equal(typeTipId("Orphan"), "type-tip-orphan");
 });

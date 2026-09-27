@@ -61,6 +61,61 @@ export function atcLadder(code, counts, names) {
   }));
 }
 
+// A class strictly under another: for valid ATC codes, a longer code with the other as its start.
+const isUnder = (code, ancestor) => code.length > ancestor.length && code.startsWith(ancestor);
+
+// The ATC selection (state.atc) after one class is toggled: a selected class is removed; otherwise
+// it is added in place of the selected classes it covers or is covered by, so no selected class
+// covers another. Class-name queries (older links) stay.
+export function toggleAtcCode(selected, code) {
+  if (selected.includes(code)) return selected.filter((value) => value !== code);
+  const covering = (value) => ATC_CODE.test(value) && (isUnder(value, code) || isUnder(code, value));
+  return [...selected.filter((value) => !covering(value)), code];
+}
+
+// A tree node's checkbox against the selected codes: "checked", "included" (under a checked
+// class: shown checked and disabled), "mixed" (a class under it is checked) or "unchecked".
+export function atcCheckState(code, selectedCodes) {
+  if (selectedCodes.includes(code)) return "checked";
+  if (selectedCodes.some((selected) => isUnder(code, selected))) return "included";
+  if (selectedCodes.some((selected) => isUnder(selected, code))) return "mixed";
+  return "unchecked";
+}
+
+// The ATC tree's nodes: every class with products (counts: atcPrefixCounts()) plus the selected
+// codes and their levels, so a selection always shows.
+export function atcTreeCodes(counts, selectedCodes) {
+  const codes = new Set([...counts].filter(([, count]) => count > 0).map(([code]) => code));
+  for (const code of selectedCodes) for (const prefix of atcPrefixes(code)) codes.add(prefix);
+  return codes;
+}
+
+// The tree nodes one level below parent (level 1 for null), in code order.
+export function atcTreeChildren(parent, codes) {
+  const level = parent === null ? 1 : atcLevel(parent) + 1;
+  return [...codes].filter((code) => atcLevel(code) === level && (parent === null || code.startsWith(parent))).sort();
+}
+
+// Class names match a search from this many characters (a single letter is a level-1 code).
+const NAME_SEARCH_MIN = 3;
+
+// The tree filtered by a search (not a filter): matches = the top matching nodes (code prefix, or
+// name from 3 characters; a node under a match is not one of its own), in code order; open = their
+// levels above, opened; shown = those levels, the matches and everything under them. null for a
+// blank query. names: code -> WHO name.
+export function atcTreeSearch(codes, names, query) {
+  const text = query.trim();
+  if (!text) return null;
+  const upper = text.toUpperCase();
+  const lower = text.toLowerCase();
+  const hits = [...codes].filter((code) => code.startsWith(upper) ||
+    (text.length >= NAME_SEARCH_MIN && Boolean(names.get(code)?.toLowerCase().includes(lower))));
+  const matches = hits.filter((code) => !hits.some((other) => isUnder(code, other))).sort();
+  const open = new Set(matches.flatMap((code) => atcPrefixes(code).slice(0, -1)));
+  const shown = new Set([...codes].filter((code) => open.has(code) || matches.some((match) => code.startsWith(match))));
+  return { matches, open, shown };
+}
+
 // medicines: [{ name, codes }] in display order. The code most of them carry (ties: the shorter,
 // then the first seen), and for every other code the medicines that carry it but not the main one.
 export function mainAtcCode(medicines) {

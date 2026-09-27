@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atcChildren, atcExactCounts, atcLadder, atcLevel, atcPrefixCounts, atcPrefixes, mainAtcCode } from "./atc.js";
+import {
+  atcCheckState,
+  atcChildren,
+  atcExactCounts,
+  atcLadder,
+  atcLevel,
+  atcPrefixCounts,
+  atcPrefixes,
+  atcTreeChildren,
+  atcTreeCodes,
+  atcTreeSearch,
+  mainAtcCode,
+  toggleAtcCode,
+} from "./atc.js";
 
 test("a code's level prefixes: all five, only those an incomplete code has, none for a malformed code", () => {
   assert.deepEqual(atcPrefixes("L04AC05"), ["L", "L04", "L04A", "L04AC", "L04AC05"]);
@@ -133,4 +146,60 @@ test("main code ties: the shorter code, then the first seen", () => {
   assert.equal(mainAtcCode([{ name: "X", codes: ["B01AC06"] }, { name: "Y", codes: ["A01AA01"] }]).code, "B01AC06");
   assert.deepEqual(mainAtcCode([{ name: "X", codes: [] }]), { code: null, others: [] });
   assert.deepEqual(mainAtcCode([]), { code: null, others: [] });
+});
+
+// The ATC filter is a list of classes combined with OR ("C and H03"): the tree, table segments and
+// breakdown toggle one class at a time, and no selected class ever covers another.
+test("toggling a class: removed when selected, else added in place of the classes it covers or is covered by", () => {
+  assert.deepEqual(toggleAtcCode(["C", "H03"], "H03"), ["C"]);
+  assert.deepEqual(toggleAtcCode(["C"], "H03"), ["C", "H03"]);
+  assert.deepEqual(toggleAtcCode(["C01", "H03", "C03AA"], "C"), ["H03", "C"]);
+  assert.deepEqual(toggleAtcCode(["L", "H03"], "L04"), ["H03", "L04"]);
+  // Class-name queries (from older links) stay, even when they start with the code's letters.
+  assert.deepEqual(toggleAtcCode(["Cardiac", "insulin"], "C"), ["Cardiac", "insulin", "C"]);
+  assert.deepEqual(toggleAtcCode([], "L04AC"), ["L04AC"]);
+});
+
+test("a tree checkbox: checked, included under a checked class, mixed above one, or unchecked", () => {
+  const selected = ["C", "H03", "L04AC"];
+  assert.equal(atcCheckState("C", selected), "checked");
+  assert.equal(atcCheckState("C01", selected), "included");
+  assert.equal(atcCheckState("C01AA05", selected), "included");
+  assert.equal(atcCheckState("H", selected), "mixed");
+  assert.equal(atcCheckState("L04A", selected), "mixed");
+  assert.equal(atcCheckState("L04AC05", selected), "included");
+  assert.equal(atcCheckState("H02", selected), "unchecked");
+  assert.equal(atcCheckState("A", []), "unchecked");
+});
+
+test("tree nodes: every class with products, plus the selected classes and their levels", () => {
+  const nodes = atcTreeCodes(counts, ["B01AC06", "L04AC"]);
+  assert.deepEqual([...nodes].sort(), [...counts.keys(), "B", "B01", "B01A", "B01AC", "B01AC06"].sort());
+  assert.equal(atcTreeCodes(new Map([["A", 0]]), []).size, 0);
+});
+
+test("tree children: the next level under a class (level 1 under none), in code order", () => {
+  const nodes = atcTreeCodes(counts, []);
+  assert.deepEqual(atcTreeChildren(null, nodes), ["A", "L"]);
+  assert.deepEqual(atcTreeChildren("L04A", nodes), ["L04AB", "L04AC"]);
+  assert.deepEqual(atcTreeChildren("L04AC05", nodes), []);
+});
+
+test("tree search: the top matching classes by code prefix or name, their levels opened", () => {
+  const nodes = atcTreeCodes(counts, []);
+  const sorted = (set) => [...set].sort();
+  const byCode = atcTreeSearch(nodes, names, " l04a ");
+  assert.deepEqual(byCode.matches, ["L04A"]);
+  assert.deepEqual(sorted(byCode.open), ["L", "L04"]);
+  assert.deepEqual(sorted(byCode.shown), ["L", "L04", "L04A", "L04AB", "L04AB02", "L04AB04", "L04AC", "L04AC05", "L04AC07"]);
+  const byName = atcTreeSearch(nodes, names, "interleukin");
+  assert.deepEqual(byName.matches, ["L04AC"]);
+  assert.deepEqual(sorted(byName.open), ["L", "L04", "L04A"]);
+  assert.deepEqual(sorted(byName.shown), ["L", "L04", "L04A", "L04AC", "L04AC05", "L04AC07"]);
+  // A class under a matching class is not a match of its own (its level stays closed).
+  assert.deepEqual(atcTreeSearch(nodes, names, "Immuno").matches, ["L"]);
+  // Names match from 3 characters; a single letter is a level-1 code.
+  assert.deepEqual(atcTreeSearch(nodes, names, "a").matches, ["A"]);
+  assert.deepEqual(atcTreeSearch(nodes, names, "xyz").matches, []);
+  assert.equal(atcTreeSearch(nodes, names, "  "), null);
 });

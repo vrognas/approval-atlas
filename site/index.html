@@ -56,10 +56,6 @@
         <section class="answer" aria-labelledby="headline">
           <h2 id="headline" class="headline" tabindex="-1"></h2>
           <p id="headline-dek" class="dek"></p>
-          <p id="other-statuses" class="note other-statuses" hidden>
-            <span id="other-statuses-text"></span>
-            <button id="other-statuses-open" class="text-button" type="button"></button>
-          </p>
           <div id="class-path" class="class-path" hidden></div>
         </section>
         <p id="filter-result" class="visually-hidden" role="status"></p>
@@ -71,7 +67,7 @@
         </div>
         <p id="url-note" class="note" role="status" hidden></p>
 
-        <!-- Approval years (every width, both views): per-year bars above a two-thumb slider. -->
+        <!-- Approval years (every width): per-year bars stacked by status above a two-thumb slider. -->
         <section id="year-strip" class="year-strip" aria-labelledby="year-strip-title">
           <div class="year-strip-head">
             <h2 id="year-strip-title">Approval years</h2>
@@ -85,45 +81,54 @@
             <input id="year-start" type="range" />
             <input id="year-end" type="range" />
           </div>
+          <ul id="year-legend" class="legend year-legend" aria-hidden="true"></ul>
+          <p id="year-undated" class="muted"></p>
         </section>
 
-        <div role="tablist" aria-label="View" class="tabs">
-          <button role="tab" type="button" id="tab-now" data-view="now" aria-controls="panel-now">Authorized now</button>
-          <button role="tab" type="button" id="tab-years" data-view="years" aria-controls="panel-years">Approvals per year</button>
-        </div>
+        <!-- One dashboard: every medicine matching the filters, whatever its status. -->
+        <div id="tiles" class="tiles"></div>
+        <p id="register-note" class="muted" hidden></p>
+        <p id="undated-authorized" class="muted" hidden></p>
 
-        <section role="tabpanel" id="panel-now" aria-labelledby="tab-now" tabindex="0">
-          <div id="tiles" class="tiles"></div>
-          <p id="register-note" class="muted" hidden></p>
-          <p id="undated-authorized" class="muted"></p>
-          <div class="chart-card">
-            <div class="card-head">
-              <h2 id="breakdown-title"></h2>
-              <div id="breakdown-by" class="segmented" role="group" aria-label="Break down by">
-                <button type="button" data-by="atc">ATC</button>
-                <button type="button" data-by="area">Therapeutic area</button>
-                <button type="button" data-by="mah">Holder</button>
-              </div>
+        <section class="chart-card" aria-labelledby="breakdown-title">
+          <div class="card-head">
+            <h2 id="breakdown-title"></h2>
+            <div id="breakdown-by" class="segmented" role="group" aria-label="Break down by">
+              <button type="button" data-by="atc">ATC</button>
+              <button type="button" data-by="area">Therapeutic area</button>
+              <button type="button" data-by="mah">Holder</button>
             </div>
-            <p id="breakdown-note" class="muted"></p>
-            <ul id="breakdown-legend" class="legend" hidden></ul>
-            <div id="breakdown-path" class="breakdown-path" hidden></div>
-            <div id="breakdown" class="breakdown"></div>
-            <p id="breakdown-excluded" class="muted" hidden></p>
           </div>
+          <p id="breakdown-note" class="muted"></p>
+          <ul id="breakdown-legend" class="legend" hidden></ul>
+          <div id="breakdown-path" class="breakdown-path" hidden></div>
+          <div id="breakdown" class="breakdown"></div>
+          <p id="breakdown-excluded" class="muted" hidden></p>
         </section>
 
-        <section role="tabpanel" id="panel-years" aria-labelledby="tab-years" tabindex="0" hidden>
-          <div class="chart-card">
-            <h2>Approvals per year by medicine type</h2>
-            <p class="muted">Year of EU marketing authorization; each medicine counted once. Drag across the chart to select approval years.</p>
-            <div class="legend-row">
-              <ul id="legend" class="legend"></ul>
-              <output id="year-readout" class="readout" aria-live="polite"></output>
+        <!-- Who is active where: the top holders by ATC group or therapeutic area group. -->
+        <section class="chart-card" aria-labelledby="activity-title">
+          <div class="card-head">
+            <h2 id="activity-title"></h2>
+            <div id="activity-by" class="segmented" role="group">
+              <button type="button" data-mode="atc"></button>
+              <button type="button" data-mode="area"></button>
             </div>
-            <div id="chart" class="chart"></div>
-            <p id="undated-note" class="muted"></p>
           </div>
+          <p id="activity-subtitle" class="muted"></p>
+          <div id="activity-table" class="activity-scroll"></div>
+          <p id="activity-note" class="muted"></p>
+        </section>
+
+        <section class="chart-card" aria-labelledby="chart-title">
+          <h2 id="chart-title">Approvals per year by medicine type</h2>
+          <p class="muted">Year of EU marketing authorization; each medicine counted once. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.</p>
+          <div class="legend-row">
+            <ul id="legend" class="legend"></ul>
+            <output id="year-readout" class="readout" aria-live="polite"></output>
+          </div>
+          <div id="chart" class="chart"></div>
+          <p id="undated-note" class="muted"></p>
         </section>
 
         <section class="chart-card" aria-labelledby="over-time-title">
@@ -165,11 +170,12 @@
       </div>
       <div id="facet-atc" class="facet" role="group" aria-labelledby="facet-atc-title">
         <h3 id="facet-atc-title" class="facet-title">ATC class</h3>
-        <div class="atc-filter">
-          <label for="atc-input">ATC code or name</label>
-          <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
-        </div>
-        <div id="atc-picker" class="atc-picker"></div>
+        <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <p id="atc-names" class="muted" hidden></p>
+        <ul id="atc-tree" class="atc-tree"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <p class="muted atc-note"></p>
       </div>
       <div id="facet-branch" class="facet" role="group" aria-labelledby="facet-branch-title">
         <h3 id="facet-branch-title" class="facet-title">Therapeutic area group</h3>
@@ -193,10 +199,7 @@
         <button class="facet-more text-button" type="button" hidden></button>
       </div>
       <div id="facet-status" class="facet" role="group" aria-labelledby="facet-status-title">
-        <div class="facet-title-row">
-          <h3 id="facet-status-title" class="facet-title">Status</h3>
-          <span class="facet-note"></span>
-        </div>
+        <h3 id="facet-status-title" class="facet-title">Status</h3>
         <ul class="facet-list"></ul>
       </div>
     </aside>

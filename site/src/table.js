@@ -1,7 +1,9 @@
 import * as d3 from "d3";
 import { atcPrefixes } from "./atc.js";
-import { atcHue, atcSegments, typeBadges } from "./badges.js";
-import { UI, atcClassLabel, statusDateLine, statusKind, statusLabel } from "./labels.js";
+import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
+import { quickDocuments } from "./documents.js";
+import { UI, atcClassLabel, statusDateLine, statusLabel } from "./labels.js";
+import { documentLinks } from "./lookup.js";
 
 const PAGE_SIZE = 100;
 const HEADERS = UI.table.headers;
@@ -34,8 +36,17 @@ function atcTitle(row, atcNames) {
   return [...lines, UI.table.source(row.source)].join("\n");
 }
 
-// Name link, then the active substance(s) in secondary text.
-function renderNameCell(cell, product, substances) {
+// The PI and EPAR links under the name (for its EMA status: quickDocuments()), replaced when the
+// documents index (rows by product; null until loaded) arrives.
+function renderDocumentLinks(cell, product, documents) {
+  cell.select(".doc-links").remove();
+  const rows = documents?.get(product.ema_product_number) ?? [];
+  const links = documents ? documentLinks(product.name_of_medicine, quickDocuments(rows, product.medicine_status)) : null;
+  if (links) cell.append(() => links);
+}
+
+// Name link, then the active substance(s) in secondary text, then the PI and EPAR links.
+function renderNameCell(cell, product, substances, documents) {
   // URLs come from third-party data; only link https so a javascript: URL can never become a link.
   if (product.medicine_url?.startsWith("https://")) {
     cell.append("a")
@@ -48,6 +59,7 @@ function renderNameCell(cell, product, substances) {
     cell.append("span").attr("class", "medicine-name").text(product.name_of_medicine);
   }
   if (substances.length) cell.append("span").attr("class", "medicine-substances").text(substances.join("; "));
+  renderDocumentLinks(cell, product, documents);
 }
 
 // Segmented ATC badge in the group's hue: one button per level that filters by that prefix; a
@@ -91,13 +103,15 @@ function renderTypeCell(cell, product) {
     .data(badges)
     .join("span")
     .attr("class", (badge) => `badge hue-${badge.hue}`)
+    .attr("data-tip", (badge) => UI.typeTips[badge.label])
+    .attr("tabindex", "-1") // a tap focuses it and shows the explanation; no tab stop
     .text((badge) => badge.label);
 }
 
 // Merged "Approved · Status": dot and status label, then the date line. Union Register
 // disagreement: a visible marker, the full text as tooltip and for screen readers.
 function renderStatusCell(cell, product, register) {
-  cell.append("span").attr("class", `status status-${statusKind(product.medicine_status)}`).text(statusLabel(product.medicine_status));
+  cell.append("span").attr("class", `status hue-${statusHue(product.medicine_status)}`).text(statusLabel(product.medicine_status));
   const dates = statusDateLine(product.medicine_status, product.authorized_from, product.authorized_until);
   if (dates) cell.append("span").attr("class", "status-date").text(dates);
   const row = register?.get(product.ema_product_number);
@@ -126,14 +140,14 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
   let shown = 0;
   let refocus = null; // { number, code } of a clicked ATC segment, until the next update
 
-  // Pressed: the segment the ATC filter is set to. Each badge's one tab stop: that segment, else
-  // the last (the full code).
+  // Pressed: the segments whose class is selected in the ATC filter. Each badge's one tab stop: the
+  // first pressed segment, else the last (the full code).
   function markPressed() {
     for (const badge of table.querySelectorAll(".atc-badge[role=toolbar]")) {
       const segments = [...badge.querySelectorAll("button.atc-seg")];
-      const pressed = segments.find((segment) => segment.dataset.code === current.selectedAtc);
+      const pressed = segments.find((segment) => current.selectedAtc.includes(segment.dataset.code));
       for (const segment of segments) {
-        segment.setAttribute("aria-pressed", String(segment === pressed));
+        segment.setAttribute("aria-pressed", String(current.selectedAtc.includes(segment.dataset.code)));
         segment.tabIndex = segment === (pressed ?? segments.at(-1)) ? 0 : -1;
       }
     }
@@ -180,7 +194,7 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
     const groups = d3.select(table).selectAll(null).data(products).enter().append("tbody");
     const rows = groups.append("tr");
     rows.append("td").attr("class", "breakable").each(function nameCell(product) {
-      renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? []);
+      renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? [], current.documents);
     });
     rows.append("td").text((product) => product.marketing_authorisation_developer_applicant_holder);
     rows.append("td").attr("class", "status-cell").each(function statusCell(product) {
@@ -229,19 +243,26 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
 
   // Rebuilds only when the rows, caption or register (ema_medicine_register_status.json rows by
   // product, null until loaded) changed, so resizes keep the pages already shown. selectedAtc: the
-  // ATC code filter (null for none or a name query), shown as pressed segments.
-  return function update(products, caption, register, selectedAtc) {
+  // ATC codes selected in the filter, shown as pressed segments. documents: the documents index by
+  // product (null until loaded); its arrival adds the links in place.
+  return function update(products, caption, register, selectedAtc, documents) {
     const unchanged = current !== null && current.caption === caption && current.register === register &&
       current.products.length === products.length && current.products.every((product, index) => product === products[index]);
     if (unchanged) {
-      if (current.selectedAtc !== selectedAtc) {
+      if (String(current.selectedAtc) !== String(selectedAtc)) {
         current.selectedAtc = selectedAtc;
         markPressed();
+      }
+      if (current.documents !== documents) {
+        current.documents = documents;
+        d3.select(table).selectAll("tbody").each(function links(product) {
+          renderDocumentLinks(d3.select(this).select("td.breakable"), product, documents);
+        });
       }
       if (refocus) restoreFocus();
       return;
     }
-    current = { products, caption, register, selectedAtc };
+    current = { products, caption, register, selectedAtc, documents };
     shown = 0;
     const root = d3.select(table);
     root.selectChildren().remove();

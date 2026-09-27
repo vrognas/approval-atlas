@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as d3 from "d3";
-import { pixelsForYears, snapToYears } from "./year-brush.js";
+import { pixelsForYears, snapToYears, yearAtPixel } from "./year-brush.js";
 
 const years = d3.range(1995, 2027).map(String);
 // Same padding as chart.js: paddingOuter = paddingInner / 2 makes the steps tile the range.
@@ -22,6 +22,15 @@ test("a short drag inside one column selects that column", () => {
   for (const [start, end] of [[3.6, 3.7], [3.55, 3.95], [3.1, 3.2]]) {
     assert.deepEqual(snapToYears(x, [40 + start * step, 40 + end * step]), { from: 1998, to: 1998, pixels: [40 + 3 * step, 40 + 4 * step] });
   }
+});
+
+test("yearAtPixel: the year whose column holds a click, clamped to the data", () => {
+  assert.equal(yearAtPixel(x, 40), 1995);
+  assert.equal(yearAtPixel(x, 40 + 15.5 * step), 2010);
+  assert.equal(yearAtPixel(x, 40 + 16 * step - 0.01), 2010);
+  assert.equal(yearAtPixel(x, 1031), 2026);
+  assert.equal(yearAtPixel(x, 0), 1995);
+  assert.equal(yearAtPixel(x, 5000), 2026);
 });
 
 test("pixelsForYears is the inverse of snapToYears", () => {

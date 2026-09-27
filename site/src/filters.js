@@ -1,6 +1,7 @@
 // Pure: one predicate per filter dimension, so a chart can apply every filter except its own.
 // Products come from buildProducts() in approvals.js.
-import { ATC_CODE, ATC_PREFIX_LENGTHS } from "./badges.js";
+import { atcPrefixes } from "./atc.js";
+import { ATC_CODE } from "./badges.js";
 
 // "L01" / "l01fa" -> code prefix; anything else -> case-insensitive name search.
 export function parseAtcQuery(query) {
@@ -9,23 +10,31 @@ export function parseAtcQuery(query) {
   return trimmed ? { kind: "name", value: trimmed.toLowerCase() } : { kind: "none" };
 }
 
-// A product code "starts with" a class code exactly when one of its level-length prefixes equals it.
-function matchesAnyClass(code, classCodes) {
-  return ATC_PREFIX_LENGTHS.some((length) => length <= code.length && classCodes.has(code.slice(0, length)));
+// An ATC selection (state.atc) split into its codes (upper case) and class-name queries (as given,
+// trimmed; older links); blank values are left out.
+export function splitAtcValues(values) {
+  const codes = [];
+  const names = [];
+  for (const value of values) {
+    const parsed = parseAtcQuery(value);
+    if (parsed.kind === "code") codes.push(parsed.value);
+    else if (parsed.kind === "name") names.push(value.trim());
+  }
+  return { codes, names };
 }
 
-function atcPredicate(query, atcClasses) {
-  const parsed = parseAtcQuery(query);
-  if (parsed.kind === "code") {
-    return (product) => product.atc.some((row) => row.atc_code_human.startsWith(parsed.value));
-  }
-  if (parsed.kind === "name") {
-    const classCodes = new Set(
-      atcClasses.filter((row) => row.name?.toLowerCase().includes(parsed.value)).map((row) => row.atc_code),
-    );
-    return (product) => product.atc.some((row) => matchesAnyClass(row.atc_code_human, classCodes));
-  }
-  return null;
+// Any selected class (a code prefix, or a class whose name matches a query) matches: OR. A product
+// code is in a class when one of its levels (atcPrefixes()) is that class, so a malformed code
+// (EMA's LX1XX02) is in none, as in the tree and breakdown counts (atcPrefixCounts()).
+function atcPredicate(values, atcClasses) {
+  const { codes, names } = splitAtcValues(values);
+  if (!codes.length && !names.length) return null;
+  const needles = names.map((name) => name.toLowerCase());
+  const selected = new Set([
+    ...codes,
+    ...atcClasses.filter((row) => needles.some((needle) => row.name?.toLowerCase().includes(needle))).map((row) => row.atc_code),
+  ]);
+  return (product) => product.atc.some((row) => atcPrefixes(row.atc_code_human).some((prefix) => selected.has(prefix)));
 }
 
 export function makePredicates(state, atcClasses) {

@@ -34,18 +34,16 @@
   --accent-wash: #dfe6da;
   --option-active: var(--accent-wash);
   --mark: #efe7cc;
-  --status-authorized: #4e8a57;
-  --status-authorized-text: #2b4a31;
-  --status-authorized-fill: #dfe9da;
-  --status-ended: #b5574a;
+  /* Headline tones: the "not" of "not authorized", the "not yet" of a pending opinion. Status dots,
+     labels and pills take their status's hue (statusHue() in badges.js). */
   --status-ended-text: #7a2e22;
-  --status-ended-fill: #f1ddd8;
-  --status-pending: #b8962e;
   --status-pending-text: #5e4a10;
-  --status-pending-fill: #efe7cc;
-  --status-refused: #8a6ba8;
-  --status-refused-text: #4e3470;
-  --status-refused-fill: #e7dff0;
+  /* Authorized in the stacked approval-years strip: the bottom segment of every bar, darker (light
+     mode) or lighter (dark) than every status mid stacked on it, not only another hue (WCAG 1.4.1). */
+  --status-authorized: var(--green-text);
+  /* Holder activity cells: five shades from --raised to --accent, each with its number colour. */
+  --heat-1: #d3d7ce; --heat-2: #b1baae; --heat-3: #8b9a8a; --heat-4: #607763; --heat-5: #2b4a31;
+  --heat-1-text: var(--ink); --heat-2-text: var(--ink); --heat-3-text: var(--ink); --heat-4-text: var(--on-accent); --heat-5-text: var(--on-accent);
   /* Hue table: level-1..5 fills (ATC level shades; level 1 is the badge fill), mid, text. */
   --green-1: #dce8d6; --green-2: #cdddc7; --green-3: #bed2b8; --green-4: #afc7a9; --green-5: #a0bc9a; --green-mid: #5e8c5a; --green-text: #264f25;
   --teal-1: #d3e6e2; --teal-2: #c3dcd7; --teal-3: #b3d1cc; --teal-4: #a3c7c1; --teal-5: #93bcb6; --teal-mid: #4e8f86; --teal-text: #164c44;
@@ -96,18 +94,10 @@
     --on-accent: #1b1c19;
     --accent-wash: #343a31;
     --mark: #3a341d;
-    --status-authorized: #7db887;
-    --status-authorized-text: #b9ddb4;
-    --status-authorized-fill: #25352a;
-    --status-ended: #d07a6c;
     --status-ended-text: #f0b9ae;
-    --status-ended-fill: #3a2420;
-    --status-pending: #c3a64d;
     --status-pending-text: #eadfbc;
-    --status-pending-fill: #3a341d;
-    --status-refused: #9c81b5;
-    --status-refused-text: #ded3e9;
-    --status-refused-fill: #312c36;
+    --heat-1: #3d4239; --heat-2: #566051; --heat-3: #7a8c74; --heat-4: #8ea688; --heat-5: #a7c4a0;
+    --heat-1-text: var(--ink); --heat-2-text: var(--ink); --heat-3-text: var(--on-accent); --heat-4-text: var(--on-accent); --heat-5-text: var(--on-accent);
     /* Dark fills step 8% toward the hue's mid per level; mids lightened 12% toward white. */
     --green-1: #28402a; --green-2: #2e472f; --green-3: #344e35; --green-4: #3a563a; --green-5: #3f5d40; --green-mid: #719a6e; --green-text: #c6e1bf;
     --teal-1: #1e3f3a; --teal-2: #244641; --teal-3: #294e49; --teal-4: #2f5550; --teal-5: #345d57; --teal-mid: #639c95; --teal-text: #b5ddd5;
@@ -144,12 +134,6 @@
 .hue-brown { --hue-1: var(--brown-1); --hue-2: var(--brown-2); --hue-3: var(--brown-3); --hue-4: var(--brown-4); --hue-5: var(--brown-5); --hue-mid: var(--brown-mid); --hue-text: var(--brown-text); }
 .hue-sky { --hue-1: var(--sky-1); --hue-2: var(--sky-2); --hue-3: var(--sky-3); --hue-4: var(--sky-4); --hue-5: var(--sky-5); --hue-mid: var(--sky-mid); --hue-text: var(--sky-text); }
 .hue-slate { --hue-1: var(--slate-1); --hue-2: var(--slate-2); --hue-3: var(--slate-3); --hue-4: var(--slate-4); --hue-5: var(--slate-5); --hue-mid: var(--slate-mid); --hue-text: var(--slate-text); }
-
-/* A status kind (statusKind() in labels.js) sets the dot, text and pill colours. */
-.status-authorized { --status-dot: var(--status-authorized); --status-text: var(--status-authorized-text); --status-fill: var(--status-authorized-fill); }
-.status-ended { --status-dot: var(--status-ended); --status-text: var(--status-ended-text); --status-fill: var(--status-ended-fill); }
-.status-pending { --status-dot: var(--status-pending); --status-text: var(--status-pending-text); --status-fill: var(--status-pending-fill); }
-.status-refused { --status-dot: var(--status-refused); --status-text: var(--status-refused-text); --status-fill: var(--status-refused-fill); }
 
 * {
   box-sizing: border-box;
@@ -304,7 +288,6 @@ button {
 }
 
 /* Secondary buttons: transparent with a strong border. */
-.atc-browse,
 .all-filters,
 .more {
   min-height: 40px;
@@ -580,13 +563,19 @@ button {
   overflow: visible;
 }
 
-/* A click on a year's column or the track moves the nearest thumb there (year-slider.js). */
+/* A click on a year's column selects that year alone, or every year again (year-slider.js). */
 .year-hit {
   fill: transparent;
   cursor: pointer;
 }
 
-/* Outside the range: a --field-border outline (3:1 on the card and the fill, WCAG 1.4.11). */
+/* Status segments (a .hue-* class each: statusHue()), 1px apart. Outside the range: greyed with a
+   --field-border outline (3:1 on the card and the fill, WCAG 1.4.11). Authorized (the one green
+   status) takes --status-authorized, in the bars and the legend. */
+.year-strip .hue-green {
+  --hue-mid: var(--status-authorized);
+}
+
 .year-bar {
   fill: var(--raised);
   stroke: var(--field-border);
@@ -594,9 +583,23 @@ button {
   cursor: pointer;
 }
 
-.year-bar.in-range {
-  fill: var(--accent);
-  stroke: var(--accent);
+.year-col.in-range .year-bar {
+  fill: var(--hue-mid);
+  stroke: none;
+}
+
+.year-legend {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+}
+
+.year-legend .swatch {
+  background: var(--hue-mid);
+}
+
+.year-strip #year-undated {
+  margin: 2px 0 4px;
+  font-size: 0.8125rem;
 }
 
 .year-baseline {
@@ -764,18 +767,6 @@ button {
   font-weight: 600;
 }
 
-.facet-title-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.facet-note {
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-
 .facet-list {
   margin: 0;
   padding: 0;
@@ -816,13 +807,13 @@ button {
   margin: 0;
 }
 
-/* A colour key: the status dot, or a medicine type's chart colour. */
+/* A colour key: the status dot (its hue's mid), or a medicine type's chart colour. */
 .facet-dot {
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--status-dot);
+  background: var(--hue-mid);
 }
 
 .facet-dot.type-other,
@@ -854,8 +845,8 @@ button {
   color: var(--muted);
 }
 
-.facet-search,
-.atc-filter input {
+.facet-search {
+  width: 100%;
   min-height: 40px;
   padding: 8px 10px;
   border: 1px solid var(--field-border);
@@ -863,11 +854,6 @@ button {
   background: var(--input);
   color: var(--ink);
   font: inherit;
-}
-
-.facet-search,
-.atc-filter input {
-  width: 100%;
 }
 
 .facet-search {
@@ -886,14 +872,107 @@ input::placeholder {
   color: var(--muted);
 }
 
-.atc-filter label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 0.875rem;
+/* ATC tree (atc-tree.js): nested lists; each row an expand button (a chevron; hidden on leaves,
+   keeping its column) and a checkbox row (.facet-row) with badge, name and count. */
+.atc-tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.atc-picker {
-  margin-top: 8px;
+.atc-tree .atc-tree {
+  padding-left: 14px;
+}
+
+.atc-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 2px;
+}
+
+.atc-row > .facet-row {
+  grid-column: 2;
+}
+
+/* The static last row: the products coded only down to the parent class. */
+.atc-static {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.atc-expand {
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.atc-expand:hover {
+  background: var(--wash);
+}
+
+.atc-expand::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: -2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.atc-expand[aria-expanded="true"]::before {
+  margin: -3px 0 0;
+  transform: rotate(45deg);
+}
+
+/* A class under a checked one: checked and disabled. */
+.atc-check:has(input:disabled) {
+  cursor: default;
+}
+
+.atc-check .code-badge {
+  height: 22px;
+}
+
+/* Deep levels leave little room beside the badge: name and count (.atc-text) short of 7em, or of
+   their longest word, move under it (the row wraps) instead of breaking inside words
+   ("Lixisenatid/e", "Immunosuppress/ants"). Level 5 always wraps in the sidebar and has the full
+   row, where only a word longer than the row ("antiCarcinoEmbryonicAntigen") still breaks. */
+.atc-check {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.atc-text {
+  display: flex;
+  flex: 1 1 7em;
+  align-items: center;
+  gap: 8px;
+  min-width: min-content;
+}
+
+.atc-check:has(.level-5) .atc-text {
+  min-width: 0;
+}
+
+.atc-text .facet-name {
+  overflow-wrap: break-word;
 }
 
 /* Sidebar (desktop): header, then the sections. Hidden below 1024px, where a sheet borrows
@@ -1044,11 +1123,23 @@ input::placeholder {
 }
 
 .sheet .facet-search,
-.sheet .atc-filter input,
-.sheet .atc-browse,
 .sheet .text-button,
 .sheet .atc-path button {
   min-height: 44px;
+}
+
+.sheet .atc-row {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.sheet .atc-expand {
+  width: 44px;
+  height: 44px;
+}
+
+.sheet .atc-static {
+  min-height: 48px;
+  font-size: 1rem;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1118,83 +1209,7 @@ input::placeholder {
   text-underline-offset: 3px;
 }
 
-.path-name {
-  font-weight: 600;
-}
-
 .path-count {
-  color: var(--ink-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-/* "Browse ATC classes": a secondary button with a chevron that turns when open. */
-.atc-browse {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.atc-browse::after {
-  content: "";
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg);
-}
-
-.atc-browse[aria-expanded="true"]::after {
-  margin-top: 3px;
-  transform: rotate(-135deg);
-}
-
-/* The classes one level down: rows of badge, name and count. The list grows with the sidebar or
-   sheet: no scroll area nested in it. */
-.atc-children {
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.atc-children li {
-  border-bottom: 1px solid var(--grid);
-}
-
-/* The static last row: the products coded only down to the current class. */
-.atc-children button,
-.atc-children .atc-child-static {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 36px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  color: var(--ink);
-  font-size: 0.875rem;
-  font-weight: 400;
-  text-align: left;
-  cursor: pointer;
-}
-
-.atc-children .atc-child-static {
-  cursor: auto;
-}
-
-.atc-children button:hover {
-  background: var(--wash);
-}
-
-.atc-children button:focus-visible {
-  outline-offset: -2px;
-}
-
-.atc-child-count {
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
 }
@@ -1246,39 +1261,9 @@ input::placeholder {
   font-size: 0.875rem;
 }
 
-/* Under the dek: where the statuses Authorized now cannot show are. */
-.other-statuses {
-  margin-top: 8px;
-}
-
-/* Tabs: text tabs, the active one in ink with an accent underline. */
-.tabs {
-  display: flex;
-  gap: 24px;
-  margin: 16px 0;
-  border-bottom: 1px solid var(--grid);
-}
-
-[role="tab"] {
-  padding: 10px 0;
-  border: 0;
-  background: none;
-  color: var(--ink-secondary);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-[role="tab"][aria-selected="true"] {
-  color: var(--ink);
-  box-shadow: inset 0 -2px var(--accent);
-}
-
-[role="tabpanel"]:focus-visible {
-  outline-offset: 4px;
-}
-
-/* Authorized-now tiles: two wide tiles, then four compact ones (2 x 2). */
+/* Tiles: two wide tiles (medicines, authorized today), then four compact ones (2 x 2). */
 .tiles {
+  margin-top: 16px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
@@ -1897,12 +1882,46 @@ td.breakable {
   font-size: 0.8125rem;
 }
 
-/* Status: an 8px dot in the status colour, then the label. */
+/* "PI" and "EPAR" on medicine rows (lookup lists after the name, the table under it): compact
+   outlined links, 24px targets (WCAG 2.5.8), 44px on phones. */
+.doc-links {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
+td .doc-links {
+  display: flex;
+  margin: 6px 0 0;
+}
+
+.doc-link {
+  display: inline-flex;
+  align-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.doc-link:hover {
+  background: var(--wash);
+}
+
+/* Status: an 8px dot in its status's hue (a .hue-* class: statusHue()), then the label in the
+   hue's text colour; a pill on the hue's fill. */
 .status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--status-text);
+  color: var(--hue-text);
   font-weight: 500;
 }
 
@@ -1912,13 +1931,13 @@ td.breakable {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--status-dot);
+  background: var(--hue-mid);
 }
 
 .status.pill {
   padding: 1px 12px 1px 10px;
   border-radius: 999px;
-  background: var(--status-fill);
+  background: var(--hue-1);
   white-space: nowrap;
 }
 
@@ -1953,6 +1972,104 @@ td.status-cell {
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* Type explanations (UI.typeTips): a tooltip from data-tip on hover and keyboard focus; on touch
+   screens a tap focuses the carrier (badges: tabindex="-1", no tab stop; tiles: tabindex="0";
+   facet rows: their checkbox) and shows it until focus moves on. Generated (content) only while
+   shown, so a hidden one never widens the page; left out of accessible names ("/ ''"): focusable
+   carriers are described by a hidden element (aria-describedby), tiles carry the text visually
+   hidden. */
+[data-tip] {
+  position: relative;
+  cursor: help;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after,
+[data-tip]:has(:focus-visible)::after {
+  content: attr(data-tip);
+  content: attr(data-tip) / "";
+}
+
+@media (hover: none) {
+  [data-tip]:focus-within::after {
+    content: attr(data-tip);
+    content: attr(data-tip) / "";
+  }
+}
+
+[data-tip]::after {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--tip-top, 100%) + 4px);
+  left: 0;
+  width: max-content;
+  max-width: min(16rem, calc(100vw - 32px));
+  padding: 6px 10px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
+  color: var(--ink);
+  font: 400 0.8125rem/1.125rem var(--font);
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+  pointer-events: none;
+}
+
+/* WCAG 1.4.13. Hoverable: with a mouse the pointer can move onto the tip, which is part of its
+   carrier, across the 4px gap too (::before, while it shows). Dismissible: Escape hides the tips
+   (.tips-hidden on <html>, setupTips() in main.js) until the pointer reaches another carrier or
+   focus moves; a click on a tip only hides it (it never reaches the carrier, e.g. a facet row's
+   checkbox). Touch screens (a tap shows it) keep taps going through it. */
+@media (hover: hover) {
+  [data-tip]::after {
+    pointer-events: auto;
+  }
+
+  [data-tip]:hover::before {
+    content: "";
+    position: absolute;
+    z-index: 4;
+    top: var(--tip-top, 100%);
+    left: 0;
+    width: 100%;
+    height: 4px;
+  }
+}
+
+.tips-hidden [data-tip]::before,
+.tips-hidden [data-tip]::after {
+  content: none !important;
+}
+
+/* Tiles and facet rows: the tooltip spans the carrier. */
+.tile[data-tip]::after,
+.facet-row[data-tip]::after {
+  right: 0;
+  width: auto;
+  max-width: none;
+}
+
+/* Lookup rows and the filter sentence: the tooltip starts at the row's left edge (a badge or
+   token near the right edge of a phone would push it off the page), under the carrier's own line
+   (--tip-top, set by setupTips() in main.js). */
+.result-meta,
+.sentence {
+  position: relative;
+}
+
+.result-meta .badge[data-tip],
+.token-pill[data-tip] {
+  position: static;
+}
+
+.result-meta .badge[data-tip]::after,
+.token-pill[data-tip]::after {
+  max-width: min(16rem, 100%);
 }
 
 /* Segmented ATC badge: one segment per level, shaded darker per level in the group's hue.
@@ -2071,6 +2188,119 @@ td.area {
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+/* Who is active where (activity.js): the table scrolls sideways inside the card when it is wider
+   (the page never does), with the holder column sticky; cells in five accent shades (--heat-1..5,
+   each with its own number colour, palette.test.js), empty for none. */
+.activity-scroll {
+  position: relative;
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+table.activity {
+  width: auto;
+  min-width: 0;
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 0.8125rem;
+}
+
+.activity th,
+.activity td {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  vertical-align: middle;
+}
+
+.activity thead th {
+  position: static;
+  padding: 0 2px 4px;
+  background: none;
+  font-weight: 500;
+  vertical-align: bottom;
+}
+
+.activity .activity-col {
+  min-width: 40px;
+  max-width: 6.5rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+
+.activity th[scope="row"],
+.activity thead th:first-child {
+  position: sticky;
+  top: auto;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  text-align: left;
+}
+
+.activity th[scope="row"] {
+  min-width: 9rem;
+  max-width: 14rem;
+  padding-right: 8px;
+  font-weight: 400;
+}
+
+.activity th button {
+  min-height: 32px;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.activity th button:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.activity td.heat {
+  min-width: 40px;
+  height: 32px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.activity td button {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.activity td button:hover {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+/* The accent ring would vanish on the darkest shade: ink, in the 2px spacing. */
+.activity button:focus-visible {
+  outline-color: var(--ink);
+  outline-offset: 1px;
+}
+
+.heat-1 { background: var(--heat-1); color: var(--heat-1-text); }
+.heat-2 { background: var(--heat-2); color: var(--heat-2-text); }
+.heat-3 { background: var(--heat-3); color: var(--heat-3-text); }
+.heat-4 { background: var(--heat-4); color: var(--heat-4-text); }
+.heat-5 { background: var(--heat-5); color: var(--heat-5-text); }
 
 /* Lookup: the search bar first, the result panel between it and the dashboard. */
 .lookup {
@@ -2362,9 +2592,17 @@ td.area {
   margin: 0;
 }
 
-.facts .badges {
-  display: inline-flex;
-  vertical-align: middle;
+/* Card Type fact: each type badge, then its explanation (UI.typeTips), one per line. */
+.type-explained {
+  display: block;
+}
+
+.type-explained + .type-explained {
+  margin-top: 4px;
+}
+
+.type-explained .badge {
+  vertical-align: 1px;
 }
 
 @media (max-width: 600px) {
@@ -2673,7 +2911,7 @@ mark {
   }
 
   /* The negative margin keeps the row's layout. */
-  .result-name a {
+  .result-name a:not(.doc-link) {
     display: inline-block;
     margin: -10px 0;
     padding: 10px 0;
@@ -2684,13 +2922,6 @@ mark {
   .atc-path button,
   .up-level {
     min-height: 44px;
-  }
-
-  /* Picker rows: the full-size equivalent of the table's 24px ATC segments (WCAG 2.5.8). */
-  .atc-children button,
-  .atc-children .atc-child-static {
-    min-height: 44px;
-    font-size: 0.9375rem;
   }
 
   .ladder-name {
@@ -2708,6 +2939,21 @@ mark {
   .token-remove {
     width: 40px;
     height: 40px;
+  }
+
+  .doc-link {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .activity th button,
+  .activity td button {
+    min-height: 44px;
+  }
+
+  .activity .activity-col button {
+    min-width: 44px;
   }
 }
 
@@ -2740,12 +2986,8 @@ code {
 }
 
 /* Forced colors (Windows high contrast) drop box shadows and force backgrounds: keep the
-   selected tab, the pressed button and the bars visible. */
+   pressed button, the bars and the activity cells visible. */
 @media (forced-colors: active) {
-  [role="tab"][aria-selected="true"] {
-    border-bottom: 2px solid SelectedItem;
-  }
-
   .segmented button[aria-pressed="true"] {
     outline: 2px solid SelectedItem;
     outline-offset: -2px;
@@ -2771,17 +3013,29 @@ code {
     background: CanvasText;
   }
 
-  /* Approval years: bars outside the range outlined, inside filled; the track keeps its outline
-     (a border, as the inset shadow is dropped) and the thumbs their ring. */
+  /* Approval years: bars outside the range outlined, inside in their status hues (every mark is
+     3:1 on black and white; no stroke, so the 1px gaps between segments show) matching the
+     legend's swatches (kept, with a border); the track keeps its outline (a border, as the inset
+     shadow is dropped) and the thumbs their ring. */
   .year-bar {
     forced-color-adjust: none;
     fill: Canvas;
     stroke: GrayText;
   }
 
-  .year-bar.in-range {
-    fill: CanvasText;
-    stroke: CanvasText;
+  .year-col.in-range .year-bar {
+    fill: var(--hue-mid);
+    stroke: none;
+  }
+
+  .year-legend .swatch {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+  }
+
+  /* Activity cells: the numbers carry the values; a border keeps the grid. */
+  .activity td.heat {
+    border: 1px solid GrayText;
   }
 
   .year-track {

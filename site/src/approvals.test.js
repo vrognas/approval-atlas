@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
   MEDICINE_TYPES,
+  STATUS_ORDER,
   authorizedSeries,
+  byStatusOrder,
   breakdownCounts,
   breakdownExcluded,
   buildProducts,
@@ -59,6 +61,22 @@ test("newestFirst sorts by approval date descending, then by name", () => {
   const tie = { ...dated[1], ema_product_number: "EMEA/H/C/000009", name_of_medicine: "Aardvark" };
   assert.deepEqual(newestFirst([...dated, tie]).map((medicine) => medicine.name_of_medicine), ["Aardvark", "Beta", "Gamma", "Alpha"]);
   assert.deepEqual(ids(dated), ["EMEA/H/C/000001", "EMEA/H/C/000002", "EMEA/H/C/000003"]);
+});
+
+test("newestFirst puts medicines without an approval date last, by status (stack order) then name", () => {
+  const opinion = { ...medicines[3], ema_product_number: "EMEA/H/C/000006", name_of_medicine: "Zeta", medicine_status: "Opinion" };
+  const refused = { ...medicines[3], ema_product_number: "EMEA/H/C/000007", name_of_medicine: "Alpha 2" };
+  assert.deepEqual(newestFirst([opinion, ...medicines, refused]).map((medicine) => medicine.name_of_medicine), [
+    "Beta", "Gamma", "Alpha", "Epsilon", "Alpha 2", "Delta", "Zeta",
+  ]);
+});
+
+test("statuses in stack order: Authorized, the ended ones, never-authorized, pending; unknown last, by name", () => {
+  assert.deepEqual(STATUS_ORDER, [
+    "Authorised", "Withdrawn", "Expired", "Lapsed", "Suspended", "Revoked",
+    "Refused", "Application withdrawn", "Withdrawn from rolling review", "Opinion", "Opinion under re-examination",
+  ]);
+  assert.deepEqual(["Zzz new", "Opinion", "Aaa new", "Withdrawn", "Authorised"].sort(byStatusOrder), ["Authorised", "Withdrawn", "Opinion", "Aaa new", "Zzz new"]);
 });
 
 test("distinctSorted removes duplicates and sorts", () => {

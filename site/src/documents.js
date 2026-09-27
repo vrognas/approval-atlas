@@ -1,5 +1,6 @@
 // Pure: EPAR document rows (ema_medicine_documents.json) of one medicine -> labelled groups in
 // display order, newest first. URLs are third-party data: only https links are kept.
+import { statusKind } from "./labels.js";
 
 const GROUPS = [
   { key: "productInformation", types: ["product-information"] },
@@ -32,17 +33,37 @@ export function groupDocuments(rows) {
 }
 
 const PRIMARY = ["productInformation", "epar"];
+const REFUSAL = /refusal/i;
+
+// A group's primary row for a medicine with this EMA status. A medicine never authorized (refused,
+// application withdrawn, opinion; statusKind()) has no product information, and only a refused one
+// has an EPAR: its refusal report (older ones carry the standard title). EMA's index can list an
+// authorized namesake's documents under it (Mylotarg EMEA/H/C/000705, refused, gets 004204's), so
+// those are never its primary links; they stay in the list.
+function primaryRow(group, status) {
+  const current = (row) => !row.archive && !row.ownTitle;
+  if (!["refused", "pending"].includes(statusKind(status))) return PRIMARY.includes(group.key) ? group.rows.find(current) : undefined;
+  if (status !== "Refused" || group.key !== "epar") return undefined;
+  return group.rows.find((row) => row.ownTitle && !row.archive && REFUSAL.test(row.title)) ?? group.rows.find(current);
+}
 
 // groupDocuments() output -> the newest current SmPC and standard EPAR (shown as buttons) and the
-// remaining groups (the list), without those two rows.
-export function primaryDocuments(groups) {
+// remaining groups (the list), without those two rows. status: the medicine's EMA status
+// (primaryRow(); none: both links, as for an authorized one).
+export function primaryDocuments(groups, status) {
   const primary = [];
   const rest = [];
   for (const group of groups) {
-    const row = PRIMARY.includes(group.key) ? group.rows.find((candidate) => !candidate.archive && !candidate.ownTitle) : undefined;
+    const row = primaryRow(group, status);
     if (row) primary.push({ key: group.key, row });
     const rows = group.rows.filter((candidate) => candidate !== row);
     if (rows.length) rest.push({ ...group, rows });
   }
   return { primary, rest };
+}
+
+// One medicine's document rows and EMA status -> { productInformation, epar }: the URLs of its
+// primary documents (primaryDocuments()), a key only where there is one; the "PI" and "EPAR" row links.
+export function quickDocuments(rows, status) {
+  return Object.fromEntries(primaryDocuments(groupDocuments(rows), status).primary.map(({ key, row }) => [key, row.url]));
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupDocuments, primaryDocuments } from "./documents.js";
+import { groupDocuments, primaryDocuments, quickDocuments } from "./documents.js";
 
 const doc = (document_type, last_updated_date, url = `https://www.ema.europa.eu/en/documents/${document_type}/x-${last_updated_date}_en.pdf`) => ({
   ema_product_number: "P1",
@@ -81,6 +81,39 @@ test("archive files and non-standard assessment reports are never primary links"
   assert.deepEqual(primary.map(({ row }) => row.title), [current.title]);
   assert.deepEqual(rest.map((group) => [group.key, group.rows.map((row) => row.title)]), [["productInformation", [archive.title]], ["epar", [referral.title]]]);
   assert.deepEqual(primaryDocuments([]), { primary: [], rest: [] });
+});
+
+test("quick links: the URLs of the primary SmPC and EPAR, each only when EMA lists one", () => {
+  const pi = doc("product-information", "2026-09-03");
+  const epar = { ...doc("assessment-report", "2018-05-04"), title: "Wegovy : EPAR - Public assessment report" };
+  const refusal = { ...doc("assessment-report", "2008-04-17"), title: "Mylotarg : EPAR - Refusal public assessment report" };
+  assert.deepEqual(quickDocuments([doc("overview", "2025-01-01"), epar, pi]), { productInformation: pi.url, epar: epar.url });
+  assert.deepEqual(quickDocuments([pi, refusal]), { productInformation: pi.url });
+  assert.deepEqual(quickDocuments([{ ...pi, url: "http://example.org/a.pdf" }]), {});
+  assert.deepEqual(quickDocuments([]), {});
+});
+
+// EMA's index can list an authorized namesake's documents under a medicine that was never
+// authorized (Mylotarg EMEA/H/C/000705, refused, gets 004204's product information and EPAR).
+test("a medicine never authorized has no product information link; a refused one's EPAR is its refusal report", () => {
+  const pi = doc("product-information", "2026-09-03");
+  const epar = { ...doc("assessment-report", "2018-05-04"), title: "Mylotarg : EPAR - Public Assessment Report" };
+  const refusal = { ...doc("assessment-report", "2008-04-17"), title: "Mylotarg : EPAR - Refusal public assessment report" };
+  const withdrawal = { ...doc("assessment-report", "2010-03-31"), title: "Withdrawal assessment report" };
+  assert.deepEqual(quickDocuments([pi, epar, refusal], "Refused"), { epar: refusal.url });
+  // Older refusal EPARs carry the standard title (Kynamro, EMEA/H/C/002429).
+  assert.deepEqual(quickDocuments([epar], "Refused"), { epar: epar.url });
+  for (const status of ["Application withdrawn", "Withdrawn from rolling review", "Opinion", "Opinion under re-examination"]) {
+    assert.deepEqual(quickDocuments([pi, epar, withdrawal], status), {}, status);
+  }
+  // Authorized and ended medicines keep both links.
+  for (const status of ["Authorised", "Withdrawn", "Expired", undefined]) {
+    assert.deepEqual(quickDocuments([pi, epar, refusal], status), { productInformation: pi.url, epar: epar.url }, status);
+  }
+  // The medicine card: the same buttons; every document stays in the list.
+  const { primary, rest } = primaryDocuments(groupDocuments([pi, epar, refusal]), "Refused");
+  assert.deepEqual(primary.map(({ key, row }) => [key, row.title]), [["epar", refusal.title]]);
+  assert.deepEqual(rest.map((group) => [group.key, group.rows.map((row) => row.title)]), [["productInformation", [pi.title]], ["epar", [epar.title]]]);
 });
 
 test("only https links survive; unknown types are ignored", () => {
