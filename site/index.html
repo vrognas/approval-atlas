@@ -71,6 +71,22 @@
         </div>
         <p id="url-note" class="note" role="status" hidden></p>
 
+        <!-- Approval years (every width, both views): per-year bars above a two-thumb slider. -->
+        <section id="year-strip" class="year-strip" aria-labelledby="year-strip-title">
+          <div class="year-strip-head">
+            <h2 id="year-strip-title">Approval years</h2>
+            <button id="year-reset" class="text-button" type="button">Reset</button>
+          </div>
+          <div id="year-hist" class="year-hist" aria-hidden="true"></div>
+          <p id="year-hist-summary" class="visually-hidden"></p>
+          <p class="year-values" aria-hidden="true"><span id="year-start-value"></span><span id="year-end-value"></span></p>
+          <div class="year-slider">
+            <div class="year-track" aria-hidden="true"><span class="year-track-fill"></span></div>
+            <input id="year-start" type="range" />
+            <input id="year-end" type="range" />
+          </div>
+        </section>
+
         <div role="tablist" aria-label="View" class="tabs">
           <button role="tab" type="button" id="tab-now" data-view="now" aria-controls="panel-now">Authorized now</button>
           <button role="tab" type="button" id="tab-years" data-view="years" aria-controls="panel-years">Approvals per year</button>
@@ -143,20 +159,6 @@
         <button id="reset-all" class="text-button" type="button">Reset all</button>
       </div>
       <p id="facets-note" class="facets-note"></p>
-      <div id="facet-date" class="facet" role="group" aria-labelledby="facet-date-title">
-        <div class="facet-title-row">
-          <h3 id="facet-date-title" class="facet-title">Approval years</h3>
-          <button id="year-reset" class="text-button" type="button">Reset</button>
-        </div>
-        <div class="year-bars" aria-hidden="true">
-          <div id="year-bars" class="year-bars-plot"></div>
-          <p class="year-bars-axis"><span id="year-first"></span><span id="year-last"></span></p>
-        </div>
-        <div class="year-range">
-          <label>From <input id="year-from" type="number" inputmode="numeric" step="1" /></label>
-          <label>To <input id="year-to" type="number" inputmode="numeric" step="1" /></label>
-        </div>
-      </div>
       <div id="facet-type" class="facet" role="group" aria-labelledby="facet-type-title">
         <h3 id="facet-type-title" class="facet-title">Medicine type</h3>
         <ul class="facet-list"></ul>

@@ -47,7 +47,7 @@ export function attachYearBrush(svg, x, [top, bottom], { from, to }, onRange, on
       });
     });
   const brushGroup = d3.select(svg).append("g").attr("class", "brush").call(brush);
-  // Mouse only: the keyboard path is the pair of year inputs in the filter row.
+  // Mouse only: the keyboard path is the approval-years slider above the tabs (year-slider.js).
   brushGroup.selectAll(".overlay, .selection, .handle").attr("aria-hidden", "true");
   if (from !== null || to !== null) brushGroup.call(brush.move, pixelsForYears(x, from, to));
   return brushGroup;

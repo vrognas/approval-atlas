@@ -58,8 +58,16 @@ const MARK_PAIRS = [
   ...ATC_HUES.map((hue) => `--${hue}-mid`),
 ].flatMap((mark) => BACKGROUNDS.map((background) => [mark, background]));
 
-// WCAG 1.4.11: text-field borders against the field and what surrounds it.
-const NON_TEXT_PAIRS = ["--input", ...BACKGROUNDS].map((background) => ["--field-border", background]);
+// WCAG 1.4.11: text-field borders against the field and what surrounds it; the year slider's
+// thumb ring and selected track against the card and the unselected track; the approval-years
+// bars outside the range and the unselected track: a --field-border outline against the card and
+// their --raised fill.
+const NON_TEXT_PAIRS = [
+  ...["--input", ...BACKGROUNDS].map((background) => ["--field-border", background]),
+  ["--field-border", "--raised"],
+  ["--accent", "--surface"],
+  ["--accent", "--raised"],
+];
 
 for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
   test(`${mode} text tokens reach 4.5:1 on their backgrounds`, () => {

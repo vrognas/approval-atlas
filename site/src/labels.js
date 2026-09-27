@@ -194,6 +194,19 @@ export const UI = {
   },
   allYears: "All years",
   yearRange: (from, to) => (from === to ? `${from}` : `${from}–${to}`),
+  // The approval-years strip in the main column: a histogram (aria-hidden; this summary is read
+  // instead; bar tooltips are UI.years.tooltipTitle) above a two-thumb slider.
+  yearStrip: {
+    start: "Start year",
+    end: "End year",
+    // view "now" counts the medicines authorized now, "years" every medicine with an approval date.
+    summary: (view, first, last, total, peakYear, peakCount) => {
+      const medicines = view === "now" ? "authorized medicines" : "medicines with an approval date";
+      if (total === 0) return `No ${medicines} match the other filters.`;
+      return `Column chart of approvals per year, ${first} to ${last}, of the ${medicines} matching the other filters: ` +
+        `${formatCount(total)} in total, most in ${peakYear} (${formatCount(peakCount)}).`;
+    },
+  },
 
   // Answer headlines: the dashboard's (home, filters) and the lookup results'.
   headline: {

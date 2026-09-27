@@ -17,7 +17,7 @@ import { atcHue } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend } from "./chart.js";
 import { createFacetPanel } from "./facet-panel.js";
-import { FACET_VALUES, TYPE_ORDER, facetCounts, facetPopulation, sentenceParts, topAreas, typeSplit } from "./facets.js";
+import { FACET_VALUES, TYPE_ORDER, facetCounts, facetPopulation, sentenceParts, topAreas, typeSplit, yearHistogram } from "./facets.js";
 import { renderSentence } from "./filter-sentence.js";
 import { filterProducts, makePredicates, parseAtcQuery } from "./filters.js";
 import { UI, atcClassLabel, atcName } from "./labels.js";
@@ -37,11 +37,11 @@ import {
   decodeLookup,
   decodeState,
   lookupView,
-  normalizeYearRange,
   patchFilterParams,
   scheduleUrlWrite,
   withoutLookup,
 } from "./url.js";
+import { createYearStrip } from "./year-slider.js";
 
 // First load: enough for the search box. Everything else loads in the background or on demand.
 const FIRST_FILES = ["meta.json", "ema_search_index.json", "mesh_entry_terms.json"];
@@ -61,18 +61,19 @@ const BREAKDOWN_FILTER = { atc: "atc", area: "branch", mah: "mah" };
 // The facet sidebar from this width; below it, the sentence's tokens open bottom sheets.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
 // Facet sections (index.html #facet-{key}) each sheet shows, the sheet each sentence token
-// opens, and the filter keys each section sets.
+// opens, and the filter keys each section sets. The year tokens have no sheet: they focus the
+// approval-years strip's thumbs (YEAR_THUMBS), which is in the main column at every width.
 const SHEET_SECTIONS = {
   type: ["type"],
   atc: ["atc"],
   mah: ["mah"],
   areas: ["branch", "area"],
-  date: ["date"],
   status: ["status"],
-  all: ["date", "type", "atc", "branch", "area", "mah", "status"],
+  all: ["type", "atc", "branch", "area", "mah", "status"],
 };
-const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", branch: "areas", area: "areas", areas: "areas", from: "date", to: "date", status: "status" };
-const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], branch: ["branch"], area: ["area"], date: ["from", "to"], status: ["status"] };
+const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", branch: "areas", area: "areas", areas: "areas", status: "status" };
+const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], branch: ["branch"], area: ["area"], status: ["status"] };
+const YEAR_THUMBS = { from: "start", to: "end" };
 // Desktop: the control each token focuses, the first one of its own section.
 const TOKEN_TARGETS = {
   type: "#facet-type input",
@@ -81,11 +82,9 @@ const TOKEN_TARGETS = {
   areas: "#facet-branch input",
   branch: "#facet-branch input",
   area: "#facet-area .facet-search",
-  from: "#year-from",
-  to: "#year-to",
   status: "#facet-status input",
 };
-const FACETS = ["type", "status", "branch", "area", "mah", "date"];
+const FACETS = ["type", "status", "branch", "area", "mah"];
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -358,11 +357,18 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     if (DESKTOP.matches) sheet.close(); // its sections go back to the sidebar
     scheduleRender(); // tokens open a dialog only below 1024px
   });
+  // Approval years: the main column's strip (histogram + two-thumb slider); the tab chart's brush
+  // also sets the range, and both follow state.from/to.
+  const yearStrip = createYearStrip($("#year-strip"), { years: approvalYears, onRange: (range) => setState(range) });
   // The token whose sidebar section has focus (desktop): Escape goes back to it.
   let opener = null;
   // A sentence token (its key) or All filters ("all"): on desktop, the token's own section and
-  // control; below that, a sheet with its sections.
+  // control; below that, a sheet with its sections. Year tokens focus the strip's thumbs.
   function openFilters(key) {
+    if (YEAR_THUMBS[key]) {
+      yearStrip.focus(YEAR_THUMBS[key]);
+      return;
+    }
     const sheetKey = TOKEN_SHEETS[key] ?? key;
     const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
     if (DESKTOP.matches) {
@@ -375,7 +381,8 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     sheet.open({
       title: UI.sheet.titles[sheetKey] ?? sections[0].querySelector(".facet-title").textContent,
       sections,
-      clears: SHEET_SECTIONS[sheetKey].flatMap((section) => SECTION_KEYS[section]),
+      // All filters clears every filter, the years too (as the sidebar's Reset all).
+      clears: sheetKey === "all" ? FILTER_KEYS : SHEET_SECTIONS[sheetKey].flatMap((section) => SECTION_KEYS[section]),
       restore: () => $(`#filter-sentence [data-sheet="${sheetKey}"]`) ?? $("#all-filters"),
     });
     // The ATC sheet has room for the classes: open the picker's list (its own toggle).
@@ -406,17 +413,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   // The picker's current level in the sidebar, or the sentence's ATC token (phones, tablets).
   const focusAtcFilter = () => (DESKTOP.matches ? $("#atc-picker [aria-current]") : $('#filter-sentence [data-sheet="atc"]'))?.focus();
 
-  const fromInput = $("#year-from");
-  const toInput = $("#year-to");
-  for (const input of [fromInput, toInput]) Object.assign(input, { min: approvalYears[0], max: approvalYears[1] });
-  const readYear = (input) => (Number.isInteger(input.valueAsNumber) ? input.valueAsNumber : null);
-  const readYears = () => setState(normalizeYearRange(readYear(fromInput), readYear(toInput), approvalYears));
-  fromInput.addEventListener("change", readYears);
-  toInput.addEventListener("change", readYears);
-  $("#year-reset").addEventListener("click", () => {
-    setState({ from: null, to: null });
-    fromInput.focus(); // the button is disabled now
-  });
   const readout = $("#year-readout");
   const showReadout = (from, to) => {
     readout.textContent = from === approvalYears[0] && to === approvalYears[1] ? UI.allYears : UI.yearRange(from, to);
@@ -589,9 +585,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   function renderDashboard() {
     renderTabs(state.view);
     if (atcInput.value !== state.atc) atcInput.value = state.atc;
-    fromInput.value = state.from ?? approvalYears[0];
-    toInput.value = state.to ?? approvalYears[1];
-    $("#year-reset").disabled = state.from === null && state.to === null;
     showReadout(state.from ?? approvalYears[0], state.to ?? approvalYears[1]);
 
     const predicates = makePredicates(state, atcClasses);
@@ -603,9 +596,9 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
         dimension,
         facetCounts(products, predicates, dimension, FACET_VALUES[dimension], facetPopulation(state.view, dimension)),
       ])),
-      years: approvalYears,
       activeCount,
     });
+    yearStrip.render({ rows: yearHistogram(products, predicates, state.view, approvalYears), view: state.view, from: state.from, to: state.to });
     renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, branchNames, atcNames }), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
@@ -677,7 +670,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   d3.select("#app").attr("hidden", null);
   d3.select("#facets").attr("hidden", null);
   const resizeObserver = new ResizeObserver(scheduleRender);
-  for (const selector of ["#chart", "#over-time"]) resizeObserver.observe($(selector));
+  for (const selector of ["#chart", "#over-time", "#year-hist"]) resizeObserver.observe($(selector));
   render();
   loadFile(REGISTER_FILE).then((rows) => {
     register = new Map(rows.map((row) => [row.ema_product_number, row]));

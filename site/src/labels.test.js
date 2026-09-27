@@ -305,6 +305,24 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(sheet.clear, "Clear");
 });
 
+test("approval-years strip copy: slider names and the histogram summary for each view", () => {
+  const { yearStrip } = labels.UI;
+  assert.equal(yearStrip.start, "Start year");
+  assert.equal(yearStrip.end, "End year");
+  assert.equal(
+    yearStrip.summary("now", 1995, 2026, 1234, 2021, 95),
+    "Column chart of approvals per year, 1995 to 2026, of the authorized medicines matching the other filters: 1,234 in total, most in 2021 (95).",
+  );
+  assert.equal(
+    yearStrip.summary("years", 1995, 2026, 2000, 2021, 120),
+    "Column chart of approvals per year, 1995 to 2026, of the medicines with an approval date matching the other filters: 2,000 in total, most in 2021 (120).",
+  );
+  assert.equal(yearStrip.summary("now", 1995, 2026, 0), "No authorized medicines match the other filters.");
+  assert.equal(yearStrip.summary("years", 1995, 2026, 0), "No medicines with an approval date match the other filters.");
+  // Bar tooltips reuse the per-year chart's.
+  assert.equal(labels.UI.years.tooltipTitle(2015, 3), "2015: 3 approvals");
+});
+
 test("Authorized now points to Approvals per year for statuses it cannot show", () => {
   const { otherStatuses } = labels.UI;
   assert.equal(otherStatuses.note(363), "Authorized now shows authorized medicines only; 363 medicines match these filters in Approvals per year.");

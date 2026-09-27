@@ -39,21 +39,6 @@ function renderChecklist(list, rows, { onToggle, dotClass = () => null }) {
   }
 }
 
-// By id: an open sheet may hold the section.
-function renderYearBars(counts, [first, last], { from, to }) {
-  const years = d3.range(first, last + 1);
-  const max = d3.max(years, (year) => counts.get(year) ?? 0) || 1;
-  const inRange = (year) => year >= (from ?? first) && year <= (to ?? last);
-  d3.select("#year-bars")
-    .selectAll("span")
-    .data(years)
-    .join("span")
-    .attr("class", (year) => (inRange(year) ? "in-range" : null))
-    .style("height", (year) => `${(100 * (counts.get(year) ?? 0)) / max}%`);
-  d3.select("#year-first").text(first);
-  d3.select("#year-last").text(last);
-}
-
 // root: the sidebar (its head stays; sections are found by id, as a sheet may hold them).
 // onChange(patch): a checkbox changed its dimension's values. labelOf.branch(code): the branch name.
 export function createFacetPanel(root, { onChange, labelOf }) {
@@ -122,16 +107,15 @@ export function createFacetPanel(root, { onChange, labelOf }) {
     if (key === "branch") button.setAttribute("aria-expanded", String(limits.branch === Infinity));
   }
 
-  // model: { view, state, counts: { type, status, branch, area, mah, date } (facetCounts()),
-  // years: [first, last], activeCount }.
+  // model: { view, state, counts: { type, status, branch, area, mah } (facetCounts()),
+  // activeCount }. The approval years are the main column's strip (year-slider.js).
   function render(next) {
     model = next;
-    const { view, state, counts, years, activeCount } = model;
+    const { view, state, counts, activeCount } = model;
     const active = UI.facets.active(activeCount);
     d3.select(root.querySelector("#facets-active")).text(active ?? "").attr("hidden", active ? null : "");
     root.querySelector("#reset-all").disabled = activeCount === 0;
     root.querySelector("#facets-note").textContent = UI.facets.counts(view);
-    renderYearBars(counts.date, years, state);
 
     const typeRows = TYPE_ORDER.map((type) => ({ value: type, label: type, count: counts.type.get(type) ?? 0, selected: state.type.includes(type) }));
     renderChecklist(section("type").querySelector(".facet-list"), typeRows, { onToggle: toggle("type"), dotClass: (row) => `type-${slug(row.value)}` });

@@ -12,6 +12,7 @@ import {
   tokenLabel,
   topAreas,
   typeSplit,
+  yearHistogram,
 } from "./facets.js";
 
 const product = (id, fields) => ({
@@ -79,6 +80,30 @@ test("Status counts follow the other filters in both views", () => {
 test("approval years count per year and ignore the year filter itself", () => {
   assert.deepEqual(counted({ from: 2018 }, "date"), { 2015: 2, 2020: 1 });
   assert.deepEqual(counted({ from: 2018 }, "type"), { Biosimilar: 1 });
+});
+
+const histogram = (patch, view) => yearHistogram(products, predicatesOf(patch), view, [2014, 2021]);
+const nonZero = (rows) => Object.fromEntries(rows.filter((row) => row.count > 0).map((row) => [row.year, row.count]));
+
+test("year histogram: one row per year of the data range, zeros included", () => {
+  const rows = histogram({}, "now");
+  assert.deepEqual(rows.map((row) => row.year), [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]);
+  assert.deepEqual(rows[0], { year: 2014, count: 0 });
+});
+
+test("year histogram: Authorized now counts authorized-now products, as the sidebar's year bars did", () => {
+  // P4 (withdrawn) and the undated P5 and P6 are left out.
+  assert.deepEqual(nonZero(histogram({}, "now")), { 2015: 2, 2020: 1 });
+});
+
+test("year histogram: Approvals per year counts every product with an approval date", () => {
+  assert.deepEqual(nonZero(histogram({}, "years")), { 2015: 3, 2020: 1 });
+});
+
+test("year histogram: ignores the year filter and applies every other one", () => {
+  assert.deepEqual(nonZero(histogram({ from: 2018 }, "now")), { 2015: 2, 2020: 1 });
+  assert.deepEqual(nonZero(histogram({ from: 2018, to: 2019, type: ["Biosimilar"] }, "now")), { 2015: 1, 2020: 1 });
+  assert.deepEqual(nonZero(histogram({ status: ["Withdrawn"] }, "years")), { 2015: 1 });
 });
 
 const labelOf = (value) => value.toUpperCase();
