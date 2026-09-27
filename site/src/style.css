@@ -217,6 +217,58 @@ header .note {
   flex-basis: 100%;
 }
 
+/* Desktop: a fixed left column (wordmark on top, the facet sidebar below, each full height with
+   its own scroll) beside the main column. Fixed, not a DOM wrapper, so the sidebar can come
+   after main in tab order. The header grows with its text (the offline note, user text
+   spacing); main.js sets --header-h to its height for the sidebar's top. */
+@media (min-width: 1024px) {
+  body {
+    max-width: none;
+    margin: 0;
+    padding: 24px 32px 32px 352px;
+  }
+
+  main,
+  footer {
+    max-width: 1160px;
+  }
+
+  header {
+    position: fixed;
+    z-index: 3;
+    top: 0;
+    left: 0;
+    width: 320px;
+    min-height: 64px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    padding: 6px 16px;
+    border-right: 1px solid var(--grid);
+    border-bottom: 1px solid var(--grid);
+    background: var(--surface);
+  }
+
+  .facets {
+    position: fixed;
+    top: var(--header-h, 64px);
+    bottom: 0;
+    left: 0;
+    width: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 16px 24px;
+    border-right: 1px solid var(--grid);
+    background: var(--surface);
+  }
+
+  .all-filters {
+    display: none;
+  }
+}
+
 h2 {
   margin: 0 0 4px;
   font-size: 1rem;
@@ -252,7 +304,8 @@ button {
 }
 
 /* Secondary buttons: transparent with a strong border. */
-.filters button,
+.atc-browse,
+.all-filters,
 .more {
   min-height: 40px;
   padding: 8px 14px;
@@ -264,10 +317,42 @@ button {
   cursor: pointer;
 }
 
-.filters button:disabled {
+/* Text buttons: link-coloured, underlined (Reset all, Show all, Clear). */
+.text-button {
+  min-height: 32px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.text-button:hover {
+  color: var(--link-hover);
+}
+
+.text-button:disabled {
   color: var(--muted);
-  border-color: var(--grid);
+  text-decoration: none;
   cursor: default;
+}
+
+/* Primary button: accent fill. */
+.primary {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* Answer headlines: the dashboard's and the lookup results'. */
@@ -345,47 +430,221 @@ button {
   text-transform: uppercase;
 }
 
-/* Filter row: one row above everything it scopes. */
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
-
-fieldset {
+/* The filter sentence: tokens in the link colour with a dotted underline and a chevron; an
+   active token is an accent-wash pill with a remove button. The line height makes every
+   token a 44px target on phones. */
+.sentence-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+}
+
+.sentence {
+  flex: 1 1 24rem;
+  max-width: 820px;
   margin: 0;
+  color: var(--ink-secondary);
+  font-size: 1.0625rem;
+  line-height: 44px;
+  overflow-wrap: anywhere;
+}
+
+.token {
+  max-width: 100%;
   padding: 0;
   border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--link);
+  text-align: left;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--link-underline);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 5px;
+  cursor: pointer;
 }
 
-legend,
-.filters label {
-  display: block;
-  margin-bottom: 4px;
+.token:hover {
+  color: var(--link-hover);
+}
+
+.token::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 3px 3px 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.token-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 0 2px;
+  padding-left: 12px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  line-height: 1.375rem;
+  vertical-align: middle;
+}
+
+.token-pill .token {
+  padding: 5px 0;
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.token-pill .token::after {
+  display: none;
+}
+
+.token-remove {
+  flex: none;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  font-weight: 600;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--accent);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.token-remove:hover {
+  background: var(--wash);
+}
+
+.sentence-reset {
+  font-size: inherit;
+}
+
+/* The year range ("[1995]–[2026]") stays on one line. */
+.token-range {
+  white-space: nowrap;
+}
+
+@media (min-width: 721px) {
+  .sentence {
+    font-size: 1.1875rem;
+    line-height: 40px;
+  }
+}
+
+/* Facet sections: the desktop sidebar, or a sheet that borrows them. */
+.facet {
+  padding: 16px 0;
+  border-top: 1px solid var(--grid);
+}
+
+.facet-title {
+  margin: 0 0 8px;
+  color: var(--ink-secondary);
   font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
 }
 
-legend {
-  width: 100%;
+.facet-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.year-range label {
+.facet-note {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.facet-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Checkbox rows: the whole row is the label. */
+.facet-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-weight: 400;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0 -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  cursor: pointer;
 }
 
-.filters input {
+.facet-row:hover {
+  background: var(--wash);
+}
+
+/* Selected rows on the accent wash; hovered, a touch darker. */
+.facet-row:has(input:checked) {
+  background: var(--accent-wash);
+}
+
+.facet-row:has(input:checked):hover {
+  background: linear-gradient(var(--wash), var(--wash)), var(--accent-wash);
+}
+
+.facet-row input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+/* A colour key: the status dot, or a medicine type's chart colour. */
+.facet-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--status-dot);
+}
+
+.facet-dot.type-other,
+.facet-dot.type-generic,
+.facet-dot.type-biosimilar,
+.facet-dot.type-advanced-therapy {
+  border-radius: 2px;
+}
+
+.facet-dot.type-other { background: var(--type-other); }
+.facet-dot.type-generic { background: var(--type-generic); }
+.facet-dot.type-biosimilar { background: var(--type-biosimilar); }
+.facet-dot.type-advanced-therapy { background: var(--type-advanced-therapy); }
+
+.facet-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.facet-count {
+  flex: none;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty .facet-name,
+.empty .facet-count {
+  color: var(--muted);
+}
+
+.facet-search,
+.atc-filter input,
+.year-range input {
   min-height: 40px;
   padding: 8px 10px;
   border: 1px solid var(--field-border);
@@ -395,38 +654,257 @@ legend {
   font: inherit;
 }
 
+.facet-search,
+.atc-filter input {
+  width: 100%;
+}
+
+.facet-search {
+  margin-bottom: 6px;
+}
+
+.facet-more {
+  margin-top: 4px;
+}
+
+.facet .facet-empty {
+  margin: 4px 0;
+}
+
 input::placeholder {
   color: var(--muted);
 }
 
-.year-range input {
-  width: 6.5em;
+.atc-filter label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+}
+
+/* Approval years: per-year bars of the population (decorative; the inputs are the control). */
+.year-bars-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 48px;
+}
+
+.year-bars-plot span {
+  flex: 1;
+  min-height: 1px;
+  border-radius: 1px 1px 0 0;
+  background: var(--out-of-range);
+}
+
+.year-bars-plot span.in-range {
+  background: var(--accent);
+}
+
+.year-bars-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
-.text-filter,
-.multi-select {
-  position: relative;
-  width: min(220px, 100%);
+.year-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.text-filter input,
-.multi-select input {
+.year-range label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+
+.year-range input {
   width: 100%;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ATC: the text filter, then the drill-down picker, on a row of their own. */
-.text-filter.atc-filter {
-  width: 100%;
-}
-
-.atc-filter > input {
-  width: min(220px, 100%);
+/* "Reset" beside the section heading. */
+.facet-title-row .text-button {
+  min-height: 24px;
+  padding: 0;
 }
 
 .atc-picker {
-  max-width: 720px;
   margin-top: 8px;
+}
+
+/* Sidebar (desktop): header, then the sections. Hidden below 1024px, where a sheet borrows
+   the sections. */
+@media (max-width: 1023px) {
+  .facets {
+    display: none;
+  }
+}
+
+.facets-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+
+.facets-head h2 {
+  margin: 0;
+}
+
+.facets-head h2:focus {
+  outline: none;
+}
+
+#reset-all {
+  margin-left: auto;
+}
+
+.count-pill {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.facets-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* Phones and tablets: the filters sheet, a modal dialog at the bottom of the screen. */
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  max-height: 88dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 -4px 24px rgba(40, 40, 40, 0.12);
+  /* Only the body scrolls (a dialog's default overflow is auto). */
+  overflow: hidden;
+}
+
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet::backdrop {
+  background: rgba(40, 40, 40, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  .sheet::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+  }
+}
+
+.sheet-handle {
+  flex: none;
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: 2px;
+  background: var(--axis);
+}
+
+.sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 16px 8px;
+  border-bottom: 1px solid var(--grid);
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+/* Focus lands on the title only to announce the sheet; it is not a control. */
+.sheet-head h2:focus {
+  outline: none;
+}
+
+.sheet-body {
+  /* Contains its rows' visually hidden text, which would otherwise overflow the dialog. */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 16px;
+}
+
+.sheet-body > .facet:first-child {
+  border-top: 0;
+}
+
+/* One section: the sheet's title already names it (the heading still names the group). */
+.sheet-body > .facet:only-child .facet-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.sheet-foot {
+  flex: none;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--grid);
+}
+
+/* Sheet rows and controls: full-size touch targets. */
+.sheet .facet-row {
+  min-height: 48px;
+  font-size: 1rem;
+  line-height: 1.375rem;
+}
+
+.sheet .facet-row input {
+  width: 20px;
+  height: 20px;
+}
+
+.sheet .facet-search,
+.sheet .atc-filter input,
+.sheet .year-range input,
+.sheet .atc-browse,
+.sheet .text-button,
+.sheet .atc-path button {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet[open] {
+    animation: sheet-in 180ms ease-out;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(32px);
+    opacity: 0.4;
+  }
 }
 
 /* Path of ATC levels (picker, breakdown, class headline): buttons with chevrons between them. */
@@ -492,7 +970,7 @@ input::placeholder {
   font-variant-numeric: tabular-nums;
 }
 
-/* "Browse ATC classes": a secondary button (.filters button) with a chevron that turns when open. */
+/* "Browse ATC classes": a secondary button with a chevron that turns when open. */
 .atc-browse {
   display: inline-flex;
   align-items: center;
@@ -515,14 +993,9 @@ input::placeholder {
   transform: rotate(-135deg);
 }
 
-/* The classes one level down: rows of badge, name and count; two columns where they fit, so the
-   always-open desktop filter row stays short. */
+/* The classes one level down: rows of badge, name and count. The list grows with the sidebar or
+   sheet: no scroll area nested in it. */
 .atc-children {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-  column-gap: 16px;
-  max-height: 20rem;
-  overflow-y: auto;
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
@@ -577,39 +1050,6 @@ input::placeholder {
   font-size: 0.8125rem;
 }
 
-/* Selected values: accent-wash pills. */
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 0 4px;
-  padding: 0;
-  list-style: none;
-}
-
-.chips li {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  padding: 0 0 0 10px;
-  border-radius: 999px;
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.filters .chips button {
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  color: var(--accent);
-}
-
 [role="listbox"] {
   position: absolute;
   z-index: 2;
@@ -649,6 +1089,11 @@ input::placeholder {
   font-size: 0.875rem;
 }
 
+/* Under the dek: where the statuses Authorized now cannot show are. */
+.other-statuses {
+  margin-top: 8px;
+}
+
 /* Tabs: text tabs, the active one in ink with an accent underline. */
 .tabs {
   display: flex;
@@ -685,6 +1130,19 @@ input::placeholder {
 @media (min-width: 721px) {
   .tiles {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+
+/* Tablets, and desktops whose main column the sidebar narrows: the compact tiles in one row
+   under the wide ones. */
+@media (min-width: 721px) and (max-width: 1279px) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .tiles .tile-group {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -954,17 +1412,65 @@ button.bar-row:hover {
 }
 
 .bar-track {
-  display: block;
+  display: flex;
   height: 10px;
 }
 
-/* ATC rows use their group's mid; area and holder rows the accent. */
+/* Area, holder and condition rows: one accent bar. */
 .bar-fill {
   display: block;
   height: 100%;
   min-width: 2px;
   border-radius: 0 3px 3px 0;
-  background: var(--hue-mid, var(--bar));
+  background: var(--bar);
+}
+
+/* ATC rows: stacked by medicine type (colours set per segment), 1px apart. */
+.bar-seg {
+  flex: none;
+  height: 100%;
+  min-width: 2px;
+}
+
+.bar-seg + .bar-seg {
+  margin-left: 1px;
+}
+
+.bar-seg:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+/* Most common conditions: the term (a condition lookup link), a bar, the count. */
+.condition-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.condition-list li {
+  display: grid;
+  grid-template-columns: minmax(8rem, 38%) 1fr 4.5ch;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 0.875rem;
+}
+
+.condition-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+@media (max-width: 600px) {
+  .condition-list li {
+    grid-template-columns: 1fr 4.5ch;
+    gap: 2px 12px;
+  }
+
+  .condition-list li > :first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .bar-row.other .bar-fill {
@@ -1488,7 +1994,7 @@ td.area {
   max-height: min(440px, 65vh);
 }
 
-[role="group"] {
+[role="listbox"] [role="group"] {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2001,19 +2507,6 @@ mark {
   color: var(--ink-secondary);
 }
 
-/* Filters: a closed disclosure on phones, always open (no toggle) on wider screens. */
-.filters-disclosure > summary {
-  margin-bottom: 8px;
-  padding: 8px 0;
-  font-weight: 600;
-}
-
-@media (min-width: 721px) {
-  .filters-disclosure > summary {
-    display: none;
-  }
-}
-
 /* Phones: primary controls are at least 44px tall. */
 @media (max-width: 720px) {
   .try a {
@@ -2030,20 +2523,13 @@ mark {
   }
 
   .segmented button,
-  .filters input,
-  .filters button,
+  .all-filters,
   .atc-path button,
   .up-level {
     min-height: 44px;
   }
 
-  /* Picker rows: the full-size equivalent of the table's 24px ATC segments (WCAG 2.5.8). The
-     list grows with the page: no scroll area nested in it. */
-  .atc-children {
-    max-height: none;
-    overflow: visible;
-  }
-
+  /* Picker rows: the full-size equivalent of the table's 24px ATC segments (WCAG 2.5.8). */
   .atc-children button,
   .atc-children .atc-child-static {
     min-height: 44px;
@@ -2054,8 +2540,17 @@ mark {
     font-size: 0.9375rem;
   }
 
-  .filters-disclosure > summary {
-    padding: 10px 0;
+  .condition-list a {
+    min-height: 44px;
+  }
+
+  .token-pill .token {
+    padding: 9px 0;
+  }
+
+  .token-remove {
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -2113,9 +2608,16 @@ code {
   }
 
   .bar-fill,
-  .meter-fill {
+  .meter-fill,
+  .year-bars-plot span.in-range {
     forced-color-adjust: none;
     background: CanvasText;
+  }
+
+  /* Colours are set per segment; the 1px gaps still separate the types. */
+  .bar-seg {
+    forced-color-adjust: none;
+    background: CanvasText !important;
   }
 
   .has-selection .bar-row:not([aria-pressed="true"]) .bar-fill {

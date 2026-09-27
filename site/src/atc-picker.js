@@ -1,6 +1,7 @@
 // ATC drill-down: a path of level badges and the classes one level below the current code, with
-// counts. Reusable containers (the Filters disclosure now; the facet sidebar and phone sheet
-// later). Controls carry data-focus-key ("all" or a code) so a rebuild can put focus back.
+// counts. Reusable containers (the facet sidebar's ATC section, which the phone sheet borrows;
+// the breakdown and class paths). Controls carry data-focus-key ("all" or a code) so a rebuild can
+// put focus back.
 import * as d3 from "d3";
 import { atcChildren, atcLadder, atcLevel } from "./atc.js";
 import { atcHue } from "./badges.js";
@@ -21,8 +22,8 @@ function focusKey(container, key) {
 // Path of current's levels as buttons: "All ATC classes" (all), then one badge per level; the
 // last is the current class (aria-current). counts: shown after each badge; showName: the
 // current class's name shown too (every button names its class and count via aria-label).
-// label: the list's name.
-export function renderAtcPath(container, { current, counts = null, names, onSelect, all = true, showName = false, label = null }) {
+// label: the list's name. countNoun: what the counts count (UI.atc.classCount()).
+export function renderAtcPath(container, { current, counts = null, names, onSelect, all = true, showName = false, label = null, countNoun = undefined }) {
   const focused = container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
   const root = d3.select(container);
   root.selectChildren().remove();
@@ -40,7 +41,7 @@ export function renderAtcPath(container, { current, counts = null, names, onSele
     .on("click", (event, item) => onSelect(item.code));
   buttons.filter((item) => item.code === null).attr("class", "path-all").text(UI.atc.all);
   buttons.filter((item) => item.code !== null).each(function level(item) {
-    const button = d3.select(this).attr("aria-label", UI.atc.classCount(item.code, item.name, item.count));
+    const button = d3.select(this).attr("aria-label", UI.atc.classCount(item.code, item.name, item.count, countNoun));
     appendCodeBadge(button, item.code);
     if (showName && item === items.at(-1)) button.append("span").attr("class", "path-name").text(atcName(item.code, item.name));
     if (item.count !== null) button.append("span").attr("class", "path-count").text(formatCount(item.count));
@@ -57,8 +58,9 @@ const listState = new WeakMap();
 
 // current: the ATC code filter (null for none); nameQuery: the ATC filter text when it is a name,
 // not a code (all groups are shown). counts, exact: products per prefix and per exact code
-// (atcPrefixCounts(), atcExactCounts()); names: code -> WHO name; onSelect(code | null).
-export function renderAtcPicker(container, { current, nameQuery = null, counts, exact = null, names, onSelect }) {
+// (atcPrefixCounts(), atcExactCounts()); names: code -> WHO name; onSelect(code | null);
+// countNoun: "approved" when the counts are medicines with an approval date.
+export function renderAtcPicker(container, { current, nameQuery = null, counts, exact = null, names, onSelect, countNoun = undefined }) {
   const focused = container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
   const intent = nextFocus.get(container);
   nextFocus.delete(container);
@@ -76,7 +78,7 @@ export function renderAtcPicker(container, { current, nameQuery = null, counts, 
   root.selectChildren().remove();
 
   renderAtcPath(root.append("nav").attr("aria-label", UI.atc.path).node(), {
-    current, counts, names, showName: true, onSelect: (code) => pick(code, code ?? "all"),
+    current, counts, names, showName: true, countNoun, onSelect: (code) => pick(code, code ?? "all"),
   });
   if (nameQuery) root.append("p").attr("class", "muted").text(UI.atc.nameFilter(nameQuery));
 
@@ -108,7 +110,7 @@ export function renderAtcPicker(container, { current, nameQuery = null, counts, 
     rows.filter((row) => !row.incomplete)
       .attr("type", "button")
       .attr("data-focus-key", (row) => row.code)
-      .attr("aria-label", (row) => UI.atc.classCount(row.code, row.name, row.count))
+      .attr("aria-label", (row) => UI.atc.classCount(row.code, row.name, row.count, countNoun))
       .on("click", (event, row) => pick(row.code, "first-child"));
     rows.each(function badge(row) {
       appendCodeBadge(d3.select(this), row.code);

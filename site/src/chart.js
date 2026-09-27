@@ -10,7 +10,7 @@ const SEGMENT_GAP = 1;
 const CORNER_RADIUS = 4;
 const formatCount = d3.format(",");
 
-function typeColor(type) {
+export function typeColor(type) {
   return `var(--type-${type.toLowerCase().replaceAll(" ", "-")})`;
 }
 
@@ -63,8 +63,10 @@ export function hideTooltip(container) {
   d3.select(container).select(".tooltip").attr("hidden", "");
 }
 
-export function renderLegend(list) {
-  const items = d3.select(list).selectAll("li").data(MEDICINE_TYPES).join("li");
+// types: the medicine types to list (the stacked ATC breakdown shows only those present).
+export function renderLegend(list, types = MEDICINE_TYPES) {
+  const items = d3.select(list).selectAll("li").data(types).join("li");
+  items.selectChildren().remove();
   items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", typeColor);
   items.append("span").text((type) => type);
 }
