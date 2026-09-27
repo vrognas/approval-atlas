@@ -1,5 +1,6 @@
 import * as d3 from "d3";
-import { UI, atcLevelOneLabel, statusLabel } from "./labels.js";
+import { atcHue, atcSegments, typeBadges } from "./badges.js";
+import { UI, atcLevelOneLabel, statusDateLine, statusKind, statusLabel } from "./labels.js";
 
 const PAGE_SIZE = 100;
 const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7];
@@ -19,40 +20,79 @@ function toggleIndication(event, product) {
   d3.select(document.getElementById(indicationRowId(product))).attr("hidden", expanded ? null : "");
 }
 
-// "L01FA01" -> one line per level found in atc_classes (level 1 in title case, the others
-// verbatim), then the source.
-function atcTitle(row, atcNames) {
-  const lines = ATC_PREFIX_LENGTHS
+// "L01FA01" -> one name per level found in atc_classes (level 1 in title case, the others verbatim).
+function atcLevelNames(row, atcNames) {
+  return ATC_PREFIX_LENGTHS
     .filter((length) => length <= row.atc_code_human.length)
     .map((length) => row.atc_code_human.slice(0, length))
     .filter((prefix) => atcNames.has(prefix))
     .map((prefix) => (prefix.length === 1 ? atcLevelOneLabel(prefix, atcNames.get(prefix)) : `${prefix} ${atcNames.get(prefix)}`));
+}
+
+// Tooltip: the level names one per line, then the source.
+function atcTitle(row, atcNames) {
+  const lines = atcLevelNames(row, atcNames);
   if (row.atc_incomplete) lines.push(UI.table.incompleteTitle);
   return [...lines, UI.table.source(row.source)].join("\n");
 }
 
-function renderNameCell(cell, product) {
+// Name link, then the active substance(s) in secondary text.
+function renderNameCell(cell, product, substances) {
   // URLs come from third-party data; only link https so a javascript: URL can never become a link.
-  if (!product.medicine_url?.startsWith("https://")) {
-    cell.text(product.name_of_medicine);
-    return;
+  if (product.medicine_url?.startsWith("https://")) {
+    cell.append("a")
+      .attr("class", "medicine-name")
+      .attr("href", product.medicine_url)
+      .attr("rel", "noopener noreferrer")
+      .attr("target", "_blank")
+      .text(product.name_of_medicine);
+  } else {
+    cell.append("span").attr("class", "medicine-name").text(product.name_of_medicine);
   }
-  cell.append("a")
-    .attr("href", product.medicine_url)
-    .attr("rel", "noopener noreferrer")
-    .attr("target", "_blank")
-    .text(product.name_of_medicine);
+  if (substances.length) cell.append("span").attr("class", "medicine-substances").text(substances.join("; "));
+}
+
+// Segmented ATC badge (display only in this phase): one segment per level, in the group's hue.
+function appendAtcBadge(parent, code) {
+  const badge = parent.append("span").attr("class", `atc-badge hue-${atcHue(code)}`);
+  badge.selectAll("span")
+    .data(atcSegments(code))
+    .join("span")
+    .attr("class", (segment) => (segment.level ? `atc-seg level-${segment.level}` : "atc-seg"))
+    .text((segment) => segment.text);
+  return badge;
 }
 
 function renderAtcCell(cell, product, atcNames) {
   const codes = cell.selectAll("span.code").data(product.atc).join("span").attr("class", "code").attr("title", (row) => atcTitle(row, atcNames));
-  codes.append("span").text((row) => row.atc_code_human);
+  codes.each(function badge(row) {
+    const code = d3.select(this);
+    appendAtcBadge(code, row.atc_code_human);
+    // The tooltip is out of reach for keyboard, touch and screen-reader users; phase 2 names the segments.
+    const names = atcLevelNames(row, atcNames);
+    if (names.length) code.append("span").attr("class", "visually-hidden").text(` (${names.join("; ")})`);
+  });
   codes.filter((row) => row.atc_incomplete).append("span").attr("class", "flag").text(UI.table.incomplete);
 }
 
-// Union Register disagreement: a visible marker, the full text as tooltip and for screen readers.
+function renderTypeCell(cell, product) {
+  const badges = typeBadges(product);
+  if (!badges.length) return;
+  cell.append("span")
+    .attr("class", "badges")
+    .selectAll("span")
+    .data(badges)
+    .join("span")
+    .attr("class", (badge) => `badge hue-${badge.hue}`)
+    .text((badge) => badge.label);
+}
+
+// Merged "Approved · Status": dot and status label, then the date line. Union Register
+// disagreement: a visible marker, the full text as tooltip and for screen readers.
 function renderStatusCell(cell, product, register) {
-  cell.text(statusLabel(product.medicine_status));
+  cell.append("span").attr("class", `status status-${statusKind(product.medicine_status)}`).text(statusLabel(product.medicine_status));
+  const dates = statusDateLine(product.medicine_status, product.authorized_from, product.authorized_until);
+  if (dates) cell.append("span").attr("class", "status-date").text(dates);
   const row = register?.get(product.ema_product_number);
   if (row?.agrees_with_ema !== false) return;
   const text = `${UI.register.chip(row.register_status, row.register_last_decision_date)}. ${UI.register.note}`;
@@ -82,15 +122,15 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
     const groups = d3.select(table).selectAll(null).data(products).enter().append("tbody");
     const rows = groups.append("tr");
     rows.append("td").attr("class", "breakable").each(function nameCell(product) {
-      renderNameCell(d3.select(this), product);
+      renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? []);
     });
-    rows.append("td").attr("class", "breakable").text((product) => (substanceIndex.get(product.ema_product_number) ?? []).join("; "));
     rows.append("td").text((product) => product.marketing_authorisation_developer_applicant_holder);
-    rows.append("td").attr("class", "date").text((product) => product.authorized_from);
-    rows.append("td").each(function statusCell(product) {
+    rows.append("td").attr("class", "status-cell").each(function statusCell(product) {
       renderStatusCell(d3.select(this), product, current.register);
     });
-    rows.append("td").text((product) => product.medicine_type);
+    rows.append("td").each(function typeCell(product) {
+      renderTypeCell(d3.select(this), product);
+    });
     rows.append("td").attr("class", "atc").each(function atcCell(product) {
       renderAtcCell(d3.select(this), product, atcNames);
     });

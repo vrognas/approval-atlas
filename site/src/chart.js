@@ -6,7 +6,7 @@ import { attachYearBrush } from "./year-brush.js";
 const HEIGHT = 320;
 const MARGIN = { top: 12, right: 8, bottom: 28, left: 40 };
 const MAX_BAR_WIDTH = 24;
-const SEGMENT_GAP = 2;
+const SEGMENT_GAP = 1;
 const CORNER_RADIUS = 4;
 const formatCount = d3.format(",");
 
@@ -134,8 +134,8 @@ export function renderChart(container, rows, { from, to }, onRange, onReadout) {
     .attr("width", x.step())
     .attr("height", HEIGHT - MARGIN.top - MARGIN.bottom);
 
-  // A surface-colored gap separates stacked segments; a 1px floor keeps a
-  // single-medicine segment visible when the gap would otherwise swallow it.
+  // A 1px surface-colored gap separates stacked segments (neighbours of similar lightness stay
+  // apart); a 1px floor keeps a single-medicine segment visible when the gap would swallow it.
   columns.selectAll("path")
     .data((row) => stackSegments(row).map((segment) => ({ ...segment, row })))
     .join("path")

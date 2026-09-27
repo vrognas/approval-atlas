@@ -1,71 +1,170 @@
-/* Tokens follow the dataviz reference palette; categorical slots validated with its
-   validate_palette.js (adjacent pairs, light and dark). Slot 1 goes to "Other",
-   the largest group, so the dominant fill is the calmest hue. The over-time lines
-   use slots 1 and 2 (validated as a pair in both modes). */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* Palette "E · Sage" (approved redesign, 2026-09-27): damped warm neutrals with the
+   vrognas.com accent #2B4A31. Categorical data (medicine types, ATC groups) uses fourteen
+   damped hues, each a light fill for badges, a mid for chart marks and a dark text shade;
+   ATC levels 1-5 are shades of their group's hue. Dark mode keeps the hues with dark fills
+   and light text. palette.test.js checks every text pair >= 4.5:1 and every chart mark
+   >= 3:1 on page and surface, in both modes. Fonts: Geist and Geist Mono, bundled from
+   @fontsource-variable (served from this site, CSP font-src 'self'). */
 :root {
   color-scheme: light;
-  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --ink: #0b0b0b;
-  --ink-secondary: #52514e;
-  --muted: #6f6d68;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --border: rgba(11, 11, 11, 0.1);
-  --wash: rgba(11, 11, 11, 0.04);
-  --link: #1c5cab;
-  --type-other: #2a78d6;
-  --type-generic: #eb6834;
-  --type-biosimilar: #1baf7a;
-  --type-advanced-therapy: #eda100;
-  --series-products: #2a78d6;
-  --series-substances: #eb6834;
-  --bar: #2a78d6;
-  --de-emphasis: #c3c2b7;
-  --out-of-range: #c3c2b7;
-  --range-band: rgba(42, 120, 214, 0.1);
-  --option-active: #cde2fb;
-  --mark: #fde7a6;
+  --font: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --page: #f3f3ee;
+  --surface: #fafaf7;
+  --raised: #eaeae3;
+  --input: #fffffc;
+  --grid: #ddddd4;
+  --axis: #c8c8bc;
+  /* Text-field borders: 3:1 against the field and the page (WCAG 1.4.11); --axis is too faint. */
+  --field-border: #86867e;
+  --border: var(--grid);
+  --wash: rgba(40, 40, 40, 0.05);
+  --separator: rgba(40, 40, 40, 0.12);
+  --ink: #282828;
+  --ink-secondary: #50504f;
+  --muted: #6a6a64;
+  --link: #576a39;
+  --link-underline: #8c957b;
+  --link-hover: #2b4a31;
+  --accent: #2b4a31;
+  --on-accent: #ffffff;
+  --accent-wash: #dfe6da;
+  --option-active: var(--accent-wash);
+  --mark: #efe7cc;
+  --status-authorized: #4e8a57;
+  --status-authorized-text: #2b4a31;
+  --status-authorized-fill: #dfe9da;
+  --status-ended: #b5574a;
+  --status-ended-text: #7a2e22;
+  --status-ended-fill: #f1ddd8;
+  --status-pending: #b8962e;
+  --status-pending-text: #5e4a10;
+  --status-pending-fill: #efe7cc;
+  --status-refused: #8a6ba8;
+  --status-refused-text: #4e3470;
+  --status-refused-fill: #e7dff0;
+  /* Hue table: level-1..5 fills (ATC level shades; level 1 is the badge fill), mid, text. */
+  --green-1: #dce8d6; --green-2: #cdddc7; --green-3: #bed2b8; --green-4: #afc7a9; --green-5: #a0bc9a; --green-mid: #5e8c5a; --green-text: #264f25;
+  --teal-1: #d3e6e2; --teal-2: #c3dcd7; --teal-3: #b3d1cc; --teal-4: #a3c7c1; --teal-5: #93bcb6; --teal-mid: #4e8f86; --teal-text: #164c44;
+  --blue-1: #d8e2ef; --blue-2: #cbd7e6; --blue-3: #bfccdd; --blue-4: #b2c1d5; --blue-5: #a6b6cc; --blue-mid: #6f86a6; --blue-text: #203b60;
+  --indigo-1: #dddef0; --indigo-2: #d0d1e8; --indigo-3: #c2c4e0; --indigo-4: #b5b7d8; --indigo-5: #a8abd0; --indigo-mid: #6e73ae; --indigo-text: #2f3370;
+  --purple-1: #e6ddef; --purple-2: #dbcfe6; --purple-3: #d0c2de; --purple-4: #c5b4d5; --purple-5: #baa6cd; --purple-mid: #8a6ba8; --purple-text: #482a6b;
+  --plum-1: #ecdae9; --plum-2: #e2cddf; --plum-3: #d9bfd5; --plum-4: #cfb2cb; --plum-5: #c6a4c1; --plum-mid: #9c6a96; --plum-text: #5b2457;
+  --pink-1: #f1d9e3; --pink-2: #e9ccd8; --pink-3: #e1bece; --pink-4: #dab1c3; --pink-5: #d2a4b8; --pink-mid: #b06a8a; --pink-text: #69213f;
+  --red-1: #f1dad6; --red-2: #eaccc8; --red-3: #e3beb9; --red-4: #dbb0ab; --red-5: #d4a29c; --red-mid: #b5655e; --red-text: #6b2419;
+  --orange-1: #f2dfcc; --orange-2: #ebd3bc; --orange-3: #e4c7ac; --orange-4: #ddbb9b; --orange-5: #d7af8b; --orange-mid: #b97a45; --orange-text: #683410;
+  --gold-1: #efe4c6; --gold-2: #e6d8b3; --gold-3: #decca1; --gold-4: #d5c08e; --gold-5: #cdb47b; --gold-mid: #a8812a; --gold-text: #5a4510;
+  --olive-1: #e4e6cd; --olive-2: #d9dcbd; --olive-3: #ced1ae; --olive-4: #c3c79e; --olive-5: #b7bd8e; --olive-mid: #87904a; --olive-text: #434c15;
+  --brown-1: #e8ddd1; --brown-2: #ddcfc1; --brown-3: #d2c2b2; --brown-4: #c7b4a2; --brown-5: #bca692; --brown-mid: #8c6b4e; --brown-text: #4f3520;
+  --sky-1: #d5e6ee; --sky-2: #c6dce6; --sky-3: #b7d1dd; --sky-4: #a9c7d5; --sky-5: #9abccc; --sky-mid: #5a8fa8; --sky-text: #174860;
+  --slate-1: #e2e3df; --slate-2: #d6d7d2; --slate-3: #c9cbc6; --slate-4: #bdbeb9; --slate-5: #b0b2ad; --slate-mid: #7a7d76; --slate-text: #3d403b;
+  /* Medicine types (marks use the mids; stacked bottom to top Other, Generic, Biosimilar, Advanced therapy). */
+  --type-other: var(--blue-mid);
+  --type-generic: var(--gold-mid);
+  --type-biosimilar: var(--teal-mid);
+  --type-advanced-therapy: var(--purple-mid);
+  --series-products: var(--accent);
+  --series-substances: var(--gold-mid);
+  --bar: var(--accent);
+  --de-emphasis: #c8c8bc;
+  --out-of-range: #c8c8bc;
+  --range-band: rgba(43, 74, 49, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --ink: #ffffff;
-    --ink-secondary: #c3c2b7;
-    --muted: #898781;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --border: rgba(255, 255, 255, 0.1);
-    --wash: rgba(255, 255, 255, 0.06);
-    --link: #6da7ec;
-    --type-other: #3987e5;
-    --type-generic: #d95926;
-    --type-biosimilar: #199e70;
-    --type-advanced-therapy: #c98500;
-    --series-products: #3987e5;
-    --series-substances: #d95926;
-    --bar: #3987e5;
-    --de-emphasis: #52514e;
-    --out-of-range: #52514e;
-    --range-band: rgba(57, 135, 229, 0.18);
-    --option-active: #184f95;
-    --mark: #5c4300;
+    --page: #1b1c19;
+    --surface: #232420;
+    --raised: #2c2d28;
+    --input: #232420;
+    --grid: #383932;
+    --axis: #4a4b43;
+    --field-border: #76776e;
+    --wash: rgba(232, 232, 225, 0.06);
+    --separator: rgba(0, 0, 0, 0.3);
+    --ink: #e8e8e1;
+    --ink-secondary: #bdbdb2;
+    --muted: #9c9c92;
+    --link: #b9c4a4;
+    --link-underline: #7f8a6e;
+    --link-hover: #d2d9c4;
+    --accent: #a7c4a0;
+    --on-accent: #1b1c19;
+    --accent-wash: #343a31;
+    --mark: #3a341d;
+    --status-authorized: #7db887;
+    --status-authorized-text: #b9ddb4;
+    --status-authorized-fill: #25352a;
+    --status-ended: #d07a6c;
+    --status-ended-text: #f0b9ae;
+    --status-ended-fill: #3a2420;
+    --status-pending: #c3a64d;
+    --status-pending-text: #eadfbc;
+    --status-pending-fill: #3a341d;
+    --status-refused: #9c81b5;
+    --status-refused-text: #ded3e9;
+    --status-refused-fill: #312c36;
+    /* Dark fills step 8% toward the hue's mid per level; mids lightened 12% toward white. */
+    --green-1: #28402a; --green-2: #2e472f; --green-3: #344e35; --green-4: #3a563a; --green-5: #3f5d40; --green-mid: #719a6e; --green-text: #c6e1bf;
+    --teal-1: #1e3f3a; --teal-2: #244641; --teal-3: #294e49; --teal-4: #2f5550; --teal-5: #345d57; --teal-mid: #639c95; --teal-text: #b5ddd5;
+    --blue-1: #2a3a52; --blue-2: #31415a; --blue-3: #384961; --blue-4: #3f5069; --blue-5: #465770; --blue-mid: #8095b1; --blue-text: #c3d3ea;
+    --indigo-1: #2e3057; --indigo-2: #34375f; --indigo-3: #3b3d67; --indigo-4: #41446e; --indigo-5: #484b76; --indigo-mid: #7f84b8; --indigo-text: #cccef2;
+    --purple-1: #403648; --purple-2: #473c50; --purple-3: #4e4159; --purple-4: #554761; --purple-5: #5c4d6a; --purple-mid: #987db2; --purple-text: #ddd2e8;
+    --plum-1: #463642; --plum-2: #4e3c4a; --plum-3: #564152; --plum-4: #5e4759; --plum-5: #654c61; --plum-mid: #a87ca3; --plum-text: #e4cfe1;
+    --pink-1: #4a2536; --pink-2: #532c3e; --pink-3: #5c3346; --pink-4: #653a4e; --pink-5: #6e4155; --pink-mid: #b97c98; --pink-text: #f0c3d5;
+    --red-1: #4e3430; --red-2: #573935; --red-3: #603f3a; --red-4: #694440; --red-5: #724945; --red-mid: #be7771; --red-text: #ebceca;
+    --orange-1: #4f3b28; --orange-2: #58412c; --orange-3: #614830; --orange-4: #6a4e34; --orange-5: #735438; --orange-mid: #c18a5b; --orange-text: #ecd5bf;
+    --gold-1: #473a1a; --gold-2: #50411d; --gold-3: #584821; --gold-4: #614f24; --gold-5: #695627; --gold-mid: #b29044; --gold-text: #ead9a8;
+    --olive-1: #3f4229; --olive-2: #46492d; --olive-3: #4d5132; --olive-4: #545836; --olive-5: #5b5f3b; --olive-mid: #959d60; --olive-text: #dbddc0;
+    --brown-1: #40362a; --brown-2: #473c2f; --brown-3: #4e4133; --brown-4: #564738; --brown-5: #5d4d3c; --brown-mid: #9a7d63; --brown-text: #dfd2c4;
+    --sky-1: #304248; --sky-2: #354950; --sky-3: #3a5059; --sky-4: #3f5861; --sky-5: #445f6a; --sky-mid: #6e9cb2; --sky-text: #c9dde7;
+    --slate-1: #3a3c38; --slate-2: #40423e; --slate-3: #474944; --slate-4: #4d4f4b; --slate-5: #545651; --slate-mid: #8a8d86; --slate-text: #d8d9d5;
+    --de-emphasis: #4a4b43;
+    --out-of-range: #4a4b43;
+    --range-band: rgba(167, 196, 160, 0.12);
   }
 }
+
+/* A hue class hands its level shades, mid and text colour to badges and bars inside it. */
+.hue-green { --hue-1: var(--green-1); --hue-2: var(--green-2); --hue-3: var(--green-3); --hue-4: var(--green-4); --hue-5: var(--green-5); --hue-mid: var(--green-mid); --hue-text: var(--green-text); }
+.hue-teal { --hue-1: var(--teal-1); --hue-2: var(--teal-2); --hue-3: var(--teal-3); --hue-4: var(--teal-4); --hue-5: var(--teal-5); --hue-mid: var(--teal-mid); --hue-text: var(--teal-text); }
+.hue-blue { --hue-1: var(--blue-1); --hue-2: var(--blue-2); --hue-3: var(--blue-3); --hue-4: var(--blue-4); --hue-5: var(--blue-5); --hue-mid: var(--blue-mid); --hue-text: var(--blue-text); }
+.hue-indigo { --hue-1: var(--indigo-1); --hue-2: var(--indigo-2); --hue-3: var(--indigo-3); --hue-4: var(--indigo-4); --hue-5: var(--indigo-5); --hue-mid: var(--indigo-mid); --hue-text: var(--indigo-text); }
+.hue-purple { --hue-1: var(--purple-1); --hue-2: var(--purple-2); --hue-3: var(--purple-3); --hue-4: var(--purple-4); --hue-5: var(--purple-5); --hue-mid: var(--purple-mid); --hue-text: var(--purple-text); }
+.hue-plum { --hue-1: var(--plum-1); --hue-2: var(--plum-2); --hue-3: var(--plum-3); --hue-4: var(--plum-4); --hue-5: var(--plum-5); --hue-mid: var(--plum-mid); --hue-text: var(--plum-text); }
+.hue-pink { --hue-1: var(--pink-1); --hue-2: var(--pink-2); --hue-3: var(--pink-3); --hue-4: var(--pink-4); --hue-5: var(--pink-5); --hue-mid: var(--pink-mid); --hue-text: var(--pink-text); }
+.hue-red { --hue-1: var(--red-1); --hue-2: var(--red-2); --hue-3: var(--red-3); --hue-4: var(--red-4); --hue-5: var(--red-5); --hue-mid: var(--red-mid); --hue-text: var(--red-text); }
+.hue-orange { --hue-1: var(--orange-1); --hue-2: var(--orange-2); --hue-3: var(--orange-3); --hue-4: var(--orange-4); --hue-5: var(--orange-5); --hue-mid: var(--orange-mid); --hue-text: var(--orange-text); }
+.hue-gold { --hue-1: var(--gold-1); --hue-2: var(--gold-2); --hue-3: var(--gold-3); --hue-4: var(--gold-4); --hue-5: var(--gold-5); --hue-mid: var(--gold-mid); --hue-text: var(--gold-text); }
+.hue-olive { --hue-1: var(--olive-1); --hue-2: var(--olive-2); --hue-3: var(--olive-3); --hue-4: var(--olive-4); --hue-5: var(--olive-5); --hue-mid: var(--olive-mid); --hue-text: var(--olive-text); }
+.hue-brown { --hue-1: var(--brown-1); --hue-2: var(--brown-2); --hue-3: var(--brown-3); --hue-4: var(--brown-4); --hue-5: var(--brown-5); --hue-mid: var(--brown-mid); --hue-text: var(--brown-text); }
+.hue-sky { --hue-1: var(--sky-1); --hue-2: var(--sky-2); --hue-3: var(--sky-3); --hue-4: var(--sky-4); --hue-5: var(--sky-5); --hue-mid: var(--sky-mid); --hue-text: var(--sky-text); }
+.hue-slate { --hue-1: var(--slate-1); --hue-2: var(--slate-2); --hue-3: var(--slate-3); --hue-4: var(--slate-4); --hue-5: var(--slate-5); --hue-mid: var(--slate-mid); --hue-text: var(--slate-text); }
+
+/* A status kind (statusKind() in labels.js) sets the dot, text and pill colours. */
+.status-authorized { --status-dot: var(--status-authorized); --status-text: var(--status-authorized-text); --status-fill: var(--status-authorized-fill); }
+.status-ended { --status-dot: var(--status-ended); --status-text: var(--status-ended-text); --status-fill: var(--status-ended-fill); }
+.status-pending { --status-dot: var(--status-pending); --status-text: var(--status-pending-text); --status-fill: var(--status-pending-fill); }
+.status-refused { --status-dot: var(--status-refused); --status-text: var(--status-refused-text); --status-fill: var(--status-refused-fill); }
 
 * {
   box-sizing: border-box;
 }
 
+/* Elements styled with a display value would otherwise ignore the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0 auto;
-  /* Wide enough for the nine-column table (natural width ~1,110 px) without a horizontal scroll on desktop. */
+  /* Wide enough for the seven-column table without a horizontal scroll on desktop. */
   max-width: 1160px;
-  padding: 24px 16px;
+  padding: 20px 16px 32px;
   background: var(--page);
   color: var(--ink);
   font: 16px/1.5 var(--font);
@@ -73,26 +172,56 @@ body {
 
 a {
   color: var(--link);
+  text-decoration-color: var(--link-underline);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--link-hover);
 }
 
 :focus-visible {
-  outline: 2px solid var(--link);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* App bar: wordmark and data date. */
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 16px;
 }
 
 h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+header .note {
+  flex-basis: 100%;
 }
 
 h2 {
   margin: 0 0 4px;
-  font-size: 1.125rem;
-}
-
-.subtitle {
-  margin: 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
 }
 
 .muted {
@@ -115,11 +244,95 @@ h2 {
 }
 
 main {
-  margin: 24px 0;
+  margin: 16px 0 32px;
 }
 
 button {
   font: inherit;
+}
+
+/* Secondary buttons: transparent with a strong border. */
+.filters button,
+.more {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--axis);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.filters button:disabled {
+  color: var(--muted);
+  border-color: var(--grid);
+  cursor: default;
+}
+
+/* Answer headlines: the dashboard's and the lookup results'. */
+.answer {
+  margin: 8px 0 24px;
+}
+
+.headline,
+.card h2 {
+  margin: 0;
+  max-width: 820px;
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.dek {
+  margin: 8px 0 0;
+  max-width: 820px;
+  color: var(--ink-secondary);
+  font-size: 1.0625rem;
+  line-height: 1.625rem;
+}
+
+.dek:empty {
+  display: none;
+}
+
+.tone-number {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.tone-negative {
+  color: var(--status-ended-text);
+}
+
+@media (min-width: 721px) {
+  .headline {
+    font-size: 2.75rem;
+    line-height: 3.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .card h2 {
+    font-size: 2.25rem;
+    line-height: 2.75rem;
+    letter-spacing: -0.02em;
+  }
+
+  .dek {
+    font-size: 1.1875rem;
+    line-height: 1.75rem;
+  }
+}
+
+.kicker {
+  margin: 0 0 8px;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Filter row: one row above everything it scopes. */
@@ -163,12 +376,17 @@ legend {
 }
 
 .filters input {
-  padding: 6px 8px;
-  border: 1px solid var(--muted);
-  border-radius: 6px;
-  background: var(--surface);
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  background: var(--input);
   color: var(--ink);
   font: inherit;
+}
+
+input::placeholder {
+  color: var(--muted);
 }
 
 .year-range input {
@@ -176,27 +394,10 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
-.filters button,
-.segmented button,
-.more {
-  padding: 5px 10px;
-  border: 1px solid var(--muted);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.filters button:disabled {
-  color: var(--muted);
-  border-color: var(--grid);
-  cursor: default;
-}
-
 .text-filter,
 .multi-select {
   position: relative;
-  width: min(200px, 100%);
+  width: min(220px, 100%);
 }
 
 .text-filter input,
@@ -204,6 +405,7 @@ legend {
   width: 100%;
 }
 
+/* Selected values: accent-wash pills. */
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -217,20 +419,23 @@ legend {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 0 0 0 8px;
-  border: 1px solid var(--axis);
+  padding: 0 0 0 10px;
   border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
   font-size: 0.8125rem;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
 .filters .chips button {
   min-width: 24px;
   min-height: 24px;
-  padding: 0 4px;
+  padding: 0 6px;
   border: 0;
+  border-radius: 999px;
   background: none;
-  color: var(--ink-secondary);
+  color: var(--accent);
 }
 
 [role="listbox"] {
@@ -240,17 +445,17 @@ legend {
   right: 0;
   max-height: 260px;
   overflow: auto;
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   padding: 4px 0;
   border: 1px solid var(--axis);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--surface);
   list-style: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
 }
 
 [role="option"] {
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 0.875rem;
   cursor: pointer;
 }
@@ -259,8 +464,11 @@ legend {
   background: var(--wash);
 }
 
+/* The wash alone is too faint to show the active option; the outline also survives forced colors. */
 [role="option"][aria-selected="true"] {
   background: var(--option-active);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .note {
@@ -269,48 +477,58 @@ legend {
   font-size: 0.875rem;
 }
 
-/* Tabs */
+/* Tabs: text tabs, the active one in ink with an accent underline. */
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 24px;
   margin: 16px 0;
   border-bottom: 1px solid var(--grid);
 }
 
 [role="tab"] {
-  padding: 8px 12px;
+  padding: 10px 0;
   border: 0;
   background: none;
   color: var(--ink-secondary);
+  font-weight: 500;
   cursor: pointer;
 }
 
 [role="tab"][aria-selected="true"] {
   color: var(--ink);
-  font-weight: 600;
-  box-shadow: inset 0 -2px var(--link);
+  box-shadow: inset 0 -2px var(--accent);
 }
 
 [role="tabpanel"]:focus-visible {
   outline-offset: 4px;
 }
 
-/* Authorized-now tiles */
+/* Authorized-now tiles: two wide tiles, then four compact ones (2 x 2). */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
-/* Subgrid rows keep values and captions on one line across tiles when a label wraps. */
-.tile {
+@media (min-width: 721px) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+
+.tile-group {
   display: grid;
-  grid-row: span 3;
-  grid-template-rows: subgrid;
-  row-gap: 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 20px;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
   background: var(--surface);
 }
 
@@ -325,45 +543,149 @@ legend {
 
 .tile-value {
   font-weight: 600;
-  font-size: 1.75rem;
-  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-wide .tile-value {
+  color: var(--accent);
+  font-size: 2.25rem;
+  line-height: 2.75rem;
+  letter-spacing: -0.02em;
 }
 
 .tile-caption {
   color: var(--ink-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
 }
 
+/* A wide tile stretched to the compact block's height keeps its caption at the bottom. */
+.tile-wide .tile-caption {
+  margin-top: auto;
+}
+
+.tile-compact {
+  padding: 12px 16px;
+}
+
+.tile-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.tile-compact .tile-value {
+  font-size: 1.5rem;
+  line-height: 1.75rem;
+}
+
+.tile-share {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  height: 4px;
+  margin: 2px 0;
+  border-radius: 2px;
+  background: var(--raised);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+@media (min-width: 721px) {
+  .tile-wide .tile-value {
+    font-size: 2.75rem;
+    line-height: 3.25rem;
+  }
+
+  /* Desktop compact tiles are one-liners (the badge names them), so the 2 x 2 block is about as
+     tall as the wide tiles; the caption stays for screen readers. */
+  .tile-compact {
+    padding: 10px 16px 8px;
+    gap: 2px;
+  }
+
+  .tile-compact .tile-caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Cards: surface, hairline, no shadow. */
 .chart-card {
-  margin: 16px 0 32px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  margin: 16px 0 24px;
+  padding: 20px;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
   background: var(--surface);
+}
+
+@media (max-width: 720px) {
+  .chart-card {
+    padding: 16px;
+  }
 }
 
 .card-head {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px 16px;
 }
 
+/* No overflow clip (it would cut the focus ring): the end buttons round their own corners. */
 .segmented {
-  display: flex;
-  gap: 4px;
+  display: inline-flex;
+  border: 1px solid var(--axis);
+  border-radius: 10px;
 }
 
 .segmented button {
-  padding: 3px 10px;
-  border-color: var(--grid);
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
   font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
 }
 
+.segmented button:first-child {
+  border-radius: 9px 0 0 9px;
+}
+
+.segmented button:last-child {
+  border-radius: 0 9px 9px 0;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--grid);
+}
+
+/* Above its neighbours, so their fills do not cover the ring. */
+.segmented button:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+/* The wash is too faint on its own (WCAG 1.4.11); the underline matches the tabs. */
 .segmented button[aria-pressed="true"] {
-  border-color: var(--link);
-  background: var(--wash);
+  background: var(--accent-wash);
+  box-shadow: inset 0 -2px var(--accent);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -378,9 +700,9 @@ legend {
   gap: 12px;
   align-items: center;
   width: 100%;
-  padding: 3px 4px;
+  padding: 4px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
   background: none;
   color: var(--ink);
   font-size: 0.875rem;
@@ -396,24 +718,43 @@ button.bar-row:hover {
 }
 
 .bar-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .bar-row[aria-pressed="true"] .bar-label {
   font-weight: 600;
 }
 
-.bar-track {
-  display: block;
-  height: 12px;
+/* ATC level-1 letter badge (breakdown); its hue comes from the row. */
+.letter-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--hue-1);
+  color: var(--hue-text);
+  font: 500 0.78125rem/1 var(--font-mono);
 }
 
+.bar-track {
+  display: block;
+  height: 10px;
+}
+
+/* ATC rows use their group's mid; area and holder rows the accent. */
 .bar-fill {
   display: block;
   height: 100%;
   min-width: 2px;
-  border-radius: 0 4px 4px 0;
-  background: var(--bar);
+  border-radius: 0 3px 3px 0;
+  background: var(--hue-mid, var(--bar));
 }
 
 .bar-row.other .bar-fill {
@@ -433,11 +774,16 @@ button.bar-row:hover {
 @media (max-width: 600px) {
   .bar-row {
     grid-template-columns: 1fr 4.5ch;
-    gap: 0 12px;
+    gap: 2px 12px;
   }
 
   .bar-label {
     grid-column: 1 / -1;
+  }
+
+  .letter-badge {
+    width: 24px;
+    height: 24px;
   }
 }
 
@@ -519,7 +865,7 @@ button.bar-row:hover {
 .brush .selection {
   fill: var(--range-band);
   fill-opacity: 1;
-  stroke: var(--link);
+  stroke: var(--accent);
   stroke-width: 1;
 }
 
@@ -540,8 +886,8 @@ button.bar-row:hover {
 }
 
 .end-label {
-  fill: var(--ink-secondary);
-  font: 12px var(--font);
+  fill: var(--ink);
+  font: 600 12px var(--font);
   font-variant-numeric: tabular-nums;
 }
 
@@ -558,10 +904,10 @@ button.bar-row:hover {
   z-index: 1;
   min-width: 140px;
   padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
   font-size: 0.8125rem;
   pointer-events: none;
 }
@@ -589,43 +935,70 @@ button.bar-row:hover {
   color: var(--ink-secondary);
 }
 
+/* Medicines table: a card whose table runs edge to edge. */
+.table-card {
+  padding: 20px 0 16px;
+}
+
+.table-card > h2 {
+  margin: 0 20px 4px;
+}
+
+.table-card > .more {
+  margin: 12px 20px 0;
+}
+
+/* Positioned, so visually hidden (absolute) text in cells scrolls with the table instead of
+   widening the page. */
 .table-scroll {
+  position: relative;
   max-height: 70vh;
   overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
 }
 
 table {
   width: 100%;
-  min-width: 1100px;
+  min-width: 1000px;
   border-collapse: collapse;
   font-size: 0.875rem;
 }
 
 caption {
-  padding: 8px 12px;
+  padding: 0 20px 12px;
   color: var(--ink-secondary);
   text-align: left;
 }
 
 th,
 td {
-  padding: 8px 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--grid);
   text-align: left;
   vertical-align: top;
 }
 
-/* Sticky cells lose collapsed borders, so the header rule is an inset shadow. */
+th:first-child,
+td:first-child {
+  padding-left: 20px;
+}
+
+th:last-child,
+td:last-child {
+  padding-right: 20px;
+}
+
+/* Sticky cells lose collapsed borders, so the header rules are inset shadows. */
 th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--surface);
-  box-shadow: inset 0 -1px var(--axis);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background: var(--page);
+  box-shadow: inset 0 1px var(--grid), inset 0 -1px var(--grid);
+  color: var(--ink-secondary);
   font-weight: 600;
+  font-size: 0.8125rem;
 }
 
 /* "anywhere" lets long slash-joined names wrap, but it also drops the column's
@@ -635,24 +1008,139 @@ td.breakable {
   overflow-wrap: anywhere;
 }
 
-td.date,
-td.atc {
+.medicine-name {
+  font-weight: 600;
+}
+
+.medicine-substances {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
+/* Status: an 8px dot in the status colour, then the label. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--status-text);
+  font-weight: 500;
+}
+
+.status::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--status-dot);
+}
+
+.status.pill {
+  padding: 1px 12px 1px 10px;
+  border-radius: 999px;
+  background: var(--status-fill);
   white-space: nowrap;
+}
+
+.status-date {
+  display: block;
+  padding-left: 14px;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
 
+td.status-cell {
+  min-width: 10rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Type badge (Generic, Biosimilar, Advanced therapy, Orphan): fill and text of its hue. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--hue-1);
+  color: var(--hue-text);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Segmented ATC badge: one segment per level, shaded darker per level in the group's hue.
+   Inline blocks, not flex items: flex items read, select and copy as separate lines. */
+.atc-badge {
+  display: inline-block;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  color: var(--hue-text);
+  font: 500 0.78125rem/24px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.atc-seg {
+  display: inline-block;
+  padding: 0 5px;
+  background: var(--hue-1);
+}
+
+.atc-seg + .atc-seg {
+  border-left: 1px solid var(--separator);
+}
+
+.atc-seg.level-2 {
+  background: var(--hue-2);
+}
+
+.atc-seg.level-3 {
+  background: var(--hue-3);
+}
+
+.atc-seg.level-4 {
+  background: var(--hue-4);
+}
+
+.atc-seg.level-5 {
+  background: var(--hue-5);
+}
+
 td.atc .code {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  white-space: nowrap;
   cursor: help;
 }
 
+td.atc .code + .code {
+  margin-top: 6px;
+}
+
 .flag {
-  margin-left: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--axis);
+  padding: 1px 8px;
   border-radius: 999px;
-  color: var(--ink-secondary);
+  background: var(--raised);
+  color: var(--ink);
   font-size: 0.75rem;
+}
+
+.status-cell .flag {
+  display: inline-block;
+  margin-top: 4px;
 }
 
 /* MeSH terms wrap at spaces only; long single words widen the column instead of breaking. */
@@ -671,37 +1159,83 @@ td.area {
   color: var(--link);
   font: inherit;
   text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
-.more {
-  margin-top: 8px;
-}
-
-/* Lookup: the search box first, the result panel between it and the dashboard. */
+/* Lookup: the search bar first, the result panel between it and the dashboard. */
 .lookup {
-  margin-bottom: 16px;
-}
-
-.lookup > label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 600;
+  max-width: 760px;
+  margin: 20px 0 24px;
 }
 
 .lookup-box {
   position: relative;
 }
 
+.search-icon {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 20px;
+  height: 20px;
+  color: var(--ink-secondary);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .lookup-box input {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--muted);
-  border-radius: 8px;
-  background: var(--surface);
+  height: 52px;
+  padding: 0 12px 0 44px;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--input);
   color: var(--ink);
   font: inherit;
-  font-size: 1.0625rem;
+  text-overflow: ellipsis;
+}
+
+/* Phones: the typed text stays 16px (iOS zooms into smaller fields); the placeholder is smaller so it
+   fits (checked at 360, 375, 384 and 390px). */
+@media (max-width: 720px) {
+  .lookup-box input::placeholder {
+    font-size: 15px;
+  }
+}
+
+/* Narrow phones (360px): Chrome also reserves room for the search field's clear button. */
+@media (max-width: 382px) {
+  .lookup-box input::placeholder {
+    font-size: 13.5px;
+  }
+}
+
+@media (min-width: 721px) {
+  .lookup-box input {
+    height: 56px;
+    padding-right: 16px;
+    font-size: 1.0625rem;
+  }
+
+  .search-icon {
+    top: 18px;
+  }
+}
+
+.try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 10px 0 0;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
 }
 
 .lookup [role="listbox"] {
@@ -715,7 +1249,7 @@ td.area {
 }
 
 .group-label {
-  padding: 6px 8px 2px;
+  padding: 6px 10px 2px;
   color: var(--ink-secondary);
   font-weight: 600;
   font-size: 0.75rem;
@@ -728,7 +1262,7 @@ td.area {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 12px;
-  padding: 6px 8px;
+  padding: 6px 10px;
 }
 
 .option-meta {
@@ -736,17 +1270,10 @@ td.area {
   font-size: 0.8125rem;
 }
 
+/* Lookup result: answer on the page, details in surface blocks. */
 .card {
-  margin: 0 0 24px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  margin: 0 0 32px;
   overflow-wrap: anywhere;
-}
-
-.card h2 {
-  font-size: 1.375rem;
 }
 
 /* Focus moves to the result heading only to announce it; it is not a control. */
@@ -757,35 +1284,146 @@ td.area {
 .card h3 {
   margin: 16px 0 4px;
   font-size: 1rem;
+  font-weight: 600;
 }
 
 .card p {
   margin: 4px 0;
 }
 
-.badge,
-.chip {
-  display: inline-block;
-  padding: 0 8px;
-  border: 1px solid var(--axis);
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 400;
-  white-space: nowrap;
+.card .kicker {
+  margin: 0 0 8px;
 }
 
-.badge {
-  border-color: var(--ink-secondary);
+.card .dek {
+  margin-top: 8px;
+}
+
+.card-section {
+  margin: 16px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.card-section > h3:first-child {
+  margin-top: 0;
+}
+
+/* Answer strip: Holder, Since, Status. */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 16px 0;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+.strip-wide {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--grid);
+}
+
+.strip > div:not(.strip-wide):not(:last-child) {
+  border-right: 1px solid var(--grid);
+}
+
+.strip dt {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.strip dd {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 721px) {
+  .strip {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .strip-wide {
+    grid-column: auto;
+    border-bottom: 0;
+  }
+
+  .strip > div:not(:last-child) {
+    border-right: 1px solid var(--grid);
+  }
+}
+
+/* The SmPC and EPAR as full-width secondary buttons. */
+.doc-buttons {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+@media (min-width: 721px) {
+  .doc-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.doc-button {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 1px solid var(--axis);
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.doc-button:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.doc-button-title {
   font-weight: 600;
 }
 
-/* Union Register disagrees with EMA's status. Link text uses --ink: --link on --mark is
-   below 4.5:1 in dark mode. */
+.doc-button-meta {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
+/* Neutral pill: flags, protection status, "incomplete". */
+.chip {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Union Register disagrees with EMA's status. */
 .chip.warning {
-  border-color: transparent;
   border-radius: 8px;
   background: var(--mark);
-  color: var(--ink);
   white-space: normal;
 }
 
@@ -802,17 +1440,22 @@ td.area {
 .facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 6px 16px;
-  margin: 12px 0;
+  gap: 8px 16px;
 }
 
 .facts dt {
   color: var(--ink-secondary);
   font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .facts dd {
   margin: 0;
+}
+
+.facts .badges {
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 @media (max-width: 600px) {
@@ -822,7 +1465,7 @@ td.area {
   }
 
   .facts dd {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
 }
 
@@ -832,8 +1475,12 @@ td.area {
   list-style: none;
 }
 
+.atc-list > li + li {
+  margin-top: 8px;
+}
+
 .atc-levels {
-  margin: 0 0 4px;
+  margin: 4px 0 0;
   padding-left: 16px;
   color: var(--ink-secondary);
   font-size: 0.8125rem;
@@ -843,11 +1490,15 @@ details > summary {
   cursor: pointer;
 }
 
+.indication > summary {
+  font-weight: 600;
+}
+
 .doc-list > li {
   margin: 4px 0;
 }
 
-/* "updated 2026-07-01" wraps as one unit on phones. */
+/* "updated 1 Jul 2026" wraps as one unit on phones. */
 .doc-list span.muted {
   white-space: nowrap;
 }
@@ -870,6 +1521,11 @@ details > summary {
   vertical-align: 1px;
 }
 
+.protection h3 .chip {
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+
 .protection ul {
   margin: 4px 0;
   padding-left: 20px;
@@ -888,19 +1544,31 @@ details > summary {
 .related a {
   display: inline-block;
   margin: 2px 0;
-  padding: 0 8px;
+  padding: 0 10px;
   border: 1px solid var(--axis);
   border-radius: 999px;
   font-size: 0.875rem;
   text-decoration: none;
 }
 
+/* Result rows: a surface block, hairlines between rows. */
+.result-list {
+  margin: 8px 0 16px;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
 .result-list > li {
-  padding: 6px 0;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--grid);
 }
 
-.result-list p {
+.result-list > li:last-child {
+  border-bottom: 0;
+}
+
+.card .result-list p {
   margin: 0;
 }
 
@@ -908,14 +1576,25 @@ details > summary {
   font-weight: 600;
 }
 
-.result-name .muted {
-  font-weight: 400;
-}
-
-.result-meta,
+.result-substances,
+.result-holder,
 .snippet {
   color: var(--ink-secondary);
   font-size: 0.875rem;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 2px;
+  font-size: 0.875rem;
+}
+
+.result-date {
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 mark {
@@ -925,7 +1604,7 @@ mark {
 
 /* Results timeline */
 .timeline {
-  margin: 12px 0;
+  margin: 0;
 }
 
 .lane-line {
@@ -958,10 +1637,10 @@ mark {
   z-index: 3;
   max-width: 260px;
   padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
   font-size: 0.8125rem;
   pointer-events: none;
 }
@@ -997,9 +1676,39 @@ mark {
   }
 }
 
+/* Phones: primary controls are at least 44px tall. */
+@media (max-width: 720px) {
+  .try a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* The negative margin keeps the row's layout. */
+  .result-name a {
+    display: inline-block;
+    margin: -10px 0;
+    padding: 10px 0;
+  }
+
+  .segmented button,
+  .filters input,
+  .filters button {
+    min-height: 44px;
+  }
+
+  .filters-disclosure > summary {
+    padding: 10px 0;
+  }
+}
+
 footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--grid);
   color: var(--ink-secondary);
   font-size: 0.875rem;
+  /* Long URLs in the attribution wrap at 320px instead of scrolling the page. */
+  overflow-wrap: anywhere;
 }
 
 footer p {
@@ -1017,5 +1726,34 @@ footer p {
 }
 
 code {
+  font-family: var(--font-mono);
   font-size: 0.9em;
+}
+
+/* Forced colors (Windows high contrast) drop box shadows and force backgrounds: keep the
+   selected tab, the pressed button and the bars visible. */
+@media (forced-colors: active) {
+  [role="tab"][aria-selected="true"] {
+    border-bottom: 2px solid SelectedItem;
+  }
+
+  .segmented button[aria-pressed="true"] {
+    outline: 2px solid SelectedItem;
+    outline-offset: -2px;
+  }
+
+  /* Focused, the ring moves outside, so focus still shows on the pressed button. */
+  .segmented button[aria-pressed="true"]:focus-visible {
+    outline-offset: 2px;
+  }
+
+  .bar-fill,
+  .meter-fill {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+
+  .has-selection .bar-row:not([aria-pressed="true"]) .bar-fill {
+    background: GrayText;
+  }
 }

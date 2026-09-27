@@ -30,3 +30,19 @@ export function groupDocuments(rows) {
   const hasEpar = groups.some((group) => group.key === "epar" && group.rows.some((row) => !row.ownTitle));
   return groups.filter((group) => !(hasEpar && group.key === "scientificDiscussion"));
 }
+
+const PRIMARY = ["productInformation", "epar"];
+
+// groupDocuments() output -> the newest current SmPC and standard EPAR (shown as buttons) and the
+// remaining groups (the list), without those two rows.
+export function primaryDocuments(groups) {
+  const primary = [];
+  const rest = [];
+  for (const group of groups) {
+    const row = PRIMARY.includes(group.key) ? group.rows.find((candidate) => !candidate.archive && !candidate.ownTitle) : undefined;
+    if (row) primary.push({ key: group.key, row });
+    const rows = group.rows.filter((candidate) => candidate !== row);
+    if (rows.length) rest.push({ ...group, rows });
+  }
+  return { primary, rest };
+}

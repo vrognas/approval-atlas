@@ -12,11 +12,12 @@ import {
   isAuthorizedNow,
   newestFirst,
 } from "./approvals.js";
+import { atcHue } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend } from "./chart.js";
 import { filterProducts, makePredicates, parseAtcQuery } from "./filters.js";
-import { UI, atcLevelOneLabel, statusLabel } from "./labels.js";
-import { createLookup } from "./lookup.js";
+import { UI, statusLabel, titleCaseAtcName } from "./labels.js";
+import { createLookup, headlineNodes } from "./lookup.js";
 import { createMultiSelect } from "./multi-select.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { createSearchBox } from "./search-box.js";
@@ -30,6 +31,7 @@ import {
   DEFAULT_STATE,
   decodeLookup,
   decodeState,
+  lookupView,
   normalizeYearRange,
   scheduleUrlWrite,
   withoutLookup,
@@ -84,6 +86,10 @@ let pendingFilters = new URLSearchParams();
 let lookup = null;
 let frame = 0;
 const urlNote = $("#url-note");
+// Filter edits (not the first render, tabs or lookups) announce the new headline, debounced.
+const FILTER_KEYS = Object.keys(DEFAULT_STATE).filter((key) => key !== "view" && key !== "by");
+let announceFilters = false;
+let announceTimer = 0;
 
 function applyUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -101,6 +107,9 @@ function applyUrl() {
 
 function render() {
   lookup.render(state);
+  const lookupOpen = lookupView(state).kind !== null;
+  $("#lookup-try").hidden = lookupOpen; // home state only
+  $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
   dashboard?.render();
 }
 
@@ -112,6 +121,7 @@ function scheduleRender() {
 }
 
 function setState(patch, push = false) {
+  if (FILTER_KEYS.some((key) => key in patch)) announceFilters = true;
   state = { ...state, ...patch };
   urlNote.hidden = true;
   scheduleRender();
@@ -187,6 +197,27 @@ function suggestionGroups(result) {
   ];
 }
 
+// Search icon (decorative) inside the search bar.
+function addSearchIcon() {
+  const icon = d3.select(".lookup-box").insert("svg", "input")
+    .attr("class", "search-icon")
+    .attr("viewBox", "0 0 20 20")
+    .attr("aria-hidden", "true")
+    .attr("focusable", "false");
+  icon.append("circle").attr("cx", 8.5).attr("cy", 8.5).attr("r", 5.75);
+  icon.append("path").attr("d", "M12.75 12.75l4.5 4.5");
+}
+
+// "Try Keytruda · semaglutide · psoriasis": links that open those lookups.
+function renderTryLinks() {
+  const line = d3.select("#lookup-try");
+  line.append("span").text(UI.lookup.tryLead);
+  for (const [position, example] of UI.lookup.examples.entries()) {
+    if (position > 0) line.append("span").attr("aria-hidden", "true").text("·");
+    line.append(() => lookup.link(example.label, example.patch));
+  }
+}
+
 function startLookup([meta, searchRows, entryTermRows]) {
   d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
   renderFooter(meta);
@@ -194,6 +225,8 @@ function startLookup([meta, searchRows, entryTermRows]) {
 
   const index = buildLookupIndex(searchRows, entryTermRows);
   lookup = createLookup($("#result"), { index, loadFile, navigate, snapshotDate: meta.snapshot_date });
+  addSearchIcon();
+  renderTryLinks();
   const input = $("#lookup-input");
   const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
     suggestionsFor: (query) => suggestionGroups(suggest(index, lookup.conditions(), query)),
@@ -247,8 +280,9 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     statuses: new Set(options.status.map((option) => option.value)),
     years: approvalYears,
   };
+  // ATC rows show the group letter as a badge, so the label is the title-case name alone.
   const breakdownLabel = {
-    atc: (code) => atcLevelOneLabel(code, atcNames.get(code)),
+    atc: (code) => (atcNames.has(code) ? titleCaseAtcName(atcNames.get(code)) : code),
     area: (branch) => branchNames.get(branch) ?? branch,
     mah: (mah) => mah,
   };
@@ -320,9 +354,31 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   const registerDiffers = (product) => register?.get(product.ema_product_number)?.agrees_with_ema === false;
   const showCount = (selector, count, text) => d3.select(selector).text(count ? text(count) : "").attr("hidden", count ? null : "");
 
-  function renderNow(predicates, filtered, withoutDateFilter) {
-    const authorizedNow = filtered.filter(isAuthorizedNow);
-    renderTiles($("#tiles"), countTiles(authorizedNow));
+  // The answer headline follows the view and the filters: authorized medicines (Authorized now),
+  // or the medicines with an approval date that the per-year table lists (Approvals per year).
+  function renderHeadline(predicates, tableRows, authorizedCounts) {
+    const filtersActive = Object.keys(predicates).length > 0;
+    let counts = authorizedCounts;
+    let parts;
+    if (state.view === "now") {
+      parts = filtersActive ? UI.headline.filtered(counts.products) : UI.headline.home(counts.products);
+    } else {
+      counts = countTiles(tableRows);
+      const range = predicates.date ? UI.yearRange(state.from ?? approvalYears[0], state.to ?? approvalYears[1]) : null;
+      parts = filtersActive ? UI.headline.approvedFiltered(counts.products, range) : UI.headline.approvedSince(counts.products, approvalYears[0]);
+    }
+    $("#headline").replaceChildren(...headlineNodes(parts));
+    d3.select("#headline-dek").text(UI.headline.dek(counts) ?? "");
+    if (!announceFilters) return;
+    announceFilters = false;
+    clearTimeout(announceTimer);
+    announceTimer = setTimeout(() => {
+      $("#filter-result").textContent = $("#headline").textContent;
+    }, 500);
+  }
+
+  function renderNow(predicates, authorizedNow, counts, withoutDateFilter) {
+    renderTiles($("#tiles"), counts);
     showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
     const undated = withoutDateFilter.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
     d3.select("#undated-authorized").text(UI.undatedAuthorized(undated.length));
@@ -336,6 +392,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     renderBreakdown($("#breakdown"), breakdownCounts(population, state.by, breakdownLabel[state.by]), {
       isSelected: isBreakdownSelected,
       onToggle: toggleBreakdown,
+      badgeOf: state.by === "atc" ? (row) => ({ text: row.key, hue: atcHue(row.key) }) : undefined,
     });
     const { excluded } = UI.breakdown[state.by];
     showCount("#breakdown-excluded", excluded ? breakdownExcluded(population, state.by) : 0, excluded);
@@ -362,16 +419,19 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     // The per-year chart and the over-time line ignore the approval-year filter and mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
-    if (state.view === "now") renderNow(predicates, filtered, withoutDateFilter);
+    const authorizedNow = filtered.filter(isAuthorizedNow);
+    const counts = countTiles(authorizedNow);
+    const tableRows = state.view === "now"
+      ? authorizedNow
+      : filtered.filter((product) => product.year !== null);
+    renderHeadline(predicates, tableRows, counts);
+    if (state.view === "now") renderNow(predicates, authorizedNow, counts, withoutDateFilter);
     else renderYears(withoutDateFilter);
 
     renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
     const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
     d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
 
-    const tableRows = state.view === "now"
-      ? filtered.filter(isAuthorizedNow)
-      : filtered.filter((product) => product.year !== null);
     const caption = state.view === "now" ? UI.table.captionNow(tableRows.length) : UI.table.captionYears(tableRows.length);
     table(newestFirst(tableRows), caption, register);
   }

@@ -5,7 +5,8 @@ import { UI } from "./labels.js";
 const COPY = UI.protection;
 
 // row: the medicine's protection row (undefined when it has none); orphanRows: its orphan rows;
-// snapshotDate: the data date, which decides whether orphan exclusivity "ends" or "ended".
+// snapshotDate: the data date, which decides whether a protection "ends" or "ended" (a range
+// has ended only once its later end is past).
 export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate) {
   if (!row) return null;
   const lines = [];
@@ -14,8 +15,8 @@ export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate)
   } else {
     if (row.basis === "follows_reference") lines.push(COPY.follows(row.reference_name));
     lines.push(
-      COPY.dataExclusivity(row.data_exclusivity_end),
-      COPY.marketProtection(row.market_protection_end_min, row.market_protection_end_max),
+      COPY.dataExclusivity(row.data_exclusivity_end, row.data_exclusivity_end < snapshotDate),
+      COPY.marketProtection(row.market_protection_end_min, row.market_protection_end_max, row.market_protection_end_max < snapshotDate),
       COPY.countedFrom(substanceLabel, row.reference_name, row.counted_from),
     );
   }

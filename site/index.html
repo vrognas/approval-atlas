@@ -9,18 +9,17 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
-    <title>approval-atlas</title>
+    <meta name="theme-color" content="#f3f3ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1b1c19" media="(prefers-color-scheme: dark)" />
+    <title>Approval Atlas</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <header>
-      <h1>approval-atlas</h1>
-      <p class="subtitle">EMA human medicines</p>
-      <p id="data-date" class="muted"></p>
+      <h1>Approval Atlas</h1>
+      <p id="data-date" class="meta">EMA human medicines</p>
       <p id="offline-note" class="note" role="status" hidden></p>
     </header>
 
@@ -28,7 +27,7 @@
       <p id="message" hidden></p>
 
       <section id="lookup" class="lookup" hidden>
-        <label id="lookup-label" for="lookup-input">Look up a medicine, substance or condition</label>
+        <label id="lookup-label" for="lookup-input" class="visually-hidden">Search medicine, substance or condition</label>
         <div class="lookup-box">
           <input
             id="lookup-input"
@@ -40,11 +39,12 @@
             autocomplete="off"
             spellcheck="false"
             enterkeyhint="search"
-            placeholder="e.g. Keytruda, adalimumab, psoriasis"
+            placeholder="Search medicine, substance or condition"
             disabled
           />
           <div id="lookup-listbox" role="listbox" aria-labelledby="lookup-label" hidden></div>
         </div>
+        <p id="lookup-try" class="try" hidden></p>
         <p id="lookup-status" class="visually-hidden" aria-live="polite"></p>
       </section>
 
@@ -53,6 +53,12 @@
       <p id="app-loading" class="muted">Loading charts…</p>
 
       <div id="app" hidden>
+        <section class="answer" aria-labelledby="headline">
+          <h2 id="headline" class="headline"></h2>
+          <p id="headline-dek" class="dek"></p>
+        </section>
+        <p id="filter-result" class="visually-hidden" role="status"></p>
+
         <details id="filters" class="filters-disclosure">
           <summary id="filters-summary">Filters</summary>
           <section class="filters" aria-label="Filters">
@@ -120,7 +126,7 @@
           <p id="over-time-note" class="muted"></p>
         </section>
 
-        <section aria-labelledby="table-title">
+        <section class="chart-card table-card" aria-labelledby="table-title">
           <h2 id="table-title">Medicines</h2>
           <div class="table-scroll">
             <table id="medicines-table"></table>

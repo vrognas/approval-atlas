@@ -19,14 +19,23 @@ test("own protection: status chip, estimated ends and what they are counted from
   assert.deepEqual(protectionSummary(own, [], "pembrolizumab", "2026-09-26"), {
     status: "Data/market protection: Unclear",
     lines: [
-      "Data exclusivity ends (est.) 2023-07-17",
-      "Market protection ends (est.) 2025-07-17 – 2026-07-17",
-      "Counted from the first EU approval of pembrolizumab: Keytruda, 2015-07-17",
+      "Data exclusivity ended (est.) 17 Jul 2023",
+      "Market protection ended (est.) 17 Jul 2025 – 17 Jul 2026",
+      "Counted from the first EU approval of pembrolizumab: Keytruda, 17 Jul 2015",
     ],
     orphan: [],
   });
   assert.equal(protectionSummary({ ...own, status: "protected" }, [], "x", "2026-09-26").status, "Data/market protection: Protected");
   assert.equal(protectionSummary({ ...own, status: "ended" }, [], "x", "2026-09-26").status, "Data/market protection: Ended");
+});
+
+// Relative to the data date: a date before it has ended, the data date itself and later ones end.
+test("protection ends read 'ended' once past the data date and 'ends' until then", () => {
+  const future = { ...own, data_exclusivity_end: "2026-09-26", market_protection_end_min: "2026-01-01", market_protection_end_max: "2027-01-01" };
+  assert.deepEqual(protectionSummary(future, [], "x", "2026-09-26").lines.slice(0, 2), [
+    "Data exclusivity ends (est.) 26 Sep 2026",
+    "Market protection ends (est.) 1 Jan 2026 – 1 Jan 2027",
+  ]);
 });
 
 test("a generic or biosimilar has no protection of its own and follows its reference", () => {
@@ -54,10 +63,10 @@ test("orphan market exclusivity rows say whether it ends or ended and where the 
     { condition: "Treatment of Y", exclusivity_end: "2026-09-26", end_source: "computed" },
   ];
   assert.deepEqual(protectionSummary(own, orphan, "x", "2026-09-26").orphan, [
-    "Orphan market exclusivity for Treatment of spinal muscular atrophy: ends 2031-05-30 (register)",
-    "Orphan market exclusivity for Treatment of X: ends 2032-01-01 (estimate)",
-    "Orphan market exclusivity for Treatment of Hodgkin lymphoma: ended 2024-06-20 (register)",
-    "Orphan market exclusivity for Treatment of Y: ends 2026-09-26 (estimate)",
+    "Orphan market exclusivity for Treatment of spinal muscular atrophy: ends 30 May 2031 (register)",
+    "Orphan market exclusivity for Treatment of X: ends 1 Jan 2032 (estimate)",
+    "Orphan market exclusivity for Treatment of Hodgkin lymphoma: ended 20 Jun 2024 (register)",
+    "Orphan market exclusivity for Treatment of Y: ends 26 Sep 2026 (estimate)",
   ]);
 });
 
