@@ -252,6 +252,7 @@ test_that("build_atc_codes_table flags incomplete codes and sets the source", {
       atc_code = c("L01XE", "A10AB04", "A10AD04", "LX1XX02"),
       atc_code_source = "ema",
       atc_code_conflict = FALSE,
+      atc_final_level = c(FALSE, TRUE, TRUE, FALSE),
       atc_code_document_url = NA_character_,
       atc_code_document_date = as.Date(NA),
       current_atc_code = NA_character_,
@@ -372,8 +373,8 @@ test_that("build_atc_codes_table completes incomplete EMA codes from SmPCs", {
     c(
       "ema_product_number", "atc_code_human", "atc_level", "atc_incomplete",
       "source", "atc_code", "atc_code_source", "atc_code_conflict",
-      "atc_code_document_url", "atc_code_document_date", "current_atc_code",
-      "current_atc_code_source"
+      "atc_final_level", "atc_code_document_url", "atc_code_document_date",
+      "current_atc_code", "current_atc_code_source"
     )
   )
   # One row per EMA code: G's two SmPC codes both complete J07BX, so
@@ -603,6 +604,7 @@ test_that("products without an EMA code get their SmPC codes", {
       atc_code = c("L01XE10", "L04AG05", "L01FX02", "A10AE54", "A10BJ03"),
       atc_code_source = "ema_smpc",
       atc_code_conflict = FALSE,
+      atc_final_level = TRUE,
       atc_code_document_url = checks$document_url[1:5],
       atc_code_document_date = as.Date("2025-08-19"),
       current_atc_code = c("L01EG02", NA, NA, NA, NA),
@@ -653,6 +655,218 @@ test_that("atc_codes_in_use collects every published, used and SmPC code", {
       "A10AB04", "A10AB05", "J07BX", "J07BX03", "J07BX04", "L01E", "L01EA01",
       "L01XE", "L01XE01", "L01XL", "L01XL12", "L01XX", "L04AC", "N03AX26"
     )
+  )
+})
+
+curated_code <- function(product, code) {
+  dplyr::tibble(
+    ema_product_number = product,
+    atc_code = code,
+    evidence_source = "whocc_index",
+    evidence_url = whocc_index_url(substr(code, 1, 5)),
+    checked_date = as.Date("2026-09-27"),
+    note = paste("Test:", code)
+  )
+}
+
+curation_medicines <- function() {
+  dplyr::tibble(
+    ema_product_number = c("A", "B", "C", "D", "E", "F", "G", "H", "I"),
+    atc_code_human = c(
+      "L04AC", "N03", "A10AB04", "C09", "L01XX", NA, NA, "B03", "B03AC"
+    )
+  )
+}
+
+curation_checks <- function() {
+  dplyr::bind_rows(
+    smpc_check("B", "N03AX26"),
+    smpc_check("G", "L04AG05")
+  )
+}
+
+curation_codes <- function() {
+  dplyr::bind_rows(
+    curated_code("A", "L04AC21"),
+    curated_code("B", "N03AX14"),
+    curated_code("C", "A10AB05"),
+    curated_code("D", "C03DA05"),
+    curated_code("E", "L01X"),
+    curated_code("F", "N02CD05"),
+    curated_code("G", "L04AG03"),
+    curated_code("H", "B03AC"),
+    curated_code("Z", "V04CX05")
+  )
+}
+
+test_that("final_atc_levels finds level-4 codes WHO no longer subdivides", {
+  retired <- fixture_retired_codes()
+  expect_identical(final_atc_levels(retired), "B03AC")
+  expect_identical(final_atc_levels(empty_retired_atc_codes()), character())
+  expect_identical(
+    is_final_atc_level(
+      c("B03AC", "B03AC02", "L04AC", "L04AC21", "LX1XX02", NA),
+      retired
+    ),
+    c(TRUE, TRUE, FALSE, TRUE, FALSE, FALSE)
+  )
+})
+
+test_that("a curated code completes a code neither EMA nor the SmPC does", {
+  atc_codes <- build_atc_codes_table(
+    curation_medicines(),
+    curation_checks(),
+    fixture_retired_codes(),
+    curation_codes()
+  )
+  # A: completed; B: the SmPC's code wins; C: EMA's code is complete; D:
+  # does not fit EMA's C09, but goes deeper; E: not deeper; F: no EMA code;
+  # G: no EMA code, the SmPC's code wins; H: B03AC is complete (Rienso); I:
+  # EMA's B03AC is complete as it is (Feraheme).
+  expect_identical(
+    atc_codes$ema_product_number,
+    c("A", "B", "C", "D", "E", "F", "G", "H", "I")
+  )
+  expect_identical(
+    atc_codes$atc_code,
+    c(
+      "L04AC21", "N03AX26", "A10AB04", "C03DA05", "L01XX", "N02CD05",
+      "L04AG05", "B03AC", "B03AC"
+    )
+  )
+  expect_identical(
+    atc_codes$atc_code_source,
+    c(
+      "curated", "ema_smpc", "ema", "curated", "ema", "curated", "ema_smpc",
+      "curated", "ema"
+    )
+  )
+  expect_identical(
+    atc_codes$source,
+    c(rep("ema", 5), "curated", "ema_smpc", "ema", "ema")
+  )
+  expect_identical(
+    atc_codes$atc_code_conflict,
+    c(FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE)
+  )
+  expect_identical(
+    atc_codes$atc_final_level,
+    c(TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, TRUE)
+  )
+  expect_identical(
+    atc_codes$atc_incomplete,
+    c(TRUE, TRUE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE)
+  )
+  expect_identical(
+    atc_codes$atc_code_document_url[c(1, 6)],
+    whocc_index_url(c("L04AC", "N02CD"))
+  )
+  expect_identical(
+    atc_codes$atc_code_document_date[c(1, 6)],
+    as.Date(c("2026-09-27", "2026-09-27"))
+  )
+})
+
+test_that("a curated code completes an incomplete SmPC-only code", {
+  # No EMA code. J: the SmPC gives L04 only, the curated L04AC21 completes
+  # it. K: the SmPC also gives a complete code, so its codes stay. L: the
+  # curated code does not fit the SmPC's C09 but goes deeper, so it replaces
+  # it as a conflict, as it would EMA's C09.
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = c("J", "K", "L"),
+    atc_code_human = NA_character_
+  )
+  checks <- dplyr::bind_rows(
+    smpc_check("J", "L04", status = "incomplete"),
+    smpc_check("K", c("N02", "N02CD05")),
+    smpc_check("L", "C09", status = "incomplete")
+  )
+  curated <- dplyr::bind_rows(
+    curated_code("J", "L04AC21"),
+    curated_code("K", "N02CC01"),
+    curated_code("L", "C03DA05")
+  )
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes(),
+    curated
+  )
+  expect_identical(atc_codes$ema_product_number, c("J", "K", "K", "L"))
+  expect_identical(
+    atc_codes$atc_code,
+    c("L04AC21", "N02", "N02CD05", "C03DA05")
+  )
+  expect_identical(
+    atc_codes$atc_code_source,
+    c("curated", "ema_smpc", "ema_smpc", "curated")
+  )
+  expect_identical(atc_codes$source, atc_codes$atc_code_source)
+  expect_identical(atc_codes$atc_code_conflict, c(FALSE, FALSE, FALSE, TRUE))
+  expect_identical(atc_codes$atc_final_level, c(TRUE, FALSE, TRUE, TRUE))
+  expect_identical(atc_codes$atc_code_human, rep(NA_character_, 4))
+  expect_identical(
+    atc_codes$atc_code_document_url[c(1, 4)],
+    whocc_index_url(c("L04AC", "C03DA"))
+  )
+  expect_identical(
+    judge_curated_atc_codes(atc_codes, curated)$verdict,
+    c("used", "smpc", "conflict")
+  )
+  expect_identical(
+    judge_smpc_atc_codes(atc_codes, checks, fixture_retired_codes())$verdict,
+    c("curated", "no_ema_code", "no_ema_code", "curated")
+  )
+})
+
+test_that("judge_curated_atc_codes says why a curated code is not used", {
+  atc_codes <- build_atc_codes_table(
+    curation_medicines(),
+    curation_checks(),
+    fixture_retired_codes(),
+    curation_codes()
+  )
+  expect_identical(
+    judge_curated_atc_codes(atc_codes, curation_codes()),
+    dplyr::tibble(
+      ema_product_number = c("A", "B", "C", "D", "E", "F", "G", "H", "Z"),
+      atc_code = curation_codes()$atc_code,
+      verdict = c(
+        "used", "smpc", "ema_complete", "conflict", "rejected", "used",
+        "smpc", "used", "not_in_data"
+      ),
+      in_use = c(
+        "L04AC21", "N03AX26", "A10AB04", "C03DA05", "L01XX", "N02CD05",
+        "L04AG05", "B03AC", NA
+      )
+    )
+  )
+})
+
+test_that("the curated ATC codes are valid and checked", {
+  curated <- curated_atc_codes()
+  expect_named(curated, names(empty_curated_atc_codes()))
+  expect_identical(
+    purrr::map_chr(curated, class),
+    purrr::map_chr(empty_curated_atc_codes(), class)
+  )
+  expect_false(anyNA(curated))
+  expect_false(anyNA(atc_code_level(curated$atc_code)))
+  expect_in(
+    curated$evidence_source,
+    c("whocc_index", "whocc_temporary", "ema_smpc_text")
+  )
+  expect_identical(
+    anyDuplicated(curated[c("ema_product_number", "atc_code")]),
+    0L
+  )
+  expect_true(all(startsWith(curated$evidence_url, "https://")))
+  expect_true(all(grepl("^EMEA/H/C/\\d{6}$", curated$ema_product_number)))
+  temporary <- curated$evidence_source == "whocc_temporary"
+  expect_identical(unique(curated$evidence_url[temporary]), whocc_temporary_url)
+  expect_identical(
+    curated$ema_product_number,
+    sort(curated$ema_product_number, method = "radix")
   )
 })
 
@@ -838,13 +1052,72 @@ test_that("empty_atc_sources gives no SmPC codes, moves or WHOCC names", {
   expect_identical(nrow(sources$retired_codes), 0L)
   expect_identical(sources$whocc_classes, empty_whocc_classes())
   expect_identical(sources$name_corrections, empty_atc_name_corrections())
+  expect_identical(sources$curated_codes, empty_curated_atc_codes())
+})
+
+test_that("report_curated_atc_codes lists the codes used and not used", {
+  atc_codes <- build_atc_codes_table(
+    curation_medicines(),
+    curation_checks(),
+    fixture_retired_codes(),
+    curation_codes()
+  )
+  messages <- testthat::capture_messages(report_curated_atc_codes(
+    judge_curated_atc_codes(atc_codes, curation_codes())
+  ))
+  expect_match(
+    messages,
+    paste(
+      "Curated ATC codes: 4 used \\(1 although EMA's code does not fit\\),",
+      "not used: 2 SmPC code used, 1 EMA code complete, 1 rejected, 1 not in",
+      "the EMA data\\."
+    ),
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "Curated ATC codes used:.*A L04AC21.*D C03DA05.*F N02CD05.*H B03AC",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    paste0(
+      "Curated ATC codes not used:.*B N03AX14 \\(smpc; in use: N03AX26\\).*",
+      "E L01X \\(rejected; in use: L01XX\\).*Z V04CX05 \\(not_in_data; in ",
+      "use: none\\)"
+    ),
+    all = FALSE
+  )
+  all_used <- judge_curated_atc_codes(atc_codes, curation_codes()[1, ])
+  expect_no_match(
+    testthat::capture_messages(report_curated_atc_codes(all_used)),
+    "codes not used"
+  )
+  expect_silent(report_incomplete_atc_codes(
+    atc_codes,
+    dplyr::tibble(
+      ema_product_number = c("A", "E"),
+      name_of_medicine = c("Medicine A", "Medicine E"),
+      medicine_status = c("Authorised", "Withdrawn")
+    )
+  ))
 })
 
 test_that("report_atc_summary reports checks, verdicts and rejections", {
   checks <- imputation_checks()
   retired <- fixture_retired_codes()
   atc_codes <- build_atc_codes_table(imputation_medicines(), checks, retired)
+  products <- c(imputation_medicines()$ema_product_number, "J")
   tables <- list(
+    ema_medicines = dplyr::tibble(
+      ema_product_number = products,
+      name_of_medicine = paste("Medicine", products),
+      medicine_status = dplyr::if_else(
+        products %in% c("A", "C", "J"),
+        "Authorised",
+        "Withdrawn"
+      )
+    ),
     ema_medicine_smpc_atc = checks,
     ema_medicine_atc_codes = atc_codes,
     atc_classes = build_atc_classes(
@@ -864,6 +1137,7 @@ test_that("report_atc_summary reports checks, verdicts and rejections", {
       medicine_status = c("Authorised", "Refused")
     ),
     index_requests = 2L,
+    curated_codes = curated_code("Z", "V04CX05"),
     renamed_codes = renamed_atc_codes(
       build_chembl_atc_classes(
         jsonlite::fromJSON(fixture_atc_class_renamed_path())
@@ -892,7 +1166,8 @@ test_that("report_atc_summary reports checks, verdicts and rejections", {
       "EMA code; SmPC codes: 2 used, 1 used although EMA's code does not",
       "fit, 2 not used \\(ambiguous\\),",
       "0 rejected \\(prefix mismatch\\), 1 not deeper than EMA's,",
-      "2 EMA code already complete, 1 used for products without an EMA code"
+      "2 EMA code already complete, 1 used for products without an EMA code,",
+      "0 replaced by a curated code;"
     ),
     all = FALSE
   )
@@ -922,4 +1197,17 @@ test_that("report_atc_summary reports checks, verdicts and rejections", {
     all = FALSE
   )
   expect_match(messages, "2 WHOCC index requests this run", all = FALSE)
+  expect_match(
+    messages,
+    "Curated ATC codes: 0 used .* 1 not in the EMA data",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    paste(
+      "2 Authorised products without a complete ATC code:.*Medicine C",
+      "\\(C\\): L01XE.*Medicine J \\(J\\): none"
+    ),
+    all = FALSE
+  )
 })

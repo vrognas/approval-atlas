@@ -84,6 +84,88 @@ test_that("extract_smpc_atc_codes keeps distinct codes of every SmPC", {
   )
 })
 
+# Section 5.1 of five product information PDFs as pdftools reads them
+# (fetched 2026-09-27): "ATC" and "code" on two lines.
+line_broken_labels <- c(
+  "EMEA/H/C/006554" = paste0(
+    "Pharmacotherapeutic group: Other haematological agents, drugs used in ",
+    "hereditary angioedema, ATC\ncode: B06AC09.\n\nMechanism of action"
+  ),
+  "EMEA/H/C/004829" = paste0(
+    "Pharmacotherapeutic group: Antibacterials for systemic use, other ",
+    "beta-lactam antibacterials. ATC\ncode: J01DI04\n\nMechanism of action"
+  ),
+  "EMEA/H/C/005102" = paste0(
+    "Pharmacotherapeutic group: Other antineoplastic agents, antineoplastic ",
+    "cell and gene therapy, ATC\ncode: L01XL06.\n\nMechanism of action"
+  ),
+  "EMEA/H/C/004648" = paste0(
+    "Pharmacotherapeutic group: analgesics, calcitonin gene-related peptide ",
+    "(CGRP) antagonists, ATC\ncode: N02CD02\n\nMechanism of action"
+  ),
+  "EMEA/H/C/005287" = paste0(
+    "Pharmacotherapeutic group: analgesics, calcitonin gene-related peptide ",
+    "(CGRP) antagonists, ATC\ncode: N02CD05.\n\nMechanism of action"
+  )
+)
+
+test_that("extract_smpc_atc_codes reads a label broken across two lines", {
+  expect_identical(
+    purrr::map_chr(line_broken_labels, function(text) {
+      extract_smpc_atc_codes(paste(text, aucatzyl_label_text))$codes
+    }),
+    c(
+      "EMEA/H/C/006554" = "B06AC09",
+      "EMEA/H/C/004829" = "J01DI04",
+      "EMEA/H/C/005102" = "L01XL06",
+      "EMEA/H/C/004648" = "N02CD02",
+      "EMEA/H/C/005287" = "N02CD05"
+    )
+  )
+  expect_identical(
+    extract_smpc_atc_codes(line_broken_labels[[1]])$status,
+    "code_found"
+  )
+})
+
+test_that("extract_smpc_atc_codes reads (ATC) code", {
+  # Tryngolza (EMEA/H/C/006477), section 5.1.
+  tryngolza_text <- paste0(
+    "Pharmacotherapeutic group: lipid modifying agents, other lipid ",
+    "modifying agents, anatomical\ntherapeutic chemical (ATC) code: not yet ",
+    "assigned\n\nMechanism of action"
+  )
+  expect_identical(
+    extract_smpc_atc_codes(tryngolza_text),
+    list(status = "not_assigned", codes = character())
+  )
+  expect_identical(
+    extract_smpc_atc_codes("(ATC) code: L01XL06")$codes,
+    "L01XL06"
+  )
+})
+
+test_that("extract_smpc_atc_codes reads a letter O in a digit as a zero", {
+  # Helicobacter Test INFAI (EMEA/H/C/000140): a page number follows.
+  helicobacter_text <- paste0(
+    "Pharmacotherapeutic group: Other diagnostic agents, ATC code: VO4CX\n\n",
+    "                                                     3\n\n",
+    "For the amount of 75 mg 13C-urea"
+  )
+  expect_identical(
+    extract_smpc_atc_codes(helicobacter_text),
+    list(status = "incomplete", codes = "V04CX")
+  )
+  expect_identical(
+    extract_smpc_atc_codes("ATC code: A1OBJO6")$codes,
+    "A10BJ06"
+  )
+  expect_identical(
+    zero_for_letter_o(c("VO4CX", "OO1", "V")),
+    c("V04CX", "O01", "V")
+  )
+})
+
 test_that("extract_smpc_atc_codes reports a document without text", {
   expect_identical(
     extract_smpc_atc_codes(" \n\f "),
@@ -119,12 +201,14 @@ example_check <- function(product = "EMEA/H/C/005907",
                           document_date = "2025-08-19",
                           checked_date = "2026-09-27",
                           status = "code_found",
-                          codes = "L01XL12") {
+                          codes = "L01XL12",
+                          reader_version = smpc_reader_version) {
   dplyr::tibble(
     ema_product_number = product,
     document_url = pi_url(slug),
     document_last_updated_date = as.Date(document_date),
     checked_date = as.Date(checked_date),
+    reader_version = reader_version,
     smpc_status = status,
     atc_code = codes,
     source = "ema_smpc"
@@ -150,6 +234,15 @@ test_that("read_smpc_checks reads written checks and handles missing files", {
   expect_identical(read_smpc_checks(path), empty_smpc_checks())
 })
 
+test_that("read_smpc_checks dates checks without a reader version to 1", {
+  path <- tempfile(fileext = ".json")
+  write_json_table(dplyr::select(example_check(), -"reader_version"), path)
+  expect_identical(
+    read_smpc_checks(path),
+    example_check(reader_version = 1L)
+  )
+})
+
 test_that("merge_smpc_checks keeps each product's newest check", {
   old <- example_check(checked_date = "2026-09-01", status = "not_assigned",
                        codes = NA_character_)
@@ -163,6 +256,13 @@ test_that("merge_smpc_checks keeps each product's newest check", {
     dplyr::bind_rows(other, new)
   )
   expect_identical(merge_smpc_checks(), empty_smpc_checks())
+})
+
+test_that("merge_smpc_checks prefers the newer reader on the same day", {
+  old <- example_check(status = "no_code", codes = NA_character_,
+                       reader_version = 1L)
+  new <- example_check()
+  expect_identical(merge_smpc_checks(old, new), new)
 })
 
 plan_medicines <- function() {
@@ -288,6 +388,38 @@ test_that("plan_smpc_checks retries unread or missing PIs after 180 days", {
   )
 })
 
+test_that("plan_smpc_checks rereads what an older reader found incomplete", {
+  checked <- function(product, slug, document_date, status, codes,
+                      reader_version) {
+    example_check(
+      product,
+      slug,
+      document_date = document_date,
+      status = status,
+      codes = codes,
+      reader_version = reader_version
+    )
+  }
+  checks <- dplyr::bind_rows(
+    checked("EMEA/H/C/000005", "five", "2026-02-01", "no_code", NA, 1L),
+    checked("EMEA/H/C/000001", "one", "2025-01-01", "incomplete", "L01XL", 1L),
+    checked("EMEA/H/C/000004", "four", "2024-01-01", "not_assigned", NA, 1L),
+    checked("EMEA/H/C/000002", "two", "2026-05-01", "no_code", NA, 2L)
+  )
+  plan <- plan_smpc_checks(
+    plan_atc_codes(),
+    plan_medicines(),
+    plan_documents(),
+    checks,
+    budget = 10
+  )
+  # 4 said "not yet assigned"; 2 was read by the current reader.
+  expect_identical(
+    plan$ema_product_number,
+    paste0("EMEA/H/C/00000", c(5, 1))
+  )
+})
+
 # Stands in for httr2::req_perform(): answers product information URLs with
 # the given statuses in turn and records the requests. `is_pdf = FALSE`
 # serves an HTML page with status 200, as a firewall challenge would.
@@ -366,6 +498,7 @@ test_that("fetch_smpc_checks reads each PDF and saves after every one", {
     )
   )
   expect_identical(unique(run$checks$source), "ema_smpc")
+  expect_identical(unique(run$checks$reader_version), smpc_reader_version)
   expect_identical(
     run$checks$checked_date[1:2],
     as.Date(c("2026-09-27", "2026-09-27"))

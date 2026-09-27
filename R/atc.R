@@ -313,10 +313,19 @@ pair_smpc_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
 # EMA code it does not fit), "ambiguous" (competes with another SmPC code
 # for an EMA code, or would replace several), "prefix_mismatch" (fits none
 # of EMA's codes and is not used), "not_deeper" (fits, but EMA's code is as
-# deep), "ema_complete" (all EMA codes are level 5) or "no_ema_code" (used
-# as it is). `atc_codes` may hold the rows of products without an EMA code.
+# deep), "ema_complete" (all EMA codes are level 5), "no_ema_code" (used
+# as it is) or "curated" (no EMA code, and a curated code replaced it).
+# `atc_codes` may hold the rows of products without an EMA code.
 judge_smpc_atc_codes <- function(atc_codes, smpc_checks, retired_codes) {
   ema_codes <- atc_codes[atc_codes$source == "ema", ]
+  smpc_only <- atc_codes$source == "ema_smpc"
+  kept_smpc_codes <- paste(
+    atc_codes$ema_product_number[smpc_only],
+    atc_codes$atc_code[smpc_only]
+  )
+  curated_products <- atc_codes$ema_product_number[
+    atc_codes$source == "curated"
+  ]
   paired <- pair_smpc_atc_codes(ema_codes, smpc_checks, retired_codes) |>
     dplyr::summarise(
       verdict = dplyr::case_when(
@@ -338,20 +347,47 @@ judge_smpc_atc_codes <- function(atc_codes, smpc_checks, retired_codes) {
     dplyr::transmute(
       .data$ema_product_number,
       smpc_code = .data$atc_code,
-      verdict = "no_ema_code",
+      verdict = dplyr::if_else(
+        .data$ema_product_number %in% curated_products &
+          !paste(.data$ema_product_number, .data$atc_code) %in%
+            kept_smpc_codes,
+        "curated",
+        "no_ema_code"
+      ),
       ema_codes = NA_character_
     )
   dplyr::bind_rows(paired, without_ema_code) |>
     dplyr::arrange(.data$ema_product_number, .data$smpc_code)
 }
 
+# Level-4 codes WHO no longer subdivides: the WHOCC alterations list moved
+# their level-5 codes up to them (B03AC in 2014: "ATC 5th levels deleted, all
+# products classified on the 4th level").
+final_atc_levels <- function(retired_codes) {
+  is_moved_up <- dplyr::coalesce(
+    retired_codes$level == 5L &
+      retired_codes$replaced_by == substr(retired_codes$atc_code, 1, 5),
+    FALSE
+  )
+  unique(retired_codes$replaced_by[is_moved_up])
+}
+
+# A code is at its final level at level 5, or at a level-4 code WHO no
+# longer subdivides.
+is_final_atc_level <- function(codes, retired_codes) {
+  dplyr::coalesce(atc_code_level(codes) == 5L, FALSE) |
+    codes %in% final_atc_levels(retired_codes)
+}
+
 # One row per EMA code as published (atc_code_human, atc_level,
-# atc_incomplete, source "ema") and one per SmPC code of a product without an
-# EMA code, with the code the site uses (atc_code) and the current code of a
+# atc_incomplete, source "ema") and one per SmPC or curated code of a
+# product without an EMA code, with the code the site uses (atc_code),
+# whether that code is complete (atc_final_level) and the current code of a
 # retired one.
 build_atc_codes_table <- function(clean_medicines,
                                   smpc_checks = empty_smpc_checks(),
-                                  retired_codes = empty_retired_atc_codes()) {
+                                  retired_codes = empty_retired_atc_codes(),
+                                  curated_codes = empty_curated_atc_codes()) {
   ema_codes <- build_lookup_table(
     clean_medicines,
     "atc_code_human",
@@ -363,10 +399,22 @@ build_atc_codes_table <- function(clean_medicines,
       source = "ema"
     )
   dplyr::bind_rows(
-    complete_ema_atc_codes(ema_codes, smpc_checks, retired_codes),
-    smpc_only_atc_codes(clean_medicines, ema_codes, smpc_checks)
+    complete_ema_atc_codes(
+      ema_codes,
+      smpc_checks,
+      retired_codes,
+      curated_codes
+    ),
+    unassigned_atc_codes(
+      clean_medicines,
+      ema_codes,
+      smpc_checks,
+      curated_codes,
+      retired_codes
+    )
   ) |>
     dplyr::mutate(
+      atc_final_level = is_final_atc_level(.data$atc_code, retired_codes),
       current_atc_code = current_atc_codes(.data$atc_code, retired_codes),
       current_atc_code_source = dplyr::if_else(
         is.na(.data$current_atc_code),
@@ -379,6 +427,7 @@ build_atc_codes_table <- function(clean_medicines,
     dplyr::relocate(
       "atc_code_source",
       "atc_code_conflict",
+      "atc_final_level",
       .after = "atc_code"
     ) |>
     dplyr::arrange(
@@ -388,59 +437,176 @@ build_atc_codes_table <- function(clean_medicines,
     )
 }
 
-# EMA's codes with the code the site uses: EMA's, or the one the SmPC gives
-# when EMA's is incomplete ("ema_smpc"; EMA's when several SmPC codes
-# complete it; `atc_code_conflict` when the SmPC code does not fit EMA's).
-complete_ema_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
-  completed <- pair_smpc_atc_codes(ema_codes, smpc_checks, retired_codes) |>
+# The curated codes in the shape of SmPC checks: the evidence page stands in
+# for the product information, the date it was checked for its date.
+curated_codes_as_checks <- function(curated_codes) {
+  dplyr::transmute(
+    curated_codes,
+    .data$ema_product_number,
+    .data$atc_code,
+    document_url = .data$evidence_url,
+    document_last_updated_date = .data$checked_date
+  )
+}
+
+# The candidate codes (SmPC checks, or curated codes in their shape) that
+# replace an EMA code, one row per EMA code.
+used_atc_codes <- function(ema_codes, candidates, retired_codes, code_source) {
+  pair_smpc_atc_codes(ema_codes, candidates, retired_codes) |>
     dplyr::filter(.data$is_used) |>
-    dplyr::select(
-      "ema_product_number",
-      "atc_code_human",
-      atc_code = "smpc_code",
-      atc_code_conflict = "is_conflict",
-      atc_code_document_url = "document_url",
-      atc_code_document_date = "document_last_updated_date"
+    dplyr::transmute(
+      .data$ema_product_number,
+      .data$atc_code_human,
+      atc_code = .data$smpc_code,
+      atc_code_source = code_source,
+      atc_code_conflict = .data$is_conflict,
+      atc_code_document_url = .data$document_url,
+      atc_code_document_date = .data$document_last_updated_date
     )
+}
+
+# EMA's codes with the code the site uses: EMA's; when EMA's is incomplete,
+# the one the SmPC gives ("ema_smpc"; EMA's when several SmPC codes complete
+# it), else a curated one ("curated", under the same rules; never in place of
+# an SmPC code); `atc_code_conflict` when that code does not fit EMA's.
+complete_ema_atc_codes <- function(ema_codes,
+                                   smpc_checks,
+                                   retired_codes,
+                                   curated_codes) {
+  from_smpc <- used_atc_codes(ema_codes, smpc_checks, retired_codes, "ema_smpc")
+  still_incomplete <- ema_codes |>
+    dplyr::mutate(
+      atc_incomplete = .data$atc_incomplete &
+        !paste(.data$ema_product_number, .data$atc_code_human) %in%
+          paste(from_smpc$ema_product_number, from_smpc$atc_code_human)
+    )
+  from_curated <- used_atc_codes(
+    still_incomplete,
+    curated_codes_as_checks(curated_codes),
+    retired_codes,
+    "curated"
+  )
   ema_codes |>
     dplyr::left_join(
-      completed,
+      dplyr::bind_rows(from_smpc, from_curated),
       by = c("ema_product_number", "atc_code_human"),
       relationship = "one-to-one"
     ) |>
     dplyr::mutate(
-      atc_code_source = dplyr::if_else(
-        is.na(.data$atc_code),
-        "ema",
-        "ema_smpc"
-      ),
+      atc_code_source = dplyr::coalesce(.data$atc_code_source, "ema"),
       atc_code_conflict = dplyr::coalesce(.data$atc_code_conflict, FALSE),
       atc_code = dplyr::coalesce(.data$atc_code, .data$atc_code_human)
     )
 }
 
 # One row per SmPC code of a product in EMA's data without an EMA code
-# (missing or "Not yet assigned"), every level. atc_level and atc_incomplete
-# describe EMA's published code, so they stay NA and FALSE: the level of
-# atc_code tells whether the SmPC code is complete.
-smpc_only_atc_codes <- function(clean_medicines, ema_codes, smpc_checks) {
-  smpc_checks |>
+# (missing or "Not yet assigned"), every level, or per curated code when its
+# SmPC gives none. When none of its SmPC codes is at its final level, a
+# curated code replaces an SmPC code as it would an incomplete EMA code. The
+# source of such a row is its atc_code_source; atc_level and atc_incomplete
+# describe EMA's published code, so they stay NA and FALSE: atc_final_level
+# tells whether the code is complete.
+unassigned_atc_codes <- function(clean_medicines,
+                                 ema_codes,
+                                 smpc_checks,
+                                 curated_codes,
+                                 retired_codes) {
+  unassigned <- setdiff(
+    clean_medicines$ema_product_number,
+    ema_codes$ema_product_number
+  )
+  smpc_codes <- smpc_checks |>
     dplyr::filter(
       !is.na(.data$atc_code),
-      .data$ema_product_number %in% clean_medicines$ema_product_number,
-      !.data$ema_product_number %in% ema_codes$ema_product_number
+      .data$ema_product_number %in% unassigned
+    )
+  curated <- curated_codes_as_checks(curated_codes) |>
+    dplyr::filter(.data$ema_product_number %in% unassigned)
+  completed_by_smpc <- smpc_codes$ema_product_number[
+    is_final_atc_level(smpc_codes$atc_code, retired_codes)
+  ]
+  from_curated <- used_atc_codes(
+    dplyr::transmute(
+      smpc_codes,
+      .data$ema_product_number,
+      atc_code_human = .data$atc_code,
+      atc_incomplete = !.data$ema_product_number %in% completed_by_smpc
+    ),
+    curated,
+    retired_codes,
+    "curated"
+  )
+  dplyr::bind_rows(
+    ema_smpc = dplyr::anti_join(
+      smpc_codes,
+      from_curated,
+      by = c("ema_product_number", atc_code = "atc_code_human")
+    ),
+    curated = dplyr::filter(
+      curated,
+      !.data$ema_product_number %in% smpc_codes$ema_product_number
+    ),
+    .id = "atc_code_source"
+  ) |>
+    dplyr::transmute(
+      .data$ema_product_number,
+      .data$atc_code,
+      .data$atc_code_source,
+      atc_code_conflict = FALSE,
+      atc_code_document_url = .data$document_url,
+      atc_code_document_date = .data$document_last_updated_date
     ) |>
+    dplyr::bind_rows(dplyr::select(from_curated, -"atc_code_human")) |>
+    dplyr::distinct() |>
     dplyr::transmute(
       .data$ema_product_number,
       atc_code_human = NA_character_,
       atc_level = NA_integer_,
       atc_incomplete = FALSE,
-      source = "ema_smpc",
+      source = .data$atc_code_source,
       .data$atc_code,
-      atc_code_source = "ema_smpc",
-      atc_code_conflict = FALSE,
-      atc_code_document_url = .data$document_url,
-      atc_code_document_date = .data$document_last_updated_date
+      .data$atc_code_source,
+      .data$atc_code_conflict,
+      .data$atc_code_document_url,
+      .data$atc_code_document_date
+    )
+}
+
+# One verdict per curated code: "used", "conflict" (used although it does
+# not fit EMA's code), "smpc" (the product's code comes from its SmPC),
+# "ema_complete" (EMA's code is complete), "rejected" (not deeper than EMA's
+# code, does not fit and cannot replace it, or ambiguous) or "not_in_data";
+# `in_use` lists the codes the product uses.
+judge_curated_atc_codes <- function(atc_codes, curated_codes) {
+  products <- atc_codes |>
+    dplyr::summarise(
+      is_incomplete = any(.data$source == "ema" & .data$atc_incomplete),
+      from_smpc = any(.data$atc_code_source == "ema_smpc"),
+      in_use = paste(unique(.data$atc_code), collapse = ", "),
+      .by = "ema_product_number"
+    )
+  used <- atc_codes |>
+    dplyr::filter(.data$atc_code_source == "curated") |>
+    dplyr::summarise(
+      is_conflict = any(.data$atc_code_conflict),
+      .by = c("ema_product_number", "atc_code")
+    )
+  curated_codes |>
+    dplyr::select("ema_product_number", "atc_code") |>
+    dplyr::left_join(used, by = c("ema_product_number", "atc_code")) |>
+    dplyr::left_join(products, by = "ema_product_number") |>
+    dplyr::transmute(
+      .data$ema_product_number,
+      .data$atc_code,
+      verdict = dplyr::case_when(
+        .data$is_conflict ~ "conflict",
+        !is.na(.data$is_conflict) ~ "used",
+        is.na(.data$from_smpc) ~ "not_in_data",
+        .data$from_smpc ~ "smpc",
+        !.data$is_incomplete ~ "ema_complete",
+        .default = "rejected"
+      ),
+      .data$in_use
     )
 }
 

@@ -371,6 +371,44 @@ test_that("run_ema_pipeline completes an incomplete code from the SmPC", {
   expect_identical(again$ema_medicine_smpc_atc, tables$ema_medicine_smpc_atc)
 })
 
+test_that("run_ema_pipeline completes an incomplete code from curated codes", {
+  forbid_network()
+  # Bimzelx: EMA's L04AC; bimekizumab is L04AC21 in the ATC/DDD Index 2026.
+  testthat::local_mocked_bindings(
+    curated_atc_codes = function() {
+      dplyr::tibble(
+        ema_product_number = "EMEA/H/C/005316",
+        atc_code = "L04AC21",
+        evidence_source = "whocc_index",
+        evidence_url = whocc_index_url("L04AC"),
+        checked_date = as.Date("2026-09-27"),
+        note = "Bimzelx: bimekizumab"
+      )
+    }
+  )
+  messages <- testthat::capture_messages(
+    tables <- run_fixture_pipeline(file.path(tempfile(), "data"))
+  )
+  atc_codes <- tables$ema_medicine_atc_codes
+  bimzelx <- atc_codes[atc_codes$ema_product_number == "EMEA/H/C/005316", ]
+  expect_identical(bimzelx$atc_code_human, "L04AC")
+  expect_identical(bimzelx$atc_code, "L04AC21")
+  expect_identical(bimzelx$atc_code_source, "curated")
+  expect_false(bimzelx$atc_code_conflict)
+  expect_true(bimzelx$atc_final_level)
+  expect_identical(bimzelx$atc_code_document_url, whocc_index_url("L04AC"))
+  expect_match(
+    messages,
+    "Curated ATC codes: 1 used \\(0 although",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "Curated ATC codes used:.*EMEA/H/C/005316 L04AC21",
+    all = FALSE
+  )
+})
+
 test_that("run_ema_pipeline writes its outputs while WHOCC is unreachable", {
   testthat::local_mocked_bindings(
     req_perform = function(req, ...) {
@@ -487,6 +525,7 @@ test_that("run_ema_pipeline output follows the data contract", {
   atc_codes <- read_output("ema_medicine_atc_codes")
   expect_type(atc_codes$atc_incomplete, "logical")
   expect_type(atc_codes$atc_code_conflict, "logical")
+  expect_type(atc_codes$atc_final_level, "logical")
   expect_identical(atc_codes$atc_code, atc_codes$atc_code_human)
   expect_identical(unique(atc_codes$atc_code_source), "ema")
   atc_classes <- read_output("atc_classes")

@@ -104,7 +104,8 @@ build_ema_tables <- function(clean_medicines,
   atc_codes <- build_atc_codes_table(
     clean_medicines,
     atc_sources$smpc_checks,
-    atc_sources$retired_codes
+    atc_sources$retired_codes,
+    atc_sources$curated_codes
   )
   list(
     ema_medicines = medicines,
