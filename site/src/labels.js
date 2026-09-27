@@ -1,6 +1,6 @@
 // The one display map: raw EMA values -> U.S. labels, plus all UI copy written from JS.
 // Raw values stay unchanged in the data and the URL. WHO ATC names are shown verbatim, except
-// level-1 group names, displayed in title case (user decision 2026-09-26, noted in the credit).
+// level-1 group names, displayed in title case (user decision 2026-09-26).
 
 const formatCount = new Intl.NumberFormat("en-US").format;
 const plural = (count, one, many) => `${formatCount(count)} ${count === 1 ? one : many}`;
@@ -247,8 +247,9 @@ export const UI = {
   footer: {
     mesh: (version) => `MeSH® courtesy of the U.S. National Library of Medicine${version ? ` (${version})` : ""}.`,
     chembl: (version) => `ATC classification from ChEMBL${version ? ` (${version})` : ""}. ChEMBL data is from https://www.ebi.ac.uk/chembl.`,
-    atc: "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology; names reproduced verbatim in the data; level-1 names displayed in title case.",
-    unionRegister: "Orphan market exclusivity dates and EU register status: © European Union, Union Register of medicinal products, CC BY 4.0; changes made.",
+    atc: "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology.",
+    // CC BY 4.0 requires indicating that the material was modified.
+    unionRegister: "Orphan exclusivity and EU register status: © European Union, Union Register, CC BY 4.0, modified.",
   },
 
   about: {

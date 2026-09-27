@@ -34,7 +34,7 @@ Status: **Met**, **Partly met** (usually waiting for a GitHub setting listed und
 | 3.4 Time to fix vulnerabilities | Met | `SECURITY.md` | Fix within 90 days of confirmation, exploited issues first; public GitHub security advisory after the fix. Visitors need to take no action: a new deploy replaces the site and its offline cache. |
 | 3.5 Build and release process | Met | `.github/workflows/pipeline.yml` | Git on GitHub; the site is built and deployed only by the scripted CI workflow on GitHub-hosted runners, and each Pages deployment records its workflow run and commit (SLSA Build L1). Actions pinned by commit SHA. No stored secrets: only the automatic `GITHUB_TOKEN`, read-only by default, with `pages`/`id-token` write only in the deploy job and `contents: write` only in the data-commit job. Not done: signed build provenance (SLSA L2). |
 | 4.1 Physical access | N/A | — | No own facilities or servers; GitHub hosts code, CI and the site. |
-| 4.2 Logical access | Partly met | Repository ruleset "Protect main" (blocks force pushes and deletion on `main`) | One owner with write access; no customer data. Pending: confirm 2FA on the owner's GitHub account. CI token permissions per 3.5. Access reviewed with this document yearly. |
+| 4.2 Logical access | Met | Repository ruleset "Protect main" (blocks force pushes and deletion on `main`); 2FA enabled on the owner's GitHub account (confirmed by the owner, 2026-09-27) | One owner with write access; no customer data. CI token permissions per 3.5. Access reviewed with this document yearly. |
 | 4.3 Sub-processors | Met | [Sub-processors](#sub-processors) | |
 | 4.4 Backup and disaster recovery | Met | [Backup and recovery](#backup-and-recovery) | |
 
@@ -110,7 +110,7 @@ The repository is public. Applied settings are checked; apply the rest with the 
 - [x] Private vulnerability reporting
 - [x] Dependabot alerts and security updates
 - [x] Ruleset on `main`: block force pushes and deletion
-- [ ] Confirm 2FA on the owner's GitHub account
+- [x] Confirm 2FA on the owner's GitHub account (2026-09-27)
 - [x] GitHub Pages from GitHub Actions, custom domain `approval-atlas.vrognas.com` (DNS CNAME to `vrognas.github.io`)
 - [ ] "Enforce HTTPS" once the certificate is issued
 - [ ] TLS scan of the live site
