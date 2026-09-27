@@ -13,6 +13,14 @@ smpc_retry_days <- 180
 
 smpc_retry_statuses <- c("no_text", "not_found")
 
+# Bumped when extract_smpc_atc_codes() learns to read more; a product whose
+# last check, by an older reader, found no complete code is checked again.
+# Version 2: "ATC" and "code" on two lines, "(ATC) code", a letter O for a
+# zero ("VO4CX"). Checks without a version were made by version 1.
+smpc_reader_version <- 2L
+
+smpc_reread_statuses <- c("no_code", "incomplete")
+
 smpc_budget_from_env <- function(value =
                                    Sys.getenv("APPROVAL_ATLAS_SMPC_BUDGET")) {
   if (identical(value, "")) {
@@ -33,20 +41,34 @@ empty_smpc_checks <- function() {
     document_url = character(),
     document_last_updated_date = as.Date(character()),
     checked_date = as.Date(character()),
+    reader_version = integer(),
     smpc_status = character(),
     atc_code = character(),
     source = character()
   )
 }
 
-# "ATC code", "ATC Code", "ATC-code", "ATC codes", but not "BATCH".
-atc_label_pattern <- "(?<![A-Za-z])ATC[ -]?(?i:codes?)\\b\\s*:?"
+# "ATC code", "ATC Code", "ATC-code", "ATC codes", "ATC" and "code" on two
+# lines, "(ATC) code", but not "BATCH".
+atc_label_pattern <- "(?<![A-Za-z])ATC\\)?[\\s-]*(?i:codes?)\\b\\s*:?"
 
-# A code may wrap onto the next line or carry a stray space ("L04AC 13").
+# A code may wrap onto the next line or carry a stray space ("L04AC 13"), and
+# may have a letter O where a digit belongs ("VO4CX").
 atc_code_text_pattern <- paste0(
-  "[A-Z]\\s?[0-9]\\s?[0-9]",
-  "(?:\\s?[A-Z](?:\\s?[A-Z](?:\\s?[0-9]\\s?[0-9])?)?)?"
+  "[A-Z]\\s?[0-9O]\\s?[0-9O]",
+  "(?:\\s?[A-Z](?:\\s?[A-Z](?:\\s?[0-9O]\\s?[0-9O])?)?)?"
 )
+
+atc_digit_positions <- c(2L, 3L, 6L, 7L)
+
+# A letter O becomes a zero in a digit position only.
+zero_for_letter_o <- function(codes) {
+  for (position in atc_digit_positions) {
+    is_letter_o <- substr(codes, position, position) == "O"
+    substr(codes[is_letter_o], position, position) <- "0"
+  }
+  codes
+}
 
 atc_code_list_pattern <- paste0(
   "^\\s*", atc_code_text_pattern,
@@ -74,7 +96,7 @@ extract_smpc_atc_codes <- function(text) {
     code_lists[!is.na(code_lists)],
     atc_code_text_pattern
   ))
-  codes <- unique(stringr::str_remove_all(codes, "\\s"))
+  codes <- unique(zero_for_letter_o(stringr::str_remove_all(codes, "\\s")))
   codes <- codes[!is.na(atc_code_level(codes))]
   status <- dplyr::case_when(
     any(atc_code_level(codes) == 5L) ~ "code_found",
@@ -97,8 +119,12 @@ read_smpc_checks <- function(path) {
   if (length(rows) == 0) {
     return(empty_smpc_checks())
   }
+  rows <- dplyr::as_tibble(rows)
+  if (!"reader_version" %in% names(rows)) {
+    rows$reader_version <- 1L
+  }
   # jsonlite reads an all-null column as logical.
-  dplyr::as_tibble(rows) |>
+  rows |>
     dplyr::transmute(
       ema_product_number = as.character(.data$ema_product_number),
       document_url = as.character(.data$document_url),
@@ -106,6 +132,7 @@ read_smpc_checks <- function(path) {
         as.character(.data$document_last_updated_date)
       ),
       checked_date = as.Date(as.character(.data$checked_date)),
+      reader_version = as.integer(.data$reader_version),
       smpc_status = as.character(.data$smpc_status),
       atc_code = as.character(.data$atc_code),
       source = as.character(.data$source)
@@ -120,11 +147,13 @@ merge_smpc_checks <- function(...) {
     dplyr::arrange(
       .data$ema_product_number,
       dplyr::desc(.data$checked_date),
+      dplyr::desc(.data$reader_version),
       dplyr::desc(.data$document_last_updated_date)
     ) |>
     dplyr::mutate(
       check_key = paste(
         .data$checked_date,
+        .data$reader_version,
         .data$document_url,
         .data$document_last_updated_date
       )
@@ -138,9 +167,9 @@ merge_smpc_checks <- function(...) {
 }
 
 # Products whose EMA code is incomplete, malformed or missing and whose
-# product information was not checked yet, changed since, or could not be
-# read more than `smpc_retry_days` ago: Authorised first, then the newest
-# documents.
+# product information was not checked yet, changed since, could not be read
+# more than `smpc_retry_days` ago, or gave no complete code to an older
+# reader: Authorised first, then the newest documents.
 plan_smpc_checks <- function(atc_codes,
                              medicines,
                              documents,
@@ -166,6 +195,7 @@ plan_smpc_checks <- function(atc_codes,
       checked_url = "document_url",
       checked_document_date = "document_last_updated_date",
       "checked_date",
+      checked_reader_version = "reader_version",
       checked_status = "smpc_status"
     )
   medicines[needs_code, c("ema_product_number", "medicine_status")] |>
@@ -187,7 +217,9 @@ plan_smpc_checks <- function(atc_codes,
           !is.na(.data$document_last_updated_date)
         ) |
         (.data$checked_status %in% smpc_retry_statuses &
-           .data$checked_date < today - smpc_retry_days)
+           .data$checked_date < today - smpc_retry_days) |
+        (.data$checked_status %in% smpc_reread_statuses &
+           .data$checked_reader_version < smpc_reader_version)
     ) |>
     dplyr::arrange(
       dplyr::desc(.data$medicine_status == "Authorised"),
@@ -209,6 +241,7 @@ smpc_check_rows <- function(plan_row, status, codes, today) {
     document_url = plan_row$document_url,
     document_last_updated_date = plan_row$document_last_updated_date,
     checked_date = today,
+    reader_version = smpc_reader_version,
     smpc_status = status,
     atc_code = if (length(codes) == 0) NA_character_ else codes,
     source = "ema_smpc"
