@@ -5,12 +5,14 @@ import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
   LOOKUP_QUERY_MAX,
+  classState,
   decodeLookup,
   decodeState,
   encodeState,
   encodeUrl,
   lookupView,
   normalizeYearRange,
+  patchFilterParams,
   withoutLookup,
 } from "./url.js";
 
@@ -113,6 +115,24 @@ test("before the filter domain is known, the URL's filter part is passed through
   assert.equal(filters.toString(), "mah=B&mah=A&from=2010");
   const query = encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, med: "M2" }, filters).toString();
   assert.equal(query, "med=M2&mah=B&mah=A&from=2010");
+});
+
+// A drug class opened from the search before the dashboard has loaded: the kept filter part
+// takes the new values and keeps the rest.
+test("patchFilterParams replaces the patched filter keys in a verbatim filter part", () => {
+  const filters = new URLSearchParams("mah=B&view=years&atc=L01&mah=A");
+  assert.equal(patchFilterParams(filters, { ...DEFAULT_LOOKUP, atc: "L04AC", view: "now" }).toString(), "mah=B&mah=A&atc=L04AC");
+  assert.equal(patchFilterParams(filters, { atc: "" }).toString(), "mah=B&view=years&mah=A");
+  assert.equal(filters.toString(), "mah=B&view=years&atc=L01&mah=A");
+});
+
+// Suggestion, card ladder and Try link: the link's href and its click give the same view.
+test("a drug class opens alone: default filters and view with only its ATC code", () => {
+  assert.deepEqual(classState("L04AC"), { ...structuredClone(DEFAULT_STATE), atc: "L04AC" });
+  assert.equal(encodeUrl({ ...DEFAULT_LOOKUP, ...classState("L04AC") }).toString(), "atc=L04AC");
+  // Applied before the dashboard has loaded, it clears the kept filters too.
+  assert.equal(patchFilterParams(new URLSearchParams("mah=B&view=years&by=mah"), classState("L04AC")).toString(), "atc=L04AC");
+  assert.notEqual(classState("L").mah, DEFAULT_STATE.mah);
 });
 
 test("the filter decoder ignores lookup keys", () => {

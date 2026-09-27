@@ -12,9 +12,13 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
   let options = [];
   let active = -1;
   let timer = 0;
+  // Suggestions were asked for (typing, arrow keys) and not dismissed since: data arriving later
+  // may fill a list that had no matches yet (e.g. an ATC code typed before the classes loaded).
+  let requested = false;
 
   function close() {
     clearTimeout(timer); // a pending keystroke render would reopen the list
+    requested = false;
     listbox.hidden = true;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
@@ -22,6 +26,7 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
   }
 
   function renderList() {
+    requested = true;
     const groups = suggestionsFor(input.value).filter((group) => group.options.length > 0);
     options = [];
     listbox.replaceChildren(...groups.map((group) => {
@@ -100,9 +105,10 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
   input.addEventListener("blur", close);
 
   return {
-    // New background data (conditions) arrived: refresh an open list in place.
+    // New background data (conditions, drug classes) arrived: refresh an open list in place, or
+    // show one for a query that had no matches yet.
     refresh() {
-      if (!listbox.hidden) renderList();
+      if (!listbox.hidden || (requested && input.value.trim().length >= 2)) renderList();
     },
     setText(text) {
       input.value = text;

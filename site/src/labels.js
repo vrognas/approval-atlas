@@ -88,6 +88,25 @@ export function atcLevelOneLabel(code, name) {
   return name ? `${code} — ${titleCaseAtcName(name)}` : code;
 }
 
+// Codes EMA uses that atc_classes.json has no name for.
+const NO_ATC_NAME = "no WHO name yet";
+
+// A class in running text: "L — Antineoplastic and Immunomodulating Agents" (level 1),
+// "L04 IMMUNOSUPPRESSANTS"; the code alone without a WHO name.
+export function atcClassLabel(code, name) {
+  if (!name) return code;
+  return code.length === 1 ? atcLevelOneLabel(code, name) : `${code} ${name}`;
+}
+
+// A class named for screen readers: atcClassLabel(), a missing name said as such.
+const namedClass = (code, name) => (name ? atcClassLabel(code, name) : `${code} ${NO_ATC_NAME}`);
+
+// The name next to a code badge: level 1 in title case, others verbatim.
+export function atcName(code, name) {
+  if (!name) return NO_ATC_NAME;
+  return code.length === 1 ? titleCaseAtcName(name) : name;
+}
+
 export const SOURCE_LABELS = {
   ema: "EMA",
   chembl_atc_class: "ChEMBL",
@@ -100,6 +119,7 @@ export const NOT_STATED = "Not stated";
 // (tone "number": counts in the accent; "negative": the "not" of "not authorized").
 const number = (count) => ({ text: formatCount(count), tone: "number" });
 const NOT = { text: "not", tone: "negative" };
+const NOT_YET = { text: "not yet", tone: "pending" };
 
 // "a, b and c".
 const listing = (items) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : items[0]);
@@ -157,7 +177,15 @@ export const UI = {
       const contents = `${products === 1 ? "It contains" : "They contain"} ${plural(substances, "distinct active substance", "distinct active substances")}.`;
       return clauses.length ? `${contents} ${listing(clauses)}.` : contents;
     },
-    medicine: (name, authorized) => (authorized ? [`${name} is authorized in the EU.`] : [`${name} is `, NOT, " authorized in the EU."]),
+    // Only an ATC code filter is active (Authorized now). label: atcClassLabel().
+    atcClass: (count, label) => (count === 0
+      ? [`No medicines in ${label} are authorized in the EU.`]
+      : [number(count), ` ${count === 1 ? "medicine" : "medicines"} in ${label} ${count === 1 ? "is" : "are"} authorized in the EU.`]),
+    // kind: statusKind(); an opinion without a decision yet is "not yet" authorized.
+    medicine: (name, kind) => {
+      if (kind === "authorized") return [`${name} is authorized in the EU.`];
+      return [`${name} is `, kind === "pending" ? NOT_YET : NOT, " authorized in the EU."];
+    },
     // Substance names stay as in the data (lower-case INN) except for the first letter.
     substance: (name, count) => (count > 0
       ? [`${capitalize(name)} is authorized in the EU in `, number(count), ` ${count === 1 ? "medicine" : "medicines"}.`]
@@ -191,6 +219,9 @@ export const UI = {
   breakdown: {
     atc: {
       title: "Authorized products by ATC level 1",
+      // Drilled into a class (label: atcClassLabel()); a leaf shows only itself.
+      titleIn: (label) => `Authorized products in ${label} by ATC class`,
+      titleLeaf: (label) => `Authorized products in ${label}`,
       note: "A medicine with codes in several ATC groups appears in each.",
       excluded: (count) => `${plural(count, "authorized medicine", "authorized medicines")} without an ATC code ${count === 1 ? "is" : "are"} not shown.`,
     },
@@ -246,14 +277,41 @@ export const UI = {
     noBranch: "No MeSH branch matched",
   },
 
+  // ATC filtering at every level: table badge segments, the picker, the breakdown, ladders.
+  atc: {
+    noName: NO_ATC_NAME,
+    filterBy: (level, code, name) => `Filter by ATC level ${level}: ${namedClass(code, name)}`,
+    toolbar: (code) => `ATC ${code}`,
+    all: "All ATC classes",
+    path: "ATC level path",
+    classPath: "ATC levels of this class",
+    browse: "Browse ATC classes",
+    childrenLabel: (level, parent) => (parent ? `ATC level ${level} classes in ${parent}` : "ATC level 1 groups"),
+    // Picker rows, path items and bars: the class and its count (null: no count shown).
+    classCount: (code, name, count) => `${namedClass(code, name)}${count === null ? "" : `, ${formatCount(count)} authorized`}`,
+    // The products whose code stops at the parent class (no child class).
+    incomplete: "code incomplete",
+    nameFilter: (query) => `Showing all groups; the name filter “${query}” is applied.`,
+    note: "Codes as published by EMA; some outdated codes (e.g. L01XC, L01XE) are not yet mapped to current classes.",
+    up: "Up one level",
+    // Ladders (medicine and substance cards): counts are the medicines authorized today, no filters.
+    ladder: (code) => `ATC levels of ${code}`,
+    ladderLink: (level, code, name, count) =>
+      `Level ${level}, ${namedClass(code, name)}${count === null ? "" : `: ${plural(count, "authorized medicine", "authorized medicines")}`}`,
+    countsHead: "Authorized today",
+    count: (count) => formatCount(count),
+    classed: (names, code) => `${listing(names)} ${names.length === 1 ? "is" : "are"} classed ${code}.`,
+  },
+
   filtersSummary: (count) => (count ? `Filters (${formatCount(count)} active)` : "Filters"),
   offline: (date) => `Offline — data as of ${formatDate(date)}`,
 
   lookup: {
-    groups: { medicines: "Medicines", substances: "Substances", conditions: "Conditions" },
+    groups: { medicines: "Medicines", substances: "Substances", conditions: "Conditions", classes: "Drug classes" },
     medicineMeta: (status, year) => [statusLabel(status), year].filter(Boolean).join(" · "),
     substanceMeta: (count) => plural(count, "medicine", "medicines"),
     conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
+    classMeta: (count, unnamed = false) => [unnamed ? NO_ATC_NAME : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     noMatches: "No matches",
     matches: (count) => plural(count, "suggestion", "suggestions"),
     loading: "Loading…",
@@ -264,6 +322,8 @@ export const UI = {
       { label: "Keytruda", patch: { med: "EMEA/H/C/003820" } },
       { label: "semaglutide", patch: { sub: "semaglutide" } },
       { label: "psoriasis", patch: { cond: "D011565" } },
+      // A drug class: the dashboard filtered to it alone (url.js classState()).
+      { label: "L04AC", atc: "L04AC" },
     ],
   },
 
@@ -277,7 +337,7 @@ export const UI = {
     documentMeta: (isPdf, date) => [isPdf ? UI.card.pdf : null, UI.card.updated(date)].filter(Boolean).join(" · "),
     substances: "Active substance(s)",
     type: "Medicine type",
-    atc: "ATC",
+    atc: "ATC classification",
     areas: "Therapeutic areas",
     indication: "Indication",
     documents: "Documents",

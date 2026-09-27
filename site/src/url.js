@@ -86,6 +86,10 @@ export function decodeState(params, domain) {
   return { state, dropped };
 }
 
+// A drug class opened from a suggestion, a card ladder or a Try link: the class alone (other
+// filters cleared, view "now", ATC breakdown), so the link's href and its click agree.
+export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: code });
+
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI. Kept verbatim:
 // an unknown value shows a "not found" result instead of being dropped.
 export const LOOKUP_KEYS = ["q", "med", "sub", "cond"];
@@ -110,6 +114,18 @@ export function withoutLookup(params) {
   const rest = new URLSearchParams(params);
   for (const key of LOOKUP_KEYS) rest.delete(key);
   return rest;
+}
+
+// The verbatim filter part with the filter keys in patch replaced (others kept as they are), for
+// filter changes made before the filter domain has loaded (a drug class opened from the search).
+export function patchFilterParams(params, patch) {
+  const next = new URLSearchParams(params);
+  const encoded = encodeState({ ...DEFAULT_STATE, ...patch });
+  for (const key of Object.keys(patch).filter((name) => name in DEFAULT_STATE)) {
+    next.delete(key);
+    for (const value of encoded.getAll(key)) next.append(key, value);
+  }
+  return next;
 }
 
 // Lookup keys first, then the filters. filterParams: the URL's filter part kept verbatim while the

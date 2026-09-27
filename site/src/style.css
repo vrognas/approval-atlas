@@ -307,6 +307,16 @@ button {
   color: var(--status-ended-text);
 }
 
+/* "not yet" authorized: an opinion without a decision. */
+.tone-pending {
+  color: var(--status-pending-text);
+}
+
+/* Focus moves to the dashboard headline only to announce a drug class; it is not a control. */
+.headline:focus {
+  outline: none;
+}
+
 @media (min-width: 721px) {
   .headline {
     font-size: 2.75rem;
@@ -403,6 +413,168 @@ input::placeholder {
 .text-filter input,
 .multi-select input {
   width: 100%;
+}
+
+/* ATC: the text filter, then the drill-down picker, on a row of their own. */
+.text-filter.atc-filter {
+  width: 100%;
+}
+
+.atc-filter > input {
+  width: min(220px, 100%);
+}
+
+.atc-picker {
+  max-width: 720px;
+  margin-top: 8px;
+}
+
+/* Path of ATC levels (picker, breakdown, class headline): buttons with chevrons between them. */
+.atc-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atc-path li {
+  display: flex;
+  align-items: center;
+}
+
+.atc-path li + li::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 8px 0 4px;
+  border-top: 1.5px solid var(--muted);
+  border-right: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+}
+
+.atc-path button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atc-path button:hover {
+  background: var(--wash);
+}
+
+.atc-path .path-all:not([aria-current]) {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
+}
+
+.path-name {
+  font-weight: 600;
+}
+
+.path-count {
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Browse ATC classes": a secondary button (.filters button) with a chevron that turns when open. */
+.atc-browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.atc-browse::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.atc-browse[aria-expanded="true"]::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+}
+
+/* The classes one level down: rows of badge, name and count; two columns where they fit, so the
+   always-open desktop filter row stays short. */
+.atc-children {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  column-gap: 16px;
+  max-height: 20rem;
+  overflow-y: auto;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atc-children li {
+  border-bottom: 1px solid var(--grid);
+}
+
+/* The static last row: the products coded only down to the current class. */
+.atc-children button,
+.atc-children .atc-child-static {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atc-children .atc-child-static {
+  cursor: auto;
+}
+
+.atc-children button:hover {
+  background: var(--wash);
+}
+
+.atc-children button:focus-visible {
+  outline-offset: -2px;
+}
+
+.atc-child-count {
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.no-name {
+  color: var(--muted);
+}
+
+.atc-note {
+  font-size: 0.8125rem;
 }
 
 /* Selected values: accent-wash pills. */
@@ -729,8 +901,10 @@ button.bar-row:hover {
   font-weight: 600;
 }
 
-/* ATC level-1 letter badge (breakdown); its hue comes from the row. */
-.letter-badge {
+/* ATC level-1 letter badge (breakdown), and the code badge showing the full code of one level
+   (L04, L04AC) in its level's shade; the hue comes from the badge or an ancestor. */
+.letter-badge,
+.code-badge {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -741,6 +915,42 @@ button.bar-row:hover {
   background: var(--hue-1);
   color: var(--hue-text);
   font: 500 0.78125rem/1 var(--font-mono);
+}
+
+.code-badge {
+  width: auto;
+  min-width: 22px;
+  padding: 0 6px;
+}
+
+/* Above the drilled-down ATC bars: "Up one level" and the path. */
+.breakdown-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.up-level {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--axis);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.up-level:hover {
+  background: var(--wash);
+}
+
+/* The class headline's levels with their counts. */
+.class-path {
+  margin-top: 12px;
 }
 
 .bar-track {
@@ -783,6 +993,11 @@ button.bar-row:hover {
 
   .letter-badge {
     width: 24px;
+    height: 24px;
+  }
+
+  .code-badge {
+    min-width: 24px;
     height: 24px;
   }
 }
@@ -1101,20 +1316,50 @@ td.status-cell {
   border-left: 1px solid var(--separator);
 }
 
-.atc-seg.level-2 {
+.atc-seg.level-2,
+.code-badge.level-2 {
   background: var(--hue-2);
 }
 
-.atc-seg.level-3 {
+.atc-seg.level-3,
+.code-badge.level-3 {
   background: var(--hue-3);
 }
 
-.atc-seg.level-4 {
+.atc-seg.level-4,
+.code-badge.level-4 {
   background: var(--hue-4);
 }
 
-.atc-seg.level-5 {
+.atc-seg.level-5,
+.code-badge.level-5 {
   background: var(--hue-5);
+}
+
+/* Segment buttons (table) look like the segments; the one the ATC filter is set to is underlined.
+   The focus ring sits inside: the badge clips its overflow. At least 24px wide (WCAG 2.5.8). */
+button.atc-seg {
+  min-width: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  user-select: text;
+}
+
+button.atc-seg:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+button.atc-seg:focus-visible {
+  outline-offset: -2px;
+}
+
+button.atc-seg[aria-pressed="true"] {
+  box-shadow: inset 0 -2px var(--accent);
 }
 
 td.atc .code {
@@ -1202,17 +1447,18 @@ td.area {
 }
 
 /* Phones: the typed text stays 16px (iOS zooms into smaller fields); the placeholder is smaller so it
-   fits (checked at 360, 375, 384 and 390px). */
+   fits (checked at 360, 375, 384 and 390px with the shorter phase-1 text; the ATC placeholder is
+   7.4% wider in Geist's metrics, so both sizes shrink by that to keep the same width). */
 @media (max-width: 720px) {
   .lookup-box input::placeholder {
-    font-size: 15px;
+    font-size: 13.9px;
   }
 }
 
 /* Narrow phones (360px): Chrome also reserves room for the search field's clear button. */
 @media (max-width: 382px) {
   .lookup-box input::placeholder {
-    font-size: 13.5px;
+    font-size: 12.5px;
   }
 }
 
@@ -1475,15 +1721,107 @@ td.area {
   list-style: none;
 }
 
-.atc-list > li + li {
-  margin-top: 8px;
+/* ATC ladder (medicine and substance cards): a link per level, a thin line in the group's hue
+   joining the badges, the count of medicines authorized today, a chevron. */
+/* The label row: "ATC classification", then the counts' head at the right. On the medicine card
+   the fact spans both columns, so the head sits over the counts at every width. */
+.facts .fact-wide {
+  grid-column: 1 / -1;
 }
 
-.atc-levels {
-  margin: 4px 0 0;
-  padding-left: 16px;
-  color: var(--ink-secondary);
+.ladder-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Right edge over the counts: chevron 7px + its 8px margin + the 8px gap. */
+.ladder-head {
+  padding-right: 23px;
+  color: var(--muted);
   font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.atc-ladder + .atc-ladder,
+.ladder-flag + .atc-ladder {
+  margin-top: 12px;
+}
+
+.ladder-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.ladder-row:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.ladder-rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 4.125rem; /* the widest badge, A10BJ06 */
+}
+
+.ladder-rail::before,
+.ladder-rail::after {
+  content: "";
+  flex: 1;
+  width: 1px;
+  margin-left: 11.5px;
+  background: var(--hue-mid);
+  opacity: 0.4;
+}
+
+.atc-ladder li:first-child .ladder-rail::before,
+.atc-ladder li:last-child .ladder-rail::after {
+  visibility: hidden;
+}
+
+.ladder-rail .code-badge {
+  height: 24px;
+}
+
+.ladder-name {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  padding: 10px 0;
+  font-weight: 500;
+}
+
+.ladder-name.no-name {
+  font-weight: 400;
+}
+
+.ladder-count {
+  flex: none;
+  align-self: center;
+  min-width: 3ch;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ladder-row::after {
+  content: "";
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  margin: 0 8px 0 0;
+  border-top: 1.75px solid var(--link);
+  border-right: 1.75px solid var(--link);
+  transform: rotate(45deg);
 }
 
 details > summary {
@@ -1693,8 +2031,27 @@ mark {
 
   .segmented button,
   .filters input,
-  .filters button {
+  .filters button,
+  .atc-path button,
+  .up-level {
     min-height: 44px;
+  }
+
+  /* Picker rows: the full-size equivalent of the table's 24px ATC segments (WCAG 2.5.8). The
+     list grows with the page: no scroll area nested in it. */
+  .atc-children {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .atc-children button,
+  .atc-children .atc-child-static {
+    min-height: 44px;
+    font-size: 0.9375rem;
+  }
+
+  .ladder-name {
+    font-size: 0.9375rem;
   }
 
   .filters-disclosure > summary {
@@ -1745,6 +2102,14 @@ code {
   /* Focused, the ring moves outside, so focus still shows on the pressed button. */
   .segmented button[aria-pressed="true"]:focus-visible {
     outline-offset: 2px;
+  }
+
+  /* Not an outline: the focus ring is the (inset) outline, and the badge clips anything outside. */
+  button.atc-seg[aria-pressed="true"] {
+    text-decoration-line: underline;
+    text-decoration-thickness: 2px;
+    text-decoration-color: SelectedItem;
+    text-underline-offset: 3px;
   }
 
   .bar-fill,

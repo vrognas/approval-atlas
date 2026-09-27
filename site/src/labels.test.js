@@ -219,9 +219,13 @@ test("the home dek names substances and flag counts with plurals and without zer
 
 test("lookup headlines answer whether it is authorized; 'not' and counts are toned", () => {
   const { headline } = labels.UI;
-  assert.equal(plain(headline.medicine("Wegovy", true)), "Wegovy is authorized in the EU.");
-  assert.equal(plain(headline.medicine("Acomplia", false)), "Acomplia is not authorized in the EU.");
-  assert.deepEqual(toned(headline.medicine("Acomplia", false)), [["not", "negative"]]);
+  assert.equal(plain(headline.medicine("Wegovy", "authorized")), "Wegovy is authorized in the EU.");
+  assert.equal(plain(headline.medicine("Acomplia", "ended")), "Acomplia is not authorized in the EU.");
+  assert.deepEqual(toned(headline.medicine("Acomplia", "ended")), [["not", "negative"]]);
+  assert.deepEqual(toned(headline.medicine("Grasustek", "refused")), [["not", "negative"]]);
+  // Opinion adopted, no decision yet: "not yet", in the pending tone.
+  assert.equal(plain(headline.medicine("Vyloy", "pending")), "Vyloy is not yet authorized in the EU.");
+  assert.deepEqual(toned(headline.medicine("Vyloy", "pending")), [["not yet", "pending"]]);
   assert.equal(plain(headline.substance("semaglutide", 5)), "Semaglutide is authorized in the EU in 5 medicines.");
   assert.deepEqual(toned(headline.substance("semaglutide", 5)), [["5", "number"]]);
   assert.equal(plain(headline.substance("rimonabant", 0)), "Rimonabant is not authorized in the EU.");
@@ -229,6 +233,81 @@ test("lookup headlines answer whether it is authorized; 'not' and counts are ton
   assert.equal(plain(headline.condition("Psoriasis", 52)), "52 medicines are authorized for Psoriasis.");
   assert.equal(plain(headline.condition("Psoriasis", 1)), "1 medicine is authorized for Psoriasis.");
   assert.equal(plain(headline.condition("Kuru", 0)), "No authorized medicines are tagged with Kuru.");
+});
+
+test("an ATC class reads as its code and name: level 1 in title case, the code alone without a WHO name", () => {
+  assert.equal(labels.atcClassLabel("L", ATC_LEVEL_ONE.L[0]), "L — Antineoplastic and Immunomodulating Agents");
+  assert.equal(labels.atcClassLabel("L04", "IMMUNOSUPPRESSANTS"), "L04 IMMUNOSUPPRESSANTS");
+  assert.equal(labels.atcClassLabel("L04AL", null), "L04AL");
+  assert.equal(labels.atcClassLabel("L04AL", undefined), "L04AL");
+});
+
+test("next to a code badge the name stands alone: level 1 in title case, a missing name says so", () => {
+  assert.equal(labels.atcName("L", ATC_LEVEL_ONE.L[0]), "Antineoplastic and Immunomodulating Agents");
+  assert.equal(labels.atcName("L04AC", "Interleukin inhibitors"), "Interleukin inhibitors");
+  assert.equal(labels.atcName("L04AL", null), "no WHO name yet");
+});
+
+test("ATC segment buttons name the level and class they filter by", () => {
+  const { filterBy } = labels.UI.atc;
+  assert.equal(filterBy(2, "L04", "IMMUNOSUPPRESSANTS"), "Filter by ATC level 2: L04 IMMUNOSUPPRESSANTS");
+  assert.equal(filterBy(1, "L", ATC_LEVEL_ONE.L[0]), "Filter by ATC level 1: L — Antineoplastic and Immunomodulating Agents");
+  assert.equal(filterBy(4, "L04AL", null), "Filter by ATC level 4: L04AL no WHO name yet");
+  // The badge's segments are one toolbar.
+  assert.equal(labels.UI.atc.toolbar("L04AC05"), "ATC L04AC05");
+});
+
+// Accessible names: the badge, name and count spans would otherwise read glued together.
+test("picker, path and bar controls name the class and its count", () => {
+  const { classCount } = labels.UI.atc;
+  assert.equal(classCount("L04AC05", "ustekinumab", 12), "L04AC05 ustekinumab, 12 authorized");
+  assert.equal(classCount("L", ATC_LEVEL_ONE.L[0], 1481), "L — Antineoplastic and Immunomodulating Agents, 1,481 authorized");
+  assert.equal(classCount("L04AL", null, 3), "L04AL no WHO name yet, 3 authorized");
+  assert.equal(classCount("L04", "IMMUNOSUPPRESSANTS", null), "L04 IMMUNOSUPPRESSANTS");
+});
+
+test("ladder links name the level, the class and the medicines authorized today", () => {
+  const { ladderLink } = labels.UI.atc;
+  assert.equal(ladderLink(1, "A", ATC_LEVEL_ONE.A[0], 180), "Level 1, A — Alimentary Tract and Metabolism: 180 authorized medicines");
+  assert.equal(ladderLink(5, "A10BJ06", "semaglutide", 1), "Level 5, A10BJ06 semaglutide: 1 authorized medicine");
+  assert.equal(ladderLink(4, "L04AL", null, 0), "Level 4, L04AL no WHO name yet: 0 authorized medicines");
+  // Counts still loading.
+  assert.equal(ladderLink(2, "A10", "DRUGS USED IN DIABETES", null), "Level 2, A10 DRUGS USED IN DIABETES");
+});
+
+test("the class headline counts the medicines authorized in one ATC class", () => {
+  const { atcClass } = labels.UI.headline;
+  assert.equal(plain(atcClass(147, "L04 IMMUNOSUPPRESSANTS")), "147 medicines in L04 IMMUNOSUPPRESSANTS are authorized in the EU.");
+  assert.deepEqual(toned(atcClass(147, "L04 IMMUNOSUPPRESSANTS")), [["147", "number"]]);
+  assert.equal(plain(atcClass(481, "L — Antineoplastic and Immunomodulating Agents")), "481 medicines in L — Antineoplastic and Immunomodulating Agents are authorized in the EU.");
+  assert.equal(plain(atcClass(1, "L04AL")), "1 medicine in L04AL is authorized in the EU.");
+  assert.equal(plain(atcClass(0, "X01")), "No medicines in X01 are authorized in the EU.");
+  assert.deepEqual(toned(atcClass(0, "X01")), []);
+});
+
+test("the ATC breakdown and picker copy", () => {
+  const { atc } = labels.UI;
+  assert.equal(labels.UI.breakdown.atc.titleIn("L04 IMMUNOSUPPRESSANTS"), "Authorized products in L04 IMMUNOSUPPRESSANTS by ATC class");
+  assert.equal(labels.UI.breakdown.atc.titleLeaf("L04AC05 ustekinumab"), "Authorized products in L04AC05 ustekinumab");
+  assert.equal(atc.nameFilter("rituximab"), "Showing all groups; the name filter “rituximab” is applied.");
+  assert.equal(atc.note, "Codes as published by EMA; some outdated codes (e.g. L01XC, L01XE) are not yet mapped to current classes.");
+  assert.equal(atc.childrenLabel(1, null), "ATC level 1 groups");
+  assert.equal(atc.childrenLabel(3, "L04 IMMUNOSUPPRESSANTS"), "ATC level 3 classes in L04 IMMUNOSUPPRESSANTS");
+  assert.equal(atc.browse, "Browse ATC classes");
+  assert.equal(atc.incomplete, "code incomplete");
+});
+
+test("a substance card names the medicines classed under another code", () => {
+  assert.equal(labels.UI.atc.classed(["Kyinsu"], "A10AE57"), "Kyinsu is classed A10AE57.");
+  assert.equal(labels.UI.atc.classed(["MabThera", "Truxima", "Ruxience"], "L01XC02"), "MabThera, Truxima and Ruxience are classed L01XC02.");
+});
+
+test("drug classes are a lookup suggestion group with an authorized count", () => {
+  assert.equal(labels.UI.lookup.groups.classes, "Drug classes");
+  assert.equal(labels.UI.lookup.classMeta(1234), "1,234 authorized");
+  assert.equal(labels.UI.lookup.classMeta(20, true), "no WHO name yet · 20 authorized");
+  // A drug class example opens the class alone (url.js classState()).
+  assert.deepEqual(labels.UI.lookup.examples.at(-1), { label: "L04AC", atc: "L04AC" });
 });
 
 test("breakdown notes say how many authorized medicines have no value", () => {

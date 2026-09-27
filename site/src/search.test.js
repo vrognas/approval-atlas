@@ -11,6 +11,7 @@ import {
   makeSnippet,
   searchWords,
   suggest,
+  suggestAtcClasses,
   textMatches,
 } from "./search.js";
 
@@ -197,6 +198,55 @@ test("a condition's text phrases are its folded name and synonyms, inverted MeSH
   // Three-part names: MeSH's natural-order entry term is deduplicated away in R, so it is rebuilt here.
   assert.deepEqual(conditionPhrases({ name: "Leukemia, Myeloid, Acute", synonyms: [] }), ["leukemia, myeloid, acute", "acute myeloid leukemia"]);
   assert.deepEqual(conditionPhrases({ name: "Lymphoma, Large B-Cell, Diffuse", synonyms: [] }), ["lymphoma, large b cell, diffuse", "diffuse large b cell lymphoma"]);
+});
+
+const atcClasses = [
+  { atc_code: "A", level: 1, name: "ALIMENTARY TRACT AND METABOLISM" },
+  { atc_code: "A10", level: 2, name: "DRUGS USED IN DIABETES" },
+  { atc_code: "A10A", level: 3, name: "INSULINS AND ANALOGUES" },
+  { atc_code: "A10AE", level: 4, name: "Insulins and analogues for injection, long-acting" },
+  { atc_code: "A10B", level: 3, name: "BLOOD GLUCOSE LOWERING DRUGS, EXCL. INSULINS" },
+  { atc_code: "A10BJ", level: 4, name: "Glucagon-like peptide-1 (GLP-1) analogues" },
+  { atc_code: "A10BJ06", level: 5, name: "semaglutide" },
+  { atc_code: "C10", level: 2, name: "LIPID MODIFYING AGENTS" },
+  { atc_code: "L04AC", level: 4, name: "Interleukin inhibitors" },
+];
+// Authorized-now products per prefix; C10 has none, L01XE and A10AE57 have no WHO name.
+const classCounts = new Map([
+  ["A", 180], ["A10", 94], ["A10A", 30], ["A10AE", 12], ["A10AE57", 1], ["A10B", 63], ["A10BJ", 11], ["A10BJ06", 4],
+  ["L04AC", 33], ["L01XE", 20],
+]);
+const classCodes = (query) => suggestAtcClasses(query, atcClasses, classCounts).map((row) => row.code);
+
+test("an ATC code query lists the classes under it, shortest code first, then most products", () => {
+  assert.deepEqual(classCodes("a10"), ["A10", "A10B", "A10A", "A10AE", "A10BJ", "A10BJ06", "A10AE57"]);
+  assert.deepEqual(suggestAtcClasses("A10BJ06", atcClasses, classCounts), [{ code: "A10BJ06", level: 5, name: "semaglutide", count: 4 }]);
+  // Codes are not folded ("ae" stays), and codes EMA uses without a WHO name are found too.
+  assert.deepEqual(classCodes(" A10ae "), ["A10AE", "A10AE57"]);
+  assert.deepEqual(suggestAtcClasses("l01xe", atcClasses, classCounts), [{ code: "L01XE", level: 4, name: null, count: 20 }]);
+});
+
+test("a name query matches word starts in level 1-4 class names with products; level-5 names are substances", () => {
+  assert.deepEqual(classCodes("glp"), ["A10BJ"]);
+  assert.deepEqual(classCodes("semaglutide"), []);
+  assert.deepEqual(classCodes("lipid"), []);
+  assert.deepEqual(classCodes("interleukin inhib"), ["L04AC"]);
+  assert.deepEqual(classCodes("ukin"), []);
+});
+
+test("class names rank exact > prefix > contains, then by authorized count", () => {
+  assert.deepEqual(classCodes("insulin"), ["A10A", "A10AE", "A10B"]);
+  assert.deepEqual(classCodes("analogues"), ["A10A", "A10AE", "A10BJ"]);
+  assert.deepEqual(classCodes("Insulins and analogues"), ["A10A", "A10AE"]);
+  assert.deepEqual(suggestAtcClasses("glucagon", atcClasses, classCounts), [
+    { code: "A10BJ", level: 4, name: "Glucagon-like peptide-1 (GLP-1) analogues", count: 11 },
+  ]);
+});
+
+test("class suggestions need 2 characters and stop at 8", () => {
+  assert.deepEqual(classCodes("a"), []);
+  const many = new Map(Array.from({ length: 12 }, (_, index) => [`B01AC${String(index + 1).padStart(2, "0")}`, 1]));
+  assert.equal(suggestAtcClasses("B01AC", [], many).length, 8);
 });
 
 test("textMatches finds whole-word folded mentions and skips excluded products", () => {

@@ -2,17 +2,17 @@
 // a kicker, an answer headline and (medicine, substance) an answer strip.
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
-import { statusDate } from "./approvals.js";
+import { isAuthorizedNow, statusDate } from "./approvals.js";
+import { atcLadder, atcPrefixCounts, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, typeBadges } from "./badges.js";
 import { groupDocuments, primaryDocuments } from "./documents.js";
-import { NOT_STATED, UI, atcLevelOneLabel, formatDate, statusDateLine, statusKind, statusLabel, statusSentence, statusesByFrequency } from "./labels.js";
+import { NOT_STATED, UI, atcName, formatDate, statusDateLine, statusKind, statusLabel, statusSentence, statusesByFrequency } from "./labels.js";
 import { espacenetUrl, protectionSummary } from "./protection.js";
 import { buildConditions, conditionPhrases, foldSearchText, suggest, textMatches } from "./search.js";
 import { renderTimeline } from "./timeline.js";
-import { DEFAULT_LOOKUP, DEFAULT_STATE, encodeUrl, lookupView } from "./url.js";
+import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView } from "./url.js";
 
 const FAILED = Symbol("failed");
-const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7];
 
 function el(tag, props, ...children) {
   const node = document.createElement(tag);
@@ -60,7 +60,8 @@ function typeBadgeList(row) {
   return badges.length ? el("span", { class: "badges" }, badges.map((badge) => el("span", { class: `badge hue-${badge.hue}` }, badge.label))) : null;
 }
 
-// Segmented ATC badge (display only in this phase): one segment per level, in the group's hue.
+// Segmented ATC badge (display only; lookup rows are links, the card has ladders): one segment
+// per level, in the group's hue.
 function atcBadge(code) {
   return el("span", { class: `atc-badge hue-${atcHue(code)}` },
     atcSegments(code).map((segment) => el("span", { class: segment.level ? `atc-seg level-${segment.level}` : "atc-seg" }, segment.text)));
@@ -95,7 +96,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     atc: [["ema_medicine_atc_codes.json", "atc_classes.json"], (rows, classes) => ({
       byProduct: groupBy(rows, "ema_product_number"),
       names: new Map(classes.map((row) => [row.atc_code, row.name])),
+      classes,
     })],
+    // Medicines authorized today per ATC prefix, no filters: ladder counts, drug-class suggestions.
+    atcCounts: [["ema_medicines.json", "ema_medicine_atc_codes.json"], (medicines, rows) => {
+      const byProduct = groupBy(rows, "ema_product_number");
+      return atcPrefixCounts(medicines.filter(isAuthorizedNow).map((medicine) => ({ atc: byProduct.get(medicine.ema_product_number) ?? [] })));
+    }],
     areas: [["ema_medicine_therapeutic_areas.json"], (rows) => groupBy(rows, "ema_product_number")],
     conditions: [["mesh_descriptor_areas.json", "ema_medicine_therapeutic_areas.json", "ema_therapeutic_area_branches.json"],
       (descriptorAreaRows, areaRows, branchRows) => buildConditions(index, { descriptorAreaRows, areaRows, branchRows })],
@@ -133,10 +140,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   const ready = (value) => value !== undefined && value !== FAILED;
   const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
-  function internalLink(text, patch) {
+  // patch: lookup keys (a card or result), or filters (a drug class on the dashboard: classState()).
+  // label: an accessible name replacing the text's.
+  function internalLink(text, patch, className = null, label = null) {
     const href = `?${encodeUrl({ ...DEFAULT_STATE, ...DEFAULT_LOOKUP, ...patch })}`;
     return el("a", {
       href,
+      class: className,
+      "aria-label": label,
       onclick: (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
@@ -147,20 +158,51 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
 
   const fact = (label, content) => (content === null || (Array.isArray(content) && content.length === 0) ? null : [el("dt", null, label), el("dd", null, content)]);
 
-  function atcList(number, atc) {
+  // ATC ladder of one code: a row per level (badge, name, medicines authorized today) linking to
+  // the dashboard filtered to that level alone. counts: null until loaded (rows show without
+  // counts). A malformed code has no levels: its badge only.
+  function atcLadderList(code, names, counts) {
+    const levels = atcLadder(code, counts, names);
+    if (!levels.length) return el("p", null, atcBadge(code));
+    return el("ol", { class: `plain atc-ladder hue-${atcHue(code)}`, "aria-label": UI.atc.ladder(code) }, levels.map((level) => el("li", null,
+      internalLink([
+        el("span", { class: "ladder-rail" }, el("span", { class: `code-badge level-${level.level}` }, level.code)),
+        el("span", { class: level.name ? "ladder-name" : "ladder-name no-name" }, atcName(level.code, level.name)),
+        level.count === null ? null : el("span", { class: "ladder-count" }, UI.atc.count(level.count)),
+      ], classState(level.code), "ladder-row", UI.atc.ladderLink(level.level, level.code, level.name, level.count)))));
+  }
+
+  // Over the ladder counts, at the end of the ATC label's row.
+  const ladderHead = (counts) => (ready(counts) ? el("span", { class: "ladder-head", "aria-hidden": "true" }, UI.atc.countsHead) : null);
+
+  // Medicine card: one ladder per code, incomplete codes flagged.
+  function atcLadders(number, atc, counts) {
     if (!ready(atc)) return pending(atc);
     const rows = atc.byProduct.get(number) ?? [];
     if (!rows.length) return null;
-    return el("ul", { class: "plain atc-list" }, rows.map((row) => el("li", null,
-      atcBadge(row.atc_code_human),
-      row.atc_incomplete ? [" ", el("span", { class: "chip" }, UI.table.incomplete)] : null,
-      el("ul", { class: "atc-levels" }, ATC_PREFIX_LENGTHS
-        .filter((length) => length <= row.atc_code_human.length && atc.names.has(row.atc_code_human.slice(0, length)))
-        .map((length) => {
-          const prefix = row.atc_code_human.slice(0, length);
-          return el("li", null, length === 1 ? atcLevelOneLabel(prefix, atc.names.get(prefix)) : `${prefix} ${atc.names.get(prefix)}`);
-        })),
-    )));
+    return rows.map((row) => [
+      atcLadderList(row.atc_code_human, atc.names, ready(counts) ? counts : null),
+      row.atc_incomplete ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", title: UI.table.incompleteTitle }, UI.table.incomplete)) : null,
+    ]);
+  }
+
+  // The ATC fact spans the card; its label row ends with the ladder counts' head.
+  const ladderFact = (content, head) => (content === null ? null : [
+    el("dt", { class: "fact-wide ladder-title" }, el("span", null, UI.card.atc), head),
+    el("dd", { class: "fact-wide" }, content)]);
+
+  // Substance card: the ladder of its medicines' most common code; medicines classed otherwise are named.
+  function substanceAtc(rows, atc, counts) {
+    if (!ready(atc)) return null;
+    const { code, others } = mainAtcCode(rows.map((row) => ({
+      name: row.name_of_medicine,
+      codes: (atc.byProduct.get(row.ema_product_number) ?? []).map((item) => item.atc_code_human),
+    })));
+    if (!code) return null;
+    return el("section", { class: "card-section" },
+      el("div", { class: "ladder-title" }, el("h3", null, UI.card.atc), ladderHead(counts)),
+      atcLadderList(code, atc.names, ready(counts) ? counts : null),
+      others.map((other) => el("p", { class: "muted" }, UI.atc.classed(other.names, other.code))));
   }
 
   function areaLinks(number, areas, conditions) {
@@ -224,7 +266,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     if (!row) return notFound("medicine", number);
     const medicines = need("medicines");
     const medicine = ready(medicines) ? medicines.get(number) : null;
-    const [atc, areas, conditions, documents] = [need("atc"), need("areas"), need("conditions"), need("documents")];
+    const [atc, atcCounts, areas, conditions, documents] = [need("atc"), need("atcCounts"), need("areas"), need("conditions"), need("documents")];
     const authorized = statusKind(row.medicine_status) === "authorized";
     // Orphan shows as a type badge; the other flags as neutral chips.
     const flags = Object.entries(UI.card.flags).filter(([flag]) => flag !== "orphan_medicine" && (medicine ?? row)[flag] === true);
@@ -241,7 +283,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     // Order for a talk or poster: the answer, status and the SmPC / EPAR buttons on the first phone screen.
     return el("article", { class: "card" },
       kicker("medicine"),
-      title(headlineNodes(UI.headline.medicine(row.name_of_medicine, authorized))),
+      title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status)))),
       sentence ? el("p", { class: "dek" }, sentence) : null,
       strip([
         [UI.card.strip.holder, ready(medicines) ? medicine?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : pending(medicines), true],
@@ -266,7 +308,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
           typeBadgeList(medicine ?? row),
           flags.map(([, label]) => [" ", el("span", { class: "chip" }, label)]),
         ]),
-        fact(UI.card.atc, atcList(number, atc)),
+        ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null),
         fact(UI.card.areas, areaLinks(number, areas, conditions)),
       ),
       medicine?.therapeutic_indication
@@ -320,10 +362,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const medicines = need("medicines");
     const rows = [...substance.products].sort(byDate(1));
     const first = rows[0]?.marketing_authorisation_date ? rows[0] : null;
-    const authorized = rows.filter((row) => statusKind(row.medicine_status) === "authorized").length;
+    const authorizedRows = rows.filter((row) => statusKind(row.medicine_status) === "authorized");
+    const authorized = authorizedRows.length;
+    // Holders of the medicines authorized now; of all its medicines when none is.
     const holders = ready(medicines)
-      ? [...new Set(rows.map((row) => medicines.get(row.ema_product_number)?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED))]
+      ? [...new Set((authorized ? authorizedRows : rows).map((row) => medicines.get(row.ema_product_number)?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED))]
       : null;
+    const [atc, atcCounts] = [need("atc"), need("atcCounts")];
     return el("article", { class: "card" },
       kicker("substance"),
       title(headlineNodes(UI.headline.substance(substance.name, authorized))),
@@ -338,7 +383,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       ]),
       timelineBlock(rows, medicines),
       el("h3", null, UI.substance.products(rows.length)),
-      resultList(rows.map((row) => ({ row })), medicines, true));
+      resultList(rows.map((row) => ({ row })), medicines, true),
+      substanceAtc(rows, atc, atcCounts));
   }
 
   function conditionResults(ui, query) {
@@ -438,6 +484,11 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     render,
     need,
     conditions: () => (ready(values.get("conditions")) ? values.get("conditions") : null),
+    // Drug-class suggestions need the class names and today's counts: null until both have loaded.
+    atcClasses: () => {
+      const [atc, counts] = [values.get("atc"), values.get("atcCounts")];
+      return ready(atc) && ready(counts) ? { classes: atc.classes, counts } : null;
+    },
     link: internalLink,
     onData: (listener) => listeners.push(listener),
     focusOnNextRender: () => {
