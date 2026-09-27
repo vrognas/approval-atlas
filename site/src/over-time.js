@@ -1,6 +1,6 @@
 import * as d3 from "d3";
 import { hideTooltip, showTooltip } from "./chart.js";
-import { UI } from "./labels.js";
+import { UI, formatDate } from "./labels.js";
 
 const HEIGHT = 260;
 const MARGIN = { top: 12, right: 56, bottom: 28, left: 48 };
@@ -33,7 +33,7 @@ export function renderOverTime(container, series, { from, to }) {
     .attr("height", HEIGHT)
     .attr("viewBox", [0, 0, width, HEIGHT])
     .attr("role", "img")
-    .attr("aria-label", UI.overTime.summary(last.date, last.authorized_products, last.authorized_substances));
+    .attr("aria-label", UI.overTime.summary(formatDate(last.date), last.authorized_products, last.authorized_substances));
 
   if (from !== null || to !== null) {
     const [start, end] = x.domain();
@@ -99,7 +99,7 @@ export function renderOverTime(container, series, { from, to }) {
       const row = series[index];
       crosshair.attr("x1", x(dates[index])).attr("x2", x(dates[index])).attr("display", null);
       const items = SERIES.map(({ key, label, color }) => ({ value: row[key], label, color }));
-      showTooltip(container, [x(dates[index]), pointerY], row.date, items);
+      showTooltip(container, [x(dates[index]), pointerY], formatDate(row.date), items);
     })
     .on("pointerleave", () => {
       crosshair.attr("display", "none");

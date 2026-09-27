@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupDocuments } from "./documents.js";
+import { groupDocuments, primaryDocuments } from "./documents.js";
 
 const doc = (document_type, last_updated_date, url = `https://www.ema.europa.eu/en/documents/${document_type}/x-${last_updated_date}_en.pdf`) => ({
   ema_product_number: "P1",
@@ -59,6 +59,28 @@ test("EMA's archive file of a document type is flagged so its link can be told a
   const archive = { ...doc("procedural-steps-after", "2026-06-05", "https://www.ema.europa.eu/en/documents/procedural-steps-after/x-archive_en.pdf"), title: `${current.title} (archive)` };
   const [group] = groupDocuments([archive, current]);
   assert.deepEqual(group.rows.map((row) => [row.title === current.title, row.archive]), [[true, false], [false, true]]);
+});
+
+test("the newest SmPC and the standard EPAR become the primary links; everything else stays in the list", () => {
+  const groups = groupDocuments([
+    doc("product-information", "2026-09-03"),
+    { ...doc("assessment-report", "2008-04-17"), title: "Mylotarg : EPAR - Refusal public assessment report" },
+    { ...doc("assessment-report", "2018-05-04"), title: "Mylotarg : EPAR - Public Assessment Report" },
+    doc("overview", "2025-01-01"),
+  ]);
+  const { primary, rest } = primaryDocuments(groups);
+  assert.deepEqual(primary.map(({ key, row }) => [key, row.last_updated_date]), [["productInformation", "2026-09-03"], ["epar", "2018-05-04"]]);
+  assert.deepEqual(rest.map((group) => [group.key, group.rows.map((row) => row.last_updated_date)]), [["epar", ["2008-04-17"]], ["overview", ["2025-01-01"]]]);
+});
+
+test("archive files and non-standard assessment reports are never primary links", () => {
+  const current = { ...doc("product-information", "2026-06-05"), title: "X : EPAR - Product information" };
+  const archive = { ...doc("product-information", "2026-06-06", "https://www.ema.europa.eu/en/documents/product-information/x-archive_en.pdf"), title: `${current.title} (archive)` };
+  const referral = { ...doc("assessment-report", "2014-10-03"), title: "Kinzalkomb-H-C-415-A31-0084 : EPAR - Assessment Report - Article 31" };
+  const { primary, rest } = primaryDocuments(groupDocuments([archive, current, referral]));
+  assert.deepEqual(primary.map(({ row }) => row.title), [current.title]);
+  assert.deepEqual(rest.map((group) => [group.key, group.rows.map((row) => row.title)]), [["productInformation", [archive.title]], ["epar", [referral.title]]]);
+  assert.deepEqual(primaryDocuments([]), { primary: [], rest: [] });
 });
 
 test("only https links survive; unknown types are ignored", () => {

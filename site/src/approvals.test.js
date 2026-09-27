@@ -13,6 +13,7 @@ import {
   distinctSorted,
   isAuthorizedNow,
   newestFirst,
+  statusDate,
 } from "./approvals.js";
 
 const medicines = [
@@ -119,6 +120,26 @@ test("buildProducts joins holder, year, MeSH terms, branches and ATC rows", () =
   assert.equal(second.year, null);
   assert.deepEqual(second.atc.map((row) => row.atc_code_human), ["L01XE"]);
   assert.deepEqual([second.areas, second.branches], [[], []]);
+});
+
+test("statusDate picks the EMA date of the event behind the current status", () => {
+  const row = {
+    marketing_authorisation_date: "2006-06-19",
+    authorized_from: "2006-06-19",
+    authorized_until: "2009-01-16",
+    refusal_of_marketing_authorisation_date: "2004-09-07",
+    withdrawal_of_application_date: "2006-01-19",
+    opinion_adopted_date: "2026-09-17",
+  };
+  const dateFor = (medicine_status) => statusDate({ ...row, medicine_status });
+  assert.equal(dateFor("Authorised"), "2006-06-19");
+  assert.equal(dateFor("Withdrawn"), "2009-01-16");
+  assert.equal(dateFor("Expired"), "2009-01-16");
+  assert.equal(dateFor("Refused"), "2004-09-07");
+  assert.equal(dateFor("Application withdrawn"), "2006-01-19");
+  assert.equal(dateFor("Withdrawn from rolling review"), "2009-01-16");
+  assert.equal(dateFor("Opinion"), "2026-09-17");
+  assert.equal(statusDate({ medicine_status: "Suspended", authorized_until: null }), null);
 });
 
 test("isAuthorizedNow needs status Authorised and an approval date", () => {

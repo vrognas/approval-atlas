@@ -2,7 +2,7 @@
 // medicine (dodged), thin lines joining a substance family. Hover or tap shows a tooltip; tapping
 // a dot pins it so its name link can be followed. The result list below is the non-visual equivalent.
 import * as d3 from "d3";
-import { UI, statusLabel } from "./labels.js";
+import { UI, formatDate, statusLabel } from "./labels.js";
 import { families, layoutLanes } from "./timeline-layout.js";
 
 const RADIUS = 4;
@@ -106,7 +106,7 @@ export function renderTimeline(container, items, { link }) {
     circles.classed("active", (candidate) => candidate === dot);
     tip.attr("hidden", null).classed("pinned", pin).selectChildren().remove();
     tip.append("p").attr("class", "tip-name").append(() => link(dot));
-    tip.append("p").text(`${dot.date} · ${statusLabel(dot.status)}`);
+    tip.append("p").text(`${formatDate(dot.date)} · ${statusLabel(dot.status)}`);
     if (dot.holder) tip.append("p").attr("class", "tip-holder").text(dot.holder);
     const tipWidth = tip.node().offsetWidth;
     const left = dot.x + 12 + tipWidth > width ? Math.max(0, dot.x - 12 - tipWidth) : dot.x + 12;

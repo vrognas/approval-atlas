@@ -80,6 +80,21 @@ export function buildProducts(medicines, { areaRows, branchRows, atcRows }) {
   });
 }
 
+// EMA's date field for the event behind each status; the others (ended statuses, and
+// "Withdrawn from rolling review", as in the table's date line) use authorized_until.
+const STATUS_DATE_FIELDS = {
+  Authorised: "authorized_from",
+  Refused: "refusal_of_marketing_authorisation_date",
+  "Application withdrawn": "withdrawal_of_application_date",
+  Opinion: "opinion_adopted_date",
+  "Opinion under re-examination": "opinion_adopted_date",
+};
+
+// The date of the event behind a medicine's current status (ema_medicines row), or null.
+export function statusDate(medicine) {
+  return medicine[STATUS_DATE_FIELDS[medicine.medicine_status] ?? "authorized_until"] ?? null;
+}
+
 export function isAuthorizedNow(product) {
   return product.medicine_status === "Authorised" && product.authorized_from !== null;
 }
