@@ -77,6 +77,112 @@ test_that("read_whocc_sheet aborts when a sheet or its header is missing", {
     read_whocc_sheet(fixture_whocc_temporary_path(), "^Heading$"),
     "no ATC code column"
   )
+  expect_error(
+    read_whocc_sheet(
+      fixture_whocc_updates_path(),
+      "^ATC level alterations$",
+      name_header = "^New ATC level name$"
+    ),
+    "New ATC level name"
+  )
+})
+
+test_that("read_whocc_name_alterations reads the renamed codes of a year", {
+  expect_identical(
+    read_whocc_name_alterations(
+      fixture_whocc_updates_path(),
+      whocc_updates_url(2026)
+    ),
+    dplyr::tibble(
+      atc_code = c("J07BX01", "V09IX15"),
+      name = c("smallpox and mpox vaccines", "copper (64Cu) oxodotreotide"),
+      source = "whocc_updates",
+      source_url = whocc_updates_url(2026)
+    )
+  )
+  earlier <- read_whocc_name_alterations(
+    fixture_whocc_updates_path(2025),
+    whocc_updates_url(2025)
+  )
+  expect_identical(
+    earlier$atc_code,
+    c("A12BA51", "D01AA20", "J04AM08", "L02BX53")
+  )
+  expect_identical(
+    earlier$name[earlier$atc_code == "J04AM08"],
+    "isoniazid, sulfamethoxazole and trimethoprim"
+  )
+})
+
+test_that("the curated ATC name corrections are the WHO index names", {
+  corrections <- curated_atc_name_corrections
+  expect_setequal(
+    corrections$atc_code,
+    c(
+      "J07CA04", "J07CA06", "J07CA08", "J07CA09", "J07CA11", "J07CA13",
+      "L01FG", "S01XA19", "N06BX21", "N07BA04", "V09IX07", "J07BX01",
+      "V09IX15"
+    )
+  )
+  expect_identical(anyDuplicated(corrections$atc_code), 0L)
+  name_of <- function(code) corrections$name[corrections$atc_code == code]
+  expect_identical(
+    name_of("J07CA09"),
+    paste0(
+      "diphtheria-haemophilus influenzae B-pertussis-poliomyelitis-tetanus-",
+      "hepatitis B"
+    )
+  )
+  expect_identical(
+    name_of("L01FG"),
+    "VEGF/VEGFR (Vascular Endothelial Growth Factor / -Receptor) inhibitors"
+  )
+  expect_identical(name_of("S01XA19"), "limbal stem cells, autologous")
+  expect_identical(name_of("V09IX07"), "fluorocholine (18F)")
+  expect_identical(
+    corrections$source_url,
+    whocc_index_url(corrections$atc_code)
+  )
+  expect_identical(unique(corrections$index_version), "2026-01-20")
+})
+
+test_that("build_atc_name_corrections puts the yearly lists first", {
+  corrections <- build_atc_name_corrections(dplyr::bind_rows(
+    read_whocc_name_alterations(
+      fixture_whocc_updates_path(),
+      whocc_updates_url(2026)
+    ),
+    read_whocc_name_alterations(
+      fixture_whocc_updates_path(2025),
+      whocc_updates_url(2025)
+    )
+  ))
+  expect_named(corrections, c("atc_code", "name", "source", "source_url"))
+  expect_identical(anyDuplicated(corrections$atc_code), 0L)
+  row_for <- function(code) corrections[corrections$atc_code == code, ]
+  expect_identical(
+    row_for("J07BX01"),
+    dplyr::tibble(
+      atc_code = "J07BX01",
+      name = "smallpox and mpox vaccines",
+      source = "whocc_updates",
+      source_url = whocc_updates_url(2026)
+    )
+  )
+  expect_identical(row_for("A12BA51")$source_url, whocc_updates_url(2025))
+  expect_identical(
+    row_for("N07BA04"),
+    dplyr::tibble(
+      atc_code = "N07BA04",
+      name = "cytisinicline",
+      source = "whocc_index",
+      source_url = whocc_index_url("N07BA04")
+    )
+  )
+  expect_identical(
+    nrow(build_atc_name_corrections(empty_atc_name_corrections())),
+    nrow(curated_atc_name_corrections)
+  )
 })
 
 test_that("check_atc_code_format lists invalid codes", {
@@ -166,6 +272,19 @@ test_that("build_retired_atc_codes resolves whole moves and keeps splits", {
   expect_identical(row_for("L01XE")$source, "whocc_index_archived")
   expect_identical(row_for("L01XE")$replacement_source, "curated")
   expect_identical(row_for("L01XC")$replaced_by, "L01F")
+  expect_identical(
+    row_for("J07BX03"),
+    dplyr::tibble(
+      atc_code = "J07BX03",
+      level = 5L,
+      name = "covid-19 vaccines",
+      replaced_by = "J07BN",
+      changed_year = 2023L,
+      source = "whocc_alterations",
+      source_url = whocc_alterations_url,
+      replacement_source = "curated"
+    )
+  )
   kept_in_use <- c(
     "A01AD02", "C07FB02", "G03AC03", "N02AA59", "R03AK07", "R03CA02"
   )
@@ -173,18 +292,62 @@ test_that("build_retired_atc_codes resolves whole moves and keeps splits", {
   expect_identical(anyDuplicated(retired$atc_code), 0L)
 })
 
-test_that("the curated retired level-4 names are the archived WHO names", {
+test_that("a curated replacement wins over the list's deletion", {
+  # The alterations list's row for J07BX03 (2026 page).
+  deleted <- dplyr::tibble(
+    previous_code = "J07BX03",
+    substance_name = "covid-19 vaccines",
+    previous_name = NA_character_,
+    new_code = NA_character_,
+    changed_year = 2023L,
+    keeps_previous = FALSE
+  )
+  retired <- build_retired_atc_codes(dplyr::bind_rows(
+    read_whocc_alterations(fixture_whocc_alterations_path()),
+    deleted
+  ))
+  covid <- retired[retired$atc_code == "J07BX03", ]
+  expect_identical(covid$replaced_by, "J07BN")
+  expect_identical(covid$replacement_source, "curated")
+  without_curated <- build_retired_atc_codes(
+    deleted,
+    curated_levels = curated_retired_atc_levels[1:2, ]
+  )
   expect_identical(
-    curated_retired_atc_levels[c("atc_code", "name")],
+    without_curated$replaced_by[without_curated$atc_code == "J07BX03"],
+    NA_character_
+  )
+})
+
+test_that("the curated retired codes are archived WHO names and J07BX03", {
+  expect_identical(
+    curated_retired_atc_levels[c("atc_code", "name", "replaced_by", "source")],
     dplyr::tibble(
-      atc_code = c("L01XC", "L01XE"),
-      name = c("Monoclonal antibodies", "Protein kinase inhibitors")
+      atc_code = c("L01XC", "L01XE", "J07BX03"),
+      name = c(
+        "Monoclonal antibodies", "Protein kinase inhibitors",
+        "covid-19 vaccines"
+      ),
+      replaced_by = c("L01F", "L01E", "J07BN"),
+      source = c(
+        "whocc_index_archived", "whocc_index_archived", "whocc_alterations"
+      )
     )
   )
   expect_match(
-    curated_retired_atc_levels$source_url,
+    curated_retired_atc_levels$source_url[1:2],
     "^https://web\\.archive\\.org/web/2020"
   )
+  expect_identical(
+    curated_retired_atc_levels$source_url[3],
+    whocc_alterations_url
+  )
+  expect_match(
+    curated_retired_atc_levels$reason[3],
+    "WHO deleted J07BX03 in 2023 without a successor",
+    fixed = TRUE
+  )
+  expect_false(anyNA(curated_retired_atc_levels$reason))
 })
 
 test_that("read_whocc_index_page reads the path and the table", {
@@ -447,6 +610,34 @@ test_that("download_whocc_updates falls back to last year's list", {
   expect_true(file.exists(source$path))
 })
 
+test_that("download_whocc_prior_updates caches the year before apart", {
+  cache_directory <- file.path(tempfile(), "whocc")
+  server <- fake_whocc_server()
+  testthat::local_mocked_bindings(
+    req_perform = server$perform,
+    .package = "httr2"
+  )
+  source <- suppressMessages(
+    download_whocc_prior_updates(cache_directory, year = 2025L)
+  )
+  expect_identical(server$urls, whocc_updates_url(2025))
+  expect_identical(source$year, 2025L)
+  expect_identical(
+    source$path,
+    file.path(
+      cache_directory,
+      "updates-previous",
+      "atc_ddd_new_and_alterations.xlsx"
+    )
+  )
+  expect_true(file.exists(source$path))
+  expect_message(
+    download_whocc_prior_updates(cache_directory, year = 2025L),
+    "Using cached WHOCC ATC/DDD updates 2025"
+  )
+  expect_length(server$urls, 1)
+})
+
 test_that("the WHOCC lists are checked daily, the alterations monthly", {
   cache_directory <- file.path(tempfile(), "whocc")
   seed_whocc_downloads(cache_directory)
@@ -468,6 +659,10 @@ test_that("the WHOCC lists are checked daily, the alterations monthly", {
   expect_identical(
     suppressMessages(download_whocc_updates(cache_directory))$year,
     current_year()
+  )
+  expect_identical(
+    suppressMessages(download_whocc_prior_updates(cache_directory))$year,
+    current_year() - 1L
   )
 
   Sys.setFileTime(alterations_sidecar, Sys.time() - 31 * 24 * 60 * 60)
@@ -516,6 +711,13 @@ test_that("an unreachable WHOCC site falls back to the cached copies", {
   expect_identical(updates$year, current_year())
   expect_true(file.exists(updates$path))
   expect_warning(
+    previous <- suppressMessages(
+      download_whocc_prior_updates(cache_directory)
+    ),
+    "WHOCC ATC/DDD updates of the year before"
+  )
+  expect_identical(previous$year, current_year() - 1L)
+  expect_warning(
     alterations <- suppressMessages(
       download_whocc_alterations(cache_directory)
     ),
@@ -542,6 +744,12 @@ test_that("an unreachable WHOCC site without cached copies gives no source", {
     expect_null(suppressMessages(download_whocc_temporary(cache_directory))),
     "no cached copy"
   )
+  expect_warning(
+    expect_null(suppressMessages(
+      download_whocc_prior_updates(cache_directory)
+    )),
+    "no cached copy"
+  )
 })
 
 test_that("read_whocc_sources reads the cached lists", {
@@ -550,8 +758,20 @@ test_that("read_whocc_sources reads the cached lists", {
   forbid_network()
   sources <- suppressMessages(read_whocc_sources(cache_directory))
   expect_identical(sources$updates_source$year, current_year())
-  expect_identical(nrow(sources$final_classes), 99L)
-  expect_identical(unique(sources$final_classes$status), "current")
+  expect_identical(sources$previous_updates_source$year, current_year() - 1L)
+  # The new codes of both yearly lists, this year's first.
+  final_classes <- sources$final_classes
+  expect_identical(nrow(final_classes), 99L + 90L)
+  expect_identical(anyDuplicated(final_classes$atc_code), 0L)
+  expect_identical(unique(final_classes$status), "current")
+  expect_identical(
+    final_classes$source_url[final_classes$atc_code == "L04AL"],
+    whocc_updates_url(current_year())
+  )
+  expect_identical(
+    final_classes$source_url[final_classes$atc_code == "L01XM"],
+    whocc_updates_url(current_year() - 1L)
+  )
   expect_identical(nrow(sources$temporary_classes), 78L)
   expect_identical(unique(sources$temporary_classes$status), "temporary")
   expect_identical(
@@ -559,6 +779,15 @@ test_that("read_whocc_sources reads the cached lists", {
       sources$retired_codes$atc_code == "L01XX28"
     ],
     "L01EA01"
+  )
+  corrections <- sources$name_corrections
+  expect_identical(
+    corrections$source_url[corrections$atc_code %in% c("J07BX01", "A12BA51")],
+    whocc_updates_url(c(current_year(), current_year() - 1L))
+  )
+  expect_identical(
+    corrections$source[corrections$atc_code == "J07CA09"],
+    "whocc_index"
   )
 })
 
@@ -570,13 +799,21 @@ test_that("read_whocc_sources keeps only the curated codes without WHOCC", {
   warnings <- testthat::capture_warnings(
     sources <- suppressMessages(read_whocc_sources(tempfile()))
   )
-  expect_length(warnings, 3)
+  expect_length(warnings, 4)
   expect_null(sources$updates_source)
+  expect_null(sources$previous_updates_source)
   expect_null(sources$temporary_source)
   expect_null(sources$alterations_source)
   expect_identical(sources$final_classes, empty_whocc_classes())
   expect_identical(sources$temporary_classes, empty_whocc_classes())
-  expect_identical(sources$retired_codes$atc_code, c("L01XC", "L01XE"))
+  expect_identical(
+    sources$retired_codes$atc_code,
+    c("J07BX03", "L01XC", "L01XE")
+  )
+  expect_identical(
+    sources$name_corrections,
+    build_atc_name_corrections(empty_atc_name_corrections())
+  )
 })
 
 test_that("a WHOCC list that fails to parse still stops the build", {

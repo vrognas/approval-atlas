@@ -71,13 +71,16 @@ empty_whocc_classes <- function() {
 
 # ChEMBL's table, plus names from WHOCC sources for codes the data uses that
 # ChEMBL lacks (`whocc_classes` in order of precedence, then the retired
-# codes' old names). Every code gets its WHO status: retired codes name the
+# codes' old names); WHO names in `name_corrections` replace any other name
+# they differ from. Every code gets its WHO status: retired codes name the
 # code that replaced them, and `status_source` where that comes from (a
-# ChEMBL row's `source` names only its name).
+# row's `source` names only where its name comes from).
 build_atc_classes <- function(atc_class_rows,
                               whocc_classes = empty_whocc_classes(),
                               retired_codes = empty_retired_atc_codes(),
-                              used_codes = character()) {
+                              used_codes = character(),
+                              name_corrections =
+                                empty_atc_name_corrections()) {
   chembl_classes <- build_chembl_atc_classes(atc_class_rows)
   used_prefixes <- atc_prefix_set(used_codes)
   retired_names <- retired_codes |>
@@ -96,7 +99,13 @@ build_atc_classes <- function(atc_class_rows,
       !is.na(.data$name)
     ) |>
     dplyr::distinct(.data$atc_code, .keep_all = TRUE)
-  dplyr::bind_rows(chembl_classes, added_classes) |>
+  classes <- dplyr::bind_rows(chembl_classes, added_classes)
+  classes |>
+    dplyr::rows_update(
+      dplyr::anti_join(name_corrections, classes, by = c("atc_code", "name")),
+      by = "atc_code",
+      unmatched = "ignore"
+    ) |>
     dplyr::left_join(
       dplyr::select(
         retired_codes,
@@ -244,6 +253,10 @@ is_consistent_atc_code <- function(smpc_codes, ema_codes, retired_codes) {
 # code completes an EMA code when EMA's is incomplete (never a level-5 code),
 # the SmPC code fits it and goes deeper. It is used only when no other SmPC
 # code completes the same EMA code: the site keeps one row per EMA code.
+# An incomplete EMA code nothing completes is replaced by a deeper SmPC code
+# that fits none of the product's EMA codes (a conflict, user decision
+# 2026-09-27), when that is its only such code and the code replaces no
+# other EMA code.
 pair_smpc_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
   smpc_codes <- smpc_checks |>
     dplyr::filter(!is.na(.data$atc_code)) |>
@@ -278,21 +291,38 @@ pair_smpc_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
       completes = .data$atc_incomplete & .data$is_consistent & .data$is_deeper
     ) |>
     dplyr::mutate(
-      is_used = .data$completes & sum(.data$completes) == 1,
+      completions = sum(.data$completes),
+      .by = c("ema_product_number", "atc_code_human")
+    ) |>
+    dplyr::mutate(
+      conflicts = .data$atc_incomplete & .data$is_deeper &
+        .data$completions == 0 & !any(.data$is_consistent),
+      replaced_codes = sum(.data$conflicts),
+      .by = c("ema_product_number", "smpc_code")
+    ) |>
+    dplyr::mutate(
+      is_used = (.data$completes & .data$completions == 1) |
+        (.data$conflicts & sum(.data$conflicts) == 1 &
+           .data$replaced_codes == 1),
+      is_conflict = .data$is_used & .data$conflicts,
       .by = c("ema_product_number", "atc_code_human")
     )
 }
 
-# One verdict per product and SmPC code: "imputed", "ambiguous" (completes
-# an EMA code another SmPC code completes too), "prefix_mismatch" (fits none
-# of EMA's codes), "not_deeper" (fits, but EMA's code is as deep),
-# "ema_complete" (all EMA codes are level 5) or "no_ema_code".
-judge_smpc_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
+# One verdict per product and SmPC code: "imputed", "conflict" (replaces an
+# EMA code it does not fit), "ambiguous" (competes with another SmPC code
+# for an EMA code, or would replace several), "prefix_mismatch" (fits none
+# of EMA's codes and is not used), "not_deeper" (fits, but EMA's code is as
+# deep), "ema_complete" (all EMA codes are level 5) or "no_ema_code" (used
+# as it is). `atc_codes` may hold the rows of products without an EMA code.
+judge_smpc_atc_codes <- function(atc_codes, smpc_checks, retired_codes) {
+  ema_codes <- atc_codes[atc_codes$source == "ema", ]
   paired <- pair_smpc_atc_codes(ema_codes, smpc_checks, retired_codes) |>
     dplyr::summarise(
       verdict = dplyr::case_when(
+        any(.data$is_conflict) ~ "conflict",
         any(.data$is_used) ~ "imputed",
-        any(.data$completes) ~ "ambiguous",
+        any(.data$completes | .data$conflicts) ~ "ambiguous",
         !any(.data$atc_incomplete) ~ "ema_complete",
         any(.data$is_consistent) ~ "not_deeper",
         .default = "prefix_mismatch"
@@ -316,9 +346,9 @@ judge_smpc_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
 }
 
 # One row per EMA code as published (atc_code_human, atc_level,
-# atc_incomplete, source "ema"), with the code the site uses: EMA's, or the
-# one the SmPC gives when EMA's is incomplete ("ema_smpc"; EMA's when several
-# SmPC codes complete it), and the current code of a retired one.
+# atc_incomplete, source "ema") and one per SmPC code of a product without an
+# EMA code, with the code the site uses (atc_code) and the current code of a
+# retired one.
 build_atc_codes_table <- function(clean_medicines,
                                   smpc_checks = empty_smpc_checks(),
                                   retired_codes = empty_retired_atc_codes()) {
@@ -332,12 +362,43 @@ build_atc_codes_table <- function(clean_medicines,
       atc_incomplete = is.na(.data$atc_level) | .data$atc_level < 5L,
       source = "ema"
     )
+  dplyr::bind_rows(
+    complete_ema_atc_codes(ema_codes, smpc_checks, retired_codes),
+    smpc_only_atc_codes(clean_medicines, ema_codes, smpc_checks)
+  ) |>
+    dplyr::mutate(
+      current_atc_code = current_atc_codes(.data$atc_code, retired_codes),
+      current_atc_code_source = dplyr::if_else(
+        is.na(.data$current_atc_code),
+        NA_character_,
+        retired_codes$replacement_source[
+          match(.data$atc_code, retired_codes$atc_code)
+        ]
+      )
+    ) |>
+    dplyr::relocate(
+      "atc_code_source",
+      "atc_code_conflict",
+      .after = "atc_code"
+    ) |>
+    dplyr::arrange(
+      .data$ema_product_number,
+      .data$atc_code_human,
+      .data$atc_code
+    )
+}
+
+# EMA's codes with the code the site uses: EMA's, or the one the SmPC gives
+# when EMA's is incomplete ("ema_smpc"; EMA's when several SmPC codes
+# complete it; `atc_code_conflict` when the SmPC code does not fit EMA's).
+complete_ema_atc_codes <- function(ema_codes, smpc_checks, retired_codes) {
   completed <- pair_smpc_atc_codes(ema_codes, smpc_checks, retired_codes) |>
     dplyr::filter(.data$is_used) |>
     dplyr::select(
       "ema_product_number",
       "atc_code_human",
       atc_code = "smpc_code",
+      atc_code_conflict = "is_conflict",
       atc_code_document_url = "document_url",
       atc_code_document_date = "document_last_updated_date"
     )
@@ -353,21 +414,33 @@ build_atc_codes_table <- function(clean_medicines,
         "ema",
         "ema_smpc"
       ),
-      atc_code = dplyr::coalesce(.data$atc_code, .data$atc_code_human),
-      current_atc_code = current_atc_codes(.data$atc_code, retired_codes),
-      current_atc_code_source = dplyr::if_else(
-        is.na(.data$current_atc_code),
-        NA_character_,
-        retired_codes$replacement_source[
-          match(.data$atc_code, retired_codes$atc_code)
-        ]
-      )
+      atc_code_conflict = dplyr::coalesce(.data$atc_code_conflict, FALSE),
+      atc_code = dplyr::coalesce(.data$atc_code, .data$atc_code_human)
+    )
+}
+
+# One row per SmPC code of a product in EMA's data without an EMA code
+# (missing or "Not yet assigned"), every level. atc_level and atc_incomplete
+# describe EMA's published code, so they stay NA and FALSE: the level of
+# atc_code tells whether the SmPC code is complete.
+smpc_only_atc_codes <- function(clean_medicines, ema_codes, smpc_checks) {
+  smpc_checks |>
+    dplyr::filter(
+      !is.na(.data$atc_code),
+      .data$ema_product_number %in% clean_medicines$ema_product_number,
+      !.data$ema_product_number %in% ema_codes$ema_product_number
     ) |>
-    dplyr::relocate("atc_code_source", .after = "atc_code") |>
-    dplyr::arrange(
+    dplyr::transmute(
       .data$ema_product_number,
-      .data$atc_code_human,
-      .data$atc_code
+      atc_code_human = NA_character_,
+      atc_level = NA_integer_,
+      atc_incomplete = FALSE,
+      source = "ema_smpc",
+      .data$atc_code,
+      atc_code_source = "ema_smpc",
+      atc_code_conflict = FALSE,
+      atc_code_document_url = .data$document_url,
+      atc_code_document_date = .data$document_last_updated_date
     )
 }
 

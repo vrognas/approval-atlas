@@ -2,14 +2,15 @@ empty_atc_sources <- function() {
   list(
     smpc_checks = empty_smpc_checks(),
     retired_codes = empty_retired_atc_codes(),
-    whocc_classes = empty_whocc_classes()
+    whocc_classes = empty_whocc_classes(),
+    name_corrections = empty_atc_name_corrections()
   )
 }
 
 # Downloads and reads everything the ATC tables need besides ChEMBL: the
 # WHOCC update lists and alterations, the SmPC checks (fetching up to
-# `smpc_budget` product information PDFs) and WHOCC index pages for codes no
-# other source names.
+# `smpc_budget` product information PDFs), WHOCC index pages for codes no
+# other source names, and the WHO names that replace ChEMBL's.
 prepare_atc_sources <- function(clean_medicines,
                                 epar_documents,
                                 atc_class_rows,
@@ -31,6 +32,7 @@ prepare_atc_sources <- function(clean_medicines,
     smpc_budget
   )
   index_directory <- file.path(whocc_directory, "index")
+  chembl_classes <- build_chembl_atc_classes(atc_class_rows)
   index_requests <- look_up_unnamed_atc_codes(
     build_atc_codes_table(
       clean_medicines,
@@ -39,7 +41,7 @@ prepare_atc_sources <- function(clean_medicines,
     ),
     smpc_run$checks,
     c(
-      build_chembl_atc_classes(atc_class_rows)$atc_code,
+      chembl_classes$atc_code,
       whocc$final_classes$atc_code,
       whocc$temporary_classes$atc_code,
       whocc$retired_codes$atc_code
@@ -54,6 +56,8 @@ prepare_atc_sources <- function(clean_medicines,
       read_whocc_index_classes(index_directory),
       whocc$temporary_classes
     ),
+    name_corrections = whocc$name_corrections,
+    renamed_codes = renamed_atc_codes(chembl_classes, whocc$name_corrections),
     smpc_run = smpc_run,
     still_to_check = plan_smpc_checks(
       ema_codes,
@@ -84,24 +88,42 @@ look_up_unnamed_atc_codes <- function(atc_codes,
   update_whocc_index_cache(unnamed_codes, index_directory)
 }
 
+# The codes whose ChEMBL name a WHO name replaces, with both names.
+renamed_atc_codes <- function(chembl_classes, name_corrections) {
+  chembl_classes |>
+    dplyr::select("atc_code", chembl_name = "name") |>
+    dplyr::inner_join(
+      name_corrections,
+      by = "atc_code",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::filter(.data$chembl_name != .data$name) |>
+    dplyr::select("atc_code", "chembl_name", "name", "source")
+}
+
+updates_source_entry <- function(updates) {
+  if (is.null(updates)) {
+    return(NULL)
+  }
+  whocc_source_entry(
+    paste0(
+      "WHOCC new ATC codes and alterations (ATC/DDD Index ",
+      updates$year,
+      ")"
+    ),
+    updates,
+    paste("ATC/DDD Index", updates$year)
+  )
+}
+
 # meta.json entries for the ATC sources; a WHOCC list this run went without
 # has none.
 atc_source_entries <- function(whocc, index_directory, smpc_checks) {
-  updates <- whocc$updates_source
   temporary <- whocc$temporary_source
   alterations <- whocc$alterations_source
   purrr::compact(list(
-    if (!is.null(updates)) {
-      whocc_source_entry(
-        paste0(
-          "WHOCC new ATC codes and alterations (ATC/DDD Index ",
-          updates$year,
-          ")"
-        ),
-        updates,
-        paste("ATC/DDD Index", updates$year)
-      )
-    },
+    updates_source_entry(whocc$updates_source),
+    updates_source_entry(whocc$previous_updates_source),
     if (!is.null(temporary)) {
       whocc_source_entry(
         "WHOCC temporary ATC codes (next ATC/DDD Index)",
@@ -146,6 +168,7 @@ report_atc_summary <- function(tables, atc_sources) {
     atc_sources$still_to_check
   )
   report_retired_codes_in_use(tables$ema_medicine_atc_codes)
+  report_renamed_atc_codes(atc_sources$renamed_codes)
   report_unnamed_atc_codes(tables, atc_sources$index_requests)
   invisible(verdicts)
 }
@@ -183,29 +206,12 @@ report_smpc_checks <- function(smpc_checks, run) {
 }
 
 report_smpc_verdicts <- function(verdicts, atc_codes, still_to_check) {
-  is_completed <- atc_codes$atc_code_source == "ema_smpc"
-  cli::cli_alert_info(paste0(
-    sprintf(
-      paste(
-        "ATC codes from product information: %d EMA codes completed",
-        "(%d products); SmPC codes: "
-      ),
-      sum(is_completed),
-      dplyr::n_distinct(atc_codes$ema_product_number[is_completed])
-    ),
-    count_label(verdicts$verdict, c(
-      imputed = "used",
-      ambiguous = "not used (several complete one EMA code)",
-      prefix_mismatch = "rejected (prefix mismatch)",
-      not_deeper = "not deeper than EMA's",
-      ema_complete = "EMA code already complete",
-      no_ema_code = "for products without an EMA code (checks file only)"
-    )),
-    sprintf(
-      "; %d Authorised products still to check.",
-      sum(still_to_check$medicine_status == "Authorised")
-    )
-  ))
+  report_smpc_verdict_counts(verdicts, atc_codes, still_to_check)
+  report_smpc_code_list(
+    verdicts,
+    "conflict",
+    "SmPC ATC codes used although EMA's code does not fit"
+  )
   report_smpc_code_list(
     verdicts,
     "prefix_mismatch",
@@ -214,8 +220,47 @@ report_smpc_verdicts <- function(verdicts, atc_codes, still_to_check) {
   report_smpc_code_list(
     verdicts,
     "ambiguous",
-    "SmPC ATC codes not used (several complete one EMA code)"
+    "SmPC ATC codes not used (several for one EMA code, or one for several)"
   )
+}
+
+report_smpc_verdict_counts <- function(verdicts, atc_codes, still_to_check) {
+  from_ema <- atc_codes$source == "ema"
+  is_completed <- from_ema & atc_codes$atc_code_source == "ema_smpc" &
+    !atc_codes$atc_code_conflict
+  is_replaced <- from_ema & atc_codes$atc_code_conflict
+  products <- function(rows) {
+    dplyr::n_distinct(atc_codes$ema_product_number[rows])
+  }
+  cli::cli_alert_info(paste0(
+    sprintf(
+      paste(
+        "ATC codes from product information: %d EMA codes completed",
+        "(%d products), %d replaced by a code that does not fit it",
+        "(%d products), %d codes for %d products without an EMA code;",
+        "SmPC codes: "
+      ),
+      sum(is_completed),
+      products(is_completed),
+      sum(is_replaced),
+      products(is_replaced),
+      sum(!from_ema),
+      products(!from_ema)
+    ),
+    count_label(verdicts$verdict, c(
+      imputed = "used",
+      conflict = "used although EMA's code does not fit",
+      ambiguous = "not used (ambiguous)",
+      prefix_mismatch = "rejected (prefix mismatch)",
+      not_deeper = "not deeper than EMA's",
+      ema_complete = "EMA code already complete",
+      no_ema_code = "used for products without an EMA code"
+    )),
+    sprintf(
+      "; %d Authorised products still to check.",
+      sum(still_to_check$medicine_status == "Authorised")
+    )
+  ))
 }
 
 report_smpc_code_list <- function(verdicts, listed_verdict, heading) {
@@ -242,6 +287,22 @@ report_retired_codes_in_use <- function(atc_codes) {
     dplyr::n_distinct(retired_in_use$atc_code),
     dplyr::n_distinct(retired_in_use$ema_product_number)
   ))
+}
+
+report_renamed_atc_codes <- function(renamed_codes) {
+  labels <- sprintf(
+    "%s: %s -> %s (%s)",
+    renamed_codes$atc_code,
+    renamed_codes$chembl_name,
+    renamed_codes$name,
+    renamed_codes$source
+  )
+  if (length(labels) > 0) {
+    cli::cli_alert_info(
+      "ATC names from the WHOCC instead of ChEMBL: {length(labels)} codes:
+      {.val {offender_values(labels, max_shown = length(labels))}}"
+    )
+  }
 }
 
 report_unnamed_atc_codes <- function(tables, index_requests) {

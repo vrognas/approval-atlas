@@ -31,23 +31,77 @@ whocc_index_max_pages <- 10L
 # validators, so it is fetched again at most monthly.
 alterations_max_age_hours <- 30 * 24
 
-# Retired level-4 codes EMA still uses. The cumulative alterations list has
-# level-5 codes only, so these names were copied by hand (2026-09-27) from
-# archived copies of the ATC/DDD Index 2020; the replacements follow the
-# list: every L01XC code but L01XC04 (moved to L04AA34 in 2015) moved to
-# L01F in 2022, and every L01XE code to L01E in 2021.
+# Retired codes the cumulative alterations list leaves open, each with the
+# reason for its replacement (user decisions, 2026-09-27). The list has
+# level-5 codes only, so the names of the level-4 codes EMA still uses were
+# copied by hand from archived copies of the ATC/DDD Index 2020. These rows
+# win over the list's.
 curated_retired_atc_levels <- dplyr::tibble(
-  atc_code = c("L01XC", "L01XE"),
-  name = c("Monoclonal antibodies", "Protein kinase inhibitors"),
-  replaced_by = c("L01F", "L01E"),
-  changed_year = c(2022L, 2021L),
-  source_url = paste0(
-    "https://web.archive.org/web/",
-    c("20200627072941", "20200623144658"),
-    "/https://www.whocc.no/atc_ddd_index/?code=",
-    c("L01XC", "L01XE"),
-    "&showdescription=no"
+  atc_code = c("L01XC", "L01XE", "J07BX03"),
+  name = c(
+    "Monoclonal antibodies", "Protein kinase inhibitors", "covid-19 vaccines"
+  ),
+  replaced_by = c("L01F", "L01E", "J07BN"),
+  changed_year = c(2022L, 2021L, 2023L),
+  source = c(
+    "whocc_index_archived", "whocc_index_archived", "whocc_alterations"
+  ),
+  source_url = c(
+    paste0(
+      "https://web.archive.org/web/",
+      c("20200627072941", "20200623144658"),
+      "/https://www.whocc.no/atc_ddd_index/?code=",
+      c("L01XC", "L01XE"),
+      "&showdescription=no"
+    ),
+    whocc_alterations_url
+  ),
+  reason = c(
+    paste(
+      "Every L01XC code but L01XC04 (moved to L04AA34 in 2015) moved to L01F",
+      "in 2022."
+    ),
+    "Every L01XE code moved to L01E in 2021.",
+    paste(
+      "WHO deleted J07BX03 in 2023 without a successor; COVID-19 vaccines",
+      "are classified in J07BN."
+    )
   )
+)
+
+# Level names ChEMBL_37 gives differently from the ATC/DDD Index 2026
+# (version 2026-01-20), copied verbatim from the index pages (checked by
+# hand, 2026-09-27): ChEMBL's spellings ("hemophilus", "stems cells") and WHO
+# renames. The 2026 list renames J07BX01 and V09IX15 too; these rows keep
+# the names once that list is no longer read.
+curated_atc_name_corrections <- dplyr::tibble(
+  atc_code = c(
+    "J07BX01", "J07CA04", "J07CA06", "J07CA08", "J07CA09", "J07CA11",
+    "J07CA13", "L01FG", "N06BX21", "N07BA04", "S01XA19", "V09IX07", "V09IX15"
+  ),
+  name = c(
+    "smallpox and mpox vaccines",
+    "haemophilus influenzae B and poliomyelitis",
+    "diphtheria-haemophilus influenzae B-pertussis-poliomyelitis-tetanus",
+    "haemophilus influenzae B and hepatitis B",
+    paste0(
+      "diphtheria-haemophilus influenzae B-pertussis-poliomyelitis-tetanus-",
+      "hepatitis B"
+    ),
+    "diphtheria-haemophilus influenzae B-pertussis-tetanus-hepatitis B",
+    paste0(
+      "diphtheria-haemophilus influenzae B-pertussis-tetanus-hepatitis B-",
+      "meningococcus A + C"
+    ),
+    "VEGF/VEGFR (Vascular Endothelial Growth Factor / -Receptor) inhibitors",
+    "temgicoluril",
+    "cytisinicline",
+    "limbal stem cells, autologous",
+    "fluorocholine (18F)",
+    "copper (64Cu) oxodotreotide"
+  ),
+  source_url = whocc_index_url(atc_code),
+  index_version = "2026-01-20"
 )
 
 # One realm for the WHOCC site, two seconds apart.
@@ -90,43 +144,62 @@ whocc_updates_year <- function(url) {
   as.integer(stringr::str_match(url, "_(\\d{4})_final\\.xlsx$")[, 2])
 }
 
-download_whocc_updates <- function(cache_directory = ".cache/downloads/whocc",
-                                   year = current_year(),
-                                   max_age_hours =
-                                     daily_source_max_age_hours) {
-  destination <- file.path(
-    cache_directory,
-    "updates",
-    "atc_ddd_new_and_alterations.xlsx"
-  )
-  download_year <- function(year) {
-    url <- whocc_updates_url(year)
-    download_cached_source(
-      url,
-      destination,
-      request = whocc_request(url),
-      label = paste("WHOCC ATC/DDD updates", year),
-      max_age_hours = max_age_hours
-    )
-  }
-  # The list for a new year is published some time in January.
-  source <- download_or_use_cache(
-    tryCatch(
-      download_year(year),
-      httr2_http_404 = function(error) {
-        cli::cli_inform(
-          "No WHOCC ATC/DDD updates for {year} yet; using {year - 1}."
-        )
-        download_year(year - 1L)
-      }
-    ),
+whocc_updates_path <- function(cache_directory, folder) {
+  file.path(cache_directory, folder, "atc_ddd_new_and_alterations.xlsx")
+}
+
+download_whocc_updates_year <- function(year, destination, max_age_hours) {
+  url <- whocc_updates_url(year)
+  download_cached_source(
+    url,
     destination,
-    "The WHOCC ATC/DDD updates"
+    request = whocc_request(url),
+    label = paste("WHOCC ATC/DDD updates", year),
+    max_age_hours = max_age_hours
   )
+}
+
+with_updates_year <- function(source) {
   if (is.null(source)) {
     return(NULL)
   }
   c(source, year = whocc_updates_year(source$url))
+}
+
+download_whocc_updates <- function(cache_directory = ".cache/downloads/whocc",
+                                   year = current_year(),
+                                   max_age_hours =
+                                     daily_source_max_age_hours) {
+  destination <- whocc_updates_path(cache_directory, "updates")
+  # The list for a new year is published some time in January.
+  with_updates_year(download_or_use_cache(
+    tryCatch(
+      download_whocc_updates_year(year, destination, max_age_hours),
+      httr2_http_404 = function(error) {
+        cli::cli_inform(
+          "No WHOCC ATC/DDD updates for {year} yet; using {year - 1}."
+        )
+        download_whocc_updates_year(year - 1L, destination, max_age_hours)
+      }
+    ),
+    destination,
+    "The WHOCC ATC/DDD updates"
+  ))
+}
+
+# ChEMBL lags the index by about a year, so the list of the year before
+# still has names ChEMBL lacks.
+download_whocc_prior_updates <- function(cache_directory =
+                                           ".cache/downloads/whocc",
+                                         year = current_year() - 1L,
+                                         max_age_hours =
+                                           daily_source_max_age_hours) {
+  destination <- whocc_updates_path(cache_directory, "updates-previous")
+  with_updates_year(download_or_use_cache(
+    download_whocc_updates_year(year, destination, max_age_hours),
+    destination,
+    "The WHOCC ATC/DDD updates of the year before"
+  ))
 }
 
 download_whocc_temporary <- function(cache_directory = ".cache/downloads/whocc",
@@ -192,7 +265,9 @@ check_atc_code_format <- function(codes, source_name) {
   invisible(codes)
 }
 
-read_whocc_sheet <- function(path, sheet_pattern) {
+# The codes in the first column and the names in the second, or in the
+# column headed `name_header`.
+read_whocc_sheet <- function(path, sheet_pattern, name_header = NULL) {
   sheets <- readxl::excel_sheets(path)
   sheet <- sheets[grepl(sheet_pattern, stringr::str_squish(sheets))]
   if (length(sheet) != 1) {
@@ -216,19 +291,31 @@ read_whocc_sheet <- function(path, sheet_pattern) {
       column; has the WHOCC format changed?"
     )
   }
+  name_column <- if (is.null(name_header)) {
+    2L
+  } else {
+    header <- clean_whocc_text(unlist(cells[header_row, ], use.names = FALSE))
+    which(grepl(name_header, header))
+  }
+  if (length(name_column) != 1) {
+    cli::cli_abort(
+      "Sheet {.val {sheet}} of {.file {basename(path)}} has no column headed
+      {.val {name_header}}; has the WHOCC format changed?"
+    )
+  }
   rows <- cells[-seq_len(header_row), ]
   classes <- dplyr::tibble(
     atc_code = clean_whocc_text(rows[[1]]),
-    name = clean_whocc_text(rows[[2]])
+    name = clean_whocc_text(rows[[name_column]])
   ) |>
     dplyr::filter(!is.na(.data$atc_code), !is.na(.data$name))
   check_atc_code_format(classes$atc_code, paste("Sheet", sheet))
   classes
 }
 
-# New codes from a yearly (final) or temporary WHOCC update list. The other
-# sheets are not used: level alterations are in the cumulative list, and
-# ChEMBL's names take precedence over name alterations.
+# New codes from a yearly (final) or temporary WHOCC update list. Level
+# alterations are in the cumulative list; name alterations are read by
+# read_whocc_name_alterations().
 read_whocc_updates <- function(path, url, status) {
   dplyr::bind_rows(
     read_whocc_sheet(path, "^New ATC 5th levels$"),
@@ -242,6 +329,44 @@ read_whocc_updates <- function(path, url, status) {
       source = "whocc_updates",
       source_url = url
     )
+}
+
+# Codes a yearly list renames, with their new names.
+read_whocc_name_alterations <- function(path, url) {
+  read_whocc_sheet(
+    path,
+    "^ATC level name alterations$",
+    name_header = "^New ATC level name$"
+  ) |>
+    dplyr::mutate(source = "whocc_updates", source_url = url)
+}
+
+empty_atc_name_corrections <- function() {
+  dplyr::tibble(
+    atc_code = character(),
+    name = character(),
+    source = character(),
+    source_url = character()
+  )
+}
+
+# WHO names that replace ChEMBL's, one per code: the yearly lists' name
+# alterations (`name_alterations`, the newest list first), then the curated
+# corrections.
+build_atc_name_corrections <- function(name_alterations,
+                                       curated = curated_atc_name_corrections) {
+  dplyr::bind_rows(
+    empty_atc_name_corrections(),
+    name_alterations,
+    dplyr::transmute(
+      curated,
+      .data$atc_code,
+      .data$name,
+      source = "whocc_index",
+      .data$source_url
+    )
+  ) |>
+    dplyr::distinct(.data$atc_code, .keep_all = TRUE)
 }
 
 # Notes that keep the previous code in use for other products: a split, or a
@@ -323,7 +448,7 @@ follow_replacements <- function(code, next_code) {
 # Codes WHO moved as a whole (one new code, or deleted), each with its old
 # name and the code that holds its products now, through chains of moves
 # (L01XX28 -> L01XE01 -> L01EA01); NA when deleted. Split codes stay in use,
-# so they are not retired. The curated level-4 codes follow.
+# so they are not retired. The curated codes come first.
 build_retired_atc_codes <- function(alterations,
                                     curated_levels =
                                       curated_retired_atc_levels) {
@@ -331,11 +456,9 @@ build_retired_atc_codes <- function(alterations,
     retired_codes_from_alterations(alterations)
   }
   curated <- curated_levels |>
-    dplyr::mutate(
-      source = "whocc_index_archived",
-      replacement_source = "curated"
-    )
-  dplyr::bind_rows(empty_retired_atc_codes(), from_alterations, curated) |>
+    dplyr::select(-"reason") |>
+    dplyr::mutate(replacement_source = "curated")
+  dplyr::bind_rows(empty_retired_atc_codes(), curated, from_alterations) |>
     dplyr::mutate(level = atc_code_level(.data$atc_code)) |>
     dplyr::distinct(.data$atc_code, .keep_all = TRUE) |>
     dplyr::arrange(.data$atc_code)
@@ -404,10 +527,21 @@ read_whocc_updates_source <- function(source, status) {
   read_whocc_updates(source$path, source$url, status)
 }
 
+read_name_alterations_source <- function(source) {
+  if (is.null(source)) {
+    return(empty_atc_name_corrections())
+  }
+  read_whocc_name_alterations(source$path, source$url)
+}
+
 # The WHOCC lists, downloaded or cached. A list that is neither adds no
-# names or moves; the curated retired codes apply regardless.
+# names or moves; the curated retired codes and names apply regardless.
 read_whocc_sources <- function(whocc_directory) {
   updates_source <- download_whocc_updates(whocc_directory)
+  previous_updates_source <- download_whocc_prior_updates(
+    whocc_directory,
+    year = (updates_source$year %||% current_year()) - 1L
+  )
   temporary_source <- download_whocc_temporary(whocc_directory)
   alterations_source <- download_whocc_alterations(whocc_directory)
   alterations <- if (is.null(alterations_source)) {
@@ -417,14 +551,23 @@ read_whocc_sources <- function(whocc_directory) {
   }
   list(
     updates_source = updates_source,
+    previous_updates_source = previous_updates_source,
     temporary_source = temporary_source,
     alterations_source = alterations_source,
-    final_classes = read_whocc_updates_source(updates_source, "current"),
+    final_classes = dplyr::bind_rows(
+      read_whocc_updates_source(updates_source, "current"),
+      read_whocc_updates_source(previous_updates_source, "current")
+    ) |>
+      dplyr::distinct(.data$atc_code, .keep_all = TRUE),
     temporary_classes = read_whocc_updates_source(
       temporary_source,
       "temporary"
     ),
-    retired_codes = build_retired_atc_codes(alterations)
+    retired_codes = build_retired_atc_codes(alterations),
+    name_corrections = build_atc_name_corrections(dplyr::bind_rows(
+      read_name_alterations_source(updates_source),
+      read_name_alterations_source(previous_updates_source)
+    ))
   )
 }
 
@@ -639,7 +782,10 @@ whocc_index_source_entry <- function(cache_directory) {
     attribution = paste(
       whocc_attribution,
       "Names of the retired level-4 codes L01XC and L01XE from archived",
-      "copies of the ATC/DDD Index 2020 (Internet Archive)."
+      "copies of the ATC/DDD Index 2020 (Internet Archive).",
+      nrow(curated_atc_name_corrections),
+      "level names where ChEMBL differs copied from the ATC/DDD Index",
+      paste0(unique(curated_atc_name_corrections$index_version), ".")
     ),
     pages = nrow(cached)
   )

@@ -26,8 +26,16 @@ fixture_union_register_path <- function() {
   testthat::test_path("fixtures", "ods-products-sample.json")
 }
 
-fixture_whocc_updates_path <- function() {
-  testthat::test_path("fixtures", "whocc-new-and-alterations-2026.xlsx")
+fixture_whocc_updates_path <- function(year = 2026) {
+  testthat::test_path(
+    "fixtures",
+    paste0("whocc-new-and-alterations-", year, ".xlsx")
+  )
+}
+
+# Real ChEMBL_37 rows of codes the WHO index names differently.
+fixture_atc_class_renamed_path <- function() {
+  testthat::test_path("fixtures", "chembl-atc-class-renamed.json")
 }
 
 fixture_whocc_temporary_path <- function() {
@@ -52,8 +60,8 @@ seed_cached_source <- function(destination, fixture_path, source) {
   write_source_sidecar(source, file.path(dirname(destination), "source.json"))
 }
 
-# Fresh WHOCC caches. The yearly list is looked up by the current year, so
-# its sidecar names that year.
+# Fresh WHOCC caches. The yearly lists are looked up by the current year, so
+# their sidecars name this year and the year before.
 seed_whocc_downloads <- function(whocc_directory) {
   seed_cached_source(
     file.path(whocc_directory, "updates", "atc_ddd_new_and_alterations.xlsx"),
@@ -63,6 +71,20 @@ seed_whocc_downloads <- function(whocc_directory) {
       etag = NA_character_,
       last_modified = NA_character_,
       retrieved = "2026-09-27T16:50:12Z"
+    )
+  )
+  seed_cached_source(
+    file.path(
+      whocc_directory,
+      "updates-previous",
+      "atc_ddd_new_and_alterations.xlsx"
+    ),
+    fixture_whocc_updates_path(2025),
+    list(
+      url = whocc_updates_url(current_year() - 1L),
+      etag = "\"91f0-645fb2e841422-gzip\"",
+      last_modified = "Mon, 15 Dec 2025 10:36:19 GMT",
+      retrieved = "2026-09-27T21:17:56Z"
     )
   )
   seed_cached_source(

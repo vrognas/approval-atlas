@@ -1,0 +1,50 @@
+[
+  {
+    "level1": "J",
+    "level1_description": "ANTIINFECTIVES FOR SYSTEMIC USE",
+    "level2": "J07",
+    "level2_description": "VACCINES",
+    "level3": "J07B",
+    "level3_description": "VIRAL VACCINES",
+    "level4": "J07BX",
+    "level4_description": "Other viral vaccines",
+    "level5": "J07BX01",
+    "who_name": "smallpox and monkeypox vaccines"
+  },
+  {
+    "level1": "J",
+    "level1_description": "ANTIINFECTIVES FOR SYSTEMIC USE",
+    "level2": "J07",
+    "level2_description": "VACCINES",
+    "level3": "J07C",
+    "level3_description": "BACTERIAL AND VIRAL VACCINES, COMBINED",
+    "level4": "J07CA",
+    "level4_description": "Bacterial and viral vaccines, combined",
+    "level5": "J07CA09",
+    "who_name": "diphtheria-hemophilus influenzae B-pertussis-poliomyelitis-tetanus-hepatitis B"
+  },
+  {
+    "level1": "L",
+    "level1_description": "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS",
+    "level2": "L01",
+    "level2_description": "ANTINEOPLASTIC AGENTS",
+    "level3": "L01F",
+    "level3_description": "MONOCLONAL ANTIBODIES AND ANTIBODY DRUG CONJUGATES",
+    "level4": "L01FG",
+    "level4_description": "VEGF/VEGFR (Vascular Endothelial Growth Factor) inhibitors",
+    "level5": "L01FG01",
+    "who_name": "bevacizumab"
+  },
+  {
+    "level1": "V",
+    "level1_description": "VARIOUS",
+    "level2": "V09",
+    "level2_description": "DIAGNOSTIC RADIOPHARMACEUTICALS",
+    "level3": "V09I",
+    "level3_description": "TUMOUR DETECTION",
+    "level4": "V09IX",
+    "level4_description": "Other diagnostic radiopharmaceuticals for tumour detection",
+    "level5": "V09IX15",
+    "who_name": "copper (64Cu) dotatate"
+  }
+]
