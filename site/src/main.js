@@ -8,7 +8,6 @@ import {
   buildSubstanceIndex,
   countApprovalsByYear,
   countTiles,
-  distinctSorted,
   isAuthorizedNow,
   newestFirst,
 } from "./approvals.js";
@@ -17,13 +16,16 @@ import { renderAtcPath, renderAtcPicker } from "./atc-picker.js";
 import { atcHue } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend } from "./chart.js";
+import { createFacetPanel } from "./facet-panel.js";
+import { FACET_VALUES, TYPE_ORDER, facetCounts, facetPopulation, sentenceParts, topAreas, typeSplit } from "./facets.js";
+import { renderSentence } from "./filter-sentence.js";
 import { filterProducts, makePredicates, parseAtcQuery } from "./filters.js";
-import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
+import { UI, atcClassLabel, atcName } from "./labels.js";
 import { createLookup, headlineNodes } from "./lookup.js";
-import { createMultiSelect } from "./multi-select.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { createSearchBox } from "./search-box.js";
 import { buildLookupIndex, suggest, suggestAtcClasses } from "./search.js";
+import { createSheet } from "./sheet.js";
 import { createTable } from "./table.js";
 import { initTabs } from "./tabs.js";
 import { renderTiles } from "./tiles.js";
@@ -56,7 +58,34 @@ const DASHBOARD_FILES = [
 const REGISTER_FILE = "ema_medicine_register_status.json";
 // The filter each breakdown ignores and toggles.
 const BREAKDOWN_FILTER = { atc: "atc", area: "branch", mah: "mah" };
-const WIDE = window.matchMedia("(min-width: 721px)");
+// The facet sidebar from this width; below it, the sentence's tokens open bottom sheets.
+const DESKTOP = window.matchMedia("(min-width: 1024px)");
+// Facet sections (index.html #facet-{key}) each sheet shows, the sheet each sentence token
+// opens, and the filter keys each section sets.
+const SHEET_SECTIONS = {
+  type: ["type"],
+  atc: ["atc"],
+  mah: ["mah"],
+  areas: ["branch", "area"],
+  date: ["date"],
+  status: ["status"],
+  all: ["date", "type", "atc", "branch", "area", "mah", "status"],
+};
+const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", branch: "areas", area: "areas", areas: "areas", from: "date", to: "date", status: "status" };
+const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], branch: ["branch"], area: ["area"], date: ["from", "to"], status: ["status"] };
+// Desktop: the control each token focuses, the first one of its own section.
+const TOKEN_TARGETS = {
+  type: "#facet-type input",
+  atc: "#atc-input",
+  mah: "#facet-mah .facet-search",
+  areas: "#facet-branch input",
+  branch: "#facet-branch input",
+  area: "#facet-area .facet-search",
+  from: "#year-from",
+  to: "#year-to",
+  status: "#facet-status input",
+};
+const FACETS = ["type", "status", "branch", "area", "mah", "date"];
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -298,43 +327,73 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     (rows) => rows.map((row) => row.branch_name),
     (row) => row.therapeutic_area_mesh,
   );
-  const byLabel = (a, b) => a.label.localeCompare(b.label);
-  const options = {
-    mah: distinctSorted(products.map((product) => product.mah)).map((value) => ({ value, label: value })),
-    branch: [...branchNames].map(([value, label]) => ({ value, label })).sort(byLabel),
-    area: distinctSorted(areaRows.map((row) => row.therapeutic_area_mesh)).map((value) => ({ value, label: value })),
-    type: MEDICINE_TYPES.map((value) => ({ value, label: value })),
-    status: distinctSorted(products.map((product) => product.medicine_status)).map((value) => ({ value, label: statusLabel(value) })).sort(byLabel),
-  };
+  // EMA term -> MeSH descriptor, so a common condition opens its condition lookup.
+  const descriptorOf = new Map(branchRows.map((row) => [row.therapeutic_area_mesh, row.mesh_descriptor_ui]));
   const domain = {
-    mahs: new Set(options.mah.map((option) => option.value)),
-    branches: new Set(options.branch.map((option) => option.value)),
-    areas: new Set(options.area.map((option) => option.value)),
+    mahs: new Set(products.map((product) => product.mah)),
+    branches: new Set(branchNames.keys()),
+    areas: new Set(areaRows.map((row) => row.therapeutic_area_mesh)),
     types: new Set(MEDICINE_TYPES),
-    statuses: new Set(options.status.map((option) => option.value)),
+    statuses: new Set(products.map((product) => product.medicine_status)),
     years: approvalYears,
   };
+  const branchName = (branch) => branchNames.get(branch) ?? branch;
   const breakdownLabel = {
-    area: (branch) => branchNames.get(branch) ?? branch,
+    area: branchName,
     mah: (mah) => mah,
   };
 
   renderLegend($("#legend"));
   renderOverTimeLegend($("#over-time-legend"));
 
-  // Phones: the filter row collapses into a closed disclosure; wider screens keep it open.
-  const disclosure = $("#filters");
-  const syncDisclosure = () => {
-    disclosure.open = WIDE.matches;
-  };
-  WIDE.addEventListener("change", syncDisclosure);
-  syncDisclosure();
+  // Every filter key reset to its default (the sentence's remove buttons, Clear, Reset).
+  const cleared = (keys) => Object.fromEntries(keys.map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
+  const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch), labelOf: { branch: branchName } });
+  $("#reset-all").addEventListener("click", () => {
+    setState(cleared(FILTER_KEYS));
+    $("#facets-title").focus(); // the button is disabled now
+  });
+  const sheet = createSheet($("#sheet"), { onClear: (keys) => setState(cleared(keys)) });
+  DESKTOP.addEventListener("change", () => {
+    if (DESKTOP.matches) sheet.close(); // its sections go back to the sidebar
+    scheduleRender(); // tokens open a dialog only below 1024px
+  });
+  // The token whose sidebar section has focus (desktop): Escape goes back to it.
+  let opener = null;
+  // A sentence token (its key) or All filters ("all"): on desktop, the token's own section and
+  // control; below that, a sheet with its sections.
+  function openFilters(key) {
+    const sheetKey = TOKEN_SHEETS[key] ?? key;
+    const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
+    if (DESKTOP.matches) {
+      const target = $(TOKEN_TARGETS[key]) ?? sections[0];
+      target.closest(".facet").scrollIntoView({ block: "start" });
+      target.focus({ preventScroll: true });
+      opener = key;
+      return;
+    }
+    sheet.open({
+      title: UI.sheet.titles[sheetKey] ?? sections[0].querySelector(".facet-title").textContent,
+      sections,
+      clears: SHEET_SECTIONS[sheetKey].flatMap((section) => SECTION_KEYS[section]),
+      restore: () => $(`#filter-sentence [data-sheet="${sheetKey}"]`) ?? $("#all-filters"),
+    });
+    // The ATC sheet has room for the classes: open the picker's list (its own toggle).
+    if (sheetKey === "atc") $('#atc-picker .atc-browse[aria-expanded="false"]')?.click();
+  }
+  // Escape in the sidebar returns to the results: the token that led there, else the headline.
+  // A search with text clears first (the browser's own Escape).
+  $("#facets").addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented || (event.target.type === "search" && event.target.value)) return;
+    ($(`#filter-sentence [data-focus-key="${opener}:open"]`) ?? $(`#filter-sentence [data-sheet="${TOKEN_SHEETS[opener]}"]`) ?? $("#headline")).focus();
+  });
+  const allFilters = $("#all-filters");
+  allFilters.textContent = UI.sentence.allFilters;
+  allFilters.addEventListener("click", () => openFilters("all"));
+  const otherStatuses = $("#other-statuses-open");
+  otherStatuses.textContent = UI.otherStatuses.action;
+  otherStatuses.addEventListener("click", () => navigate({ view: "years" })); // focus: the new headline
 
-  const selects = Object.fromEntries(Object.keys(options).map((key) => [key, createMultiSelect($(`#filter-${key}`), {
-    label: UI.filters[key],
-    options: options[key],
-    onChange: (values) => setState({ [key]: values }),
-  })]));
   const atcInput = $("#atc-input");
   atcInput.maxLength = ATC_QUERY_MAX;
   atcInput.addEventListener("input", () => setState({ atc: atcInput.value }));
@@ -344,8 +403,8 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     return query.kind === "code" ? query.value : null;
   };
   const selectAtc = (code) => setState({ atc: code ?? "" });
-  // The picker's current level, or the disclosure's summary while it is closed (phones).
-  const focusAtcPicker = () => (disclosure.open ? $("#atc-picker [aria-current]") : $("#filters-summary"))?.focus();
+  // The picker's current level in the sidebar, or the sentence's ATC token (phones, tablets).
+  const focusAtcFilter = () => (DESKTOP.matches ? $("#atc-picker [aria-current]") : $('#filter-sentence [data-sheet="atc"]'))?.focus();
 
   const fromInput = $("#year-from");
   const toInput = $("#year-to");
@@ -354,7 +413,10 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   const readYears = () => setState(normalizeYearRange(readYear(fromInput), readYear(toInput), approvalYears));
   fromInput.addEventListener("change", readYears);
   toInput.addEventListener("change", readYears);
-  $("#year-reset").addEventListener("click", () => setState({ from: null, to: null }));
+  $("#year-reset").addEventListener("click", () => {
+    setState({ from: null, to: null });
+    fromInput.focus(); // the button is disabled now
+  });
   const readout = $("#year-readout");
   const showReadout = (from, to) => {
     readout.textContent = from === approvalYears[0] && to === approvalYears[1] ? UI.allYears : UI.yearRange(from, to);
@@ -371,7 +433,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     branchNamesByTerm,
     // A segment filters by its level; pressed again, it clears the ATC filter.
     onAtcSelect: (code) => selectAtc(code === selectedAtc() ? null : code),
-    focusFallback: focusAtcPicker,
+    focusFallback: focusAtcFilter,
   });
 
   // Area and holder rows toggle their filter value; ATC rows drill down (atcBreakdown()).
@@ -417,19 +479,29 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     announceFilters = false;
     clearTimeout(announceTimer);
     announceTimer = setTimeout(() => {
-      $("#filter-result").textContent = $("#headline").textContent;
+      // An open sheet makes the page behind it inert, and inert live regions are not announced.
+      $(sheet.isOpen() ? "#sheet-status" : "#filter-result").textContent = $("#headline").textContent;
     }, 500);
   }
 
   // ATC breakdown: the classes one level below the ATC code filter (level-1 groups without one,
   // or for a name query), then the products coded exactly at it (a static row); a class without
   // children shows only itself. counts, exact: atcPrefixCounts(), atcExactCounts() of the
-  // breakdown's population.
-  function atcBreakdown(counts, exact) {
+  // breakdown's population; types: that population split by medicine type (typeSplit()) per
+  // prefix and per exact code, for the stacked bars.
+  function atcBreakdown(counts, exact, types) {
     const current = selectedAtc();
-    const toRow = (row) => (row.incomplete
-      ? { key: row.code, label: UI.atc.incomplete, count: row.count, static: true, incomplete: true }
-      : { key: row.code, label: atcName(row.code, row.name), count: row.count, ariaLabel: UI.atc.classCount(row.code, row.name, row.count) });
+    const stack = (row) => {
+      const split = (row.incomplete ? types.exact : types.prefix).get(row.code);
+      const segments = TYPE_ORDER.filter((type) => split?.get(type)).map((type) => ({ type, count: split.get(type) }));
+      return { segments, split: UI.breakdown.typeSplit(segments.map((segment) => [segment.type, segment.count])) };
+    };
+    const toRow = (row) => {
+      const { segments, split } = stack(row);
+      return row.incomplete
+        ? { key: row.code, label: UI.atc.incomplete, count: row.count, static: true, incomplete: true, segments, split }
+        : { key: row.code, label: atcName(row.code, row.name), count: row.count, segments, split, ariaLabel: `${UI.atc.classCount(row.code, row.name, row.count)}: ${split}` };
+    };
     const children = atcChildren(current, counts, atcNames, exact);
     if (current === null) return { current, title: UI.breakdown.atc.title, rows: children.map(toRow) };
     const label = atcClassLabel(current, atcNames.get(current));
@@ -456,7 +528,28 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     if (focused !== undefined) container.querySelector(`[data-focus-key="${focused}"]`)?.focus();
   }
 
-  function renderNow(predicates, authorizedNow, counts, withoutDateFilter, atcCounts, atcExact) {
+  // With any filter active: the therapeutic areas of the authorized medicines shown, as links to
+  // their condition lookup where the MeSH descriptor is known.
+  function renderConditions(authorizedNow) {
+    const rows = topAreas(authorizedNow, descriptorOf);
+    const card = $("#conditions");
+    card.hidden = rows.length === 0;
+    if (card.hidden) return;
+    d3.select("#conditions-title").text(UI.conditions.title);
+    d3.select("#conditions-subtitle").text(UI.conditions.subtitle(authorizedNow.length));
+    const list = d3.select("#conditions-list");
+    list.selectChildren().remove();
+    for (const row of rows) {
+      const item = list.append("li");
+      if (row.descriptorUi) item.append(() => lookup.link(row.term, { cond: row.descriptorUi }));
+      else item.append("span").text(row.term);
+      item.append("span").attr("class", "bar-track").attr("aria-hidden", "true")
+        .append("span").attr("class", "bar-fill").style("width", `${(100 * row.count) / rows[0].count}%`);
+      item.append("span").attr("class", "bar-value").text(d3.format(",")(row.count));
+    }
+  }
+
+  function renderNow(predicates, authorizedNow, counts, withoutDateFilter, atcCounts, atcExact, atcTypes) {
     renderTiles($("#tiles"), counts);
     showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
     const undated = withoutDateFilter.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
@@ -467,9 +560,13 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     });
     const card = $("#breakdown").closest(".chart-card");
     const hadFocus = card.contains(document.activeElement);
-    const atc = state.by === "atc" ? atcBreakdown(atcCounts, atcExact) : null;
+    const atc = state.by === "atc" ? atcBreakdown(atcCounts, atcExact, atcTypes) : null;
     d3.select("#breakdown-title").text(atc?.title ?? UI.breakdown[state.by].title);
     d3.select("#breakdown-note").text(UI.breakdown[state.by].note).attr("hidden", UI.breakdown[state.by].note ? null : "");
+    // One legend per card: the medicine types the stacked ATC bars show.
+    const legendTypes = TYPE_ORDER.filter((type) => atc?.rows.some((row) => row.segments.some((segment) => segment.type === type)));
+    renderLegend($("#breakdown-legend"), legendTypes);
+    $("#breakdown-legend").hidden = legendTypes.length === 0;
     renderBreakdownPath(atc?.current ?? null);
     const population = filterProducts(products, predicates, BREAKDOWN_FILTER[state.by]).filter(isAuthorizedNow);
     renderBreakdown($("#breakdown"), atc ? atc.rows : breakdownCounts(population, state.by, breakdownLabel[state.by]), atc
@@ -491,7 +588,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
 
   function renderDashboard() {
     renderTabs(state.view);
-    for (const [key, select] of Object.entries(selects)) select.update(options[key], state[key]);
     if (atcInput.value !== state.atc) atcInput.value = state.atc;
     fromInput.value = state.from ?? approvalYears[0];
     toInput.value = state.to ?? approvalYears[1];
@@ -499,20 +595,42 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     showReadout(state.from ?? approvalYears[0], state.to ?? approvalYears[1]);
 
     const predicates = makePredicates(state, atcClasses);
-    d3.select("#filters-summary").text(UI.filtersSummary(Object.keys(predicates).length));
-    // ATC facet counts: authorized products matching every other filter, per prefix (and per
-    // exact code, for the products coded only down to an incomplete level).
-    const atcPopulation = filterProducts(products, predicates, "atc").filter(isAuthorizedNow);
+    const activeCount = Object.keys(predicates).length;
+    facetPanel.render({
+      view: state.view,
+      state,
+      counts: Object.fromEntries(FACETS.map((dimension) => [
+        dimension,
+        facetCounts(products, predicates, dimension, FACET_VALUES[dimension], facetPopulation(state.view, dimension)),
+      ])),
+      years: approvalYears,
+      activeCount,
+    });
+    renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, branchNames, atcNames }), {
+      anyActive: activeCount > 0,
+      sheetOf: (key) => TOKEN_SHEETS[key],
+      popup: !DESKTOP.matches,
+      onOpen: openFilters,
+      onRemove: (token) => setState(cleared(token.clears)),
+      onReset: () => setState(cleared(FILTER_KEYS)),
+    });
+    // ATC counts per prefix (and per exact code, for the products coded only down to an
+    // incomplete level) of the products matching every other filter: authorized now for the
+    // breakdown and class path; the view's population (facetPopulation()) for the picker.
+    const withoutAtcFilter = filterProducts(products, predicates, "atc");
+    const atcPopulation = withoutAtcFilter.filter(isAuthorizedNow);
     const atcCounts = atcPrefixCounts(atcPopulation);
     const atcExact = atcExactCounts(atcPopulation);
+    const pickerPopulation = state.view === "now" ? atcPopulation : withoutAtcFilter.filter(facetPopulation(state.view, "atc"));
     const atcQuery = parseAtcQuery(state.atc);
     renderAtcPicker($("#atc-picker"), {
       current: selectedAtc(),
       nameQuery: atcQuery.kind === "name" ? state.atc.trim() : null,
-      counts: atcCounts,
-      exact: atcExact,
+      counts: state.view === "now" ? atcCounts : atcPrefixCounts(pickerPopulation),
+      exact: state.view === "now" ? atcExact : atcExactCounts(pickerPopulation),
       names: atcNames,
       onSelect: selectAtc,
+      countNoun: state.view === "now" ? "authorized" : "approved",
     });
     // The per-year chart and the over-time line ignore the approval-year filter and mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
@@ -522,9 +640,27 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const tableRows = state.view === "now"
       ? authorizedNow
       : filtered.filter((product) => product.year !== null);
+    sheet.update(tableRows.length);
     renderHeadline(predicates, tableRows, counts, atcCounts);
-    if (state.view === "now") renderNow(predicates, authorizedNow, counts, withoutDateFilter, atcCounts, atcExact);
-    else renderYears(withoutDateFilter);
+    // Authorized now cannot show other statuses: say where the Status facet's counts are.
+    const elsewhere = state.view === "now" && state.status.some((status) => status !== "Authorised")
+      ? filtered.filter((product) => product.year !== null).length
+      : 0;
+    $("#other-statuses").hidden = elsewhere === 0;
+    $("#other-statuses-text").textContent = elsewhere ? UI.otherStatuses.note(elsewhere) : "";
+    if (state.view === "now") {
+      const atcTypes = state.by === "atc"
+        ? {
+          prefix: typeSplit(atcPopulation, (product) => product.atc.flatMap((row) => atcPrefixes(row.atc_code_human))),
+          exact: typeSplit(atcPopulation, (product) => product.atc.map((row) => row.atc_code_human).filter(atcLevel)),
+        }
+        : null;
+      renderNow(predicates, authorizedNow, counts, withoutDateFilter, atcCounts, atcExact, atcTypes);
+    } else {
+      renderYears(withoutDateFilter);
+    }
+    if (state.view === "now" && activeCount > 0) renderConditions(authorizedNow);
+    else $("#conditions").hidden = true;
 
     renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
     const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
@@ -539,6 +675,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   scheduleUrlWrite(state); // canonical form, invalid values removed
   d3.select("#app-loading").attr("hidden", "");
   d3.select("#app").attr("hidden", null);
+  d3.select("#facets").attr("hidden", null);
   const resizeObserver = new ResizeObserver(scheduleRender);
   for (const selector of ["#chart", "#over-time"]) resizeObserver.observe($(selector));
   render();
@@ -547,6 +684,11 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     scheduleRender();
   }, () => {});
 }
+
+// Desktop: the sidebar starts below the fixed header, whose height follows its text (the offline
+// note, user text spacing).
+const header = $("header");
+new ResizeObserver(() => document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`)).observe(header);
 
 renderAbout();
 Promise.all(FIRST_FILES.map(loadFile)).then(startLookup, showMissingData);

@@ -44,6 +44,9 @@ const TEXT_PAIRS = [
   ["--ink", "--input"],
   ["--on-accent", "--accent"],
   ["--accent", "--accent-wash"],
+  // Checked facet rows: name and count on the accent wash.
+  ["--ink", "--accent-wash"],
+  ["--ink-secondary", "--accent-wash"],
   ["--ink", "--mark"],
   ...STATUSES.flatMap((status) => [`--status-${status}-fill`, ...BACKGROUNDS].map((background) => [`--status-${status}-text`, background])),
   ...ATC_HUES.flatMap((hue) => [1, 2, 3, 4, 5].map((level) => [`--${hue}-text`, `--${hue}-${level}`])),

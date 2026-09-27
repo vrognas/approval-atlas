@@ -129,22 +129,68 @@ export const UI = {
   missingData: ["No data found. Run ", "Rscript scripts/run-pipeline.R", " first."],
   ignoredValues: (count) => `${plural(count, "filter value", "filter values")} in the link ${count === 1 ? "was" : "were"} not recognized and ignored.`,
 
-  filters: {
-    mah: "Marketing authorization holder",
-    branch: "Therapeutic area group",
-    area: "Therapeutic area",
-    type: "Medicine type",
-    status: "Status",
+  // The filter sentence under the headline (facets.js sentenceParts()): each token opens its
+  // sidebar section (desktop) or sheet (phones, tablets); an active one has a remove button.
+  sentence: {
+    words: { showing: "Showing ", in: " in ", from: " from ", and: " and ", approved: ", approved ", to: "–", with: ", with ", end: "." },
+    defaults: {
+      type: "all medicine types",
+      atc: "all ATC classes",
+      mah: "all holders",
+      branch: "all therapeutic area groups",
+      area: "all therapeutic areas",
+      status: "any status",
+    },
+    many: {
+      type: (count) => plural(count, "medicine type", "medicine types"),
+      mah: (count) => plural(count, "holder", "holders"),
+      branch: (count) => plural(count, "therapeutic area group", "therapeutic area groups"),
+      area: (count) => plural(count, "therapeutic area", "therapeutic areas"),
+      status: (count) => plural(count, "status", "statuses"),
+    },
+    atcName: (query) => `ATC classes matching “${query}”`,
+    status: (label) => `status ${label}`,
+    // The filter each token (sentenceParts() key) belongs to, for its accessible name.
+    dimensions: {
+      type: "medicine type",
+      atc: "ATC class",
+      mah: "holder",
+      areas: "therapeutic area",
+      branch: "therapeutic area group",
+      area: "therapeutic area",
+      from: "start year",
+      to: "end year",
+      status: "status",
+    },
+    // The visible text first, so speech input can use it (WCAG 2.5.3).
+    tokenName: (key, text) => `${text}, ${UI.sentence.dimensions[key]} filter`,
+    remove: (key, text) => `Remove ${UI.sentence.dimensions[key]} filter: ${text}`,
+    reset: "Reset",
+    allFilters: "All filters",
   },
-  multiSelect: {
-    placeholder: "All",
-    search: "Search…",
-    selected: (label) => `Selected: ${label}`,
-    remove: (name) => `Remove ${name}`,
-    added: (name, count) => `Added ${name}. ${formatCount(count)} selected.`,
-    removed: (name, count) => `Removed ${name}. ${formatCount(count)} selected.`,
+  // Facet sections: the desktop sidebar and the phone sheets.
+  facets: {
+    active: (count) => (count ? `${formatCount(count)} active` : null),
+    counts: (view) => (view === "now"
+      ? "Counts: authorized medicines matching the other filters."
+      : "Counts: medicines with an approval date matching the other filters."),
+    // Authorized now: the Status section counts every status.
+    statusNote: "all medicines",
+    search: (count, noun) => `Filter ${formatCount(count)} ${noun}`,
+    nouns: { area: "areas", mah: "holders" },
+    searchLabel: { area: "Filter therapeutic areas", mah: "Filter marketing authorization holders" },
+    showAll: (count) => `Show all ${formatCount(count)}`,
+    showFewer: "Show fewer",
+    showMore: (count) => `Show ${formatCount(count)} more`,
     noMatches: "No matches",
-    matches: (count, shown) => `${plural(count, "match", "matches")}${count > shown ? `, showing first ${shown}` : ""}`,
+    // Announced after typing in a facet search.
+    matches: (count) => (count ? plural(count, "match", "matches") : UI.facets.noMatches),
+  },
+  sheet: {
+    show: (count) => `Show ${plural(count, "medicine", "medicines")}`,
+    clear: "Clear",
+    // Sheets with more than one section; single sections take their heading.
+    titles: { areas: "Therapeutic areas", all: "Filters" },
   },
   allYears: "All years",
   yearRange: (from, to) => (from === to ? `${from}` : `${from}–${to}`),
@@ -233,6 +279,18 @@ export const UI = {
     // A missing holder is counted as "Not stated", so no medicine is left out.
     mah: { title: "Authorized products by marketing authorization holder", note: "" },
     empty: "No authorized products match the current filters.",
+    // A stacked ATC bar's medicine types: [[type, count]] in stack order.
+    typeSplit: (entries) => entries.map(([type, count]) => `${formatCount(count)} ${type}`).join(", "),
+  },
+  // Authorized now with a status filter other than Authorized: where those medicines are.
+  otherStatuses: {
+    note: (count) => `Authorized now shows authorized medicines only; ${plural(count, "medicine", "medicines")} ${count === 1 ? "matches" : "match"} these filters in Approvals per year.`,
+    action: "Open Approvals per year",
+  },
+  // Shown in the Authorized now view while any filter is active.
+  conditions: {
+    title: "Most common conditions",
+    subtitle: (count) => `Therapeutic areas of the ${plural(count, "authorized medicine", "authorized medicines")} shown`,
   },
   other: "Other",
 
@@ -287,8 +345,9 @@ export const UI = {
     classPath: "ATC levels of this class",
     browse: "Browse ATC classes",
     childrenLabel: (level, parent) => (parent ? `ATC level ${level} classes in ${parent}` : "ATC level 1 groups"),
-    // Picker rows, path items and bars: the class and its count (null: no count shown).
-    classCount: (code, name, count) => `${namedClass(code, name)}${count === null ? "" : `, ${formatCount(count)} authorized`}`,
+    // Picker rows, path items and bars: the class and its count (null: no count shown). noun:
+    // "approved" where the picker counts medicines with an approval date (Approvals per year).
+    classCount: (code, name, count, noun = "authorized") => `${namedClass(code, name)}${count === null ? "" : `, ${formatCount(count)} ${noun}`}`,
     // The products whose code stops at the parent class (no child class).
     incomplete: "code incomplete",
     nameFilter: (query) => `Showing all groups; the name filter “${query}” is applied.`,
@@ -303,7 +362,6 @@ export const UI = {
     classed: (names, code) => `${listing(names)} ${names.length === 1 ? "is" : "are"} classed ${code}.`,
   },
 
-  filtersSummary: (count) => (count ? `Filters (${formatCount(count)} active)` : "Filters"),
   offline: (date) => `Offline — data as of ${formatDate(date)}`,
 
   lookup: {

@@ -264,6 +264,59 @@ test("picker, path and bar controls name the class and its count", () => {
   assert.equal(classCount("L", ATC_LEVEL_ONE.L[0], 1481), "L — Antineoplastic and Immunomodulating Agents, 1,481 authorized");
   assert.equal(classCount("L04AL", null, 3), "L04AL no WHO name yet, 3 authorized");
   assert.equal(classCount("L04", "IMMUNOSUPPRESSANTS", null), "L04 IMMUNOSUPPRESSANTS");
+  // Approvals per year view: the picker counts medicines with an approval date.
+  assert.equal(classCount("L04", "IMMUNOSUPPRESSANTS", 160, "approved"), "L04 IMMUNOSUPPRESSANTS, 160 approved");
+});
+
+test("stacked ATC bars name their split by medicine type", () => {
+  const { typeSplit } = labels.UI.breakdown;
+  assert.equal(typeSplit([["Other", 1], ["Biosimilar", 11]]), "1 Other, 11 Biosimilar");
+  assert.equal(
+    `${labels.UI.atc.classCount("L04AC05", "ustekinumab", 12)}: ${typeSplit([["Other", 1], ["Biosimilar", 11]])}`,
+    "L04AC05 ustekinumab, 12 authorized: 1 Other, 11 Biosimilar",
+  );
+});
+
+test("filter sentence, sidebar and sheet copy", () => {
+  const { sentence, facets, sheet } = labels.UI;
+  // Tokens: the visible text first (WCAG 2.5.3), then the filter they belong to.
+  assert.equal(sentence.tokenName("type", "all medicine types"), "all medicine types, medicine type filter");
+  assert.equal(sentence.tokenName("from", "1995"), "1995, start year filter");
+  assert.equal(sentence.tokenName("to", "2026"), "2026, end year filter");
+  assert.equal(sentence.tokenName("areas", "all therapeutic areas"), "all therapeutic areas, therapeutic area filter");
+  assert.equal(sentence.remove("type", "Biosimilar"), "Remove medicine type filter: Biosimilar");
+  assert.equal(sentence.remove("from", "2010"), "Remove start year filter: 2010");
+  for (const key of ["type", "atc", "mah", "areas", "branch", "area", "from", "to", "status"]) assert.ok(sentence.dimensions[key], key);
+  assert.equal(sentence.reset, "Reset");
+  assert.equal(sentence.allFilters, "All filters");
+  assert.equal(facets.active(0), null);
+  assert.equal(facets.active(2), "2 active");
+  assert.equal(facets.counts("now"), "Counts: authorized medicines matching the other filters.");
+  assert.equal(facets.counts("years"), "Counts: medicines with an approval date matching the other filters.");
+  assert.equal(facets.statusNote, "all medicines");
+  assert.equal(facets.search(659, "areas"), "Filter 659 areas");
+  assert.equal(facets.showAll(41), "Show all 41");
+  assert.equal(facets.showMore(20), "Show 20 more");
+  assert.equal(facets.matches(0), "No matches");
+  assert.equal(facets.matches(1), "1 match");
+  assert.equal(facets.matches(1234), "1,234 matches");
+  assert.equal(sheet.show(33), "Show 33 medicines");
+  assert.equal(sheet.show(1), "Show 1 medicine");
+  assert.equal(sheet.clear, "Clear");
+});
+
+test("Authorized now points to Approvals per year for statuses it cannot show", () => {
+  const { otherStatuses } = labels.UI;
+  assert.equal(otherStatuses.note(363), "Authorized now shows authorized medicines only; 363 medicines match these filters in Approvals per year.");
+  assert.equal(otherStatuses.note(1), "Authorized now shows authorized medicines only; 1 medicine matches these filters in Approvals per year.");
+  assert.equal(otherStatuses.action, "Open Approvals per year");
+});
+
+test("the most common conditions card names the medicines it covers", () => {
+  const { conditions } = labels.UI;
+  assert.equal(conditions.title, "Most common conditions");
+  assert.equal(conditions.subtitle(33), "Therapeutic areas of the 33 authorized medicines shown");
+  assert.equal(conditions.subtitle(1), "Therapeutic areas of the 1 authorized medicine shown");
 });
 
 test("ladder links name the level, the class and the medicines authorized today", () => {

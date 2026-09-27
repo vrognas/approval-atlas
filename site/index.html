@@ -56,31 +56,19 @@
         <section class="answer" aria-labelledby="headline">
           <h2 id="headline" class="headline" tabindex="-1"></h2>
           <p id="headline-dek" class="dek"></p>
+          <p id="other-statuses" class="note other-statuses" hidden>
+            <span id="other-statuses-text"></span>
+            <button id="other-statuses-open" class="text-button" type="button"></button>
+          </p>
           <div id="class-path" class="class-path" hidden></div>
         </section>
         <p id="filter-result" class="visually-hidden" role="status"></p>
 
-        <details id="filters" class="filters-disclosure">
-          <summary id="filters-summary">Filters</summary>
-          <section class="filters" aria-label="Filters">
-            <fieldset class="year-range">
-              <legend>Approval years</legend>
-              <label>From <input id="year-from" type="number" inputmode="numeric" step="1" /></label>
-              <label>To <input id="year-to" type="number" inputmode="numeric" step="1" /></label>
-              <button id="year-reset" type="button">Reset</button>
-            </fieldset>
-            <div id="filter-mah"></div>
-            <div id="filter-branch"></div>
-            <div id="filter-area"></div>
-            <div class="text-filter atc-filter">
-              <label for="atc-input">ATC code or name</label>
-              <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
-              <div id="atc-picker" class="atc-picker"></div>
-            </div>
-            <div id="filter-type"></div>
-            <div id="filter-status"></div>
-          </section>
-        </details>
+        <!-- The filters as a sentence: tokens open the sidebar section (desktop) or a sheet. -->
+        <div class="sentence-row">
+          <p id="filter-sentence" class="sentence"></p>
+          <button id="all-filters" class="all-filters" type="button" aria-haspopup="dialog"></button>
+        </div>
         <p id="url-note" class="note" role="status" hidden></p>
 
         <div role="tablist" aria-label="View" class="tabs">
@@ -102,6 +90,7 @@
               </div>
             </div>
             <p id="breakdown-note" class="muted"></p>
+            <ul id="breakdown-legend" class="legend" hidden></ul>
             <div id="breakdown-path" class="breakdown-path" hidden></div>
             <div id="breakdown" class="breakdown"></div>
             <p id="breakdown-excluded" class="muted" hidden></p>
@@ -129,6 +118,12 @@
           <p id="over-time-note" class="muted"></p>
         </section>
 
+        <section id="conditions" class="chart-card" aria-labelledby="conditions-title" hidden>
+          <h2 id="conditions-title"></h2>
+          <p id="conditions-subtitle" class="muted"></p>
+          <ol id="conditions-list" class="condition-list"></ol>
+        </section>
+
         <section class="chart-card table-card" aria-labelledby="table-title">
           <h2 id="table-title">Medicines</h2>
           <div class="table-scroll">
@@ -138,6 +133,85 @@
         </section>
       </div>
     </main>
+
+    <!-- Facet sidebar (desktop, >= 1024px; after main so the search comes first in tab order).
+         Below that width it is hidden and a sheet borrows its sections. -->
+    <aside id="facets" class="facets" aria-labelledby="facets-title" hidden>
+      <div class="facets-head">
+        <h2 id="facets-title" tabindex="-1">Filters</h2>
+        <span id="facets-active" class="count-pill" hidden></span>
+        <button id="reset-all" class="text-button" type="button">Reset all</button>
+      </div>
+      <p id="facets-note" class="facets-note"></p>
+      <div id="facet-date" class="facet" role="group" aria-labelledby="facet-date-title">
+        <div class="facet-title-row">
+          <h3 id="facet-date-title" class="facet-title">Approval years</h3>
+          <button id="year-reset" class="text-button" type="button">Reset</button>
+        </div>
+        <div class="year-bars" aria-hidden="true">
+          <div id="year-bars" class="year-bars-plot"></div>
+          <p class="year-bars-axis"><span id="year-first"></span><span id="year-last"></span></p>
+        </div>
+        <div class="year-range">
+          <label>From <input id="year-from" type="number" inputmode="numeric" step="1" /></label>
+          <label>To <input id="year-to" type="number" inputmode="numeric" step="1" /></label>
+        </div>
+      </div>
+      <div id="facet-type" class="facet" role="group" aria-labelledby="facet-type-title">
+        <h3 id="facet-type-title" class="facet-title">Medicine type</h3>
+        <ul class="facet-list"></ul>
+      </div>
+      <div id="facet-atc" class="facet" role="group" aria-labelledby="facet-atc-title">
+        <h3 id="facet-atc-title" class="facet-title">ATC class</h3>
+        <div class="atc-filter">
+          <label for="atc-input">ATC code or name</label>
+          <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="atc-picker" class="atc-picker"></div>
+      </div>
+      <div id="facet-branch" class="facet" role="group" aria-labelledby="facet-branch-title">
+        <h3 id="facet-branch-title" class="facet-title">Therapeutic area group</h3>
+        <ul id="facet-branch-list" class="facet-list"></ul>
+        <button class="facet-more text-button" type="button" aria-controls="facet-branch-list" hidden></button>
+      </div>
+      <div id="facet-area" class="facet" role="group" aria-labelledby="facet-area-title">
+        <h3 id="facet-area-title" class="facet-title">Therapeutic area</h3>
+        <input class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <ul class="facet-list"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <button class="facet-more text-button" type="button" hidden></button>
+      </div>
+      <div id="facet-mah" class="facet" role="group" aria-labelledby="facet-mah-title">
+        <h3 id="facet-mah-title" class="facet-title">Marketing authorization holder</h3>
+        <input class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <ul class="facet-list"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <button class="facet-more text-button" type="button" hidden></button>
+      </div>
+      <div id="facet-status" class="facet" role="group" aria-labelledby="facet-status-title">
+        <div class="facet-title-row">
+          <h3 id="facet-status-title" class="facet-title">Status</h3>
+          <span class="facet-note"></span>
+        </div>
+        <ul class="facet-list"></ul>
+      </div>
+    </aside>
+
+    <!-- Phones and tablets: a bottom sheet (showModal) with the sections of one token, or all. -->
+    <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="sheet-title" tabindex="-1"></h2>
+        <button id="sheet-clear" class="text-button" type="button"></button>
+      </div>
+      <div id="sheet-body" class="sheet-body"></div>
+      <div class="sheet-foot">
+        <button id="sheet-done" class="primary" type="button"></button>
+      </div>
+      <p id="sheet-status" class="visually-hidden" role="status"></p>
+    </dialog>
 
     <footer>
       <details class="about">
