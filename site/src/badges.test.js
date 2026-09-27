@@ -1,7 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { ATC_GROUP_HUES, atcHue, atcSegments, typeBadges } from "./badges.js";
+import { readdirSync, readFileSync } from "node:fs";
+import { ATC_CODE, ATC_GROUP_HUES, ATC_PREFIX_LENGTHS, atcHue, atcSegments, typeBadges } from "./badges.js";
+
+test("the ATC code shape and level lengths are defined once, here", () => {
+  assert.deepEqual(ATC_PREFIX_LENGTHS, [1, 3, 4, 5, 7]);
+  assert.deepEqual(["L", "L04", "L04A", "L04AC", "L04AC05", "LX1XX02", "L4", "l04"].map((code) => ATC_CODE.test(code)), [true, true, true, true, true, false, false, false]);
+  const folder = new URL("./", import.meta.url);
+  const copies = readdirSync(folder)
+    .filter((file) => file.endsWith(".js") && !file.endsWith(".test.js") && file !== "badges.js")
+    .filter((file) => /\[1, 3, 4, 5, 7\]|\\d\{2\}\(\[A-Z\]/.test(readFileSync(new URL(file, folder), "utf8")));
+  assert.deepEqual(copies, []);
+});
 
 test("a level-5 ATC code splits into its five levels, each showing only its new characters", () => {
   assert.deepEqual(atcSegments("L04AC05"), [

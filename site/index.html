@@ -27,7 +27,7 @@
       <p id="message" hidden></p>
 
       <section id="lookup" class="lookup" hidden>
-        <label id="lookup-label" for="lookup-input" class="visually-hidden">Search medicine, substance or condition</label>
+        <label id="lookup-label" for="lookup-input" class="visually-hidden">Search medicine, substance, condition or ATC code</label>
         <div class="lookup-box">
           <input
             id="lookup-input"
@@ -39,7 +39,7 @@
             autocomplete="off"
             spellcheck="false"
             enterkeyhint="search"
-            placeholder="Search medicine, substance or condition"
+            placeholder="Medicine, substance, condition or ATC code"
             disabled
           />
           <div id="lookup-listbox" role="listbox" aria-labelledby="lookup-label" hidden></div>
@@ -54,8 +54,9 @@
 
       <div id="app" hidden>
         <section class="answer" aria-labelledby="headline">
-          <h2 id="headline" class="headline"></h2>
+          <h2 id="headline" class="headline" tabindex="-1"></h2>
           <p id="headline-dek" class="dek"></p>
+          <div id="class-path" class="class-path" hidden></div>
         </section>
         <p id="filter-result" class="visually-hidden" role="status"></p>
 
@@ -71,9 +72,10 @@
             <div id="filter-mah"></div>
             <div id="filter-branch"></div>
             <div id="filter-area"></div>
-            <div class="text-filter">
+            <div class="text-filter atc-filter">
               <label for="atc-input">ATC code or name</label>
               <input id="atc-input" type="search" placeholder="e.g. L01 or rituximab" autocomplete="off" spellcheck="false" />
+              <div id="atc-picker" class="atc-picker"></div>
             </div>
             <div id="filter-type"></div>
             <div id="filter-status"></div>
@@ -100,6 +102,7 @@
               </div>
             </div>
             <p id="breakdown-note" class="muted"></p>
+            <div id="breakdown-path" class="breakdown-path" hidden></div>
             <div id="breakdown" class="breakdown"></div>
             <p id="breakdown-excluded" class="muted" hidden></p>
           </div>

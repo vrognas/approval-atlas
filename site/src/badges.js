@@ -2,8 +2,10 @@
 // their level shades are in style.css). No DOM.
 import { UI } from "./labels.js";
 
-const ATC_CODE = /^[A-Z](\d{2}([A-Z]([A-Z](\d{2})?)?)?)?$/;
-const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7]; // lengths of ATC level 1-5 codes
+// A valid ATC code at any level (upper case), and the lengths of ATC level 1-5 codes: the one
+// definition the other modules import.
+export const ATC_CODE = /^[A-Z](\d{2}([A-Z]([A-Z](\d{2})?)?)?)?$/;
+export const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7];
 
 // Every ATC badge takes the hue of its level-1 group.
 export const ATC_GROUP_HUES = {

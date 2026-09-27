@@ -1,9 +1,9 @@
 import * as d3 from "d3";
+import { atcPrefixes } from "./atc.js";
 import { atcHue, atcSegments, typeBadges } from "./badges.js";
-import { UI, atcLevelOneLabel, statusDateLine, statusKind, statusLabel } from "./labels.js";
+import { UI, atcClassLabel, statusDateLine, statusKind, statusLabel } from "./labels.js";
 
 const PAGE_SIZE = 100;
-const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7];
 const HEADERS = UI.table.headers;
 
 function hasIndication(product) {
@@ -22,11 +22,9 @@ function toggleIndication(event, product) {
 
 // "L01FA01" -> one name per level found in atc_classes (level 1 in title case, the others verbatim).
 function atcLevelNames(row, atcNames) {
-  return ATC_PREFIX_LENGTHS
-    .filter((length) => length <= row.atc_code_human.length)
-    .map((length) => row.atc_code_human.slice(0, length))
+  return atcPrefixes(row.atc_code_human)
     .filter((prefix) => atcNames.has(prefix))
-    .map((prefix) => (prefix.length === 1 ? atcLevelOneLabel(prefix, atcNames.get(prefix)) : `${prefix} ${atcNames.get(prefix)}`));
+    .map((prefix) => atcClassLabel(prefix, atcNames.get(prefix)));
 }
 
 // Tooltip: the level names one per line, then the source.
@@ -52,14 +50,23 @@ function renderNameCell(cell, product, substances) {
   if (substances.length) cell.append("span").attr("class", "medicine-substances").text(substances.join("; "));
 }
 
-// Segmented ATC badge (display only in this phase): one segment per level, in the group's hue.
-function appendAtcBadge(parent, code) {
+// Segmented ATC badge in the group's hue: one button per level that filters by that prefix; a
+// malformed code stays one plain segment. No whitespace between segments: copied, the badge
+// reads as the plain code. The buttons form a toolbar with one tab stop (markPressed(); arrow
+// keys move between them).
+function appendAtcBadge(parent, code, atcNames) {
+  const segments = atcSegments(code);
   const badge = parent.append("span").attr("class", `atc-badge hue-${atcHue(code)}`);
-  badge.selectAll("span")
-    .data(atcSegments(code))
-    .join("span")
+  if (segments.some((segment) => segment.level)) badge.attr("role", "toolbar").attr("aria-label", UI.atc.toolbar(code));
+  badge.selectAll(".atc-seg")
+    .data(segments)
+    .join((enter) => enter.append((segment) => document.createElement(segment.level ? "button" : "span")))
     .attr("class", (segment) => (segment.level ? `atc-seg level-${segment.level}` : "atc-seg"))
-    .text((segment) => segment.text);
+    .text((segment) => segment.text)
+    .filter((segment) => segment.level)
+    .attr("type", "button")
+    .attr("data-code", (segment) => segment.code)
+    .attr("aria-label", (segment) => UI.atc.filterBy(segment.level, segment.code, atcNames.get(segment.code)));
   return badge;
 }
 
@@ -67,8 +74,8 @@ function renderAtcCell(cell, product, atcNames) {
   const codes = cell.selectAll("span.code").data(product.atc).join("span").attr("class", "code").attr("title", (row) => atcTitle(row, atcNames));
   codes.each(function badge(row) {
     const code = d3.select(this);
-    appendAtcBadge(code, row.atc_code_human);
-    // The tooltip is out of reach for keyboard, touch and screen-reader users; phase 2 names the segments.
+    appendAtcBadge(code, row.atc_code_human, atcNames);
+    // The tooltip is out of reach for keyboard, touch and screen-reader users.
     const names = atcLevelNames(row, atcNames);
     if (names.length) code.append("span").attr("class", "visually-hidden").text(` (${names.join("; ")})`);
   });
@@ -111,11 +118,62 @@ function renderAreaCell(cell, product, branchNamesByTerm) {
 }
 
 // lookups: substanceIndex (product -> EMA active substances), atcNames (code -> name),
-// branchNamesByTerm (MeSH term -> branch names).
+// branchNamesByTerm (MeSH term -> branch names). onAtcSelect(code): an ATC segment was clicked;
+// focusFallback(): where focus goes when the clicked segment's row is gone after the update.
 // All text goes through .text(): decoded indications contain literal "<" and ">".
-export function createTable(table, moreButton, { substanceIndex, atcNames, branchNamesByTerm }) {
+export function createTable(table, moreButton, { substanceIndex, atcNames, branchNamesByTerm, onAtcSelect, focusFallback }) {
   let current = null;
   let shown = 0;
+  let refocus = null; // { number, code } of a clicked ATC segment, until the next update
+
+  // Pressed: the segment the ATC filter is set to. Each badge's one tab stop: that segment, else
+  // the last (the full code).
+  function markPressed() {
+    for (const badge of table.querySelectorAll(".atc-badge[role=toolbar]")) {
+      const segments = [...badge.querySelectorAll("button.atc-seg")];
+      const pressed = segments.find((segment) => segment.dataset.code === current.selectedAtc);
+      for (const segment of segments) {
+        segment.setAttribute("aria-pressed", String(segment === pressed));
+        segment.tabIndex = segment === (pressed ?? segments.at(-1)) ? 0 : -1;
+      }
+    }
+  }
+
+  // Focus one segment and make it its badge's tab stop.
+  function focusSegment(button) {
+    for (const segment of button.parentNode.querySelectorAll("button.atc-seg")) segment.tabIndex = segment === button ? 0 : -1;
+    button.focus();
+  }
+
+  d3.select(table).on("click", (event) => {
+    const button = event.target.closest("button.atc-seg");
+    if (!button) return;
+    refocus = { number: d3.select(button.closest("tbody")).datum().ema_product_number, code: button.dataset.code };
+    onAtcSelect(button.dataset.code);
+  });
+
+  // Toolbar keys: Left/Right to the neighboring segment, Home/End to the first/last.
+  d3.select(table).on("keydown", (event) => {
+    const button = event.target.closest("button.atc-seg");
+    if (!button) return;
+    const segments = [...button.parentNode.querySelectorAll("button.atc-seg")];
+    const index = segments.indexOf(button);
+    const target = segments[{ ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: segments.length - 1 }[event.key]];
+    if (!target) return;
+    event.preventDefault();
+    focusSegment(target);
+  });
+
+  // The rows are rebuilt: back to the same segment of the same medicine, else of any medicine.
+  function restoreFocus() {
+    const { number, code } = refocus;
+    refocus = null;
+    const selector = `button.atc-seg[data-code="${code}"]`;
+    const row = d3.select(table).selectAll("tbody").filter((product) => product.ema_product_number === number);
+    const target = row.select(selector).node() ?? table.querySelector(selector);
+    if (target) focusSegment(target);
+    else focusFallback();
+  }
 
   // One tbody per medicine keeps its full-width indication row directly beneath it.
   function appendRows(products) {
@@ -159,6 +217,7 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
   function showMore() {
     const next = current.products.slice(shown, shown + PAGE_SIZE);
     appendRows(next);
+    markPressed();
     shown += next.length;
     const remaining = current.products.length - shown;
     d3.select(moreButton)
@@ -169,12 +228,20 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
   d3.select(moreButton).on("click", showMore);
 
   // Rebuilds only when the rows, caption or register (ema_medicine_register_status.json rows by
-  // product, null until loaded) changed, so resizes keep the pages already shown.
-  return function update(products, caption, register) {
+  // product, null until loaded) changed, so resizes keep the pages already shown. selectedAtc: the
+  // ATC code filter (null for none or a name query), shown as pressed segments.
+  return function update(products, caption, register, selectedAtc) {
     const unchanged = current !== null && current.caption === caption && current.register === register &&
       current.products.length === products.length && current.products.every((product, index) => product === products[index]);
-    if (unchanged) return;
-    current = { products, caption, register };
+    if (unchanged) {
+      if (current.selectedAtc !== selectedAtc) {
+        current.selectedAtc = selectedAtc;
+        markPressed();
+      }
+      if (refocus) restoreFocus();
+      return;
+    }
+    current = { products, caption, register, selectedAtc };
     shown = 0;
     const root = d3.select(table);
     root.selectChildren().remove();
@@ -186,5 +253,6 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
       .attr("scope", "col")
       .text((header) => header);
     showMore();
+    if (refocus) restoreFocus();
   };
 }

@@ -1,4 +1,6 @@
 // Pure lookup search: folding, word-start matching, ranking, indication-text matches. No DOM, no D3.
+import { atcLevel } from "./atc.js";
+import { ATC_CODE } from "./badges.js";
 
 const DASHES = /[-‐-―]/g;
 const WORD_CHAR = /[\p{L}\p{N}]/u;
@@ -180,6 +182,47 @@ export function suggest(index, conditions, query) {
     substances: suggestSubstances(index, folded, words),
     conditions: conditions ? suggestConditions(index, conditions, words) : [],
   };
+}
+
+// Per atc_classes array: code -> name, and per row its folded name and words (computed once).
+const classNameMaps = new WeakMap();
+const classEntries = new WeakMap();
+function classNames(atcClasses) {
+  if (!classNameMaps.has(atcClasses)) classNameMaps.set(atcClasses, new Map(atcClasses.map((row) => [row.atc_code, row.name])));
+  return classNameMaps.get(atcClasses);
+}
+function classEntry(row) {
+  if (!classEntries.has(row)) classEntries.set(row, { folded: foldSearchText(row.name), tokens: searchWords(row.name) });
+  return classEntries.get(row);
+}
+
+// Drug classes (atc_classes.json rows) with at least one product in counts (products per prefix).
+// A query shaped like an ATC code (not folded: "A10AE") lists the classes under it, shortest code
+// first, codes without a WHO name included; other text matches word starts in level 1-4 names
+// (level-5 names are substances, suggested as such). Ranked exact > prefix > contains, then count.
+export function suggestAtcClasses(query, atcClasses, counts) {
+  const folded = foldSearchText(query);
+  const words = searchWords(query);
+  if (folded.length < MIN_QUERY || words.length === 0) return [];
+  const code = query.trim().toUpperCase();
+  if (ATC_CODE.test(code)) {
+    const names = classNames(atcClasses);
+    return [...counts]
+      .filter(([candidate, count]) => count > 0 && candidate.startsWith(code))
+      .sort(([a, countA], [b, countB]) => a.length - b.length || countB - countA || a.localeCompare(b))
+      .slice(0, MAX_SUGGESTIONS)
+      .map(([candidate, count]) => ({ code: candidate, level: atcLevel(candidate), name: names.get(candidate) ?? null, count }));
+  }
+  const rank = (row) => {
+    const name = classEntry(row).folded;
+    return name === folded ? 0 : name.startsWith(folded) ? 1 : 2;
+  };
+  const count = (row) => counts.get(row.atc_code) ?? 0;
+  return atcClasses
+    .filter((row) => row.level <= 4 && row.name && count(row) > 0 && matchesWords(classEntry(row).tokens, words, false))
+    .sort((a, b) => rank(a) - rank(b) || count(b) - count(a) || a.atc_code.localeCompare(b.atc_code))
+    .slice(0, MAX_SUGGESTIONS)
+    .map((row) => ({ code: row.atc_code, level: row.level, name: row.name, count: count(row) }));
 }
 
 // First occurrence of phrase in folded text with no letter or digit directly before or after it.

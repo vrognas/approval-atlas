@@ -1,8 +1,6 @@
 // Pure: one predicate per filter dimension, so a chart can apply every filter except its own.
 // Products come from buildProducts() in approvals.js.
-
-const ATC_CODE = /^[A-Z](\d{2}([A-Z]([A-Z](\d{2})?)?)?)?$/;
-const ATC_PREFIX_LENGTHS = [1, 3, 4, 5, 7]; // lengths of ATC level 1-5 codes
+import { ATC_CODE, ATC_PREFIX_LENGTHS } from "./badges.js";
 
 // "L01" / "l01fa" -> code prefix; anything else -> case-insensitive name search.
 export function parseAtcQuery(query) {
