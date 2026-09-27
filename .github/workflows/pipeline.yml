@@ -28,6 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # pdftools (SmPC text for ATC codes) links to poppler's C++ library.
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y libpoppler-cpp-dev
+
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           r-version: renv
@@ -45,8 +49,10 @@ jobs:
 
       # Rolling key: each run restores the newest cache and saves an updated copy,
       # so MeSH and ChEMBL are refetched only when their source changes and the
-      # EPAR documents index, orphan designations and Union Register get one
-      # conditional GET per run (sidecars restored with old mtimes; R/http.R).
+      # EPAR documents index, orphan designations, Union Register and WHOCC lists
+      # get one conditional GET per run (sidecars restored with old mtimes; R/http.R).
+      # It also keeps the SmPC ATC checks (ema-smpc/checks.json) between runs; when
+      # it is empty they are seeded from the committed ema_medicine_smpc_atc.json.
       - name: Restore download cache
         id: restore-downloads
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -32,12 +32,15 @@ data_licence <- paste(
   "(https://creativecommons.org/licenses/by-sa/4.0/); ChEMBL-derived values",
   "adapted from ChEMBL (CC BY-SA 3.0) and modified (selected and mapped).",
   "Values from other sources keep their own terms: EMA content © European",
-  "Medicines Agency (reuse with acknowledgement); Union Register values ©",
+  "Medicines Agency (reuse with acknowledgement), including ATC codes taken",
+  "from EMA product information (SmPC section 5.1); Union Register values ©",
   "European Union, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/),",
   "changes made; MeSH® courtesy of the U.S.",
-  "National Library of Medicine; ATC classification codes from ChEMBL and ATC",
-  "level names © WHO Collaborating Centre for Drug Statistics Methodology,",
-  "reproduced verbatim and excluded from this licence."
+  "National Library of Medicine; ATC codes and level names © WHO",
+  "Collaborating Centre for Drug Statistics Methodology, Oslo (via ChEMBL,",
+  "the ATC/DDD Index at https://atcddd.fhi.no and archived copies of it),",
+  "reproduced verbatim, not for commercial distribution and excluded from",
+  "this licence."
 )
 
 file_date <- function(path) {

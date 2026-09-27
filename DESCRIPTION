@@ -12,7 +12,9 @@ Imports:
     dplyr,
     httr2 (>= 1.3.0),
     jsonlite,
+    pdftools,
     purrr,
+    readxl,
     stringr,
     tidyr,
     xml2
