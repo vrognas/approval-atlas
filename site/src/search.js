@@ -101,6 +101,9 @@ export function buildLookupIndex(searchRows, entryTermRows) {
 }
 
 // Background data: mesh_descriptor_areas.json, ema_medicine_therapeutic_areas.json, ema_therapeutic_area_branches.json.
+// Per descriptor: its EMA terms and products; ownProducts: those tagged with the descriptor's own
+// term; narrowerTerms ([{ term, ui }]): the EMA terms of narrower descriptors; narrowerByProduct:
+// product -> the narrower terms it is tagged with.
 export function buildConditions(index, { descriptorAreaRows, areaRows, branchRows }) {
   const productsByTerm = new Map();
   for (const row of areaRows) {
@@ -112,19 +115,32 @@ export function buildConditions(index, { descriptorAreaRows, areaRows, branchRow
   for (const row of descriptorAreaRows) {
     const ui = row.mesh_descriptor_ui;
     if (!descriptors.has(ui)) {
-      descriptors.set(ui, { ui, name: row.mesh_descriptor_name, nameTokens: searchWords(row.mesh_descriptor_name), terms: [], products: new Set(), synonyms: [], narrower: 0 });
+      descriptors.set(ui, {
+        ui, name: row.mesh_descriptor_name, nameTokens: searchWords(row.mesh_descriptor_name), terms: [], products: new Set(), synonyms: [], narrower: 0,
+        ownProducts: new Set(), narrowerTerms: [], narrowerByProduct: new Map(),
+      });
     }
     const descriptor = descriptors.get(ui);
-    descriptor.terms.push(row.therapeutic_area_mesh);
-    const own = termUi.has(row.therapeutic_area_mesh) ? termUi.get(row.therapeutic_area_mesh) === ui : row.therapeutic_area_mesh === row.mesh_descriptor_name;
-    if (!own) descriptor.narrower++;
-    for (const number of productsByTerm.get(row.therapeutic_area_mesh) ?? []) descriptor.products.add(number);
+    const term = row.therapeutic_area_mesh;
+    descriptor.terms.push(term);
+    const own = termUi.has(term) ? termUi.get(term) === ui : term === row.mesh_descriptor_name;
+    if (!own) {
+      descriptor.narrower++;
+      descriptor.narrowerTerms.push({ term, ui: termUi.get(term) ?? null });
+    }
+    for (const number of productsByTerm.get(term) ?? []) {
+      descriptor.products.add(number);
+      if (own) descriptor.ownProducts.add(number);
+      else descriptor.narrowerByProduct.set(number, [...(descriptor.narrowerByProduct.get(number) ?? []), term]);
+    }
   }
   for (const { term, ui } of index.entryTerms) descriptors.get(ui)?.synonyms.push(term);
   for (const descriptor of descriptors.values()) {
     descriptor.authorized = [...descriptor.products].filter((number) => index.byNumber.get(number)?.medicine_status === "Authorised").length;
   }
-  return { descriptors, termUi };
+  // Descriptor names are unique in MeSH: a therapeutic area group's name is its root descriptor's.
+  const uiByName = new Map([...descriptors.values()].map((descriptor) => [descriptor.name, descriptor.ui]));
+  return { descriptors, termUi, uiByName };
 }
 
 const byName = (a, b) => a.localeCompare(b);
@@ -182,6 +198,17 @@ export function suggest(index, conditions, query) {
     substances: suggestSubstances(index, folded, words),
     conditions: conditions ? suggestConditions(index, conditions, words) : [],
   };
+}
+
+// Enter without a picked option: the suggestion the query names (folded label, or an ATC class's
+// code), first in group order, else the only suggestion, else null (a text search). groups: the
+// search box's [{ key, options: [{ label, value }] }].
+export function submitChoice(groups, query) {
+  const folded = foldSearchText(query);
+  const options = groups.flatMap((group) => group.options.map((option) => ({ group: group.key, option })));
+  const named = options.find(({ group, option }) => foldSearchText(option.label) === folded || (group === "classes" && foldSearchText(option.value) === folded));
+  const choice = named ?? (options.length === 1 ? options[0] : null);
+  return choice ? { group: choice.group, value: choice.option.value } : null;
 }
 
 // Per atc_classes array: code -> name, and per row its folded name and words (computed once).

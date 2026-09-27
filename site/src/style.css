@@ -190,6 +190,16 @@ h1 {
   letter-spacing: -0.01em;
 }
 
+/* The wordmark links to the overview (every lookup and filter cleared). */
+h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1 a:hover {
+  text-decoration: underline;
+}
+
 .meta {
   margin: 0;
   color: var(--ink-secondary);
@@ -204,12 +214,13 @@ header .note {
 /* Desktop: a fixed left column (wordmark on top, the facet sidebar below, each full height with
    its own scroll) beside the main column. Fixed, not a DOM wrapper, so the sidebar can come
    after main in tab order. The header grows with its text (the offline note, user text
-   spacing); main.js sets --header-h to its height for the sidebar's top. */
+   spacing); main.js sets --header-h to its height for the sidebar's top. The column's width is
+   --sidebar-w (320px until the viewer resizes it: sidebar-resize.js sets it on <html>). */
 @media (min-width: 1024px) {
   body {
     max-width: none;
     margin: 0;
-    padding: 24px 32px 32px 352px;
+    padding: 24px 32px 32px calc(var(--sidebar-w, 320px) + 32px);
   }
 
   main,
@@ -222,7 +233,7 @@ header .note {
     z-index: 3;
     top: 0;
     left: 0;
-    width: 320px;
+    width: var(--sidebar-w, 320px);
     min-height: 64px;
     flex-direction: column;
     flex-wrap: nowrap;
@@ -240,7 +251,7 @@ header .note {
     top: var(--header-h, 64px);
     bottom: 0;
     left: 0;
-    width: 320px;
+    width: var(--sidebar-w, 320px);
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 0 16px 24px;
@@ -249,6 +260,78 @@ header .note {
   }
 
   .all-filters {
+    display: none;
+  }
+
+  /* The splitter (ARIA window splitter): a 12px hit area from the column's right border into the
+     main column's margin (clear of the sidebar's scrollbar), full height. Its line is that
+     border, 2px and in the accent on hover, focus and drag, with a grip in the middle (3:1,
+     --field-border) so it reads as something to drag. */
+  .sidebar-resize {
+    position: fixed;
+    z-index: 4;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--sidebar-w, 320px) - 2px);
+    width: 12px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .sidebar-resize::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1px;
+    width: 1px;
+    background: var(--grid);
+  }
+
+  .sidebar-resize::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 4px;
+    height: 32px;
+    margin-top: -16px;
+    border-radius: 2px;
+    background: var(--field-border);
+  }
+
+  .sidebar-resize:hover::before,
+  .sidebar-resize:focus-visible::before,
+  .sidebar-resizing .sidebar-resize::before {
+    width: 2px;
+    background: var(--accent);
+  }
+
+  .sidebar-resize:hover::after,
+  .sidebar-resize:focus-visible::after,
+  .sidebar-resizing .sidebar-resize::after {
+    background: var(--accent);
+  }
+
+  .sidebar-resize:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* While dragging: the resize cursor everywhere, no text selection; the charts, redrawn on
+     release, cannot widen the page meanwhile. */
+  .sidebar-resizing,
+  .sidebar-resizing * {
+    cursor: col-resize !important;
+    user-select: none;
+  }
+
+  .sidebar-resizing main {
+    overflow-x: clip;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sidebar-resize {
     display: none;
   }
 }
@@ -341,6 +424,25 @@ button {
 /* Answer headlines: the dashboard's and the lookup results'. */
 .answer {
   margin: 8px 0 24px;
+}
+
+/* Under a lookup result: the overview's heading, set apart from the result by a rule. */
+.explore {
+  margin: 40px 0 16px;
+  padding-top: 24px;
+  border-top: 1px solid var(--grid);
+}
+
+.explore h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.explore p {
+  margin: 4px 0 0;
 }
 
 .headline,
@@ -1050,29 +1152,44 @@ input::placeholder {
   }
 }
 
-.sheet-handle {
-  flex: none;
-  width: 36px;
-  height: 4px;
-  margin: 8px auto 0;
-  border-radius: 2px;
-  background: var(--axis);
-}
-
+/* Title, Clear, then a visible 44px close button (no grab handle: the sheet does not swipe). */
 .sheet-head {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 4px 16px 8px;
+  padding: 8px 8px 8px 16px;
   border-bottom: 1px solid var(--grid);
 }
 
 .sheet-head h2 {
+  flex: 1 1 auto;
   margin: 0;
   font-size: 1.25rem;
   line-height: 1.75rem;
+}
+
+.sheet-close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sheet-close:hover {
+  background: var(--wash);
+  color: var(--ink);
 }
 
 /* Focus lands on the title only to announce the sheet; it is not a control. */
@@ -1120,6 +1237,11 @@ input::placeholder {
 .sheet .facet-row input {
   width: 20px;
   height: 20px;
+}
+
+.sheet .cond-link {
+  width: 44px;
+  height: 44px;
 }
 
 .sheet .facet-search,
@@ -1261,7 +1383,7 @@ input::placeholder {
   font-size: 0.875rem;
 }
 
-/* Tiles: two wide tiles (medicines, authorized today), then four compact ones (2 x 2). */
+/* Tiles: two wide tiles (medicines, currently authorized), then four compact ones (2 x 2). */
 .tiles {
   margin-top: 16px;
   display: grid;
@@ -1269,15 +1391,15 @@ input::placeholder {
   gap: 12px;
 }
 
-@media (min-width: 721px) {
-  .tiles {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
-  }
+/* The tiles follow the main column's width (their frame is a size container), which on desktop
+   the resizable sidebar sets, not the viewport's. */
+.tiles-frame {
+  container-type: inline-size;
 }
 
-/* Tablets, and desktops whose main column the sidebar narrows: the compact tiles in one row
-   under the wide ones. */
-@media (min-width: 721px) and (max-width: 1279px) {
+/* Tablets and desktops: the compact tiles in one row under the wide ones; in a narrow main
+   column (a wide sidebar on a small desktop) 2 x 2; in a wide one, beside the wide tiles. */
+@media (min-width: 721px) {
   .tiles {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -1285,6 +1407,23 @@ input::placeholder {
   .tiles .tile-group {
     grid-column: 1 / -1;
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  @container (max-width: 599px) {
+    .tiles .tile-group {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @container (min-width: 896px) {
+    .tiles {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+    }
+
+    .tiles .tile-group {
+      grid-column: auto;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 }
 
@@ -1461,6 +1600,31 @@ input::placeholder {
   font-weight: 600;
 }
 
+/* A card's secondary controls (Sort, Column order, Stack by): a visible label, then a segmented
+   control; the smaller one sits under the card head. */
+.card-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.chart-card > .card-tools {
+  margin: 8px 0 4px;
+}
+
+.tools-label {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.segmented-small button {
+  min-height: 28px;
+  padding: 2px 10px;
+  font-size: 0.8125rem;
+}
+
 /* Breakdown: HTML toggle buttons with a bar each. */
 .breakdown {
   margin-top: 8px;
@@ -1589,9 +1753,10 @@ button.bar-row:hover {
   list-style: none;
 }
 
+/* The value column: the medicines of every status, then (muted) those authorized. */
 .condition-list li {
   display: grid;
-  grid-template-columns: minmax(8rem, 38%) 1fr 4.5ch;
+  grid-template-columns: minmax(8rem, 38%) 1fr 10rem;
   gap: 12px;
   align-items: center;
   padding: 4px 0;
@@ -1606,7 +1771,7 @@ button.bar-row:hover {
 
 @media (max-width: 600px) {
   .condition-list li {
-    grid-template-columns: 1fr 4.5ch;
+    grid-template-columns: 1fr 10rem;
     gap: 2px 12px;
   }
 
@@ -1626,6 +1791,12 @@ button.bar-row:hover {
 .bar-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.bar-authorized {
+  margin-left: 0.5em;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
 }
 
 /* Phones: the label takes its own line above the bar. */
@@ -1798,9 +1969,18 @@ button.bar-row:hover {
   color: var(--ink-secondary);
 }
 
-/* Medicines table: a card whose table runs edge to edge. */
+/* Medicines table: a card whose table runs edge to edge; a size container, so its rows stack when
+   the card is narrow (phones; below). */
 .table-card {
   padding: 20px 0 16px;
+  container-type: inline-size;
+}
+
+/* The table's caption, above the scroll area so a wide table cannot cut it off. */
+.table-caption {
+  margin: 0 20px 12px;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
 }
 
 .table-card > h2 {
@@ -1817,6 +1997,71 @@ button.bar-row:hover {
   position: relative;
   max-height: 70vh;
   overflow: auto;
+}
+
+/* Narrow (under 600px: phones): no box scrolling both ways inside the page; each medicine stacks:
+   name (substances, PI/EPAR), holder, then status, type and ATC side by side, the therapeutic
+   areas and the indication toggle. The header stays for screen readers (explicit roles keep the
+   table semantics). */
+@container (max-width: 599px) {
+  .table-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  #medicines-table,
+  #medicines-table tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  #medicines-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  #medicines-table tbody {
+    border-top: 1px solid var(--grid);
+  }
+
+  #medicines-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 12px 16px;
+  }
+
+  #medicines-table tr.indication {
+    padding-top: 0;
+  }
+
+  #medicines-table td,
+  #medicines-table td:first-child,
+  #medicines-table td:last-child {
+    padding: 0;
+    border: 0;
+  }
+
+  #medicines-table td:empty {
+    display: none;
+  }
+
+  #medicines-table td.breakable,
+  #medicines-table td.holder-cell,
+  #medicines-table td.area,
+  #medicines-table tr.indication > td {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
+
+  #medicines-table td.holder-cell {
+    color: var(--ink-secondary);
+  }
 }
 
 table {
@@ -1875,7 +2120,8 @@ td.breakable {
   font-weight: 600;
 }
 
-.medicine-substances {
+.medicine-substances,
+.matched-terms {
   display: block;
   margin-top: 2px;
   color: var(--ink-secondary);
@@ -1913,6 +2159,63 @@ td .doc-links {
 
 .doc-link:hover {
   background: var(--wash);
+}
+
+/* Link icons (links.js), stroked in the link's colour: an arrow out of a box after every link to
+   another website, a chevron in the condition page links. */
+.link-icon {
+  display: inline-block;
+  flex: none;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: 0.3em;
+  vertical-align: -0.05em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Condition page links after a row (sidebar area rows, therapeutic area group bars): an outlined
+   24px square with a chevron (WCAG 2.5.8), 44px on phones and in sheets. */
+.cond-link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+}
+
+.cond-link:hover {
+  background: var(--wash);
+}
+
+.cond-link .link-icon {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+/* A breakdown row and its condition page link; a sidebar area row and its link. */
+.bar-item,
+.facet-list > li:has(> .cond-link) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bar-item > .bar-row,
+.facet-list > li > .facet-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.facet-list > li:has(> .cond-link) > .facet-row {
+  margin-right: 0;
 }
 
 /* Status: an 8px dot in its status's hue (a .hue-* class: statusHue()), then the label in the
@@ -2054,20 +2357,26 @@ td.status-cell {
   max-width: none;
 }
 
-/* Lookup rows and the filter sentence: the tooltip starts at the row's left edge (a badge or
-   token near the right edge of a phone would push it off the page), under the carrier's own line
-   (--tip-top, set by setupTips() in main.js). */
-.result-meta,
+/* The filter sentence and the result tables' Type cells: the tooltip is placed in the sentence or
+   cell (a badge or token near the right edge of a phone would push it off the page), under the
+   carrier's own line (--tip-top, set by setupTips() in main.js). In a Type cell it ends at the
+   cell's right edge, so it stays inside the table; on phones, where the cell spans the stacked
+   row, it starts at the row's left edge (below). */
+.result-table td.type-cell,
 .sentence {
   position: relative;
 }
 
-.result-meta .badge[data-tip],
+.result-table td.type-cell .badge[data-tip],
 .token-pill[data-tip] {
   position: static;
 }
 
-.result-meta .badge[data-tip]::after,
+.result-table td.type-cell .badge[data-tip]::after {
+  left: auto;
+  right: 0;
+}
+
 .token-pill[data-tip]::after {
   max-width: min(16rem, 100%);
 }
@@ -2290,6 +2599,161 @@ table.activity {
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
+/* Row headers: the holder, then its matching medicines. */
+.activity th[scope="row"] button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.activity-total {
+  flex: none;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Sort buttons, in the second header row: "Name" and "Total" under Holder, an arrow under each
+   column (most first). Pressed: the accent wash, underline and arrow in the accent, so the sort in
+   force always shows (Total by default). */
+.activity .activity-sorts td {
+  padding-top: 0;
+  padding-bottom: 4px;
+  text-align: center;
+}
+
+.activity .activity-sorts td:first-child {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  background: var(--surface);
+  text-align: left;
+}
+
+.activity .sort-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.activity .sort-button.sort-text {
+  width: auto;
+  padding: 0 6px;
+  color: var(--ink-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.activity .sort-button:hover {
+  background: var(--wash);
+  box-shadow: none;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.activity .sort-button[aria-pressed="true"] {
+  background: var(--accent-wash);
+  box-shadow: inset 0 -2px var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.activity .sort-button[aria-pressed="true"] svg {
+  stroke-width: 2.5;
+}
+
+/* The class the columns split (one ATC class selected): a pressed toggle, badge, name and ×. */
+.activity-parent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+}
+
+.activity-parent-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 8px 2px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  box-shadow: inset 0 -2px var(--accent);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activity-parent-remove {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+/* The ATC columns' names: only where tooltips cannot show (touch screens, phones). */
+.activity-legend {
+  display: none;
+}
+
+@media (hover: none), (max-width: 720px) {
+  .activity-legend {
+    display: block;
+  }
+}
+
+.sort-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Pressed toggles (the filter a header sets is the current one; the sort shown): the accent wash
+   with the segmented control's underline (the wash alone is too faint, WCAG 1.4.11); a pressed
+   cell keeps its shade with a ring and a bold, underlined number. */
+.activity th button[aria-pressed="true"] {
+  background: var(--accent-wash);
+  box-shadow: inset 0 -2px var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.activity th button[aria-pressed="true"] .activity-total {
+  color: var(--accent);
+}
+
+.activity td button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px currentColor;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* The accent ring would vanish on the darkest shade: ink, in the 2px spacing. */
 .activity button:focus-visible {
   outline-color: var(--ink);
@@ -2367,14 +2831,43 @@ table.activity {
   }
 }
 
+/* Right under the search (whose section keeps its bottom margin). */
 .try {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 8px;
-  margin: 10px 0 0;
+  margin: -14px 0 24px;
   color: var(--ink-secondary);
   font-size: 0.875rem;
+}
+
+/* Phones and tablets: the search stays at the top while the page scrolls (the next lookup during a
+   talk comes from the top of a long card): a compact bar on the page colour across the gutters.
+   Focused elements scroll clear of it (WCAG 2.4.11). */
+@media (max-width: 1023px) {
+  html {
+    scroll-padding-top: 80px;
+  }
+
+  .lookup {
+    position: sticky;
+    z-index: 5;
+    top: 0;
+    max-width: none;
+    margin: 12px -16px 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--grid);
+    background: var(--page);
+  }
+
+  .lookup-box {
+    max-width: 760px;
+  }
+
+  .try {
+    margin: 0 0 16px;
+  }
 }
 
 .lookup [role="listbox"] {
@@ -2623,7 +3116,7 @@ table.activity {
 }
 
 /* ATC ladder (medicine and substance cards): a link per level, a thin line in the group's hue
-   joining the badges, the count of medicines authorized today, a chevron. */
+   joining the badges, the count of medicines currently authorized, a chevron. */
 /* The label row: "ATC classification", then the counts' head at the right. On the medicine card
    the fact spans both columns, so the head sits over the counts at every width. */
 .facts .fact-wide {
@@ -2733,6 +3226,59 @@ details > summary {
   font-weight: 600;
 }
 
+/* Medicine card: what the medicine is for, its therapeutic areas right under the answer strip,
+   then (after the SmPC / EPAR buttons) the indication's lead, the full text behind "Show full
+   indication". */
+.areas-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: -4px 0 16px;
+}
+
+.areas-line dt {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.areas-line dd {
+  margin: 0;
+}
+
+.card .indication-lead {
+  margin: 0;
+}
+
+.what-for .indication > summary {
+  margin-top: 4px;
+  color: var(--link);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.what-for .indication > p {
+  margin: 8px 0 0;
+}
+
+/* A namesake (another medicine with the same name) under the dek. */
+.card .namesake {
+  margin: 8px 0 0;
+}
+
+/* How the ATC code shown differs from EMA's (retired, completed from the product information). */
+.card .ladder-origin {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+}
+
+.ladder-origin + .atc-ladder {
+  margin-top: 12px;
+}
+
 .doc-list > li {
   margin: 4px 0;
 }
@@ -2790,50 +3336,155 @@ details > summary {
   text-decoration: none;
 }
 
-/* Result rows: a surface block, hairlines between rows. */
-.result-list {
+/* Result tables (condition, indication-text and substance results): a surface block, one row per
+   medicine with hairlines between them, the matched indication text in a full-width row under its
+   medicine. Positioned, so visually hidden text in cells stays inside; a size container, so its
+   rows stack when it is narrow (phones, or a wide sidebar on a small desktop; below). */
+.result-table {
+  position: relative;
   margin: 8px 0 16px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
+  container-type: inline-size;
 }
 
-.result-list > li {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--grid);
+.result-table table {
+  min-width: 0;
 }
 
-.result-list > li:last-child {
+/* Compact cells; words break only when one would not fit (the medicine's cell anywhere, as long
+   names and substances would widen it). */
+.result-table th,
+.result-table td {
+  padding: 10px 8px;
+  overflow-wrap: break-word;
+}
+
+.result-table :is(th, td):first-child {
+  padding-left: 16px;
+  overflow-wrap: anywhere;
+}
+
+.result-table :is(th, td):last-child {
+  padding-right: 16px;
+}
+
+.result-table td.status-cell {
+  min-width: 8rem;
+}
+
+/* Not sticky: the table scrolls with the page. */
+.result-table th {
+  position: static;
+  background: none;
+  box-shadow: none;
+}
+
+.result-table tbody:last-child tr:last-child > td,
+.result-table tr:has(+ .snippet-row) > td {
   border-bottom: 0;
 }
 
-.card .result-list p {
-  margin: 0;
+.result-table .snippet-row > td {
+  padding-top: 0;
 }
 
-.result-name {
-  font-weight: 600;
+.result-atc .code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  white-space: nowrap;
+  cursor: help;
 }
 
-.result-substances,
-.result-holder,
+.result-atc .code + .code {
+  margin-top: 6px;
+}
+
 .snippet {
   color: var(--ink-secondary);
   font-size: 0.875rem;
 }
 
-.result-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin-top: 2px;
-  font-size: 0.875rem;
+.card .snippet {
+  margin: 0;
 }
 
-.result-date {
-  color: var(--ink-secondary);
-  font-variant-numeric: tabular-nums;
+/* Narrow (under 600px, the five columns' minimum): a row stacks: the medicine, then its ATC codes
+   beside its status, the type badges and the holder. The header stays for screen readers
+   (explicit roles keep the table semantics). */
+@container (max-width: 599px) {
+  .result-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .result-table table,
+  .result-table tbody {
+    display: block;
+  }
+
+  .result-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .result-table tbody:last-child tr:last-child,
+  .result-table tr:has(+ .snippet-row) {
+    border-bottom: 0;
+  }
+
+  .result-table tr:has(+ .snippet-row) {
+    padding-bottom: 4px;
+  }
+
+  .result-table .snippet-row {
+    padding-top: 0;
+  }
+
+  .result-table td,
+  .result-table :is(th, td):first-child,
+  .result-table :is(th, td):last-child {
+    padding: 0;
+    border: 0;
+  }
+
+  .result-table td:empty {
+    display: none;
+  }
+
+  .result-table td.result-medicine,
+  .result-table td.result-areas,
+  .result-table td.type-cell,
+  .result-table td.result-holder,
+  .result-table .snippet-row > td {
+    flex: 1 0 100%;
+  }
+
+  .result-table td.status-cell {
+    min-width: 0;
+  }
+
+  .result-table td.result-holder {
+    color: var(--ink-secondary);
+  }
+
+  /* The Type cell spans the row: its tooltip starts at the row's left edge. */
+  .result-table td.type-cell .badge[data-tip]::after {
+    left: 0;
+    right: auto;
+    max-width: min(16rem, 100%);
+  }
 }
 
 mark {
@@ -2863,12 +3514,24 @@ mark {
 }
 
 .dot {
+  fill: var(--dot);
   stroke: var(--surface);
   stroke-width: 2;
 }
 
+/* Only mentioned in indication text: a ring in the type's colour. */
+.dot.mentioned {
+  fill: var(--surface);
+  stroke: var(--dot);
+}
+
 .dot.active {
   stroke: var(--ink);
+}
+
+.timeline-caption {
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
 }
 
 .timeline-tip {
@@ -2911,10 +3574,15 @@ mark {
   }
 
   /* The negative margin keeps the row's layout. */
-  .result-name a:not(.doc-link) {
+  a.medicine-name {
     display: inline-block;
     margin: -10px 0;
     padding: 10px 0;
+  }
+
+  .cond-link {
+    width: 44px;
+    height: 44px;
   }
 
   .segmented button,
@@ -2954,6 +3622,20 @@ mark {
 
   .activity .activity-col button {
     min-width: 44px;
+  }
+
+  .activity .sort-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .activity .sort-button.sort-text {
+    width: auto;
+    min-width: 44px;
+  }
+
+  .activity-parent-button {
+    min-height: 44px;
   }
 }
 
@@ -3033,9 +3715,25 @@ code {
     border: 1px solid CanvasText;
   }
 
-  /* Activity cells: the numbers carry the values; a border keeps the grid. */
+  /* Activity cells: the numbers carry the values; a border keeps the grid. Pressed headers,
+     sort buttons and cells: an outline, as the segmented control. */
   .activity td.heat {
     border: 1px solid GrayText;
+  }
+
+  .activity button[aria-pressed="true"] {
+    outline: 2px solid SelectedItem;
+    outline-offset: -2px;
+  }
+
+  .activity button[aria-pressed="true"]:focus-visible {
+    outline-offset: 2px;
+  }
+
+  /* The per-year chart's legend keeps its swatches (with a border), as the approval-years strip. */
+  .stack-legend .swatch {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
   }
 
   .year-track {

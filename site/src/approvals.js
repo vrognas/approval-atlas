@@ -1,4 +1,5 @@
 // Pure data helpers: no DOM, no D3, so they run under node:test.
+import { atcCode, atcPrefixes } from "./atc.js";
 import { NOT_STATED, UI } from "./labels.js";
 
 export const MEDICINE_TYPES = ["Advanced therapy", "Biosimilar", "Generic", "Other"];
@@ -10,30 +11,6 @@ export function buildSubstanceIndex(substanceRows) {
     index.get(ema_product_number).push(active_substance);
   }
   return index;
-}
-
-// yearRange [first, last] fixes the x domain; without it the rows span the data's own years.
-export function countApprovalsByYear(medicines, medicineTypes, yearRange = null) {
-  const countsByYear = new Map();
-  for (const medicine of medicines) {
-    if (medicine.marketing_authorisation_date === null) continue;
-    const year = Number(medicine.marketing_authorisation_date.slice(0, 4));
-    if (!countsByYear.has(year)) countsByYear.set(year, new Map());
-    const counts = countsByYear.get(year);
-    counts.set(medicine.medicine_type, (counts.get(medicine.medicine_type) ?? 0) + 1);
-  }
-  if (countsByYear.size === 0 && yearRange === null) return [];
-
-  const years = [...countsByYear.keys()];
-  const [first, last] = yearRange ?? [Math.min(...years), Math.max(...years)];
-  const rows = [];
-  for (let year = first; year <= last; year++) {
-    const counts = countsByYear.get(year) ?? new Map();
-    const row = { year: String(year) };
-    for (const type of medicineTypes) row[type] = counts.get(type) ?? 0;
-    rows.push(row);
-  }
-  return rows;
 }
 
 // Statuses in stack order (the approval-years strip bottom up, undated table rows, dek ties):
@@ -159,8 +136,10 @@ export function authorizedSeries(products, dates) {
   });
 }
 
+// ATC: the level-1 group of each valid code (atcCode(): the code to use; none for a row without a
+// code or with a malformed one, as in the ATC bars, atcPrefixCounts()).
 const BREAKDOWN_VALUES = {
-  atc: (product) => product.atc.map((row) => row.atc_code_human.slice(0, 1)),
+  atc: (product) => product.atc.flatMap((row) => atcPrefixes(atcCode(row)).slice(0, 1)),
   area: (product) => product.branches,
   mah: (product) => [product.mah],
 };
@@ -184,4 +163,14 @@ export function breakdownCounts(products, by, labelOf = (key) => key, n = 20) {
   const tail = new Set(rows.slice(n).map((row) => row.key));
   const otherCount = products.filter((product) => BREAKDOWN_VALUES[by](product).some((key) => tail.has(key))).length;
   return [...rows.slice(0, n), { key: null, label: UI.other, count: otherCount, other: true }];
+}
+
+// Breakdown rows (breakdownCounts() output, or ATC classes) in the Sort control's order: "count"
+// as computed (most first), "key" ATC classes by code and areas and holders by name (A-Z). The
+// Other row and the incomplete-code row stay last.
+export function sortBreakdownRows(rows, order, by) {
+  if (order !== "key") return rows;
+  const last = (row) => Boolean(row.other || row.incomplete);
+  const compare = by === "atc" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => a.label.localeCompare(b.label);
+  return [...rows.filter((row) => !last(row)).sort(compare), ...rows.filter(last)];
 }

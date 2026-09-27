@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  MEDICINE_TYPES,
   STATUS_ORDER,
   authorizedSeries,
   byStatusOrder,
@@ -10,11 +9,11 @@ import {
   breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
-  countApprovalsByYear,
   countTiles,
   distinctSorted,
   isAuthorizedNow,
   newestFirst,
+  sortBreakdownRows,
   statusDate,
 } from "./approvals.js";
 
@@ -39,21 +38,6 @@ test("buildSubstanceIndex maps each product number to its substances", () => {
   assert.deepEqual(index.get("EMEA/H/C/000001"), ["metformin", "sitagliptin"]);
   assert.deepEqual(index.get("EMEA/H/C/000002"), ["adalimumab"]);
   assert.equal(index.get("EMEA/H/C/000003"), undefined);
-});
-
-test("countApprovalsByYear fills years without approvals with zeros", () => {
-  const counts = countApprovalsByYear(medicines, MEDICINE_TYPES);
-  assert.deepEqual(counts, [
-    { year: "2018", "Advanced therapy": 0, Biosimilar: 0, Generic: 0, Other: 1 },
-    { year: "2019", "Advanced therapy": 0, Biosimilar: 0, Generic: 0, Other: 0 },
-    { year: "2020", "Advanced therapy": 0, Biosimilar: 1, Generic: 1, Other: 0 },
-  ]);
-});
-
-test("countApprovalsByYear excludes medicines without an approval date", () => {
-  const undated = medicines.filter((medicine) => medicine.marketing_authorisation_date === null);
-  assert.deepEqual(countApprovalsByYear(undated, MEDICINE_TYPES), []);
-  assert.deepEqual(countApprovalsByYear([], MEDICINE_TYPES), []);
 });
 
 test("newestFirst sorts by approval date descending, then by name", () => {
@@ -81,13 +65,6 @@ test("statuses in stack order: Authorized, the ended ones, never-authorized, pen
 
 test("distinctSorted removes duplicates and sorts", () => {
   assert.deepEqual(distinctSorted(["Withdrawn", "Authorised", "Withdrawn"]), ["Authorised", "Withdrawn"]);
-});
-
-test("countApprovalsByYear fills a given year range with zeros", () => {
-  const counts = countApprovalsByYear(medicines, MEDICINE_TYPES, [2017, 2021]);
-  assert.deepEqual(counts.map((row) => row.year), ["2017", "2018", "2019", "2020", "2021"]);
-  assert.equal(counts[0].Other, 0);
-  assert.equal(countApprovalsByYear([], MEDICINE_TYPES, [2019, 2020]).length, 2);
 });
 
 // Phase 1: products joined with lookups, tiles, breakdowns and the authorized series.
@@ -234,6 +211,18 @@ test("breakdownExcluded counts the products a breakdown cannot show", () => {
   );
   assert.equal(breakdownExcluded(products, "atc"), 2);
   assert.equal(breakdownExcluded(products, "area"), 2);
+  // Phase 4c review: a product without an EMA code but with one from its product information
+  // (atc_code_human null) is in its class; a row without any code does not break the count.
+  const smpc = buildProducts([medicine("P4", {}), medicine("P5", {})], {
+    areaRows: [],
+    branchRows: [],
+    atcRows: [
+      { ema_product_number: "P4", atc_code_human: null, atc_code: "L04AG05", current_atc_code: null, source: "ema_smpc" },
+      { ema_product_number: "P5", atc_code_human: null, source: "ema" },
+    ],
+  });
+  assert.equal(breakdownExcluded(smpc, "atc"), 1);
+  assert.deepEqual(breakdownCounts(smpc, "atc").map((row) => [row.key, row.count]), [["L", 1]]);
   // A missing holder is counted as "Not stated".
   assert.equal(breakdownExcluded(products, "mah"), 0);
 });
@@ -256,4 +245,28 @@ test("breakdownCounts keeps the top n and folds distinct remaining products into
   // Ties sort by label; Other counts each product once even when it has two tail branches.
   assert.deepEqual(breakdownCounts(products, "area", undefined, 2).at(-1), { key: null, label: "Other", count: 3, other: true });
   assert.deepEqual(breakdownCounts(products, "area", undefined, 2).map((row) => row.key), ["A", "B", null]);
+});
+
+// Phase 4c: the breakdown's Sort control (UI state).
+test("sortBreakdownRows: count keeps the rows; key sorts ATC classes by code, the others by name; Other and incomplete stay last", () => {
+  const holders = [
+    { key: "Zeta", label: "Zeta", count: 5 },
+    { key: "alpha", label: "alpha", count: 3 },
+    { key: "Beta", label: "Beta", count: 3 },
+    { key: null, label: "Other", count: 9, other: true },
+  ];
+  assert.equal(sortBreakdownRows(holders, "count", "mah"), holders);
+  assert.deepEqual(sortBreakdownRows(holders, "key", "mah").map((row) => row.label), ["alpha", "Beta", "Zeta", "Other"]);
+  // Areas sort by their branch name, not by the branch code.
+  const areas = [{ key: "C04", label: "Neoplasms", count: 9 }, { key: "C14", label: "Cardiovascular Diseases", count: 4 }];
+  assert.deepEqual(sortBreakdownRows(areas, "key", "area").map((row) => row.key), ["C14", "C04"]);
+  const atc = [
+    { key: "L04AC", label: "Interleukin Inhibitors", count: 30 },
+    { key: "L04AB", label: "TNF-Alpha Inhibitors", count: 20 },
+    { key: "L04AA", label: "Selective Immunosuppressants", count: 40 },
+    { key: "L04A", label: "code incomplete", count: 2, static: true, incomplete: true },
+  ];
+  assert.deepEqual(sortBreakdownRows(atc, "key", "atc").map((row) => row.key), ["L04AA", "L04AB", "L04AC", "L04A"]);
+  // A copy: the input keeps its order.
+  assert.equal(atc[0].key, "L04AC");
 });

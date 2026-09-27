@@ -13,8 +13,30 @@ import {
   lookupView,
   normalizeYearRange,
   patchFilterParams,
+  patchIsSet,
+  togglePatch,
   withoutLookup,
 } from "./url.js";
+
+// Phase 4c: a control that sets filters ("Who is active where") clears them on a repeat click.
+test("a filter patch is set when each of its keys holds exactly its values, in any order", () => {
+  const state = { ...structuredClone(DEFAULT_STATE), mah: ["Novartis Europharm Limited"], atc: ["L", "C"], type: ["Generic"] };
+  assert.equal(patchIsSet(state, { mah: ["Novartis Europharm Limited"] }), true);
+  assert.equal(patchIsSet(state, { atc: ["C", "L"] }), true);
+  assert.equal(patchIsSet(state, { atc: ["L"] }), false);
+  assert.equal(patchIsSet(state, { mah: ["Novartis Europharm Limited"], atc: ["L"] }), false);
+  assert.equal(patchIsSet(state, { mah: ["Novartis Europharm Limited"], type: ["Generic"] }), true);
+  assert.equal(patchIsSet(state, { branch: ["C04"] }), false);
+});
+
+test("toggling a filter patch: set it, or clear its keys when it is already exactly set", () => {
+  const state = { ...structuredClone(DEFAULT_STATE), mah: ["Novartis Europharm Limited"], branch: ["C04"], type: ["Generic"] };
+  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"] }), { mah: [] });
+  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"], branch: ["C04"] }), { mah: [], branch: [] });
+  assert.deepEqual(togglePatch(state, { mah: ["Pfizer Europe MA EEIG"] }), { mah: ["Pfizer Europe MA EEIG"] });
+  // Partly set: the whole patch is set (the other filters stay).
+  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"], branch: ["C14"] }), { mah: ["Novartis Europharm Limited"], branch: ["C14"] });
+});
 
 const domain = {
   mahs: new Set(["Merck Sharp & Dohme B.V.", "Sanofi Pasteur MSD, SNC", "Pfizer Europe MA EEIG", "Not stated"]),

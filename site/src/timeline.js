@@ -21,7 +21,7 @@ function summary(dots, lanes) {
   return UI.timeline.summary(dots.length, years[0], years[1], counts);
 }
 
-// items: [{ id, name, date, type, family, status, holder }]; link(item) -> <a> that opens the card.
+// items: [{ id, name, date, type, family, status, holder, mentioned }]; link(item) -> <a> that opens the card.
 export function renderTimeline(container, items, { link }) {
   const root = d3.select(container);
   root.selectChildren().remove();
@@ -74,15 +74,17 @@ export function renderTimeline(container, items, { link }) {
     .attr("class", "family-line")
     .attr("d", d3.line((dot) => dot.x, (dot) => dot.y));
 
+  // A medicine only mentioned in indication text (item.mentioned) is a hollow dot: its type colour
+  // as the ring (--dot, CSSOM; style.css).
   const circles = svg.append("g")
     .selectAll("circle")
     .data(dots)
     .join("circle")
-    .attr("class", "dot")
+    .attr("class", (dot) => (dot.mentioned ? "dot mentioned" : "dot"))
     .attr("cx", (dot) => dot.x)
     .attr("cy", (dot) => dot.y)
     .attr("r", RADIUS)
-    .style("fill", (dot) => typeColor(dot.type));
+    .style("--dot", (dot) => typeColor(dot.type));
 
   svg.append("g")
     .attr("class", "axis x-axis")
@@ -108,6 +110,7 @@ export function renderTimeline(container, items, { link }) {
     tip.append("p").attr("class", "tip-name").append(() => link(dot));
     tip.append("p").text(`${formatDate(dot.date)} · ${statusLabel(dot.status)}`);
     if (dot.holder) tip.append("p").attr("class", "tip-holder").text(dot.holder);
+    if (dot.mentioned) tip.append("p").attr("class", "tip-holder").text(UI.timeline.mentioned);
     const tipWidth = tip.node().offsetWidth;
     const left = dot.x + 12 + tipWidth > width ? Math.max(0, dot.x - 12 - tipWidth) : dot.x + 12;
     tip.style("left", `${left}px`).style("top", `${dot.y + 10}px`);

@@ -14,10 +14,13 @@ const slug = (text) => text.toLowerCase().replaceAll(" ", "-");
 
 // rows: facetRows() rows; dotClass(row): a colour key before the label (type or status), or null.
 // tipOf(row): the row value's explanation label (UI.typeTips key: medicine types), or null; shown
-// on hover and focus, and the checkbox's description.
-function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = () => null }) {
+// on hover and focus, and the checkbox's description. linkOf(value): a link after the row (a
+// therapeutic area's condition page; outside the label, so it is not part of the checkbox's
+// name), or null; made once per row, as a value's link never changes.
+function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = () => null, linkOf = () => null }) {
   const active = document.activeElement;
-  const focused = list.contains(active) ? d3.select(active).datum()?.value : undefined;
+  const focused = list.contains(active) ? d3.select(active.closest("li")).datum()?.value : undefined;
+  const control = active?.tagName === "A" ? "a" : "input"; // the focused row's checkbox or link
   const items = d3.select(list)
     .selectAll(":scope > li")
     .data(rows, (row) => row.value)
@@ -29,6 +32,10 @@ function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = 
       label.append("span").attr("class", "facet-name");
       label.append("span").attr("class", "visually-hidden").text(", "); // read as "Biosimilar, 150"
       label.append("span").attr("class", "facet-count");
+      item.each(function link(row) {
+        const anchor = linkOf(row.value);
+        if (anchor) this.append(anchor);
+      });
       return item;
     });
   items.classed("empty", (row) => row.count === 0 && !row.selected);
@@ -41,13 +48,14 @@ function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = 
   items.select(".facet-count").text((row) => formatCount(row.count));
   // A checked row moved (pinned first): the move dropped its focus.
   if (focused !== undefined && !list.contains(document.activeElement)) {
-    items.filter((row) => row.value === focused).select("input").node()?.focus({ preventScroll: true });
+    items.filter((row) => row.value === focused).node()?.querySelector(control)?.focus({ preventScroll: true });
   }
 }
 
 // root: the sidebar (its head stays; sections are found by id, as a sheet may hold them).
 // onChange(patch): a checkbox changed its dimension's values. labelOf.branch(code): the branch name.
-export function createFacetPanel(root, { onChange, labelOf }) {
+// linkOf.area(term): a link to the therapeutic area's condition page, or null.
+export function createFacetPanel(root, { onChange, labelOf, linkOf }) {
   const section = (key) => document.getElementById(`facet-${key}`);
   const limits = { branch: TOP, area: TOP, mah: TOP };
   const queries = { area: "", mah: "" };
@@ -141,7 +149,7 @@ export function createFacetPanel(root, { onChange, labelOf }) {
       container.querySelector(".facet-search").placeholder = UI.facets.search(available, UI.facets.nouns[key]);
       const found = facetRows(counts[key], state[key], { labelOf: String, query: queries[key], limit: limits[key], pin: true, keep: kept[key] });
       totals[key] = found.total;
-      renderChecklist(container.querySelector(".facet-list"), found.rows, { onToggle: toggle(key) });
+      renderChecklist(container.querySelector(".facet-list"), found.rows, { onToggle: toggle(key), linkOf: linkOf[key] });
       d3.select(container.querySelector(".facet-empty")).text(UI.facets.noMatches).attr("hidden", found.total || !queries[key].trim() ? "" : null);
       renderMore(key, found);
     }

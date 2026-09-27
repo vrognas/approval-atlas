@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import {
   atcCheckState,
   atcChildren,
+  atcClassesAt,
+  atcCode,
   atcExactCounts,
+  atcIncomplete,
   atcLadder,
   atcLevel,
+  atcOrigin,
   atcPrefixCounts,
   atcPrefixes,
   atcTreeChildren,
@@ -202,4 +206,58 @@ test("tree search: the top matching classes by code prefix or name, their levels
   assert.deepEqual(atcTreeSearch(nodes, names, "a").matches, ["A"]);
   assert.deepEqual(atcTreeSearch(nodes, names, "xyz").matches, []);
   assert.equal(atcTreeSearch(nodes, names, "  "), null);
+});
+
+// Phase 4c: the per-year chart stacks (and the activity card's columns) by the classes one level
+// below the selected class.
+test("a product's classes one level below a class: level 1 under none, the class itself at level 5", () => {
+  const multi = product("L04AC05", "L01FA01", "A10BJ06", "LX1XX02");
+  assert.deepEqual(atcClassesAt(multi, null), ["L", "L", "A"]);
+  assert.deepEqual(atcClassesAt(multi, "L"), ["L04", "L01"]);
+  assert.deepEqual(atcClassesAt(multi, "L04AC"), ["L04AC05"]);
+  // Coded only down to the class: no class below it.
+  assert.deepEqual(atcClassesAt(product("L04AC"), "L04AC"), []);
+  assert.deepEqual(atcClassesAt(product("L04AC05"), "L04AC05"), ["L04AC05"]);
+  assert.deepEqual(atcClassesAt(product("A10BJ06"), "L"), []);
+  assert.deepEqual(atcClassesAt(product(), null), []);
+});
+// Phase 4c review (data contract, phase 4d): rows carry the code to use (`atc_code`, completed from
+// the product information when EMA's is incomplete) and the code a retired one moved to
+// (`current_atc_code`); products without an EMA code have `atc_code_human` null.
+const row = (atc_code_human, atc_code = atc_code_human, extra = {}) => ({ atc_code_human, atc_code, current_atc_code: null, atc_code_conflict: false, ...extra });
+
+test("atcCode: the current code of a retired one, else the code to use, else EMA's (older files); null without one", () => {
+  assert.equal(atcCode(row("L01XC02", "L01XC02", { current_atc_code: "L01FA01" })), "L01FA01");
+  assert.equal(atcCode(row("L01XL", "L01XL12")), "L01XL12");
+  assert.equal(atcCode(row(null, "L04AG05")), "L04AG05");
+  assert.equal(atcCode({ atc_code_human: "L04AC05" }), "L04AC05");
+  assert.equal(atcCode({ atc_code_human: null }), null);
+});
+
+test("counts, classes and prefixes follow the code to use; rows without a code are skipped", () => {
+  const entyvio = { atc: [row(null, "L04AG05")] };
+  const retired = { atc: [row("L01XC02", "L01XC02", { current_atc_code: "L01FA01" })] };
+  const empty = { atc: [{ atc_code_human: null }] };
+  const counted = atcPrefixCounts([entyvio, retired, empty]);
+  assert.equal(counted.get("L04AG05"), 1);
+  assert.equal(counted.get("L01FA"), 1);
+  assert.equal(counted.has("L01XC"), false);
+  assert.deepEqual(Object.fromEntries(atcExactCounts([entyvio, retired, empty])), { L04AG05: 1, L01FA01: 1 });
+  assert.deepEqual(atcClassesAt(entyvio, null), ["L"]);
+  assert.deepEqual(atcClassesAt(empty, null), []);
+});
+
+test("atcOrigin: how the code shown differs from EMA's published one (null when it does not)", () => {
+  assert.equal(atcOrigin(row("L04AC05")), null);
+  assert.equal(atcOrigin({ atc_code_human: "L04AC05" }), null);
+  assert.deepEqual(atcOrigin(row("L01XC02", "L01XC02", { current_atc_code: "L01FA01" })), { kind: "retired", from: "L01XC02", now: "L01FA01" });
+  assert.deepEqual(atcOrigin(row("L01XL", "L01XL12")), { kind: "completed", published: "L01XL" });
+  assert.deepEqual(atcOrigin(row("C09", "C03DA05", { atc_code_conflict: true })), { kind: "conflict", published: "C09" });
+  assert.deepEqual(atcOrigin(row(null, "L04AG05")), { kind: "smpc" });
+});
+
+test("a code is incomplete unless it is a valid level-5 code", () => {
+  assert.equal(atcIncomplete("L04AC05"), false);
+  assert.equal(atcIncomplete("L04AC"), true);
+  assert.equal(atcIncomplete("LX1XX02"), true);
 });

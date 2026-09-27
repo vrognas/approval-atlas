@@ -1,6 +1,6 @@
 // Pure: one predicate per filter dimension, so a chart can apply every filter except its own.
 // Products come from buildProducts() in approvals.js.
-import { atcPrefixes } from "./atc.js";
+import { atcCode, atcPrefixes } from "./atc.js";
 import { ATC_CODE } from "./badges.js";
 
 // "L01" / "l01fa" -> code prefix; anything else -> case-insensitive name search.
@@ -24,8 +24,9 @@ export function splitAtcValues(values) {
 }
 
 // Any selected class (a code prefix, or a class whose name matches a query) matches: OR. A product
-// code is in a class when one of its levels (atcPrefixes()) is that class, so a malformed code
-// (EMA's LX1XX02) is in none, as in the tree and breakdown counts (atcPrefixCounts()).
+// code (atcCode(): the code to use) is in a class when one of its levels (atcPrefixes()) is that
+// class, so a malformed code (EMA's LX1XX02) is in none, as in the tree and breakdown counts
+// (atcPrefixCounts()).
 function atcPredicate(values, atcClasses) {
   const { codes, names } = splitAtcValues(values);
   if (!codes.length && !names.length) return null;
@@ -34,7 +35,7 @@ function atcPredicate(values, atcClasses) {
     ...codes,
     ...atcClasses.filter((row) => needles.some((needle) => row.name?.toLowerCase().includes(needle))).map((row) => row.atc_code),
   ]);
-  return (product) => product.atc.some((row) => atcPrefixes(row.atc_code_human).some((prefix) => selected.has(prefix)));
+  return (product) => product.atc.some((row) => atcPrefixes(atcCode(row)).some((prefix) => selected.has(prefix)));
 }
 
 export function makePredicates(state, atcClasses) {

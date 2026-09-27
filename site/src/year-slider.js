@@ -247,7 +247,7 @@ export function createYearStrip(root, { years, onRange }) {
     render({ rows, from, to, undated }) {
       applied = { from, to };
       draw(rows);
-      d3.select(undatedNote).text(undated ? UI.yearStrip.undated(undated) : "");
+      d3.select(undatedNote).text(undated ? UI.yearStrip.undated(undated, from !== null || to !== null) : "");
       if (dragging) show(current.start, current.end);
       else {
         latest = applied;

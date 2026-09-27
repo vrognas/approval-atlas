@@ -10,6 +10,7 @@ import {
   foldWithMap,
   makeSnippet,
   searchWords,
+  submitChoice,
   suggest,
   suggestAtcClasses,
   textMatches,
@@ -156,6 +157,25 @@ test("buildConditions precomputes products, authorized counts and narrower terms
   assert.equal(conditions.termUi.get("Depressive Disorder, Major"), "D7");
 });
 
+// Phase 4c review: a condition page tells its own medicines from those tagged only with a narrower
+// term (Psoriasis vs Arthritis, Psoriatic), and names the narrower terms.
+test("buildConditions tells a descriptor's own products from those tagged with a narrower term", () => {
+  const depressive = conditions.descriptors.get("D2");
+  assert.deepEqual([...depressive.ownProducts], ["P3"]);
+  assert.deepEqual(depressive.narrowerTerms, [{ term: "Depressive Disorder, Major", ui: "D7" }]);
+  assert.deepEqual(Object.fromEntries(depressive.narrowerByProduct), { P2: ["Depressive Disorder, Major"] });
+  const bipolar = conditions.descriptors.get("D1");
+  assert.deepEqual([...bipolar.ownProducts].sort(), ["P1", "P2", "P4"]);
+  assert.deepEqual(bipolar.narrowerTerms, []);
+});
+
+// A therapeutic area group (MeSH branch) is named after its root descriptor: its condition page.
+test("buildConditions finds a descriptor by its name", () => {
+  assert.equal(conditions.uiByName.get("Depressive Disorder"), "D2");
+  assert.equal(conditions.uiByName.get("Other HIV"), "D6");
+  assert.equal(conditions.uiByName.get("Neoplasms"), undefined);
+});
+
 test("suggest needs at least 2 characters", () => {
   assert.deepEqual(suggest(index, conditions, "k"), { medicines: [], substances: [], conditions: [] });
 });
@@ -258,4 +278,21 @@ test("textMatches finds whole-word folded mentions and skips excluded products",
   ];
   const matches = textMatches(products, ["hemophilia a", "plasma"], new Set(["C"]));
   assert.deepEqual(matches.map((m) => [m.product.ema_product_number, m.snippet.match]), [["A", "haemophilia A"], ["B", "Plasma"]]);
+});
+
+// Phase 4c review: Enter (the phone keyboard's Search key) without an option picked opens the
+// suggestion the query names ("wegovy" -> Wegovy's card) or the only one; else the text search.
+test("submitChoice: the suggestion whose label (or class code) the query is, else the only one, else none", () => {
+  const groups = [
+    { key: "medicines", options: [{ label: "Wegovy", value: "EMEA/H/C/005422" }, { label: "Wegovy Pen", value: "P9" }] },
+    { key: "substances", options: [{ label: "semaglutide", value: "semaglutide" }] },
+    { key: "conditions", options: [] },
+    { key: "classes", options: [{ label: "L04AC Interleukin Inhibitors", value: "L04AC" }] },
+  ];
+  assert.deepEqual(submitChoice(groups, " WEGOVY "), { group: "medicines", value: "EMEA/H/C/005422" });
+  assert.deepEqual(submitChoice(groups, "Semaglutide"), { group: "substances", value: "semaglutide" });
+  assert.deepEqual(submitChoice(groups, "l04ac"), { group: "classes", value: "L04AC" });
+  assert.equal(submitChoice(groups, "weg"), null);
+  assert.deepEqual(submitChoice([{ key: "medicines", options: [{ label: "Keytruda", value: "P1" }] }], "keytr"), { group: "medicines", value: "P1" });
+  assert.equal(submitChoice([], "anything"), null);
 });

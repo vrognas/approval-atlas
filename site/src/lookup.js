@@ -3,10 +3,25 @@
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { isAuthorizedNow, statusDate } from "./approvals.js";
-import { atcLadder, atcPrefixCounts, mainAtcCode } from "./atc.js";
+import { atcCode, atcIncomplete, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
-import { groupDocuments, primaryDocuments, quickDocuments } from "./documents.js";
-import { NOT_STATED, UI, atcName, formatDate, statusDateLine, statusKind, statusLabel, statusSentence, statusesByFrequency } from "./labels.js";
+import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
+import {
+  NOT_STATED,
+  UI,
+  atcClassLabel,
+  atcName,
+  atcOriginFlag,
+  atcOriginText,
+  formatDate,
+  indicationLead,
+  statusDateLine,
+  statusKind,
+  statusLabel,
+  statusSentence,
+  statusesByFrequency,
+} from "./labels.js";
+import { markExternal } from "./links.js";
 import { espacenetUrl, protectionSummary } from "./protection.js";
 import { buildConditions, conditionPhrases, foldSearchText, suggest, textMatches } from "./search.js";
 import { renderTimeline } from "./timeline.js";
@@ -37,10 +52,10 @@ function groupBy(rows, key) {
 
 const PDF_URL = /\.pdf(-\d+)?$/i;
 
-// Third-party URLs: https only, new tab, no opener or referrer.
+// Third-party URLs: https only, new tab, no opener or referrer; marked as leaving the site.
 function externalLink(text, url) {
   if (!url?.startsWith("https://")) return text;
-  return el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text, PDF_URL.test(url) ? el("span", { class: "pdf" }, UI.card.pdf) : null);
+  return markExternal(el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text, PDF_URL.test(url) ? el("span", { class: "pdf" }, UI.card.pdf) : null));
 }
 
 // "PI" and "EPAR": compact links to a medicine's current product information and latest public
@@ -48,7 +63,7 @@ function externalLink(text, url) {
 // missing document gets no link (none at all: null).
 export function documentLinks(name, urls) {
   const links = Object.entries(UI.documentLinks).filter(([key]) => urls?.[key]?.startsWith("https://")).map(([key, copy]) =>
-    el("a", { class: "doc-link", href: urls[key], target: "_blank", rel: "noopener noreferrer", "aria-label": copy.label(name) }, copy.text));
+    markExternal(el("a", { class: "doc-link", href: urls[key], target: "_blank", rel: "noopener noreferrer", "aria-label": copy.label(name) }, copy.text)));
   return links.length ? el("span", { class: "doc-links" }, links) : null;
 }
 
@@ -78,8 +93,8 @@ function explainedTypes(row) {
     el("span", { class: `badge hue-${badge.hue}` }, badge.label), " ", el("span", { class: "muted" }, UI.typeTips[badge.label])));
 }
 
-// Segmented ATC badge (display only; lookup rows are links, the card has ladders): one segment
-// per level, in the group's hue.
+// Segmented ATC badge (display only: the card's ladders are the links): one segment per level, in
+// the group's hue.
 function atcBadge(code) {
   return el("span", { class: `atc-badge hue-${atcHue(code)}` },
     atcSegments(code).map((segment) => el("span", { class: segment.level ? `atc-seg level-${segment.level}` : "atc-seg" }, segment.text)));
@@ -91,12 +106,14 @@ function strip(items) {
     el("div", { class: wide ? "strip-wide" : null }, el("dt", null, label), el("dd", null, value))));
 }
 
-// SmPC / EPAR as a full-width secondary button: document name, then "PDF · updated {date}".
+// SmPC / EPAR as a full-width secondary button: document name (with the external-link icon), then
+// "PDF · updated {date}".
 function documentButton({ key, row }) {
   if (!row.url?.startsWith("https://")) return null;
-  return el("a", { class: "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
-    el("span", { class: "doc-button-title" }, UI.documents[key]),
-    el("span", { class: "doc-button-meta" }, UI.card.documentMeta(PDF_URL.test(row.url), formatDate(row.last_updated_date))));
+  const heading = el("span", { class: "doc-button-title" }, UI.documents[key]);
+  return markExternal(el("a", { class: "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
+    heading,
+    el("span", { class: "doc-button-meta" }, UI.card.documentMeta(PDF_URL.test(row.url), formatDate(row.last_updated_date)))), heading);
 }
 
 const byDate = (direction) => (a, b) => {
@@ -111,12 +128,14 @@ const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substanc
 export function createLookup(panel, { index, loadFile, navigate, snapshotDate }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
+    // Rows without a code to use (atcCode()) are left out.
     atc: [["ema_medicine_atc_codes.json", "atc_classes.json"], (rows, classes) => ({
-      byProduct: groupBy(rows, "ema_product_number"),
+      byProduct: groupBy(rows.filter((row) => atcCode(row) !== null), "ema_product_number"),
       names: new Map(classes.map((row) => [row.atc_code, row.name])),
+      retiredYears: new Map(classes.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null])),
       classes,
     })],
-    // Medicines authorized today per ATC prefix, no filters: ladder counts, drug-class suggestions.
+    // Medicines currently authorized per ATC prefix, no filters: ladder counts, drug-class suggestions.
     atcCounts: [["ema_medicines.json", "ema_medicine_atc_codes.json"], (medicines, rows) => {
       const byProduct = groupBy(rows, "ema_product_number");
       return atcPrefixCounts(medicines.filter(isAuthorizedNow).map((medicine) => ({ atc: byProduct.get(medicine.ema_product_number) ?? [] })));
@@ -176,7 +195,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
 
   const fact = (label, content) => (content === null || (Array.isArray(content) && content.length === 0) ? null : [el("dt", null, label), el("dd", null, content)]);
 
-  // ATC ladder of one code: a row per level (badge, name, medicines authorized today) linking to
+  // ATC ladder of one code: a row per level (badge, name, medicines currently authorized) linking to
   // the dashboard filtered to that level alone. counts: null until loaded (rows show without
   // counts). A malformed code has no levels: its badge only.
   function atcLadderList(code, names, counts) {
@@ -193,15 +212,20 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   // Over the ladder counts, at the end of the ATC label's row.
   const ladderHead = (counts) => (ready(counts) ? el("span", { class: "ladder-head", "aria-hidden": "true" }, UI.atc.countsHead) : null);
 
-  // Medicine card: one ladder per code, incomplete codes flagged.
+  // Medicine card: one ladder per code to use (atcCode()), incomplete codes flagged, and how the code
+  // differs from EMA's published one (atcOrigin()).
   function atcLadders(number, atc, counts) {
     if (!ready(atc)) return pending(atc);
     const rows = atc.byProduct.get(number) ?? [];
     if (!rows.length) return null;
-    return rows.map((row) => [
-      atcLadderList(row.atc_code_human, atc.names, ready(counts) ? counts : null),
-      row.atc_incomplete ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", title: UI.table.incompleteTitle }, UI.table.incomplete)) : null,
-    ]);
+    return rows.map((row) => {
+      const origin = atcOriginText(atcOrigin(row), atc.names, atc.retiredYears);
+      return [
+        atcLadderList(atcCode(row), atc.names, ready(counts) ? counts : null),
+        atcIncomplete(atcCode(row)) ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", title: UI.table.incompleteTitle }, UI.table.incomplete)) : null,
+        origin ? el("p", { class: "muted ladder-origin" }, origin) : null,
+      ];
+    });
   }
 
   // The ATC fact spans the card; its label row ends with the ladder counts' head.
@@ -214,7 +238,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     if (!ready(atc)) return null;
     const { code, others } = mainAtcCode(rows.map((row) => ({
       name: row.name_of_medicine,
-      codes: (atc.byProduct.get(row.ema_product_number) ?? []).map((item) => item.atc_code_human),
+      codes: (atc.byProduct.get(row.ema_product_number) ?? []).map(atcCode),
     })));
     if (!code) return null;
     return el("section", { class: "card-section" },
@@ -225,16 +249,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
 
   function areaLinks(number, areas, conditions) {
     if (!ready(areas)) return pending(areas);
-    const terms = (areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh);
-    return terms.map((term, position) => {
-      const ui = ready(conditions) ? conditions.termUi.get(term) : null;
-      return [ui ? internalLink(term, { cond: ui }) : term, position < terms.length - 1 ? "; " : ""];
-    });
+    return termLinks((areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh), conditions);
   }
 
   // The documents list below the SmPC / EPAR buttons. groups: groupDocuments() output; rest: the
-  // groups without the button rows (primaryDocuments()).
-  function documentsSection(documents, groups, rest, medicine) {
+  // groups without the button rows (primaryDocuments()). namesakeNote: the line naming the
+  // namesake's documents left out (or null).
+  function documentsSection(documents, groups, rest, medicine, namesakeNote) {
     const items = rest.flatMap((group) => (group.key === "variations"
       ? el("li", null, el("details", { "data-key": "variations" },
         el("summary", null, UI.documents.variations(group.rows.length)),
@@ -247,7 +268,39 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       el("h3", null, UI.card.documents),
       ready(documents) ? null : pending(documents),
       ready(documents) && groups.length === 0 ? el("p", { class: "muted" }, UI.card.noDocuments) : null,
-      items.length ? el("ul", { class: "plain doc-list" }, items) : null);
+      items.length ? el("ul", { class: "plain doc-list" }, items) : null,
+      namesakeNote);
+  }
+
+  // Other medicines with the same name (folded): index rows.
+  function namesakesOf(row) {
+    const folded = foldSearchText(row.name_of_medicine);
+    return index.medicines.filter((item) => item.folded === folded && item.row !== row).map((item) => item.row);
+  }
+
+  // Under the dek: each namesake as a link to its card, then its status (authorized: since when).
+  const namesakeNotes = (namesakes) => namesakes.map((other) => el("p", { class: "namesake" },
+    internalLink(UI.card.namesake.link(other.name_of_medicine, other.ema_product_number), { med: other.ema_product_number }),
+    statusKind(other.medicine_status) === "authorized" && other.marketing_authorisation_date
+      ? UI.card.namesake.authorized(other.marketing_authorisation_date)
+      : UI.card.namesake.other(other.medicine_status)));
+
+  // A medicine never authorized, with a namesake approved later: the namesake that approval
+  // belongs to (the earliest), or null. Documents from its approval on are the namesake's.
+  function laterNamesake(row, namesakes) {
+    if (statusKind(row.medicine_status) === "authorized" || row.marketing_authorisation_date) return null;
+    return namesakes.filter((other) => other.marketing_authorisation_date)
+      .sort((a, b) => a.marketing_authorisation_date.localeCompare(b.marketing_authorisation_date))[0] ?? null;
+  }
+
+  // The indication's lead (indicationLead()) on the card's first screen, the full text behind a disclosure.
+  function indicationFact(text) {
+    if (!text) return null;
+    const { lead, more } = indicationLead(text);
+    return fact(UI.card.indication, [
+      el("p", { class: "indication-lead" }, lead),
+      more ? el("details", { class: "indication", "data-key": "indication" }, el("summary", null, UI.card.fullIndication), el("p", null, text)) : null,
+    ]);
   }
 
   function protectionSection(row) {
@@ -295,14 +348,25 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const register = need("register");
     const registerRow = ready(register) ? register.get(number) : null;
     const registerDiffers = registerRow?.agrees_with_ema === false;
-    const groups = ready(documents) ? groupDocuments(documents.get(number) ?? []) : [];
+    const namesakes = namesakesOf(row);
+    // EMA can list a later namesake's documents under a medicine never authorized: left out here.
+    const later = laterNamesake(row, namesakes);
+    const split = ready(documents) ? splitNamesakeDocuments(documents.get(number) ?? [], later?.marketing_authorisation_date ?? null) : null;
+    const groups = split ? groupDocuments(split.own) : [];
     const { primary, rest } = primaryDocuments(groups, row.medicine_status);
+    const namesakeDocuments = split?.namesake.length
+      ? el("p", { class: "muted" }, UI.card.namesake.documents(split.namesake.length),
+        internalLink(UI.card.namesake.documentsLink(later.name_of_medicine), { med: later.ema_product_number }), ".")
+      : null;
     const sentence = medicine ? statusSentence(row.medicine_status, statusDate(medicine), medicine.opinion_status) : null;
-    // Order for a talk or poster: the answer, status and the SmPC / EPAR buttons on the first phone screen.
+    // Order for a talk or poster: the answer (with any namesake), holder, since when and status in
+    // the strip, what for (the therapeutic areas) right under it, and the SmPC / EPAR buttons on the
+    // first phone screen; then the indication's lead above the documents list.
     return el("article", { class: "card" },
       kicker("medicine"),
       title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status)))),
       sentence ? el("p", { class: "dek" }, sentence) : null,
+      namesakeNotes(namesakes),
       strip([
         [UI.card.strip.holder, ready(medicines) ? medicine?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : pending(medicines), true],
         // Never-approved medicines (refused, withdrawn applications) have no approval cell.
@@ -311,53 +375,105 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
           : null,
         [UI.card.strip.status, statusBadge(row.medicine_status, true)],
       ]),
+      el("dl", { class: "areas-line" }, el("dt", null, UI.card.areas), el("dd", null, areaLinks(number, areas, conditions))),
       registerDiffers
         ? el("p", null, el("span", { class: "chip warning" },
           externalLink(UI.register.chip(registerRow.register_status, registerRow.register_last_decision_date), registerRow.register_url)))
         : null,
       registerDiffers ? el("p", { class: "muted" }, UI.register.note) : null,
       primary.length ? el("div", { class: "doc-buttons" }, primary.map(documentButton)) : null,
-      documentsSection(documents, groups, rest, medicine),
+      el("dl", { class: "facts card-section what-for" },
+        ready(medicines) ? indicationFact(medicine?.therapeutic_indication) : fact(UI.card.indication, pending(medicines))),
+      documentsSection(documents, groups, rest, medicine, namesakeDocuments),
       el("dl", { class: "facts card-section" },
         fact(UI.card.substances, substances.map((link, position) => [link, position < substances.length - 1 ? "; " : ""])),
-        // The type's name as text only when it has no badge (Other).
+        // A type without a badge (Other) as text with its explanation.
         fact(UI.card.type, [
-          typeBadges({ medicine_type: row.medicine_type }).length ? null : [row.medicine_type, " "],
+          typeBadges({ medicine_type: row.medicine_type }).length
+            ? null
+            : [el("span", { class: "type-explained" }, row.medicine_type, " ", el("span", { class: "muted" }, UI.typeTips[row.medicine_type] ?? "")), " "],
           explainedTypes(medicine ?? row),
           flags.map(([, label]) => [" ", el("span", { class: "chip" }, label)]),
         ]),
         ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null),
-        fact(UI.card.areas, areaLinks(number, areas, conditions)),
       ),
-      medicine?.therapeutic_indication
-        ? el("details", { class: "indication card-section", "data-key": "indication" }, el("summary", null, UI.card.indication), el("p", null, medicine.therapeutic_indication))
-        : null,
       protectionSection(row));
   }
 
-  // rows: search-index rows (+ snippet) -> rows linking to the medicine card: name with its PI and
-  // EPAR links (once the documents index has loaded), substances, status dot and date line with
-  // type badges, holder.
-  function resultList(entries, medicines, withHolder) {
-    if (!entries.length) return el("p", { class: "muted" }, UI.condition.none);
-    const documents = need("documents");
-    return el("ul", { class: "plain result-list" }, entries.map(({ row, snippet }) => {
-      const medicine = ready(medicines) ? medicines.get(row.ema_product_number) : null;
-      const dates = statusDateLine(row.medicine_status, row.marketing_authorisation_date, medicine?.authorized_until ?? null);
-      const holder = withHolder ? medicine?.marketing_authorisation_developer_applicant_holder : null;
-      const urls = ready(documents) ? quickDocuments(documents.get(row.ema_product_number) ?? [], row.medicine_status) : null;
-      return el("li", null,
-        el("p", { class: "result-name" }, internalLink(row.name_of_medicine, { med: row.ema_product_number }), documentLinks(row.name_of_medicine, urls)),
-        row.substances ? el("p", { class: "result-substances" }, row.substances) : null,
-        el("p", { class: "result-meta" }, statusBadge(row.medicine_status), dates ? el("span", { class: "result-date" }, dates) : null, typeBadgeList(row)),
-        holder ? el("p", { class: "result-holder" }, holder) : null,
-        snippet ? el("p", { class: "snippet" }, snippet.before, el("mark", null, snippet.match), snippet.after) : null);
-    }));
+  // A result row's ATC codes (atcCode()): display-only badges with the level names as tooltip and
+  // for screen readers (as in the medicines table), incomplete codes and codes that differ from EMA's
+  // flagged. Nothing while loading.
+  function atcCodes(number, atc) {
+    if (!ready(atc)) return null;
+    return (atc.byProduct.get(number) ?? []).map((row) => {
+      const code = atcCode(row);
+      const names = atcPrefixes(code).filter((prefix) => atc.names.has(prefix)).map((prefix) => atcClassLabel(prefix, atc.names.get(prefix)));
+      const originRow = atcOrigin(row);
+      const origin = atcOriginText(originRow, atc.names, atc.retiredYears);
+      return el("span", { class: "code", title: [...names, ...(origin ? [origin] : [])].join("\n") || null },
+        atcBadge(code),
+        names.length ? el("span", { class: "visually-hidden" }, ` (${names.join("; ")})`) : null,
+        atcIncomplete(code) ? el("span", { class: "flag", title: UI.table.incompleteTitle }, UI.table.incomplete) : null,
+        origin ? [el("span", { class: "flag", "aria-hidden": "true" }, atcOriginFlag(originRow)), el("span", { class: "visually-hidden" }, ` ${origin}`)] : null);
+    });
   }
 
-  // A surface block holding the timeline; none without rows.
-  function timelineBlock(rows, medicines) {
-    if (!rows.length) return null;
+  // Condition page links for EMA terms (plain text where the descriptor is unknown), "; " between them.
+  function termLinks(terms, conditions) {
+    return terms.map((term, position) => {
+      const ui = ready(conditions) ? conditions.termUi.get(term) : null;
+      return [ui ? internalLink(term, { cond: ui }) : term, position < terms.length - 1 ? "; " : ""];
+    });
+  }
+
+  // entries: search-index rows (+ snippet, + terms: the narrower conditions a row is tagged with) ->
+  // a table, one tbody per medicine: Medicine (the name opens its card; substances, unless they are
+  // the card's own substance (sameSubstance(row)); the narrower terms; PI and EPAR once the
+  // documents index has loaded), with areas (substance cards: what each medicine is for) its
+  // therapeutic areas, ATC, Approved · Status, Type, Holder, then the matched indication text in a
+  // full-width row. Phones stack the rows (style.css); explicit roles keep the table semantics
+  // there. labelledBy: the heading's id.
+  function resultTable(entries, medicines, labelledBy, { areas = false, sameSubstance = () => false } = {}) {
+    if (!entries.length) return el("p", { class: "muted" }, UI.condition.none);
+    const [documents, atc] = [need("documents"), need("atc")];
+    const [areaRows, conditions] = areas ? [need("areas"), need("conditions")] : [null, null];
+    const headers = areas ? [UI.results.headers[0], UI.results.areas, ...UI.results.headers.slice(1)] : UI.results.headers;
+    const cell = (className, ...content) => el("td", { class: className, role: "cell" }, content);
+    const bodies = entries.map(({ row, snippet, terms }) => {
+      const medicine = ready(medicines) ? medicines.get(row.ema_product_number) : null;
+      const dates = statusDateLine(row.medicine_status, row.marketing_authorisation_date, medicine?.authorized_until ?? null);
+      const urls = ready(documents) ? quickDocuments(documents.get(row.ema_product_number) ?? [], row.medicine_status) : null;
+      return el("tbody", { role: "rowgroup" },
+        el("tr", { role: "row" },
+          cell("result-medicine",
+            internalLink(row.name_of_medicine, { med: row.ema_product_number }, "medicine-name"),
+            row.substances && !sameSubstance(row) ? el("span", { class: "medicine-substances" }, row.substances) : null,
+            terms?.length ? el("span", { class: "matched-terms" }, UI.condition.rowTagged, termLinks(terms, need("conditions"))) : null,
+            documentLinks(row.name_of_medicine, urls)),
+          areas
+            ? cell("result-areas", ready(areaRows) ? termLinks((areaRows.get(row.ema_product_number) ?? []).map((item) => item.therapeutic_area_mesh), conditions) : null)
+            : null,
+          cell("result-atc", atcCodes(row.ema_product_number, atc)),
+          cell("status-cell", statusBadge(row.medicine_status), dates ? el("span", { class: "status-date" }, dates) : null),
+          cell("type-cell", typeBadgeList(row)),
+          cell("result-holder", ready(medicines) ? medicine?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : null)),
+        snippet
+          ? el("tr", { role: "row", class: "snippet-row" }, el("td", { role: "cell", colspan: headers.length },
+            el("p", { class: "snippet" }, snippet.before, el("mark", null, snippet.match), snippet.after)))
+          : null);
+    });
+    return el("div", { class: "result-table" }, el("table", { role: "table", "aria-labelledby": labelledBy },
+      el("thead", { role: "rowgroup" }, el("tr", { role: "row" }, headers.map((header) => el("th", { scope: "col", role: "columnheader" }, header)))),
+      bodies));
+  }
+
+  // Fewer dated medicines than this: no timeline (a month axis with a dot or two says nothing).
+  const TIMELINE_MIN = 3;
+
+  // A surface block holding the timeline and its caption; none with fewer than TIMELINE_MIN dated
+  // rows. mentioned: product numbers found only in indication texts (hollow dots).
+  function timelineBlock(rows, medicines, mentioned = new Set()) {
+    if (rows.filter((row) => row.marketing_authorisation_date).length < TIMELINE_MIN) return null;
     const container = el("div", { class: "timeline chart" });
     const items = rows.map((row) => ({
       id: row.ema_product_number,
@@ -367,9 +483,12 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       family: familyOf(row),
       status: row.medicine_status,
       holder: ready(medicines) ? medicines.get(row.ema_product_number)?.marketing_authorisation_developer_applicant_holder ?? null : null,
+      mentioned: mentioned.has(row.ema_product_number),
     }));
     timeline = { container, items, width: null };
-    return el("div", { class: "card-section" }, container);
+    return el("div", { class: "card-section" },
+      el("p", { class: "muted timeline-caption" }, UI.timeline.caption, mentioned.size ? [" ", UI.timeline.hollow] : null),
+      container);
   }
 
   function drawTimeline() {
@@ -403,26 +522,41 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
           : el("span", { class: "badges" }, statusesByFrequency(rows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true)))],
       ]),
       timelineBlock(rows, medicines),
-      el("h3", null, UI.substance.products(rows.length)),
-      resultList(rows.map((row) => ({ row })), medicines, true),
+      el("h3", { id: "results-substance" }, UI.substance.products(rows.length)),
+      // What each medicine is for (its therapeutic areas); the substance line only where it differs.
+      resultTable(rows.map((row) => ({ row })), medicines, "results-substance", {
+        areas: true,
+        sameSubstance: (row) => row.substance_keys?.length === 1 && row.substance_keys[0] === key,
+      }),
       substanceAtc(rows, atc, atcCounts));
+  }
+
+  // The dek of a condition with narrower ones: "Includes the narrower condition(s) {links}", the
+  // first NARROWER_SHOWN, then how many more.
+  const NARROWER_SHOWN = 5;
+  function narrowerDek(descriptor) {
+    const terms = descriptor.narrowerTerms;
+    if (!terms.length) return null;
+    const shown = terms.slice(0, NARROWER_SHOWN);
+    return el("p", { class: "dek" },
+      UI.condition.narrowerLead(terms.length),
+      shown.map(({ term, ui }, position) => [ui ? internalLink(term, { cond: ui }) : term, position < shown.length - 1 ? "; " : ""]),
+      terms.length > shown.length ? UI.condition.narrowerMore(terms.length - shown.length) : null,
+      ".");
   }
 
   function conditionResults(ui, query) {
     const conditions = need("conditions");
     const medicines = need("medicines");
     let heading;
-    let dek = null;
-    let tagged = null;
+    let descriptor = null;
     let phrases;
     let related = [];
     if (ui) {
       if (!ready(conditions)) return el("article", { class: "card" }, pending(conditions));
-      const descriptor = conditions.descriptors.get(ui);
+      descriptor = conditions.descriptors.get(ui);
       if (!descriptor) return notFound("condition", ui);
-      heading = headlineNodes(UI.headline.condition(descriptor.name, descriptor.authorized));
-      dek = descriptor.narrower ? UI.condition.narrower(descriptor.narrower) : null;
-      tagged = [...descriptor.products].map((number) => index.byNumber.get(number)).filter(Boolean);
+      heading = headlineNodes(UI.headline.condition(descriptor.name, descriptor.authorized, descriptor.narrowerTerms.length > 0));
       phrases = conditionPhrases(descriptor);
     } else {
       heading = UI.condition.textHeading(query);
@@ -430,9 +564,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       if (ready(conditions)) related = suggest(index, conditions, query).conditions;
     }
     const shown = (row) => showAll || row.medicine_status === "Authorised";
-    const taggedShown = (tagged ?? []).filter(shown).sort(byDate(-1));
+    // Tagged with the condition itself, or only with a narrower one (each row names it).
+    const tagged = descriptor ? [...descriptor.products].map((number) => index.byNumber.get(number)).filter(Boolean) : [];
+    const taggedShown = tagged.filter(shown).sort(byDate(-1));
+    const own = taggedShown.filter((row) => descriptor.ownProducts.has(row.ema_product_number));
+    const narrower = taggedShown.filter((row) => !descriptor.ownProducts.has(row.ema_product_number))
+      .map((row) => ({ row, terms: descriptor.narrowerByProduct.get(row.ema_product_number) ?? [] }));
     const mentioned = ready(medicines)
-      ? textMatches([...medicines.values()], phrases, new Set((tagged ?? []).map((row) => row.ema_product_number)))
+      ? textMatches([...medicines.values()], phrases, new Set(tagged.map((row) => row.ema_product_number)))
         .map(({ product, snippet }) => ({ row: index.byNumber.get(product.ema_product_number), snippet }))
         .filter(({ row }) => row && shown(row))
         .sort((a, b) => byDate(-1)(a.row, b.row))
@@ -443,17 +582,25 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         render(lastState, true);
       } }),
       " ", UI.condition.showAll);
+    const mentionedRows = (mentioned ?? []).map((entry) => entry.row);
     return el("article", { class: "card" },
       kicker(ui ? "condition" : "text"),
       title(heading),
-      dek ? el("p", { class: "dek" }, dek) : null,
+      descriptor ? narrowerDek(descriptor) : null,
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
         related.map((condition) => [internalLink(condition.name, { cond: condition.ui }), " "])) : null,
       toggle,
-      timelineBlock([...taggedShown, ...(mentioned ?? []).map(({ row }) => row)], medicines),
-      tagged ? [el("h3", null, `${UI.condition.tagged} (${taggedShown.length})`), resultList(taggedShown.map((row) => ({ row })), medicines, false)] : null,
-      el("h3", null, mentioned ? `${tagged ? UI.condition.alsoMentioned : UI.condition.mentioned} (${mentioned.length})` : tagged ? UI.condition.alsoMentioned : UI.condition.mentioned),
-      mentioned ? resultList(mentioned, medicines, false) : pending(medicines));
+      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined),
+      descriptor
+        ? [el("h3", { id: "results-tagged" }, UI.condition.taggedOwn(descriptor.name, own.length)), resultTable(own.map((row) => ({ row })), medicines, "results-tagged")]
+        : null,
+      narrower.length
+        ? [el("h3", { id: "results-narrower" }, UI.condition.taggedNarrower(narrower.length)), resultTable(narrower, medicines, "results-narrower")]
+        : null,
+      el("h3", { id: "results-mentioned" }, mentioned
+        ? `${descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned} (${mentioned.length})`
+        : descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned),
+      mentioned ? resultTable(mentioned, medicines, "results-mentioned") : pending(medicines));
   }
 
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
@@ -482,9 +629,17 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       panel.replaceChildren();
       return;
     }
-    const content = view.kind === "medicine" ? medicineCard(view.value)
-      : view.kind === "substance" ? substanceCard(view.value)
-        : conditionResults(view.kind === "condition" ? view.value : null, view.value);
+    // Data the card cannot handle is logged and the card says so, instead of staying on "Loading…".
+    let content;
+    try {
+      content = view.kind === "medicine" ? medicineCard(view.value)
+        : view.kind === "substance" ? substanceCard(view.value)
+          : conditionResults(view.kind === "condition" ? view.value : null, view.value);
+    } catch (error) {
+      console.error(error);
+      timeline = null;
+      content = el("article", { class: "card" }, kicker(view.kind), el("p", { class: "muted" }, UI.lookup.notAvailable));
+    }
     panel.replaceChildren(content);
     for (const details of panel.querySelectorAll("details[data-key]")) if (open.has(details.dataset.key)) details.open = true;
     if (timeline) {
@@ -501,13 +656,23 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     }
   }
 
+  // The name of the view a lookup state shows (the tab's title), or null while unknown.
+  function viewTitle(state) {
+    const { kind, value } = lookupView(state);
+    if (kind === "medicine") return index.byNumber.get(value)?.name_of_medicine ?? null;
+    if (kind === "substance") return index.substances.get(value)?.name ?? null;
+    if (kind === "condition") return ready(values.get("conditions")) ? values.get("conditions").descriptors.get(value)?.name ?? null : null;
+    return kind === "text" ? UI.textTitle(value) : null;
+  }
+
   return {
     render,
     need,
+    title: viewTitle,
     conditions: () => (ready(values.get("conditions")) ? values.get("conditions") : null),
     // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
     documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
-    // Drug-class suggestions need the class names and today's counts: null until both have loaded.
+    // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [values.get("atc"), values.get("atcCounts")];
       return ready(atc) && ready(counts) ? { classes: atc.classes, counts } : null;
