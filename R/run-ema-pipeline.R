@@ -1,6 +1,7 @@
 run_ema_pipeline <- function(output_directory = "site/public/data",
                              cache_path = ".cache/ema/medicines.json",
-                             downloads_directory = ".cache/downloads") {
+                             downloads_directory = ".cache/downloads",
+                             smpc_budget = smpc_budget_from_env()) {
   ema <- read_ema_json(download_ema_json(destination = cache_path))
   ema$data |>
     check_expected_columns() |>
@@ -28,15 +29,26 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   )
   documents <- read_epar_documents(documents_source$path)
   orphan_designations <- read_ema_orphan_designations(orphan_source$path)
+  clean_medicines <- clean_ema_medicines(ema$data)
+  atc_class_rows <- jsonlite::fromJSON(atc_class_path)
+  atc_sources <- prepare_atc_sources(
+    clean_medicines,
+    documents$data,
+    atc_class_rows,
+    downloads_directory,
+    output_directory,
+    smpc_budget
+  )
 
   tables <- build_ema_tables(
-    clean_ema_medicines(ema$data),
+    clean_medicines,
     mesh = load_mesh_descriptors(mesh_source),
-    atc_class_rows = jsonlite::fromJSON(atc_class_path),
+    atc_class_rows = atc_class_rows,
     snapshot_date = snapshot_date,
     epar_documents = documents$data,
     orphan_designations = orphan_designations$data,
-    union_register = read_union_register(register_source$path)
+    union_register = read_union_register(register_source$path),
+    atc_sources = atc_sources
   )
   tables$ema_medicines |>
     check_no_future_approval_dates() |>
@@ -48,7 +60,7 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
     ema$meta$timestamp,
     tables,
     snapshot_date = snapshot_date,
-    sources = list(
+    sources = c(list(
       ema_source_entry(ema$meta$timestamp, cache_path),
       mesh_source_entry(mesh_source),
       chembl_source_entry(chembl_release, atc_class_path),
@@ -58,10 +70,11 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
         orphan_designations$meta$timestamp
       ),
       union_register_source_entry(register_source)
-    )
+    ), atc_sources$source_entries)
   )
   write_ema_outputs(tables, meta, output_directory)
   report_pipeline_summary(tables, snapshot_date)
+  report_atc_summary(tables, atc_sources)
   invisible(tables)
 }
 
@@ -71,7 +84,8 @@ build_ema_tables <- function(clean_medicines,
                              snapshot_date,
                              epar_documents,
                              orphan_designations,
-                             union_register) {
+                             union_register,
+                             atc_sources = empty_atc_sources()) {
   substances <- build_substances_table(clean_medicines)
   therapeutic_areas <- build_lookup_table(
     clean_medicines,
@@ -87,17 +101,28 @@ build_ema_tables <- function(clean_medicines,
     therapeutic_areas$therapeutic_area_mesh,
     mesh
   )
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    atc_sources$smpc_checks,
+    atc_sources$retired_codes
+  )
   list(
     ema_medicines = medicines,
     ema_medicine_therapeutic_areas = therapeutic_areas,
     ema_medicine_active_substances = active_substances,
-    ema_medicine_atc_codes = build_atc_codes_table(clean_medicines),
+    ema_medicine_atc_codes = atc_codes,
     ema_medicine_substances = substances,
-    atc_classes = build_atc_classes(atc_class_rows),
+    atc_classes = build_atc_classes(
+      atc_class_rows,
+      atc_sources$whocc_classes,
+      atc_sources$retired_codes,
+      used_codes = atc_codes_in_use(atc_codes, atc_sources$smpc_checks)
+    ),
     ema_therapeutic_area_branches = build_area_branches_table(
       term_matches,
       mesh
     ),
+    ema_therapeutic_area_subtree = build_area_subtree_table(term_matches, mesh),
     ema_authorized_series = build_authorized_series(medicines, snapshot_date),
     ema_medicine_documents = build_documents_table(epar_documents, medicines),
     mesh_entry_terms = build_mesh_entry_terms(
@@ -119,6 +144,10 @@ build_ema_tables <- function(clean_medicines,
     ema_medicine_register_status = build_register_status_table(
       medicines,
       union_register
+    ),
+    ema_medicine_smpc_atc = build_smpc_atc_table(
+      atc_sources$smpc_checks,
+      medicines
     )
   )
 }

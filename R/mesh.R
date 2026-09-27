@@ -335,6 +335,55 @@ build_area_branches_table <- function(term_matches, mesh) {
     dplyr::arrange(.data$therapeutic_area_mesh, .data$branch)
 }
 
+# Sub-areas: every level-2 and level-3 tree node above (or at) a matched
+# descriptor, one row per term and node. A term matched at a branch root has
+# none. Node names come from the descriptor holding that tree number (unique
+# at these depths in MeSH 2026; the join stops the build if that changes).
+build_area_subtree_table <- function(term_matches, mesh) {
+  node_names <- mesh$tree_numbers |>
+    dplyr::filter(
+      stringr::str_count(.data$tree_number, stringr::fixed(".")) %in% 1:2
+    ) |>
+    dplyr::inner_join(
+      mesh$descriptors,
+      by = "descriptor_ui",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::select(node = "tree_number", node_name = "descriptor_name")
+  matched_trees <- term_matches |>
+    dplyr::filter(!is.na(.data$mesh_descriptor_ui)) |>
+    dplyr::inner_join(
+      mesh$tree_numbers,
+      by = c(mesh_descriptor_ui = "descriptor_ui"),
+      relationship = "many-to-many"
+    )
+  prefixes <- purrr::map(matched_trees$tree_number, tree_number_prefixes)
+  dplyr::tibble(
+    therapeutic_area_mesh = rep(
+      matched_trees$therapeutic_area_mesh,
+      lengths(prefixes)
+    ),
+    source = rep(matched_trees$source, lengths(prefixes)),
+    node = as.character(unlist(prefixes))
+  ) |>
+    dplyr::mutate(
+      level = stringr::str_count(.data$node, stringr::fixed(".")) + 1L
+    ) |>
+    dplyr::filter(.data$level %in% 2:3) |>
+    dplyr::distinct() |>
+    dplyr::left_join(node_names, by = "node", relationship = "many-to-one") |>
+    dplyr::transmute(
+      .data$therapeutic_area_mesh,
+      branch = stringr::str_extract(.data$node, "^[^.]+"),
+      .data$node,
+      .data$level,
+      parent = stringr::str_remove(.data$node, "\\.[^.]+$"),
+      .data$node_name,
+      .data$source
+    ) |>
+    dplyr::arrange(.data$therapeutic_area_mesh, .data$node)
+}
+
 # Search folding, shared with the browser: both sides apply exactly these
 # steps in this order, so R-folded data and a browser-folded query compare
 # as equal strings.

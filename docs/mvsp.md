@@ -30,7 +30,7 @@ Status: **Met**, **Partly met** (usually waiting for a GitHub setting listed und
 | 2.8 Encryption | N/A | — | No sensitive data in transit or at rest. Transport security for the public site: see 2.2. |
 | 3.1 List of data | Met | [Data inventory](#data-inventory) | |
 | 3.2 Data flow diagram | Met | [Data flow](#data-flow) | |
-| 3.3 Vulnerability prevention | Met | `AGENTS.md` (conventions); tests below | Authorization bypass, session management, CSRF: not applicable (no accounts, sessions, cookies or state-changing requests). Injection: no database or shell built from input; the MeSH XML is parsed without network access or entity expansion (`R/mesh.R`, `NONET`); no LLM in the product. XSS: no HTML sinks (2.5), strict CSP, `https:`-only links from data. Untrusted data: source files are validated and the build fails loudly on unexpected values (`R/validate-ema.R`, 100% test coverage); URL parameters are checked against the data before use (`site/src/url.js`). |
+| 3.3 Vulnerability prevention | Met | `AGENTS.md` (conventions); tests below | Authorization bypass, session management, CSRF: not applicable (no accounts, sessions, cookies or state-changing requests). Injection: no database or shell built from input; the MeSH XML is parsed without network access or entity expansion (`R/mesh.R`, `NONET`); EMA product information PDFs (URLs from EMA's documents index) are converted to text by the pipeline, in CI and in local backfill runs (`pdftools`/poppler, `R/smpc-atc.R`), from a temporary file that is then deleted, only when the file has a PDF header, and only well-formed ATC codes are kept; the WHOCC spreadsheets and HTML pages are parsed with `readxl` and `xml2` (`NONET`, `R/whocc.R`), and a format change stops the build; no LLM in the product. XSS: no HTML sinks (2.5), strict CSP, `https:`-only links from data. Untrusted data: source files are validated and the build fails loudly on unexpected values (`R/validate-ema.R`, 100% test coverage); URL parameters are checked against the data before use (`site/src/url.js`). |
 | 3.4 Time to fix vulnerabilities | Met | `SECURITY.md` | Fix within 90 days of confirmation, exploited issues first; public GitHub security advisory after the fix. Visitors need to take no action: a new deploy replaces the site and its offline cache. |
 | 3.5 Build and release process | Met | `.github/workflows/pipeline.yml` | Git on GitHub; the site is built and deployed only by the scripted CI workflow on GitHub-hosted runners, and each Pages deployment records its workflow run and commit (SLSA Build L1). Actions pinned by commit SHA. No stored secrets: only the automatic `GITHUB_TOKEN`, read-only by default, with `pages`/`id-token` write only in the deploy job and `contents: write` only in the data-commit job. Not done: signed build provenance (SLSA L2). |
 | 4.1 Physical access | N/A | — | No own facilities or servers; GitHub hosts code, CI and the site. |
@@ -48,8 +48,9 @@ The project processes public regulatory data only. No personal data is collected
 | Marketing authorization holders (company names; business addresses from the public Union Register planned) | EMA, European Commission Union Register | Public business data | As above |
 | EPAR document links, orphan designations | EMA | Public | As above |
 | EU register status, orphan market exclusivity dates | European Commission Union Register | Public | As above |
-| Therapeutic-area terms and tree branches | NLM MeSH | Public | As above |
-| ATC classification names | ChEMBL (WHO ATC) | Public | As above |
+| Therapeutic-area terms, tree branches and sub-areas (tree levels 2 and 3) | NLM MeSH | Public | As above |
+| ATC classification names, status (current, retired, temporary) and replacement codes | ChEMBL (WHO ATC); WHOCC ATC/DDD Index site (update lists, cumulative alterations, single index pages); archived index copies (Internet Archive) | Public | As above |
+| ATC codes read from section 5.1 of product information PDFs (a few per run), with the document link and date | EMA product information (SmPC) | Public | As above (`ema_medicine_smpc_atc.json`); the PDFs themselves are read in a temporary file and not kept |
 | Source download cache | All of the above | Public | GitHub Actions cache (`.cache/downloads`) |
 | Visitor data | — | None collected by the site | The browser keeps the site's files and data for offline use (service worker cache) on the visitor's device only. GitHub, as host, may log IP addresses and page addresses (which carry the lookup state, see [Data flow](#data-flow)). |
 
@@ -60,10 +61,11 @@ The browser only fetches the site's static files; searching and filtering send n
 ```mermaid
 flowchart LR
   subgraph sources["Public sources (third parties)"]
-    ema["EMA: medicines, EPAR documents, orphan designations"]
+    ema["EMA: medicines, EPAR documents, orphan designations, product information PDFs"]
     ec["European Commission: Union Register"]
     nlm["NLM: MeSH"]
     ebi["EMBL-EBI: ChEMBL ATC"]
+    whocc["WHOCC: ATC/DDD Index updates, alterations, index pages"]
   end
   ci["GitHub Actions: R pipeline (validate, derive) and Vite build"]
   repo["GitHub repository: code and data history"]

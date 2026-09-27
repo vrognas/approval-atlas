@@ -423,6 +423,123 @@ test_that("build_area_branches_table aborts on a descriptor missing in MeSH", {
   expect_match(conditionMessage(error), "Retired Term")
 })
 
+# Records of the fixture terms' level-2 and level-3 ancestors in MeSH 2026,
+# added in memory: in the XML they would change the ancestor tests below.
+add_subtree_records <- function(mesh) {
+  nodes <- dplyr::tibble(
+    descriptor_ui = c(
+      "D002493", "D019636", "D019965", "D001927", "D024801", "D003704"
+    ),
+    descriptor_name = c(
+      "Central Nervous System Diseases",
+      "Neurodegenerative Diseases",
+      "Neurocognitive Disorders",
+      "Brain Diseases",
+      "Tauopathies",
+      "Dementia"
+    ),
+    tree_number = c(
+      "C10.228", "C10.574", "F03.615", "C10.228.140", "C10.574.945",
+      "F03.615.400"
+    )
+  )
+  mesh$descriptors <- dplyr::bind_rows(
+    mesh$descriptors,
+    dplyr::select(nodes, "descriptor_ui", "descriptor_name")
+  )
+  mesh$tree_numbers <- dplyr::bind_rows(
+    mesh$tree_numbers,
+    dplyr::select(nodes, "descriptor_ui", "tree_number")
+  )
+  mesh
+}
+
+test_that("build_area_subtree_table lists level-2 and level-3 nodes per term", {
+  mesh <- add_subtree_records(read_mesh_descriptors(fixture_mesh_path()))
+  asmd <- "Acid sphingomyelinase deficiency (ASMD) type A/B or type B"
+  cns <- "Central Nervous System Diseases"
+  matches <- match_mesh_terms(
+    c("Alzheimer Disease", "Cancer", asmd, cns, "Psoriasis"),
+    mesh
+  )
+  expect_identical(
+    build_area_subtree_table(matches, mesh),
+    dplyr::tibble(
+      therapeutic_area_mesh = c(
+        rep(asmd, 2), rep("Alzheimer Disease", 6), cns
+      ),
+      branch = c("C10", "C10", "C10", "C10", "C10", "C10", "F03", "F03", "C10"),
+      node = c(
+        "C10.228", "C10.228.140",
+        "C10.228", "C10.228.140", "C10.574", "C10.574.945", "F03.615",
+        "F03.615.400",
+        "C10.228"
+      ),
+      level = c(2L, 3L, 2L, 3L, 2L, 3L, 2L, 3L, 2L),
+      parent = c(
+        "C10", "C10.228",
+        "C10", "C10.228", "C10", "C10.574", "F03", "F03.615",
+        "C10"
+      ),
+      node_name = c(
+        cns, "Brain Diseases",
+        cns, "Brain Diseases", "Neurodegenerative Diseases", "Tauopathies",
+        "Neurocognitive Disorders", "Dementia",
+        cns
+      ),
+      source = c(rep("curated", 2), rep("mesh_heading", 7))
+    )
+  )
+})
+
+test_that("build_area_subtree_table lists a node once per term", {
+  mesh <- add_subtree_records(read_mesh_descriptors(fixture_mesh_path()))
+  mesh$tree_numbers <- dplyr::add_row(
+    mesh$tree_numbers,
+    descriptor_ui = "D000544",
+    tree_number = "C10.228.140.999"
+  )
+  subtree <- build_area_subtree_table(
+    match_mesh_terms("Alzheimer Disease", mesh),
+    mesh
+  )
+  expect_identical(anyDuplicated(subtree), 0L)
+  expect_identical(nrow(subtree), 6L)
+})
+
+test_that("build_area_subtree_table leaves recordless nodes unnamed", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  subtree <- build_area_subtree_table(
+    match_mesh_terms("Alzheimer Disease", mesh),
+    mesh
+  )
+  expect_identical(
+    subtree$node,
+    c(
+      "C10.228", "C10.228.140", "C10.574", "C10.574.945", "F03.615",
+      "F03.615.400"
+    )
+  )
+  expect_identical(subtree$node_name, rep(NA_character_, 6))
+})
+
+test_that("build_area_subtree_table is empty for root and unmatched terms", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  subtree <- build_area_subtree_table(
+    match_mesh_terms(c("Cancer", "Neoplasms", "Psoriasis"), mesh),
+    mesh
+  )
+  expect_identical(nrow(subtree), 0L)
+  expect_named(
+    subtree,
+    c(
+      "therapeutic_area_mesh", "branch", "node", "level", "parent",
+      "node_name", "source"
+    )
+  )
+  expect_type(subtree$level, "integer")
+})
+
 test_that("fold_search_text lower-cases and folds ae, oe and dashes", {
   expect_identical(
     fold_search_text(c(

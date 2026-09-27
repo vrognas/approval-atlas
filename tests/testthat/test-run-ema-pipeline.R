@@ -71,29 +71,27 @@ seed_downloads_directory <- function() {
       retrieved = "2026-09-26T15:31:22Z"
     )
   )
+  seed_whocc_downloads(file.path(downloads_directory, "whocc"))
   downloads_directory
 }
 
-seed_cached_source <- function(destination, fixture_path, source) {
-  dir.create(dirname(destination), recursive = TRUE)
-  file.copy(fixture_path, destination)
-  write_source_sidecar(source, file.path(dirname(destination), "source.json"))
-}
-
-forbid_network <- function(env = parent.frame()) {
-  testthat::local_mocked_bindings(
-    req_perform = function(...) stop("network must not be used"),
-    .package = "httr2",
-    .env = env
-  )
-}
-
+# WHOCC index pages are answered with a real page for an unknown code, so
+# every code the ATC sources do not name stays unnamed.
 run_fixture_pipeline <- function(output_directory,
-                                 cache_path = copy_fixture_to_cache()) {
+                                 cache_path = copy_fixture_to_cache(),
+                                 downloads_directory =
+                                   seed_downloads_directory(),
+                                 smpc_budget = 0L) {
+  testthat::local_mocked_bindings(
+    fetch_whocc_index_page = function(page) {
+      read_fixture_bytes(fixture_whocc_index_path("L04AC28"))
+    }
+  )
   run_ema_pipeline(
     output_directory = output_directory,
     cache_path = cache_path,
-    downloads_directory = seed_downloads_directory()
+    downloads_directory = downloads_directory,
+    smpc_budget = smpc_budget
   )
 }
 
@@ -105,6 +103,7 @@ output_stems <- c(
   "ema_medicine_substances",
   "atc_classes",
   "ema_therapeutic_area_branches",
+  "ema_therapeutic_area_subtree",
   "ema_authorized_series",
   "ema_medicine_documents",
   "mesh_entry_terms",
@@ -112,7 +111,8 @@ output_stems <- c(
   "ema_search_index",
   "ema_medicine_protection",
   "ema_medicine_orphan_exclusivity",
-  "ema_medicine_register_status"
+  "ema_medicine_register_status",
+  "ema_medicine_smpc_atc"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -135,13 +135,39 @@ test_that("run_ema_pipeline writes every table and meta.json from caches", {
   expect_identical(meta$row_counts, lapply(tables, nrow))
   expect_identical(meta$snapshot_date, "2026-09-26")
   expect_identical(
-    vapply(meta$sources, function(source) source$version, character(1)),
+    vapply(meta$sources[1:6], function(source) source$version, character(1)),
     c(
       "2026-09-26T06:02:29Z", "MeSH 2026", "ChEMBL_37",
       "2026-09-26T05:49:47Z", "2026-09-26T18:10:39Z",
       "Fri, 25 Sep 2026 15:36:55 GMT"
     )
   )
+  expect_identical(
+    vapply(meta$sources[7:11], function(source) source$url, character(1)),
+    c(
+      whocc_updates_url(current_year()),
+      whocc_temporary_url,
+      whocc_alterations_url,
+      "https://atcddd.fhi.no/atc_ddd_index/",
+      "https://www.ema.europa.eu/en/medicines"
+    )
+  )
+  expect_identical(
+    meta$sources[[7]]$version,
+    paste("ATC/DDD Index", current_year())
+  )
+  expect_identical(
+    meta$sources[[8]]$version,
+    "Mon, 17 Aug 2026 07:56:13 GMT"
+  )
+  expect_identical(meta$sources[[9]]$version, "ATC alterations to 2026")
+  expect_identical(meta$sources[[10]]$version, "2026-01-20")
+  expect_identical(
+    meta$sources[[11]]$version,
+    "0 product information documents checked"
+  )
+  expect_null(meta$sources[[11]]$retrieved)
+  expect_match(meta$sources[[9]]$licence, "no commercial", fixed = TRUE)
   expect_identical(
     meta$sources[[2]]$last_modified,
     "Wed, 12 Aug 2026 18:05:02 GMT"
@@ -188,6 +214,7 @@ test_that("run_ema_pipeline builds the lookup tables from cached sources", {
   # The fixture MeSH has none of the fixture EMA terms.
   expect_identical(nrow(tables$mesh_entry_terms), 0L)
   expect_identical(nrow(tables$mesh_descriptor_areas), 0L)
+  expect_identical(nrow(tables$ema_therapeutic_area_subtree), 0L)
 })
 
 test_that("run_ema_pipeline returns the tables invisibly", {
@@ -241,6 +268,138 @@ test_that("run_ema_pipeline reports files, MeSH matches and the series", {
     "Union Register status: 4 EMA products linked \\(2 of 14 Authorised\\)",
     all = FALSE
   )
+  expect_match(messages, "Using cached WHOCC ATC alterations", all = FALSE)
+  expect_match(
+    messages,
+    "SmPC ATC checks: 0 requests this run \\(budget 0\\); 0 products checked",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "0 EMA codes completed .*; 1 Authorised products still to check",
+    all = FALSE
+  )
+  expect_match(messages, "ATC codes? without a name", all = FALSE)
+})
+
+test_that("run_ema_pipeline completes an incomplete code from the SmPC", {
+  pdf_urls <- new.env()
+  pdf_urls$requested <- character()
+  testthat::local_mocked_bindings(
+    req_perform = function(req, path = NULL, ...) {
+      pdf_urls$requested <- c(pdf_urls$requested, req$url)
+      writeLines("%PDF-1.7", path)
+      httr2::response(status_code = 200)
+    },
+    .package = "httr2"
+  )
+  testthat::local_mocked_bindings(
+    wait_seconds = function(seconds) NULL,
+    # Worded as section 5.1 of the Fintepla SmPC.
+    read_pdf_text = function(path) {
+      paste(
+        "Pharmacotherapeutic group: Antiepileptics, other antiepileptics,",
+        "ATC code: N03AX26"
+      )
+    }
+  )
+  downloads_directory <- seed_downloads_directory()
+  output_directory <- file.path(tempfile(), "data")
+  messages <- testthat::capture_messages(
+    tables <- run_fixture_pipeline(
+      output_directory,
+      downloads_directory = downloads_directory,
+      smpc_budget = 5L
+    )
+  )
+  expect_length(pdf_urls$requested, 1)
+  expect_match(pdf_urls$requested, "fintepla", fixed = TRUE)
+  atc_codes <- tables$ema_medicine_atc_codes
+  fintepla <- atc_codes[atc_codes$ema_product_number == "EMEA/H/C/003933", ]
+  expect_identical(fintepla$atc_code_human, "N03")
+  expect_true(fintepla$atc_incomplete)
+  expect_identical(fintepla$atc_code, "N03AX26")
+  expect_identical(fintepla$atc_code_source, "ema_smpc")
+  expect_identical(fintepla$atc_code_document_url, pdf_urls$requested)
+  expect_identical(fintepla$atc_code_document_date, as.Date("2026-04-09"))
+  expect_identical(
+    tables$ema_medicine_smpc_atc[c("ema_product_number", "atc_code")],
+    dplyr::tibble(ema_product_number = "EMEA/H/C/003933", atc_code = "N03AX26")
+  )
+  expect_identical(
+    read_smpc_checks(file.path(downloads_directory, "ema-smpc", "checks.json")),
+    tables$ema_medicine_smpc_atc
+  )
+  expect_match(
+    messages,
+    paste(
+      "SmPC ATC checks: 1 request this run \\(budget 5\\);",
+      "1 products checked: 1 code found"
+    ),
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    "1 EMA codes completed \\(1 products\\); SmPC codes: 1 used",
+    all = FALSE
+  )
+  meta <- jsonlite::fromJSON(file.path(output_directory, "meta.json"))
+  expect_identical(
+    meta$sources$version[11],
+    "1 product information documents checked"
+  )
+
+  pdf_urls$requested <- character()
+  unlink(file.path(downloads_directory, "ema-smpc"), recursive = TRUE)
+  again <- suppressMessages(run_fixture_pipeline(
+    output_directory,
+    downloads_directory = downloads_directory,
+    smpc_budget = 5L
+  ))
+  expect_length(pdf_urls$requested, 0)
+  expect_identical(again$ema_medicine_smpc_atc, tables$ema_medicine_smpc_atc)
+})
+
+test_that("run_ema_pipeline writes its outputs while WHOCC is unreachable", {
+  testthat::local_mocked_bindings(
+    req_perform = function(req, ...) {
+      if (!startsWith(req$url, whocc_url)) {
+        stop("network must not be used")
+      }
+      stop(structure(
+        class = c("httr2_failure", "httr2_error", "error", "condition"),
+        list(message = "Could not resolve host", call = NULL)
+      ))
+    },
+    .package = "httr2"
+  )
+  downloads_directory <- seed_downloads_directory()
+  unlink(file.path(downloads_directory, "whocc"), recursive = TRUE)
+  output_directory <- file.path(tempfile(), "data")
+  warnings <- testthat::capture_warnings(
+    tables <- suppressMessages(run_fixture_pipeline(
+      output_directory,
+      downloads_directory = downloads_directory
+    ))
+  )
+  expect_length(warnings, 3)
+  expect_match(warnings, "Could not resolve host.*no cached copy")
+  expect_setequal(
+    list.files(output_directory),
+    c(paste0(output_stems, ".json"), "meta.json")
+  )
+  expect_false(any(
+    c("whocc_updates", "whocc_alterations") %in% tables$atc_classes$source
+  ))
+  meta <- jsonlite::fromJSON(file.path(output_directory, "meta.json"))
+  expect_identical(nrow(meta$sources), 8L)
+  expect_identical(
+    meta$sources$url[7:8],
+    c(
+      "https://atcddd.fhi.no/atc_ddd_index/",
+      "https://www.ema.europa.eu/en/medicines"
+    )
+  )
 })
 
 test_that("run_ema_pipeline adds the authorization and substance columns", {
@@ -271,6 +430,10 @@ test_that("run_ema_pipeline adds the authorization and substance columns", {
     tables$ema_therapeutic_area_branches$source %in%
       c("mesh_heading", "entry_term", "curated", "unmatched")
   ))
+  expect_true(all(
+    tables$ema_therapeutic_area_subtree$source %in%
+      c("mesh_heading", "entry_term", "curated")
+  ))
 })
 
 test_that("run_ema_pipeline output follows the data contract", {
@@ -299,15 +462,24 @@ test_that("run_ema_pipeline output follows the data contract", {
     "ema_search_index",
     "ema_medicine_protection",
     "ema_medicine_orphan_exclusivity",
-    "ema_medicine_register_status"
+    "ema_medicine_register_status",
+    "ema_medicine_smpc_atc"
   )
   for (stem in product_lookups) {
     lookup <- read_output(stem)
-    expect_in(lookup$ema_product_number, medicines$ema_product_number)
+    expect_in(
+      lookup$ema_product_number %||% character(),
+      medicines$ema_product_number
+    )
     expect_false(any(unlist(lookup) == "", na.rm = TRUE))
   }
-  expect_type(read_output("ema_medicine_atc_codes")$atc_incomplete, "logical")
-  expect_type(read_output("atc_classes")$level, "integer")
+  atc_codes <- read_output("ema_medicine_atc_codes")
+  expect_type(atc_codes$atc_incomplete, "logical")
+  expect_identical(atc_codes$atc_code, atc_codes$atc_code_human)
+  expect_identical(unique(atc_codes$atc_code_source), "ema")
+  atc_classes <- read_output("atc_classes")
+  expect_type(atc_classes$level, "integer")
+  expect_in(atc_classes$status, c("current", "retired", "temporary"))
   expect_type(
     read_output("ema_authorized_series")$authorized_products,
     "integer"
