@@ -116,7 +116,8 @@ build_ema_tables <- function(clean_medicines,
       atc_class_rows,
       atc_sources$whocc_classes,
       atc_sources$retired_codes,
-      used_codes = atc_codes_in_use(atc_codes, atc_sources$smpc_checks)
+      used_codes = atc_codes_in_use(atc_codes, atc_sources$smpc_checks),
+      name_corrections = atc_sources$name_corrections
     ),
     ema_therapeutic_area_branches = build_area_branches_table(
       term_matches,

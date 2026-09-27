@@ -251,6 +251,7 @@ test_that("build_atc_codes_table flags incomplete codes and sets the source", {
       source = "ema",
       atc_code = c("L01XE", "A10AB04", "A10AD04", "LX1XX02"),
       atc_code_source = "ema",
+      atc_code_conflict = FALSE,
       atc_code_document_url = NA_character_,
       atc_code_document_date = as.Date(NA),
       current_atc_code = NA_character_,
@@ -370,31 +371,40 @@ test_that("build_atc_codes_table completes incomplete EMA codes from SmPCs", {
     atc_codes,
     c(
       "ema_product_number", "atc_code_human", "atc_level", "atc_incomplete",
-      "source", "atc_code", "atc_code_source", "atc_code_document_url",
-      "atc_code_document_date", "current_atc_code", "current_atc_code_source"
+      "source", "atc_code", "atc_code_source", "atc_code_conflict",
+      "atc_code_document_url", "atc_code_document_date", "current_atc_code",
+      "current_atc_code_source"
     )
   )
   # One row per EMA code: G's two SmPC codes both complete J07BX, so
-  # neither is used.
+  # neither is used. H has no EMA code: its SmPC code gets a row of its own.
   expect_identical(
     atc_codes$ema_product_number,
-    c("A", "B", "C", "D", "E", "F", "G", "I")
+    c("A", "B", "C", "D", "E", "F", "G", "H", "I")
   )
   expect_identical(
     atc_codes$atc_code,
     c(
-      "L01XL12", "L01EA01", "L01XE", "A10AB04", "L04AC", "L01XE01", "J07BX",
-      "L01XX"
+      "L01XL12", "L01EA01", "L01XE", "A10AB04", "L01XL12", "L01XE01", "J07BX",
+      "N03AX26", "L01XX"
     )
   )
   expect_identical(
     atc_codes$atc_code_source,
-    c("ema_smpc", "ema_smpc", "ema", "ema", "ema", "ema", "ema", "ema")
+    c(
+      "ema_smpc", "ema_smpc", "ema", "ema", "ema_smpc", "ema", "ema",
+      "ema_smpc", "ema"
+    )
+  )
+  # E's SmPC code does not fit EMA's L04AC, but goes deeper: used, marked.
+  expect_identical(
+    atc_codes$atc_code_conflict,
+    c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE)
   )
   expect_identical(
     atc_codes$atc_code_human,
     c(
-      "L01XL", "L01XE", "L01XE", "A10AB04", "L04AC", "L01XE01", "J07BX",
+      "L01XL", "L01XE", "L01XE", "A10AB04", "L04AC", "L01XE01", "J07BX", NA,
       "L01XX"
     )
   )
@@ -409,38 +419,54 @@ test_that("build_atc_codes_table completes incomplete EMA codes from SmPCs", {
   )))
   expect_identical(
     atc_codes$current_atc_code,
-    c(NA, NA, "L01E", NA, NA, "L01EA01", NA, NA)
+    c(NA, NA, "L01E", NA, NA, "L01EA01", NA, NA, NA)
   )
   expect_identical(
     atc_codes$current_atc_code_source,
-    c(NA, NA, "curated", NA, NA, "whocc_alterations", NA, NA)
+    c(NA, NA, "curated", NA, NA, "whocc_alterations", NA, NA, NA)
   )
-  expect_identical(unique(atc_codes$source), "ema")
+  expect_identical(
+    atc_codes$source,
+    c(rep("ema", 7), "ema_smpc", "ema")
+  )
 })
 
 test_that("judge_smpc_atc_codes gives one verdict per product and SmPC code", {
-  verdicts <- judge_smpc_atc_codes(
-    build_atc_codes_table(imputation_medicines()),
-    imputation_checks(),
-    fixture_retired_codes()
+  expected <- dplyr::tibble(
+    ema_product_number = c("A", "B", "D", "E", "F", "G", "G", "H", "I"),
+    smpc_code = c(
+      "L01XL12", "L01EA01", "A10AB05", "L01XL12", "L01EA01", "J07BX03",
+      "J07BX04", "N03AX26", "L01XX"
+    ),
+    verdict = c(
+      "imputed", "imputed", "ema_complete", "conflict",
+      "ema_complete", "ambiguous", "ambiguous", "no_ema_code", "not_deeper"
+    ),
+    ema_codes = c(
+      "L01XL", "L01XE", "A10AB04", "L04AC", "L01XE01", "J07BX", "J07BX",
+      NA, "L01XX"
+    )
   )
   expect_identical(
-    verdicts,
-    dplyr::tibble(
-      ema_product_number = c("A", "B", "D", "E", "F", "G", "G", "H", "I"),
-      smpc_code = c(
-        "L01XL12", "L01EA01", "A10AB05", "L01XL12", "L01EA01", "J07BX03",
-        "J07BX04", "N03AX26", "L01XX"
+    judge_smpc_atc_codes(
+      build_atc_codes_table(imputation_medicines()),
+      imputation_checks(),
+      fixture_retired_codes()
+    ),
+    expected
+  )
+  # The published table, with the rows of products without an EMA code.
+  expect_identical(
+    judge_smpc_atc_codes(
+      build_atc_codes_table(
+        imputation_medicines(),
+        imputation_checks(),
+        fixture_retired_codes()
       ),
-      verdict = c(
-        "imputed", "imputed", "ema_complete", "prefix_mismatch",
-        "ema_complete", "ambiguous", "ambiguous", "no_ema_code", "not_deeper"
-      ),
-      ema_codes = c(
-        "L01XL", "L01XE", "A10AB04", "L04AC", "L01XE01", "J07BX", "J07BX",
-        NA, "L01XX"
-      )
-    )
+      imputation_checks(),
+      fixture_retired_codes()
+    ),
+    expected
   )
 })
 
@@ -457,6 +483,162 @@ test_that("an SmPC code completes only EMA's incomplete codes it fits", {
   expect_identical(atc_codes$atc_code_human, c("A10AB04", "A10AE"))
   expect_identical(atc_codes$atc_code, c("A10AB04", "A10AE56"))
   expect_identical(atc_codes$atc_code_source, c("ema", "ema_smpc"))
+  expect_identical(atc_codes$atc_code_conflict, c(FALSE, FALSE))
+  # A10AB04 fits EMA's other code, so it never replaces A10AE.
+  alone <- build_atc_codes_table(
+    clean_medicines,
+    smpc_check("A", "A10AB04"),
+    fixture_retired_codes()
+  )
+  expect_identical(alone$atc_code, c("A10AB04", "A10AE"))
+  expect_identical(alone$atc_code_conflict, c(FALSE, FALSE))
+})
+
+test_that("a deeper SmPC code that does not fit EMA's is used and marked", {
+  # EMA's codes and the SmPC codes of Kerendia, Yttriga and Pombiliti.
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = c(
+      "EMEA/H/C/000596", "EMEA/H/C/005200", "EMEA/H/C/005703"
+    ),
+    atc_code_human = c("V09", "C09", "A16AB")
+  )
+  checks <- dplyr::bind_rows(
+    smpc_check("EMEA/H/C/000596", "V10X", status = "incomplete"),
+    smpc_check("EMEA/H/C/005200", "C03DA05"),
+    smpc_check("EMEA/H/C/005703", "A16A", status = "incomplete")
+  )
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes()
+  )
+  expect_identical(atc_codes$atc_code, c("V10X", "C03DA05", "A16AB"))
+  expect_identical(
+    atc_codes$atc_code_source,
+    c("ema_smpc", "ema_smpc", "ema")
+  )
+  expect_identical(atc_codes$atc_code_conflict, c(TRUE, TRUE, FALSE))
+  expect_identical(atc_codes$atc_incomplete, c(TRUE, TRUE, TRUE))
+  expect_identical(
+    atc_codes$atc_code_document_url[2],
+    checks$document_url[2]
+  )
+  expect_identical(
+    judge_smpc_atc_codes(atc_codes, checks, fixture_retired_codes())$verdict,
+    c("conflict", "conflict", "prefix_mismatch")
+  )
+})
+
+test_that("a conflicting SmPC code is used only when it is the only one", {
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = c("A", "B", "C", "D"),
+    atc_code_human = c("C09;C10", "C09", "C09;C10", "L01XX")
+  )
+  checks <- dplyr::bind_rows(
+    smpc_check("A", c("C03DA05", "C10AA01")),
+    smpc_check("B", c("C01CX09", "C03DA05")),
+    smpc_check("C", "C03DA05"),
+    smpc_check("D", c("L01XX52", "L04AX04"))
+  )
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes()
+  )
+  # A: C10AA01 completes C10, so C03DA05 replaces C09. B: two candidates
+  # for C09. C: one SmPC code for two EMA codes. D: a code that fits.
+  expect_identical(
+    atc_codes$atc_code,
+    c("C03DA05", "C10AA01", "C09", "C09", "C10", "L01XX52")
+  )
+  expect_identical(
+    atc_codes$atc_code_conflict,
+    c(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE)
+  )
+  expect_identical(
+    judge_smpc_atc_codes(atc_codes, checks, fixture_retired_codes())$verdict,
+    c(
+      "conflict", "imputed", "ambiguous", "ambiguous", "ambiguous", "imputed",
+      "prefix_mismatch"
+    )
+  )
+})
+
+test_that("products without an EMA code get their SmPC codes", {
+  # Entyvio: no EMA code; Mylotarg: "Not yet assigned"; a product whose
+  # SmPC gives two codes and one whose SmPC gives a retired code; Boey:
+  # "not yet assigned" in its SmPC; a product no longer in EMA's data.
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = c(
+      "EMEA/H/C/001038", "EMEA/H/C/002782", "EMEA/H/C/004204",
+      "EMEA/H/C/004243", "EMEA/H/C/005907", "EMEA/H/C/006420"
+    ),
+    atc_code_human = c(NA, NA, "Not yet assigned", NA, "L01XL", NA)
+  )
+  checks <- dplyr::bind_rows(
+    smpc_check("EMEA/H/C/001038", "L01XE10"),
+    smpc_check("EMEA/H/C/002782", "L04AG05"),
+    smpc_check("EMEA/H/C/004204", "L01FX02"),
+    smpc_check("EMEA/H/C/004243", c("A10AE54", "A10BJ03")),
+    smpc_check("EMEA/H/C/005907", "L01XL12"),
+    smpc_check("EMEA/H/C/006420", NA_character_, status = "not_assigned"),
+    smpc_check("EMEA/H/C/999999", "A10AB04")
+  )
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes()
+  )
+  expect_identical(
+    atc_codes[atc_codes$source == "ema_smpc", ],
+    dplyr::tibble(
+      ema_product_number = paste0(
+        "EMEA/H/C/",
+        c("001038", "002782", "004204", "004243", "004243")
+      ),
+      atc_code_human = NA_character_,
+      atc_level = NA_integer_,
+      atc_incomplete = FALSE,
+      source = "ema_smpc",
+      atc_code = c("L01XE10", "L04AG05", "L01FX02", "A10AE54", "A10BJ03"),
+      atc_code_source = "ema_smpc",
+      atc_code_conflict = FALSE,
+      atc_code_document_url = checks$document_url[1:5],
+      atc_code_document_date = as.Date("2025-08-19"),
+      current_atc_code = c("L01EG02", NA, NA, NA, NA),
+      current_atc_code_source = c("whocc_alterations", NA, NA, NA, NA)
+    )
+  )
+  expect_identical(
+    atc_codes$ema_product_number[atc_codes$source == "ema"],
+    "EMEA/H/C/005907"
+  )
+})
+
+test_that("an incomplete SmPC code of a product without an EMA code is used", {
+  # Entyvio's SmPC code (L04AG05) cut to level 4. atc_level and
+  # atc_incomplete describe EMA's published code, so they stay NA and FALSE:
+  # the level of atc_code itself tells that it is incomplete.
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/002782",
+    atc_code_human = NA_character_
+  )
+  checks <- smpc_check("EMEA/H/C/002782", "L04AG", status = "incomplete")
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes()
+  )
+  expect_identical(atc_codes$atc_code, "L04AG")
+  expect_identical(atc_codes$atc_code_human, NA_character_)
+  expect_identical(atc_codes$atc_level, NA_integer_)
+  expect_false(atc_codes$atc_incomplete)
+  expect_identical(atc_codes$source, "ema_smpc")
+  expect_identical(atc_code_level(atc_codes$atc_code), 4L)
+  expect_identical(
+    judge_smpc_atc_codes(atc_codes, checks, fixture_retired_codes())$verdict,
+    "no_ema_code"
+  )
 })
 
 test_that("atc_codes_in_use collects every published, used and SmPC code", {
@@ -571,11 +753,91 @@ test_that("build_atc_classes marks retired ChEMBL codes", {
   expect_identical(natalizumab$status_source, "whocc_alterations")
 })
 
+test_that("build_atc_classes prefers WHO names over ChEMBL's", {
+  rows <- jsonlite::fromJSON(fixture_atc_class_renamed_path())
+  corrections <- build_atc_name_corrections(read_whocc_name_alterations(
+    fixture_whocc_updates_path(),
+    whocc_updates_url(2026)
+  ))
+  # A WHO name ChEMBL already has leaves ChEMBL's row as it is.
+  same_name <- dplyr::tibble(
+    atc_code = "L01FG01",
+    name = "bevacizumab",
+    source = "whocc_updates",
+    source_url = whocc_updates_url(2025)
+  )
+  classes <- build_atc_classes(
+    rows,
+    name_corrections = dplyr::bind_rows(corrections, same_name)
+  )
+  expect_identical(
+    classes$atc_code,
+    build_chembl_atc_classes(rows)$atc_code
+  )
+  row_for <- function(code) classes[classes$atc_code == code, ]
+  expect_identical(
+    row_for("J07BX01"),
+    dplyr::tibble(
+      atc_code = "J07BX01",
+      level = 5L,
+      name = "smallpox and mpox vaccines",
+      source = "whocc_updates",
+      status = "current",
+      replaced_by = NA_character_,
+      changed_year = NA_integer_,
+      status_source = NA_character_,
+      source_url = whocc_updates_url(2026)
+    )
+  )
+  expect_identical(
+    row_for("V09IX15")$name,
+    "copper (64Cu) oxodotreotide"
+  )
+  expect_identical(
+    row_for("J07CA09")$name,
+    paste0(
+      "diphtheria-haemophilus influenzae B-pertussis-poliomyelitis-tetanus-",
+      "hepatitis B"
+    )
+  )
+  expect_identical(row_for("J07CA09")$source, "whocc_index")
+  expect_identical(row_for("J07CA09")$source_url, whocc_index_url("J07CA09"))
+  expect_identical(row_for("L01FG")$level, 4L)
+  expect_identical(
+    row_for("L01FG")$name,
+    "VEGF/VEGFR (Vascular Endothelial Growth Factor / -Receptor) inhibitors"
+  )
+  expect_identical(row_for("L01FG01")$source, "chembl_atc_class")
+  expect_identical(row_for("L01FG01")$source_url, NA_character_)
+  expect_identical(row_for("L01FG01")$name, "bevacizumab")
+  expect_identical(
+    renamed_atc_codes(build_chembl_atc_classes(rows), corrections),
+    dplyr::tibble(
+      atc_code = c("J07BX01", "J07CA09", "L01FG", "V09IX15"),
+      chembl_name = c(
+        "smallpox and monkeypox vaccines",
+        paste0(
+          "diphtheria-hemophilus influenzae B-pertussis-poliomyelitis-",
+          "tetanus-hepatitis B"
+        ),
+        "VEGF/VEGFR (Vascular Endothelial Growth Factor) inhibitors",
+        "copper (64Cu) dotatate"
+      ),
+      name = c(
+        "smallpox and mpox vaccines", row_for("J07CA09")$name,
+        row_for("L01FG")$name, "copper (64Cu) oxodotreotide"
+      ),
+      source = c("whocc_updates", "whocc_index", "whocc_index", "whocc_updates")
+    )
+  )
+})
+
 test_that("empty_atc_sources gives no SmPC codes, moves or WHOCC names", {
   sources <- empty_atc_sources()
   expect_identical(sources$smpc_checks, empty_smpc_checks())
   expect_identical(nrow(sources$retired_codes), 0L)
   expect_identical(sources$whocc_classes, empty_whocc_classes())
+  expect_identical(sources$name_corrections, empty_atc_name_corrections())
 })
 
 test_that("report_atc_summary reports checks, verdicts and rejections", {
@@ -601,7 +863,13 @@ test_that("report_atc_summary reports checks, verdicts and rejections", {
     still_to_check = dplyr::tibble(
       medicine_status = c("Authorised", "Refused")
     ),
-    index_requests = 2L
+    index_requests = 2L,
+    renamed_codes = renamed_atc_codes(
+      build_chembl_atc_classes(
+        jsonlite::fromJSON(fixture_atc_class_renamed_path())
+      ),
+      build_atc_name_corrections(empty_atc_name_corrections())
+    )
   )
   messages <- testthat::capture_messages(
     verdicts <- report_atc_summary(tables, atc_sources)
@@ -619,18 +887,33 @@ test_that("report_atc_summary reports checks, verdicts and rejections", {
   expect_match(
     messages,
     paste(
-      "2 EMA codes completed \\(2 products\\); SmPC codes: 2 used,",
-      "2 not used \\(several complete one EMA code\\),",
-      "1 rejected \\(prefix mismatch\\), 1 not deeper than EMA's,",
-      "2 EMA code already complete, 1 for products without an EMA code"
+      "2 EMA codes completed \\(2 products\\), 1 replaced by a code that",
+      "does not fit it \\(1 products\\), 1 codes for 1 products without an",
+      "EMA code; SmPC codes: 2 used, 1 used although EMA's code does not",
+      "fit, 2 not used \\(ambiguous\\),",
+      "0 rejected \\(prefix mismatch\\), 1 not deeper than EMA's,",
+      "2 EMA code already complete, 1 used for products without an EMA code"
     ),
     all = FALSE
   )
   expect_match(messages, "1 Authorised products still to check", all = FALSE)
-  expect_match(messages, "E: EMA L04AC, SmPC L01XL12", all = FALSE)
   expect_match(
     messages,
-    "several complete one EMA code.*G: EMA J07BX, SmPC J07BX03",
+    "used although EMA's code does not fit:.*E: EMA L04AC, SmPC L01XL12",
+    all = FALSE
+  )
+  expect_no_match(messages, "rejected \\(EMA's code does not fit\\)")
+  expect_match(
+    messages,
+    "not used \\(several for one EMA code.*G: EMA J07BX, SmPC J07BX03",
+    all = FALSE
+  )
+  expect_match(
+    messages,
+    paste0(
+      "ATC names from the WHOCC instead of ChEMBL: 4 codes.*",
+      "J07BX01: smallpox and monkeypox vaccines -> smallpox and mpox vaccines"
+    ),
     all = FALSE
   )
   expect_match(

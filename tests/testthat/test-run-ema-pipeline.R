@@ -143,9 +143,10 @@ test_that("run_ema_pipeline writes every table and meta.json from caches", {
     )
   )
   expect_identical(
-    vapply(meta$sources[7:11], function(source) source$url, character(1)),
+    vapply(meta$sources[7:12], function(source) source$url, character(1)),
     c(
       whocc_updates_url(current_year()),
+      whocc_updates_url(current_year() - 1L),
       whocc_temporary_url,
       whocc_alterations_url,
       "https://atcddd.fhi.no/atc_ddd_index/",
@@ -158,16 +159,25 @@ test_that("run_ema_pipeline writes every table and meta.json from caches", {
   )
   expect_identical(
     meta$sources[[8]]$version,
+    paste("ATC/DDD Index", current_year() - 1L)
+  )
+  expect_identical(
+    meta$sources[[9]]$version,
     "Mon, 17 Aug 2026 07:56:13 GMT"
   )
-  expect_identical(meta$sources[[9]]$version, "ATC alterations to 2026")
-  expect_identical(meta$sources[[10]]$version, "2026-01-20")
+  expect_identical(meta$sources[[10]]$version, "ATC alterations to 2026")
+  expect_identical(meta$sources[[11]]$version, "2026-01-20")
+  expect_match(
+    meta$sources[[11]]$attribution,
+    "ATC/DDD Index 2026-01-20",
+    fixed = TRUE
+  )
   expect_identical(
-    meta$sources[[11]]$version,
+    meta$sources[[12]]$version,
     "0 product information documents checked"
   )
-  expect_null(meta$sources[[11]]$retrieved)
-  expect_match(meta$sources[[9]]$licence, "no commercial", fixed = TRUE)
+  expect_null(meta$sources[[12]]$retrieved)
+  expect_match(meta$sources[[10]]$licence, "no commercial", fixed = TRUE)
   expect_identical(
     meta$sources[[2]]$last_modified,
     "Wed, 12 Aug 2026 18:05:02 GMT"
@@ -340,12 +350,13 @@ test_that("run_ema_pipeline completes an incomplete code from the SmPC", {
   )
   expect_match(
     messages,
-    "1 EMA codes completed \\(1 products\\); SmPC codes: 1 used",
+    "1 EMA codes completed \\(1 products\\), .*; SmPC codes: 1 used,",
     all = FALSE
   )
+  expect_false(fintepla$atc_code_conflict)
   meta <- jsonlite::fromJSON(file.path(output_directory, "meta.json"))
   expect_identical(
-    meta$sources$version[11],
+    meta$sources$version[12],
     "1 product information documents checked"
   )
 
@@ -382,7 +393,7 @@ test_that("run_ema_pipeline writes its outputs while WHOCC is unreachable", {
       downloads_directory = downloads_directory
     ))
   )
-  expect_length(warnings, 3)
+  expect_length(warnings, 4)
   expect_match(warnings, "Could not resolve host.*no cached copy")
   expect_setequal(
     list.files(output_directory),
@@ -475,6 +486,7 @@ test_that("run_ema_pipeline output follows the data contract", {
   }
   atc_codes <- read_output("ema_medicine_atc_codes")
   expect_type(atc_codes$atc_incomplete, "logical")
+  expect_type(atc_codes$atc_code_conflict, "logical")
   expect_identical(atc_codes$atc_code, atc_codes$atc_code_human)
   expect_identical(unique(atc_codes$atc_code_source), "ema")
   atc_classes <- read_output("atc_classes")
