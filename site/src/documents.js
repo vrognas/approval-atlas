@@ -62,6 +62,15 @@ export function primaryDocuments(groups, status) {
   return { primary, rest };
 }
 
+// EMA's documents index can list an authorized namesake's documents under a medicine never
+// authorized (Mylotarg EMEA/H/C/000705, refused in 2008, gets 004204's, approved in 2018): the rows
+// first published on or after since (the namesake's approval date) are the namesake's.
+export function splitNamesakeDocuments(rows, since) {
+  if (!since) return { own: rows, namesake: [] };
+  const later = (row) => (row.first_published_date ?? row.last_updated_date ?? "") >= since;
+  return { own: rows.filter((row) => !later(row)), namesake: rows.filter(later) };
+}
+
 // One medicine's document rows and EMA status -> { productInformation, epar }: the URLs of its
 // primary documents (primaryDocuments()), a key only where there is one; the "PI" and "EPAR" row links.
 export function quickDocuments(rows, status) {

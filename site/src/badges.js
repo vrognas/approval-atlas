@@ -26,7 +26,7 @@ export const ATC_GROUP_HUES = {
 };
 
 export function atcHue(code) {
-  return ATC_GROUP_HUES[code.charAt(0)] ?? "slate";
+  return ATC_GROUP_HUES[code?.charAt(0)] ?? "slate";
 }
 
 // "L04AC05" -> L | 04 | A | C | 05, each segment with its level and full code; an incomplete code

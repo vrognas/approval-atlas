@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupDocuments, primaryDocuments, quickDocuments } from "./documents.js";
+import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 
 const doc = (document_type, last_updated_date, url = `https://www.ema.europa.eu/en/documents/${document_type}/x-${last_updated_date}_en.pdf`) => ({
   ema_product_number: "P1",
@@ -123,4 +123,18 @@ test("only https links survive; unknown types are ignored", () => {
     doc("pip-compliance", "2020-01-03"),
   ]);
   assert.deepEqual(groups, []);
+});
+
+// Phase 4c review: EMA lists the authorized Mylotarg's documents (EMEA/H/C/004204, approved
+// 2018-04-19) under the refused one (EMEA/H/C/000705, refused 2008): those first published on or
+// after the namesake's approval are the namesake's.
+test("documents first published from a namesake's approval on are the namesake's", () => {
+  const refusal = { ...doc("assessment-report", "2008-04-17"), title: "Mylotarg : EPAR - Refusal public assessment report" };
+  const pi = { ...doc("product-information", "2025-09-17"), first_published_date: "2018-05-04" };
+  const epar = doc("assessment-report", "2018-05-04");
+  const split = splitNamesakeDocuments([refusal, pi, epar], "2018-04-19");
+  assert.deepEqual(split.own, [refusal]);
+  assert.deepEqual(split.namesake, [pi, epar]);
+  // No namesake approval: every document is the medicine's own.
+  assert.deepEqual(splitNamesakeDocuments([refusal, pi], null), { own: [refusal, pi], namesake: [] });
 });

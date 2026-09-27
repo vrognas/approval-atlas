@@ -13,23 +13,45 @@ export function atcPrefixes(code) {
   return ATC_PREFIX_LENGTHS.filter((length) => length <= code.length).map((length) => code.slice(0, length));
 }
 
-// products: buildProducts() rows (or any { atc: [{ atc_code_human }] }). A product counts once per
-// prefix, however many of its codes share it.
+// The code the site groups, filters and shows an ATC row (ema_medicine_atc_codes.json) by, as the
+// data contract says: the code WHO moved a retired one to, else the code to use (EMA's, or completed
+// from the product information), else EMA's as published (data files from before phase 4b); null
+// when there is none. A product without an EMA code has atc_code_human null.
+export function atcCode(row) {
+  return row.current_atc_code ?? row.atc_code ?? row.atc_code_human ?? null;
+}
+
+// How the code shown (atcCode()) differs from EMA's published one, or null: "retired" (from: the
+// code WHO retired, now: its current code), "completed" / "conflict" (published: EMA's incomplete
+// code, which the product information completes or contradicts), "smpc" (EMA publishes none).
+export function atcOrigin(row) {
+  const code = atcCode(row);
+  if (code === null || code === row.atc_code_human) return null;
+  if (row.current_atc_code) return { kind: "retired", from: row.atc_code ?? row.atc_code_human, now: row.current_atc_code };
+  if (row.atc_code_human === null) return { kind: "smpc" };
+  return { kind: row.atc_code_conflict ? "conflict" : "completed", published: row.atc_code_human };
+}
+
+// Not a valid level-5 code: fewer levels, or malformed (EMA's "LX1XX02").
+export const atcIncomplete = (code) => atcLevel(code) !== ATC_PREFIX_LENGTHS.length;
+
+// products: buildProducts() rows (or any { atc: [rows] }, codes by atcCode()). A product counts once
+// per prefix, however many of its codes share it.
 export function atcPrefixCounts(products) {
   const counts = new Map();
   for (const product of products) {
-    const prefixes = new Set(product.atc.flatMap((row) => atcPrefixes(row.atc_code_human)));
+    const prefixes = new Set(product.atc.flatMap((row) => atcPrefixes(atcCode(row))));
     for (const prefix of prefixes) counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
   }
   return counts;
 }
 
-// Products per code exactly as published (valid codes only): those whose code stops at an
-// incomplete level have no child class below it.
+// Products per code exactly (valid codes only): those whose code stops at an incomplete level have
+// no child class below it.
 export function atcExactCounts(products) {
   const counts = new Map();
   for (const product of products) {
-    for (const code of new Set(product.atc.map((row) => row.atc_code_human))) {
+    for (const code of new Set(product.atc.map(atcCode))) {
       if (atcLevel(code)) counts.set(code, (counts.get(code) ?? 0) + 1);
     }
   }
@@ -49,6 +71,17 @@ export function atcChildren(prefix, counts, names, exact = null) {
     .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   const incomplete = prefix === null ? 0 : exact?.get(prefix) ?? 0;
   return children.length && incomplete ? [...children, { code: prefix, level, name: null, count: incomplete, incomplete: true }] : children;
+}
+
+// A product's classes one level below parent (level 1 for null), one per code under parent (so a
+// class can repeat); a code that stops at parent has none, a level-5 parent is its own class.
+export function atcClassesAt(product, parent) {
+  const depth = parent === null ? 0 : atcLevel(parent);
+  return product.atc
+    .map((row) => atcPrefixes(atcCode(row)))
+    .filter((prefixes) => parent === null || prefixes.includes(parent))
+    .map((prefixes) => prefixes[depth] ?? (depth === ATC_PREFIX_LENGTHS.length ? parent : null))
+    .filter(Boolean);
 }
 
 // One row per level of code; counts null (not loaded yet) gives null counts.

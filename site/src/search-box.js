@@ -2,12 +2,14 @@
 // selection). DOM focus stays on the input (aria-activedescendant). Text is set via textContent only.
 // Markup is static in index.html: input[role=combobox], [role=listbox], a polite status element.
 import { UI } from "./labels.js";
+import { submitChoice } from "./search.js";
 
 const DEBOUNCE_MS = 120;
 const COPY = UI.lookup;
 
 // suggestionsFor(query) -> [{ key, label, options: [{ label, meta, value }] }]; empty = closed.
-// onPick(groupKey, value) for a chosen option; onSubmit(text) for Enter without a pick.
+// onPick(groupKey, value) for a chosen option (or, on Enter without one, the suggestion the text
+// names or the only one: submitChoice()); onSubmit(text) for Enter otherwise.
 export function createSearchBox(input, listbox, status, { suggestionsFor, onPick, onSubmit }) {
   let options = [];
   let active = -1;
@@ -91,8 +93,11 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
       clearTimeout(timer);
       if (isOpen && active >= 0) pick(active);
       else if (input.value.trim().length >= 2) {
+        // The suggestion the text names (or the only one) opens as if picked; else a text search.
+        const choice = submitChoice(suggestionsFor(input.value), input.value);
         close();
-        onSubmit(input.value.trim());
+        if (choice) onPick(choice.group, choice.value);
+        else onSubmit(input.value.trim());
       }
     } else if (event.key === "Escape") {
       if (isOpen) close();

@@ -1,21 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_STATE } from "./url.js";
+import { atcClassesAt } from "./atc.js";
 import { makePredicates } from "./filters.js";
 import {
   FACET_VALUES,
+  OTHER_KEY,
   TYPE_ORDER,
   facetCounts,
   facetRows,
   holderActivity,
   keyCounts,
+  orderActivityColumns,
   sentenceParts,
+  sortActivityRows,
   statusBreakdown,
   tokenLabel,
   topAreas,
   topKeys,
+  topWithOther,
   typeSplit,
   yearHistogram,
+  yearStacks,
 } from "./facets.js";
 
 const product = (id, fields) => ({
@@ -202,17 +208,21 @@ const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `
 test("the filter sentence: one areas token until an area filter is set", () => {
   assert.equal(
     text(sentenceParts(stateOf({}), lookups)),
-    "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved [1995]–[2026], with [any status].",
+    "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved in [any year], with [any status].",
   );
   const [areas] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "areas");
   assert.deepEqual(areas, { key: "areas", text: "all therapeutic areas", active: false, clears: ["branch", "area"] });
+  // Phase 4c review: without a year filter the count includes medicines never approved, so the
+  // sentence does not name a year range; one token focuses the slider.
+  const [years] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "years");
+  assert.deepEqual(years, { key: "years", text: "any year", active: false, clears: ["from", "to"] });
 });
 
 test("the filter sentence: active tokens, each clearing its own filter", () => {
   const parts = sentenceParts(stateOf({ type: ["Biosimilar"], atc: ["L04AC"], branch: ["C17"], area: ["Psoriasis"], from: 2015, status: ["Authorised"] }), lookups);
   assert.equal(
     text(parts),
-    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all holders] in [Skin and Connective Tissue Diseases] and [Psoriasis], approved [2015]–[2026], with [status Authorized].",
+    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all holders] in [Skin and Connective Tissue Diseases] and [Psoriasis], approved [2015]–[2026] (medicines without an approval date left out), with [status Authorized].",
   );
   const tokens = parts.filter((part) => typeof part !== "string");
   assert.deepEqual(tokens.filter((part) => part.active).map((part) => [part.key, part.clears]), [
@@ -225,13 +235,13 @@ test("the filter sentence: one approval year is one token clearing both ends", (
   const parts = sentenceParts(stateOf({ from: 2024, to: 2024 }), lookups);
   assert.equal(
     text(parts),
-    "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved in [2024], with [any status].",
+    "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved in [2024] (medicines without an approval date left out), with [any status].",
   );
   assert.deepEqual(parts.find((part) => part.key === "year"), { key: "year", text: "2024", active: true, clears: ["from", "to"] });
   // The data's first or last year alone keeps that end open (normalizeYearRange()).
-  assert.match(text(sentenceParts(stateOf({ from: null, to: 1995 }), lookups)), /, approved in \[1995\], /);
-  assert.match(text(sentenceParts(stateOf({ from: 2026, to: null }), lookups)), /, approved in \[2026\], /);
-  assert.match(text(sentenceParts(stateOf({ from: 2023, to: 2024 }), lookups)), /, approved \[2023\]–\[2024\], /);
+  assert.match(text(sentenceParts(stateOf({ from: null, to: 1995 }), lookups)), /, approved in \[1995\] \(/);
+  assert.match(text(sentenceParts(stateOf({ from: 2026, to: null }), lookups)), /, approved in \[2026\] \(/);
+  assert.match(text(sentenceParts(stateOf({ from: 2023, to: 2024 }), lookups)), /, approved \[2023\]–\[2024\] \(/);
 });
 
 test("the filter sentence: two ATC classes are two pills, each removing its own class; more are one", () => {
@@ -246,7 +256,8 @@ test("the filter sentence: a type token naming one type with an explanation carr
   const typeToken = (type) => sentenceParts(stateOf({ type }), lookups).find((part) => part.key === "type");
   assert.equal(typeToken(["Biosimilar"]).tip, "Biosimilar");
   assert.equal(typeToken(["Advanced therapy"]).tip, "Advanced therapy");
-  assert.equal(typeToken(["Other"]).tip, null);
+  // Phase 4c review: Other is explained too.
+  assert.equal(typeToken(["Other"]).tip, "Other");
   assert.equal(typeToken(["Biosimilar", "Generic"]).tip, null);
   assert.equal(typeToken([]).tip, null);
 });
@@ -254,9 +265,12 @@ test("the filter sentence: a type token naming one type with an explanation carr
 test("the most common conditions: areas by products, with the MeSH descriptor when known", () => {
   const descriptorOf = new Map([["Psoriasis", "D011565"]]);
   assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf), [
-    { term: "Psoriasis", count: 3, descriptorUi: "D011565" },
-    { term: "Arthritis, Psoriatic", count: 1, descriptorUi: null },
+    { term: "Psoriasis", count: 3, authorized: 3, descriptorUi: "D011565" },
+    { term: "Arthritis, Psoriatic", count: 1, authorized: 1, descriptorUi: null },
   ]);
+  // Phase 4c review: every status counts, and how many are authorized is kept (the condition page
+  // opens with those): the withdrawn P4 counts, but not as authorized.
+  assert.deepEqual(topAreas(products.slice(0, 4), descriptorOf)[0], { term: "Psoriasis", count: 4, authorized: 3, descriptorUi: "D011565" });
   assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf, 1).map((row) => row.term), ["Psoriasis"]);
   assert.deepEqual(topAreas([], descriptorOf), []);
 });
@@ -275,6 +289,83 @@ test("key counts and the top keys: most first, ties by key", () => {
   assert.deepEqual(Object.fromEntries(counts), { C17: 3, C05: 1 });
   assert.deepEqual(topKeys(new Map([["b", 2], ["a", 2], ["c", 5], ["d", 1]]), 3), ["c", "a", "b"]);
   assert.deepEqual(topKeys(counts), ["C17", "C05"]);
+});
+
+// Phase 4c: the holder rows sort by total, name or one column; the columns by code/name or count.
+const activityRows = [
+  { mah: "Pfizer Europe MA EEIG", count: 5, cells: new Map([["C17", 3], ["C05", 1]]) },
+  { mah: "Accord Healthcare S.L.U.", count: 1, cells: new Map() },
+  { mah: "Zentiva k.s.", count: 3, cells: new Map([["C05", 2]]) },
+  { mah: "Amgen Europe B.V.", count: 3, cells: new Map([["C05", 2]]) },
+];
+
+test("holder rows sort by total (ties by name), by name, or by a column's count (ties by total, then name)", () => {
+  const order = (sort) => sortActivityRows(activityRows, sort).map((row) => row.mah);
+  assert.deepEqual(order("total"), ["Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Zentiva k.s.", "Accord Healthcare S.L.U."]);
+  assert.deepEqual(order("name"), ["Accord Healthcare S.L.U.", "Amgen Europe B.V.", "Pfizer Europe MA EEIG", "Zentiva k.s."]);
+  assert.deepEqual(order("C05"), ["Amgen Europe B.V.", "Zentiva k.s.", "Pfizer Europe MA EEIG", "Accord Healthcare S.L.U."]);
+  assert.deepEqual(order("C17"), ["Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Zentiva k.s.", "Accord Healthcare S.L.U."]);
+  // A copy: the rows keep their order.
+  assert.equal(activityRows[0].mah, "Pfizer Europe MA EEIG");
+});
+
+test("activity columns: ATC groups by code, areas by name, or most medicines first; Other stays last", () => {
+  const counts = new Map([["L", 9], ["A", 3], ["C", 9], ["C04", 7], ["C14", 12], ["__other__", 30]]);
+  const atc = [{ key: "L", label: "L Antineoplastic" }, { key: "A", label: "A Alimentary" }, { key: "C", label: "C Cardiovascular" }];
+  assert.deepEqual(orderActivityColumns(atc, counts, "key", "atc").map((column) => column.key), ["A", "C", "L"]);
+  assert.deepEqual(orderActivityColumns(atc, counts, "count", "atc").map((column) => column.key), ["C", "L", "A"]);
+  const areas = [{ key: "C04", label: "Neoplasms" }, { key: "C14", label: "Cardiovascular Diseases" }, { key: "__other__", label: "Other", other: true }];
+  assert.deepEqual(orderActivityColumns(areas, counts, "key", "area").map((column) => column.key), ["C14", "C04", "__other__"]);
+  assert.deepEqual(orderActivityColumns(areas, counts, "count", "area").map((column) => column.key), ["C14", "C04", "__other__"]);
+});
+
+// Approvals per year, stacked by medicine type, ATC class or holder (the top n and Other).
+const dated = [
+  product("D1", { year: 2015, medicine_type: "Generic", atc: [{ atc_code_human: "L04AC05" }, { atc_code_human: "A10BJ06" }] }),
+  product("D2", { year: 2015, medicine_type: "Other", atc: [{ atc_code_human: "L04AB02" }, { atc_code_human: "L01FA01" }] }),
+  product("D3", { year: 2017, medicine_type: "Generic", mah: "Accord Healthcare S.L.U.", atc: [{ atc_code_human: "L04AC" }] }),
+  product("D4", { year: 2017, mah: "Zentiva k.s.", atc: [] }),
+  product("D5", { year: null, authorized_from: null, mah: "Zentiva k.s." }),
+];
+const stacked = (rows) => rows.map((row) => [row.year, row.total, Object.fromEntries(row.counts)]);
+
+test("year stacks by medicine type: one row per year of the range (zeros included), each medicine once", () => {
+  assert.deepEqual(stacked(yearStacks(dated, (row) => [row.medicine_type], [2014, 2017])), [
+    ["2014", 0, {}],
+    ["2015", 2, { Generic: 1, Other: 1 }],
+    ["2016", 0, {}],
+    ["2017", 2, { Generic: 1, Other: 1 }],
+  ]);
+  assert.deepEqual(stacked(yearStacks([], (row) => [row.medicine_type], [2016, 2017])), [["2016", 0, {}], ["2017", 0, {}]]);
+});
+
+test("year stacks by ATC class: a medicine counts once in each class it has, not at all without one", () => {
+  assert.deepEqual(stacked(yearStacks(dated, (row) => atcClassesAt(row, null), [2015, 2017])), [
+    ["2015", 2, { L: 2, A: 1 }],
+    ["2016", 0, {}],
+    ["2017", 1, { L: 1 }],
+  ]);
+  // One class selected: its child classes; a medicine coded only down to it has none.
+  assert.deepEqual(stacked(yearStacks(dated, (row) => atcClassesAt(row, "L04"), [2015, 2017])), [
+    ["2015", 2, { L04A: 2 }],
+    ["2016", 0, {}],
+    ["2017", 1, { L04A: 1 }],
+  ]);
+  assert.deepEqual(stacked(yearStacks(dated, (row) => atcClassesAt(row, "L04A"), [2015, 2017]))[0], ["2015", 2, { L04AC: 1, L04AB: 1 }]);
+  assert.deepEqual(stacked(yearStacks(dated, (row) => atcClassesAt(row, "L04AC"), [2017, 2017])), [["2017", 0, {}]]);
+});
+
+test("year stacks by holder: the top n holders, the rest as Other on top", () => {
+  const top = topWithOther(dated, (row) => [row.mah], 1);
+  assert.deepEqual(top.keys, ["Pfizer Europe MA EEIG", OTHER_KEY]);
+  assert.deepEqual(stacked(yearStacks(dated, top.keysOf, [2015, 2017])), [
+    ["2015", 2, { "Pfizer Europe MA EEIG": 2 }],
+    ["2016", 0, {}],
+    ["2017", 2, { [OTHER_KEY]: 2 }],
+  ]);
+  // Every key within the top n: no Other.
+  assert.deepEqual(topWithOther(dated, (row) => [row.mah], 8).keys, ["Pfizer Europe MA EEIG", "Zentiva k.s.", "Accord Healthcare S.L.U."]);
+  assert.deepEqual(topWithOther([], (row) => [row.mah], 8).keys, []);
 });
 
 test("holder activity: the top holders by medicines, each with its medicines per key", () => {

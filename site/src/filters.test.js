@@ -84,6 +84,21 @@ test("ATC filters match valid code levels only: a malformed code (EMA's LX1XX02,
   assert.deepEqual(match(["Antineoplastic"]), ["M2"]);
 });
 
+// Phase 4c review: the filter uses the code to use (atcCode()): a retired code under the class WHO
+// moved it to, a code from the product information for a product without an EMA code.
+test("ATC filters match the code to use: a retired code's current class, a product information code", () => {
+  const coded = [
+    product("R1", { atc: [{ atc_code_human: "L01XC02", atc_code: "L01XC02", current_atc_code: "L01FA01" }] }),
+    product("S1", { atc: [{ atc_code_human: null, atc_code: "L04AG05", current_atc_code: null }] }),
+    product("N1", { atc: [{ atc_code_human: null }] }),
+  ];
+  const match = (atc) => ids(filterProducts(coded, makePredicates({ ...structuredClone(DEFAULT_STATE), atc }, atcClasses)));
+  assert.deepEqual(match(["L01FA"]), ["R1"]);
+  assert.deepEqual(match(["L01XC"]), []);
+  assert.deepEqual(match(["L04AG"]), ["S1"]);
+  assert.deepEqual(match(["L"]), ["R1", "S1"]);
+});
+
 test("splitAtcValues: the codes (upper case) and the class-name queries of an ATC selection", () => {
   assert.deepEqual(splitAtcValues(["l04ac", "insulin", "C", " "]), { codes: ["L04AC", "C"], names: ["insulin"] });
   assert.deepEqual(splitAtcValues([]), { codes: [], names: [] });

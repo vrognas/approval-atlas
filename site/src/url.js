@@ -96,6 +96,20 @@ export function decodeState(params, domain) {
   return { state, dropped };
 }
 
+// A filter patch ({ key: values } of list keys) is set when each of its keys holds exactly those
+// values, in any order.
+export function patchIsSet(state, patch) {
+  return Object.entries(patch).every(([key, values]) =>
+    state[key].length === values.length && values.every((value) => state[key].includes(value)));
+}
+
+// A control that sets a filter patch clears its keys again when a click finds it exactly set (the
+// holder activity card's row and column headers and cells).
+export function togglePatch(state, patch) {
+  if (!patchIsSet(state, patch)) return patch;
+  return Object.fromEntries(Object.keys(patch).map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
+}
+
 // A drug class opened from a suggestion, a card ladder or a Try link: the class alone (other
 // filters cleared, ATC breakdown), so the link's href and its click agree.
 export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [code] });

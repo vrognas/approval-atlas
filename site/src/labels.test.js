@@ -28,6 +28,11 @@ test("no label value and no index.html text uses an em-dash", () => {
   assert.deepEqual(html.match(/.{0,30}—.{0,30}/g), null);
 });
 
+// "Authorized today" reads as "got its authorization today" (phase 4c): "currently authorized".
+test("no label value says 'authorized today'", () => {
+  assert.deepEqual([...textValues(labels)].filter((text) => /authorized today/i.test(text)), []);
+});
+
 test("raw EMA statuses map to U.S. labels and unknown values pass through", () => {
   assert.equal(labels.statusLabel("Authorised"), "Authorized");
   assert.equal(labels.statusLabel("Withdrawn"), "Withdrawn");
@@ -165,9 +170,9 @@ test("the Union Register chip and note use U.S. labels", () => {
     labels.UI.register.note,
     "EMA and the Commission's Union Register (the legal record) show different statuses; either can lag behind a recent decision.",
   );
-  // Under all the tiles: names the population it counts in (the medicines authorized today).
-  assert.equal(labels.UI.register.notAuthorized(24), "24 of the medicines authorized today are no longer authorized according to the EU Union Register.");
-  assert.equal(labels.UI.register.notAuthorized(1), "1 of the medicines authorized today is no longer authorized according to the EU Union Register.");
+  // Under all the tiles: names the population it counts in (the medicines EMA lists as currently authorized).
+  assert.equal(labels.UI.register.notAuthorized(24), "24 of the medicines EMA lists as currently authorized are no longer authorized according to the EU Union Register.");
+  assert.equal(labels.UI.register.notAuthorized(1), "1 of the medicines EMA lists as currently authorized is no longer authorized according to the EU Union Register.");
 });
 
 test("the About disclosure states intended use and privacy", () => {
@@ -245,10 +250,10 @@ test("the medicines table merges approval date and status into one column", () =
   ]);
 });
 
-test("tiles: every medicine and those authorized today, then the four types with their share", () => {
+test("tiles: every medicine and those currently authorized, then the four types with their share", () => {
   assert.deepEqual(labels.UI.tiles.map((tile) => [tile.key, tile.label]), [
     ["products", "Medicines"],
-    ["authorized", "Authorized today"],
+    ["authorized", "Currently authorized"],
     ["orphan", "Orphan"],
     ["biosimilar", "Biosimilar"],
     ["generic", "Generic"],
@@ -257,8 +262,8 @@ test("tiles: every medicine and those authorized today, then the four types with
   // The Medicines tile's caption follows the filters.
   assert.equal(labels.UI.tiles[0].caption, "Every status in the EMA data");
   assert.equal(labels.UI.tiles[0].captionFiltered, "Every status, matching the filters");
-  assert.equal(labels.UI.undatedAuthorized(6), "6 authorized medicines without an approval date are not counted as authorized today.");
-  assert.equal(labels.UI.undatedAuthorized(1), "1 authorized medicine without an approval date is not counted as authorized today.");
+  assert.equal(labels.UI.undatedAuthorized(6), "6 authorized medicines without an approval date are not counted as currently authorized.");
+  assert.equal(labels.UI.undatedAuthorized(1), "1 authorized medicine without an approval date is not counted as currently authorized.");
 });
 
 test("tile shares are percentages with one decimal", () => {
@@ -272,17 +277,18 @@ test("tile shares are percentages with one decimal", () => {
 const plain = (parts) => parts.map((part) => (typeof part === "string" ? part : part.text)).join("");
 const toned = (parts) => parts.filter((part) => typeof part !== "string").map((part) => [part.text, part.tone]);
 
-// One dashboard (phase 4a): every medicine in the EMA data, and how many of them are authorized today.
-test("the dashboard headline counts the medicines and those authorized today, with or without filters", () => {
+// One dashboard (phase 4a): every medicine in the EMA data, and how many of them are currently authorized
+// (phase 4c: not "authorized today", which reads as "authorized on this date").
+test("the dashboard headline counts the medicines and those currently authorized, with or without filters", () => {
   const { headline } = labels.UI;
-  assert.equal(plain(headline.home(2351, 1567)), "1,567 of 2,351 medicines in the EMA data are authorized in the EU today.");
+  assert.equal(plain(headline.home(2351, 1567)), "1,567 of 2,351 medicines in the EMA data are currently authorized in the EU.");
   assert.deepEqual(toned(headline.home(2351, 1567)), [["1,567", "number"], ["2,351", "number"]]);
-  assert.equal(plain(headline.filtered(12, 5)), "12 medicines match these filters, 5 of them authorized today.");
+  assert.equal(plain(headline.filtered(12, 5)), "12 medicines match these filters, 5 of them currently authorized.");
   assert.deepEqual(toned(headline.filtered(12, 5)), [["12", "number"], ["5", "number"]]);
-  assert.equal(plain(headline.filtered(12, 12)), "12 medicines match these filters, all of them authorized today.");
-  assert.equal(plain(headline.filtered(12, 0)), "12 medicines match these filters, none of them authorized today.");
-  assert.equal(plain(headline.filtered(1, 1)), "1 medicine matches these filters; it is authorized today.");
-  assert.equal(plain(headline.filtered(1, 0)), "1 medicine matches these filters; it is not authorized today.");
+  assert.equal(plain(headline.filtered(12, 12)), "12 medicines match these filters, all of them currently authorized.");
+  assert.equal(plain(headline.filtered(12, 0)), "12 medicines match these filters, none of them currently authorized.");
+  assert.equal(plain(headline.filtered(1, 1)), "1 medicine matches these filters; it is currently authorized.");
+  assert.equal(plain(headline.filtered(1, 0)), "1 medicine matches these filters; it is not currently authorized.");
   assert.deepEqual(toned(headline.filtered(1, 0)), [["1", "number"], ["not", "negative"]]);
   assert.equal(plain(headline.filtered(0, 0)), "No medicines match these filters.");
   assert.deepEqual(toned(headline.filtered(0, 0)), []);
@@ -303,6 +309,14 @@ test("the dek starts with the medicines by status: the top four, then how many m
   );
   assert.equal(statuses([{ status: "Something new", count: 3 }]), "By status: 3 something new.");
   assert.equal(statuses([]), null);
+  // Phase 4c review: the authorized ones without an approval date are named, so the dek agrees with
+  // the headline's "currently authorized" count (1,567 = 1,573 - 6).
+  assert.equal(
+    statuses(all, 6),
+    "By status: 1,573 authorized (6 without an approval date, not counted above), 363 withdrawn, 268 applications withdrawn, 64 refused and 83 more.",
+  );
+  assert.equal(statuses(all.slice(0, 1), 1), "By status: 1,573 authorized (1 without an approval date, not counted above).");
+  assert.equal(statuses(all.slice(0, 1), 0), "By status: 1,573 authorized.");
 });
 
 test("a substance with no authorized medicine shows its medicines' statuses, most common first", () => {
@@ -345,9 +359,22 @@ test("lookup headlines answer whether it is authorized; 'not' and counts are ton
   assert.deepEqual(toned(headline.substance("semaglutide", 5)), [["5", "number"]]);
   assert.equal(plain(headline.substance("rimonabant", 0)), "Rimonabant is not authorized in the EU.");
   assert.equal(plain(headline.substance("insulin human", 1)), "Insulin human is authorized in the EU in 1 medicine.");
-  assert.equal(plain(headline.condition("Psoriasis", 52)), "52 medicines are authorized for Psoriasis.");
-  assert.equal(plain(headline.condition("Psoriasis", 1)), "1 medicine is authorized for Psoriasis.");
-  assert.equal(plain(headline.condition("Kuru", 0)), "No authorized medicines are tagged with Kuru.");
+  // Phase 4c review: EMA's therapeutic-area tags, not indications; narrower terms count too.
+  assert.equal(plain(headline.condition("Psoriasis", 52, true)), "52 authorized medicines are tagged by EMA with Psoriasis or a narrower condition.");
+  assert.equal(plain(headline.condition("Psoriasis", 1, false)), "1 authorized medicine is tagged by EMA with Psoriasis.");
+  assert.deepEqual(toned(headline.condition("Psoriasis", 52, true)), [["52", "number"]]);
+  assert.equal(plain(headline.condition("Kuru", 0, false)), "No authorized medicines are tagged by EMA with Kuru.");
+  assert.equal(plain(headline.condition("Kuru", 0, true)), "No authorized medicines are tagged by EMA with Kuru or a narrower condition.");
+});
+
+test("a condition page names its narrower conditions and splits the tagged medicines", () => {
+  const { condition } = labels.UI;
+  assert.equal(condition.narrowerLead(1), "Includes the narrower condition ");
+  assert.equal(condition.narrowerLead(3), "Includes the narrower conditions ");
+  assert.equal(condition.narrowerMore(4), " and 4 more");
+  assert.equal(condition.taggedOwn("Psoriasis", 43), "Tagged by EMA with Psoriasis (43)");
+  assert.equal(condition.taggedNarrower(9), "Tagged with a narrower condition (9)");
+  assert.equal(condition.rowTagged, "Tagged with ");
 });
 
 test("an ATC class without a WHO name reads as its code alone", () => {
@@ -402,7 +429,9 @@ test("the ATC tree: search, expand buttons, classes included under a checked one
 // Hover and focus explanations of the medicine types and the orphan flag.
 test("each type badge has an explanation of at most 12 words", () => {
   const { typeTips } = labels.UI;
-  assert.deepEqual(Object.keys(typeTips).sort(), ["Advanced therapy", "Biosimilar", "Generic", "Orphan"]);
+  // Phase 4c review: Other, the largest type, is explained too.
+  assert.deepEqual(Object.keys(typeTips).sort(), ["Advanced therapy", "Biosimilar", "Generic", "Orphan", "Other"]);
+  assert.equal(typeTips.Other, "Not a generic, biosimilar or advanced therapy (e.g. a new active substance).");
   assert.equal(typeTips.Orphan, "For rare diseases (at most 5 in 10,000 people in the EU).");
   assert.equal(typeTips.Biosimilar, "Highly similar to a biological medicine already approved in the EU.");
   assert.equal(typeTips.Generic, "Same active substance as an already approved reference medicine.");
@@ -447,6 +476,7 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(sheet.show(33), "Show 33 medicines");
   assert.equal(sheet.show(1), "Show 1 medicine");
   assert.equal(sheet.clear, "Clear");
+  assert.equal(sheet.close, "Close filters");
 });
 
 test("approval-years strip copy: slider names, the summary and tooltips of the stacked bars, the undated note", () => {
@@ -464,15 +494,51 @@ test("approval-years strip copy: slider names, the summary and tooltips of the s
   assert.equal(yearStrip.tooltip(1996, 0, []), "1996: 0 approvals");
   assert.equal(yearStrip.undated(366), "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart.");
   assert.equal(yearStrip.undated(1), "1 medicine without an approval date (refused, application withdrawn, pending…) is not in this chart.");
+  // Phase 4c review: a year filter also leaves them out of every count.
+  assert.equal(
+    yearStrip.undated(366, true),
+    "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart, and the year filter leaves them out of every count.",
+  );
   // The legend states the stack order, so position identifies a segment, not only its colour.
   assert.equal(yearStrip.legendLead, "Bottom to top:");
 });
 
-test("the most common conditions card names the medicines it covers", () => {
+// Shown with and without filters (phase 4c), with a hint that leads to the condition pages.
+test("the most common conditions card names the medicines it covers and how to open a condition", () => {
   const { conditions } = labels.UI;
   assert.equal(conditions.title, "Most common conditions");
-  assert.equal(conditions.subtitle(33), "Therapeutic areas of the 33 medicines shown");
-  assert.equal(conditions.subtitle(1), "Therapeutic areas of the 1 medicine shown");
+  // Phase 4c review: each row counts every status, then the authorized ones (the condition page's list).
+  assert.equal(conditions.subtitle(2351, false), "Therapeutic areas of all 2,351 medicines in the EMA data: medicines of every status, then those authorized");
+  assert.equal(conditions.subtitle(33, true), "Therapeutic areas of the 33 medicines matching the filters: medicines of every status, then those authorized");
+  assert.equal(conditions.subtitle(1, true), "Therapeutic areas of the 1 medicine matching the filters: medicines of every status, then those authorized");
+  assert.equal(conditions.authorized(48), "48 authorized");
+  assert.equal(conditions.hint, "Open a condition to see its approval timeline.");
+  assert.equal(conditions.empty(0), "No medicines match the current filters.");
+  assert.equal(conditions.empty(1), "No therapeutic area is listed for this medicine.");
+  assert.equal(conditions.empty(3), "No therapeutic areas are listed for these medicines.");
+  assert.equal(conditions.open("Neoplasms"), "Open condition page: Neoplasms");
+});
+
+// Every link to another website says where it goes and that it opens a new tab (phase 4c).
+test("external links name their destination for screen readers and as a tooltip", () => {
+  const { external } = labels.UI;
+  assert.equal(external.destinations["www.ema.europa.eu"], "EMA website");
+  assert.equal(external.newTab("EMA website"), "(opens EMA website in a new tab)");
+  assert.equal(external.title("EMA website", "www.ema.europa.eu"), "EMA website (www.ema.europa.eu)");
+  assert.equal(external.title("example.org", "example.org"), "example.org");
+});
+
+test("condition and substance results are tables with the medicines table's columns, holder last", () => {
+  assert.deepEqual(labels.UI.results.headers, ["Medicine", "ATC", "Approved · Status", "Type", "Holder"]);
+  // Phase 4c review: substance cards add what each medicine is for, after the medicine.
+  assert.equal(labels.UI.results.areas, "Therapeutic area");
+});
+
+test("the results timeline explains its dots and lines", () => {
+  const { timeline } = labels.UI;
+  assert.equal(timeline.caption, "One dot per medicine; lines join medicines with the same active substances (reference, generics, biosimilars). Tap or point at a dot for its name.");
+  assert.equal(timeline.hollow, "Hollow dots: only mentioned in the indication text.");
+  assert.equal(timeline.mentioned, "Only mentioned in the indication text");
 });
 
 test("the medicines table lists every matching medicine, undated ones last", () => {
@@ -499,7 +565,7 @@ test("the holder activity card: title, modes, cell names and the holder-name not
   assert.equal(activity.other, "Other");
 });
 
-test("ladder links name the level, the class and the medicines authorized today", () => {
+test("ladder links name the level, the class and the medicines currently authorized", () => {
   const { ladderLink } = labels.UI.atc;
   assert.equal(ladderLink(1, "A", ATC_LEVEL_ONE.A[0], 180), "Level 1, A Alimentary Tract and Metabolism: 180 authorized medicines");
   assert.equal(ladderLink(5, "A10BJ06", "semaglutide", 1), "Level 5, A10BJ06 Semaglutide: 1 authorized medicine");
@@ -508,13 +574,13 @@ test("ladder links name the level, the class and the medicines authorized today"
   assert.equal(ladderLink(2, "A10", "DRUGS USED IN DIABETES", null), "Level 2, A10 Drugs Used in Diabetes");
 });
 
-test("the class headline counts the medicines in one ATC class and those authorized today", () => {
+test("the class headline counts the medicines in one ATC class and those currently authorized", () => {
   const { atcClass } = labels.UI.headline;
   const label = "L Antineoplastic and Immunomodulating Agents";
-  assert.equal(plain(atcClass(481, 330, label)), `481 medicines in ${label}, 330 of them authorized today.`);
+  assert.equal(plain(atcClass(481, 330, label)), `481 medicines in ${label}, 330 of them currently authorized.`);
   assert.deepEqual(toned(atcClass(481, 330, label)), [["481", "number"], ["330", "number"]]);
-  assert.equal(plain(atcClass(3, 0, "L04AL")), "3 medicines in L04AL, none of them authorized today.");
-  assert.equal(plain(atcClass(1, 1, "L04AL")), "1 medicine in L04AL; it is authorized today.");
+  assert.equal(plain(atcClass(3, 0, "L04AL")), "3 medicines in L04AL, none of them currently authorized.");
+  assert.equal(plain(atcClass(1, 1, "L04AL")), "1 medicine in L04AL; it is currently authorized.");
   assert.equal(plain(atcClass(0, 0, "X01")), "No medicines in the EMA data are classed X01.");
   assert.deepEqual(toned(atcClass(0, 0, "X01")), []);
 });
@@ -527,7 +593,8 @@ test("the ATC breakdown copy counts medicines of every status", () => {
   assert.equal(labels.UI.breakdown.area.title, "Medicines by therapeutic area group (MeSH branch)");
   assert.equal(labels.UI.breakdown.mah.title, "Medicines by marketing authorization holder");
   assert.equal(labels.UI.breakdown.empty, "No medicines match the current filters.");
-  assert.equal(atc.note, "Codes as published by EMA; some outdated codes (e.g. L01XC, L01XE) are not yet mapped to current classes.");
+  // Phase 4c review: retired and incomplete codes are mapped (atcCode()), so the note says how.
+  assert.equal(atc.note, "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one.");
   assert.equal(atc.incomplete, "code incomplete");
 });
 
@@ -545,7 +612,7 @@ test("drug classes are a lookup suggestion group with an authorized count", () =
 });
 
 test("breakdown notes say how many medicines have no value", () => {
-  assert.equal(labels.UI.breakdown.atc.excluded(20), "20 medicines without an ATC code are not shown.");
+  assert.equal(labels.UI.breakdown.atc.excluded(20), "20 medicines without a valid ATC code are not shown.");
   assert.equal(labels.UI.breakdown.area.excluded(1), "1 medicine without a therapeutic area is not shown.");
   assert.equal(labels.UI.breakdown.mah.excluded, undefined);
 });
@@ -555,4 +622,128 @@ test("document lines leave out a missing update date instead of printing null", 
   assert.equal(labels.UI.card.updated("8 Feb 2018"), "updated 8 Feb 2018");
   assert.equal(labels.UI.card.documentMeta(true, null), "PDF");
   assert.equal(labels.UI.card.documentMeta(true, "8 Feb 2018"), "PDF · updated 8 Feb 2018");
+});
+
+// Phase 4c: the sidebar splitter, sorting, and the per-year chart's stack category.
+test("the sidebar splitter is named for what it resizes, with a hint", () => {
+  assert.equal(labels.UI.sidebar.resize, "Resize filters");
+  assert.equal(labels.UI.sidebar.hint, "Drag or use the arrow keys to resize the filters; double-click to reset");
+});
+
+test("the breakdown sorts by count or by code (ATC) and name (areas, holders)", () => {
+  const { sort } = labels.UI.breakdown;
+  assert.equal(sort.label, "Sort");
+  assert.equal(sort.count, "Count");
+  assert.deepEqual(sort.key, { atc: "Code", area: "Name", mah: "Name" });
+});
+
+test("the holder activity card: sort buttons, column order and row names with the total", () => {
+  const { activity } = labels.UI;
+  assert.equal(activity.sortBy("L Antineoplastic and Immunomodulating Agents"), "Sort holders by L Antineoplastic and Immunomodulating Agents");
+  assert.equal(activity.sortByName, "Sort holders by name");
+  assert.equal(activity.order.label, "Column order");
+  assert.deepEqual(activity.order.key, { atc: "Code", area: "Name" });
+  assert.equal(activity.order.count, "Count");
+  assert.equal(activity.holderRow("Novartis Europharm Limited", 30), "Novartis Europharm Limited, 30 medicines");
+  assert.equal(activity.holderRow("Accord Healthcare S.L.U.", 1), "Accord Healthcare S.L.U., 1 medicine");
+  // Phase 4c review: a visible "Total" sort (the default), filter toggles that say what they do,
+  // and the drilled-into class as a toggle of its own.
+  assert.equal(activity.sortName, "Name");
+  assert.equal(activity.sortTotal, "Total");
+  assert.equal(activity.sortByTotal, "Sort holders by their total of matching medicines");
+  assert.equal(activity.filterBy("Novartis Europharm Limited"), "Show only Novartis Europharm Limited");
+  assert.equal(activity.pressedTitle, "Shown alone: click again to clear");
+  assert.equal(activity.filterHint, "Filters the dashboard; select again to clear.");
+  assert.equal(activity.parentLead, "Columns: classes in");
+});
+
+test("approvals per year: stack modes, the summary and the counting note per mode", () => {
+  const { years } = labels.UI;
+  assert.equal(years.stack.label, "Stack by");
+  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Holder" });
+  assert.equal(
+    years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
+    "Stacked column chart of EMA approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",
+  );
+  assert.equal(years.by.atcIn("L04 Immunosuppressants"), "ATC class in L04 Immunosuppressants");
+  assert.equal(years.by.atc, "ATC group");
+  assert.equal(years.by.mah, "marketing authorization holder");
+  const howTo = "Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.";
+  assert.equal(years.note(years.counting.type), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
+  assert.equal(years.note(years.counting.atc(6, false)), `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each. ${howTo}`);
+  // Phase 4c review: the top classes or holders and Other only when there is an Other segment.
+  assert.equal(
+    years.note(years.counting.atc(6, true)),
+    `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each: the 6 classes with the most matching medicines, the rest as Other classes. ${howTo}`,
+  );
+  assert.equal(
+    years.note(years.counting.mah(8, true)),
+    `Year of EU marketing authorization; each medicine counted once: the 8 holders with the most matching medicines, the rest as Other holders. ${howTo}`,
+  );
+  assert.equal(years.note(years.counting.mah(1, false)), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
+  assert.deepEqual(years.other, { atc: "Other classes", mah: "Other holders" });
+  assert.equal(years.onlyCoded(3, "L04AC"), "3 medicines coded only as L04AC are not shown.");
+  assert.equal(years.onlyCoded(1, "L04AC"), "1 medicine coded only as L04AC is not shown.");
+});
+
+// Phase 4c review: the code shown can differ from EMA's (retired, completed from the product
+// information, or EMA has none); a short flag beside the badge, the full sentence elsewhere.
+test("ATC codes that differ from EMA's published one say how", () => {
+  const names = new Map([["L01XC02", "rituximab"]]);
+  const years = new Map([["L01XC02", 2022]]);
+  const { atcOriginText, atcOriginFlag } = labels;
+  assert.equal(atcOriginText(null, names, years), null);
+  assert.equal(atcOriginText({ kind: "retired", from: "L01XC02", now: "L01FA01" }, names, years), "L01XC02 Rituximab: retired 2022, now L01FA01.");
+  assert.equal(atcOriginText({ kind: "retired", from: "L01XE", now: "L01E" }, names, years), "L01XE: retired, now L01E.");
+  assert.equal(atcOriginText({ kind: "completed", published: "L01XL" }, names, years), "EMA publishes L01XL; the full code is from the product information (SmPC).");
+  assert.equal(atcOriginText({ kind: "conflict", published: "C09" }, names, years), "EMA publishes C09; this code is from the product information (SmPC).");
+  assert.equal(atcOriginText({ kind: "smpc" }, names, years), "EMA publishes no ATC code; this one is from the product information (SmPC).");
+  assert.equal(atcOriginFlag({ kind: "retired", from: "L01XC02", now: "L01FA01" }), "was L01XC02");
+  assert.equal(atcOriginFlag({ kind: "completed", published: "L01XL" }), "EMA: L01XL");
+  assert.equal(atcOriginFlag({ kind: "smpc" }), "SmPC");
+  assert.equal(labels.UI.table.source("ema_smpc"), "Source: EMA product information (SmPC)");
+});
+
+// Phase 4c review: a medicine card names a namesake (the refused Mylotarg and the authorized one).
+test("a medicine card points to a namesake and to the documents that are the namesake's", () => {
+  const { namesake } = labels.UI.card;
+  assert.equal(namesake.link("Mylotarg", "EMEA/H/C/004204"), "Another medicine named Mylotarg (EMEA/H/C/004204)");
+  assert.equal(namesake.authorized("2018-04-19"), " is authorized since 19 Apr 2018.");
+  assert.equal(namesake.other("Refused"), ": Refused.");
+  assert.equal(namesake.other("Authorised"), ": Authorized.");
+  assert.equal(namesake.documents(7), "7 later documents EMA lists here belong to ");
+  assert.equal(namesake.documents(1), "1 later document EMA lists here belongs to ");
+  assert.equal(namesake.documentsLink("Mylotarg"), "the other Mylotarg");
+});
+
+// Phase 4c review: "what for" on the first screen: the indication's first sentence, or its first
+// 200 characters, with the rest behind a disclosure.
+test("an indication's lead: the whole text when short, else its first sentence, else 200 characters", () => {
+  const { indicationLead } = labels;
+  assert.deepEqual(indicationLead("Mylotarg is indicated for AML."), { lead: "Mylotarg is indicated for AML.", more: false });
+  const keytruda = "Melanoma Keytruda as monotherapy is indicated for the treatment of adults and adolescents aged 12 years and older with advanced (unresectable or metastatic) melanoma. Keytruda as monotherapy is indicated for the adjuvant treatment of adults.";
+  assert.deepEqual(indicationLead(keytruda), {
+    lead: "Melanoma Keytruda as monotherapy is indicated for the treatment of adults and adolescents aged 12 years and older with advanced (unresectable or metastatic) melanoma.",
+    more: true,
+  });
+  // "e.g. dysglycaemia" does not end a sentence; a long first sentence is cut at a word.
+  const long = `Adults Wegovy is indicated e.g. dysglycaemia ${"and weight management ".repeat(12)}in adults. Adolescents too.`;
+  const { lead, more } = indicationLead(long);
+  assert.equal(more, true);
+  assert.ok(lead.length <= 201, lead);
+  assert.ok(lead.endsWith("…"), lead);
+  assert.ok(long.startsWith(lead.slice(0, -1)), lead);
+  assert.ok(!lead.slice(0, -1).endsWith(" "), lead);
+  assert.equal(labels.UI.card.fullIndication, "Show full indication");
+});
+
+// Phase 4c review: the tab's title names the view (WCAG 2.4.2); the dashboard under a lookup result
+// has its own heading.
+test("page titles name the view; the overview under a result is headed as such", () => {
+  const { UI } = labels;
+  assert.equal(UI.pageTitle("Wegovy"), "Wegovy · Approval Atlas");
+  assert.equal(UI.pageTitle(null), "Approval Atlas");
+  assert.equal(UI.textTitle("wegovy"), "“wegovy”");
+  assert.equal(UI.explore.title, "Explore all EMA medicines");
+  assert.equal(UI.explore.note, "The filters apply to this overview, not to the result above.");
 });

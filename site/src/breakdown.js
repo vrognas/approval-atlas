@@ -11,11 +11,14 @@ import { UI } from "./labels.js";
 // rows) stacks the bar by medicine type, 1px apart; without them the bar is one accent fill.
 // row.ariaLabel: the button's name (ATC rows: badge, name, count and type split would read glued
 // together); row.split: the type split, read after a static row's count; row.incomplete: a
-// muted label (the products coded only down to the parent class).
-export function renderBreakdown(container, rows, { isSelected = null, onToggle, badgeOf = () => null }) {
+// muted label (the products coded only down to the parent class). linkOf(row): a link shown after
+// the row (therapeutic area groups: their condition page), or null.
+export function renderBreakdown(container, rows, { isSelected = null, onToggle, badgeOf = () => null, linkOf = () => null }) {
   const root = d3.select(container);
-  // Rebuilt on every render; keep keyboard focus on the same value.
-  const focusedKey = container.contains(document.activeElement) ? d3.select(document.activeElement).datum()?.key : undefined;
+  // Rebuilt on every render; keep keyboard focus on the same value's row or link.
+  const active = container.contains(document.activeElement) ? document.activeElement : null;
+  const focusedKey = active ? d3.select(active).datum()?.key : undefined;
+  const linkFocused = active?.tagName === "A";
   root.selectChildren().remove();
   if (rows.length === 0) {
     root.append("p").attr("class", "muted").text(UI.breakdown.empty);
@@ -26,9 +29,9 @@ export function renderBreakdown(container, rows, { isSelected = null, onToggle, 
   const anySelected = isSelected !== null && named.some((row) => isSelected(row.key));
   root.classed("has-selection", anySelected);
 
-  const items = root.selectAll(".bar-row")
-    .data(rows)
-    .join((enter) => enter.append((row) => document.createElement(row.other || row.static ? "div" : "button")))
+  // Each row in an item, so a link can follow the row's button (no link inside a button).
+  const rowItems = root.selectAll(".bar-item").data(rows).join("div").attr("class", "bar-item");
+  const items = rowItems.append((row) => document.createElement(row.other || row.static ? "div" : "button"))
     .attr("class", (row) => {
       const badge = row.other ? null : badgeOf(row);
       return ["bar-row", row.other ? "other" : null, badge ? `hue-${badge.hue}` : null].filter(Boolean).join(" ");
@@ -63,7 +66,10 @@ export function renderBreakdown(container, rows, { isSelected = null, onToggle, 
     });
   items.append("span").attr("class", "bar-value").text((row) => d3.format(",")(row.count));
   items.filter((row) => row.static && row.split).append("span").attr("class", "visually-hidden").text((row) => `: ${row.split}`);
-  items.filter((row) => !row.other && !row.static && focusedKey !== undefined && row.key === focusedKey).each(function focus() {
-    this.focus();
+  rowItems.each(function link(row) {
+    const anchor = row.other ? null : linkOf(row);
+    if (anchor) d3.select(this).append(() => anchor).datum(row);
   });
+  const focused = rowItems.filter((row) => !row.other && focusedKey !== undefined && row.key === focusedKey);
+  focused.select(linkFocused ? "a" : "button").node()?.focus();
 }

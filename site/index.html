@@ -18,7 +18,7 @@
   </head>
   <body>
     <header>
-      <h1>Approval Atlas</h1>
+      <h1><a id="home-link" href="/">Approval Atlas</a></h1>
       <p id="data-date" class="meta">EMA human medicines</p>
       <p id="offline-note" class="note" role="status" hidden></p>
     </header>
@@ -44,15 +44,21 @@
           />
           <div id="lookup-listbox" role="listbox" aria-labelledby="lookup-label" hidden></div>
         </div>
-        <p id="lookup-try" class="try" hidden></p>
         <p id="lookup-status" class="visually-hidden" aria-live="polite"></p>
       </section>
+      <!-- Outside the search section, which stays at the top on phones (sticky): the field only. -->
+      <p id="lookup-try" class="try" hidden></p>
 
       <section id="result" class="result" aria-label="Lookup result" hidden></section>
 
       <p id="app-loading" class="muted">Loading charts…</p>
 
       <div id="app" hidden>
+        <!-- While a lookup result is open: the dashboard below is the overview, under its own heading. -->
+        <div id="explore" class="explore" hidden>
+          <h2 id="explore-title"></h2>
+          <p id="explore-note" class="muted"></p>
+        </div>
         <section class="answer" aria-labelledby="headline">
           <h2 id="headline" class="headline" tabindex="-1"></h2>
           <p id="headline-dek" class="dek"></p>
@@ -85,8 +91,10 @@
           <p id="year-undated" class="muted"></p>
         </section>
 
-        <!-- One dashboard: every medicine matching the filters, whatever its status. -->
-        <div id="tiles" class="tiles"></div>
+        <!-- One dashboard: every medicine matching the filters, whatever its status. The frame is the
+             tiles' size container: their columns follow the main column, which the sidebar's
+             width sets on desktop. -->
+        <div class="tiles-frame"><div id="tiles" class="tiles"></div></div>
         <p id="register-note" class="muted" hidden></p>
         <p id="undated-authorized" class="muted" hidden></p>
 
@@ -100,6 +108,13 @@
             </div>
           </div>
           <p id="breakdown-note" class="muted"></p>
+          <div class="card-tools">
+            <span id="breakdown-sort-label" class="tools-label"></span>
+            <div id="breakdown-sort" class="segmented segmented-small" role="group" aria-labelledby="breakdown-sort-label">
+              <button type="button" data-sort="count"></button>
+              <button type="button" data-sort="key"></button>
+            </div>
+          </div>
           <ul id="breakdown-legend" class="legend" hidden></ul>
           <div id="breakdown-path" class="breakdown-path" hidden></div>
           <div id="breakdown" class="breakdown"></div>
@@ -116,19 +131,40 @@
             </div>
           </div>
           <p id="activity-subtitle" class="muted"></p>
+          <div class="card-tools">
+            <span id="activity-order-label" class="tools-label"></span>
+            <div id="activity-order" class="segmented segmented-small" role="group" aria-labelledby="activity-order-label">
+              <button type="button" data-order="key"></button>
+              <button type="button" data-order="count"></button>
+            </div>
+          </div>
           <div id="activity-table" class="activity-scroll"></div>
+          <!-- Touch screens: the ATC columns' names (their tooltips never show there). -->
+          <p id="activity-legend" class="muted activity-legend" aria-hidden="true"></p>
           <p id="activity-note" class="muted"></p>
         </section>
 
+        <!-- Approvals per year, stacked by medicine type, ATC class or holder (UI state). -->
         <section class="chart-card" aria-labelledby="chart-title">
-          <h2 id="chart-title">Approvals per year by medicine type</h2>
-          <p class="muted">Year of EU marketing authorization; each medicine counted once. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.</p>
+          <div class="card-head">
+            <h2 id="chart-title">Approvals per year</h2>
+            <div class="card-tools">
+              <span id="chart-stack-label" class="tools-label"></span>
+              <div id="chart-stack" class="segmented" role="group" aria-labelledby="chart-stack-label">
+                <button type="button" data-stack="type"></button>
+                <button type="button" data-stack="atc"></button>
+                <button type="button" data-stack="mah"></button>
+              </div>
+            </div>
+          </div>
+          <p id="chart-note" class="muted"></p>
           <div class="legend-row">
-            <ul id="legend" class="legend"></ul>
+            <ul id="legend" class="legend stack-legend"></ul>
             <output id="year-readout" class="readout" aria-live="polite"></output>
           </div>
           <div id="chart" class="chart"></div>
           <p id="undated-note" class="muted"></p>
+          <p id="unstacked-note" class="muted"></p>
         </section>
 
         <section class="chart-card" aria-labelledby="over-time-title">
@@ -139,14 +175,18 @@
           <p id="over-time-note" class="muted"></p>
         </section>
 
-        <section id="conditions" class="chart-card" aria-labelledby="conditions-title" hidden>
+        <!-- Most common conditions of the medicines shown (every one without a filter); each opens its condition page. -->
+        <section id="conditions" class="chart-card" aria-labelledby="conditions-title">
           <h2 id="conditions-title"></h2>
           <p id="conditions-subtitle" class="muted"></p>
+          <p id="conditions-hint" class="muted"></p>
           <ol id="conditions-list" class="condition-list"></ol>
+          <p id="conditions-empty" class="muted"></p>
         </section>
 
         <section class="chart-card table-card" aria-labelledby="table-title">
           <h2 id="table-title">Medicines</h2>
+          <p id="table-caption" class="table-caption"></p>
           <div class="table-scroll">
             <table id="medicines-table"></table>
           </div>
@@ -154,6 +194,17 @@
         </section>
       </div>
     </main>
+
+    <!-- Desktop: the splitter on the sidebar's right edge (sidebar-resize.js), between the panes. -->
+    <div
+      id="sidebar-resize"
+      class="sidebar-resize"
+      role="separator"
+      aria-orientation="vertical"
+      aria-controls="facets"
+      tabindex="0"
+      hidden
+    ></div>
 
     <!-- Facet sidebar (desktop, >= 1024px; after main so the search comes first in tab order).
          Below that width it is hidden and a sheet borrows its sections. -->
@@ -206,10 +257,10 @@
 
     <!-- Phones and tablets: a bottom sheet (showModal) with the sections of one token, or all. -->
     <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
-      <div class="sheet-handle" aria-hidden="true"></div>
       <div class="sheet-head">
         <h2 id="sheet-title" tabindex="-1"></h2>
         <button id="sheet-clear" class="text-button" type="button"></button>
+        <button id="sheet-close" class="sheet-close" type="button">×</button>
       </div>
       <div id="sheet-body" class="sheet-body"></div>
       <div class="sheet-foot">

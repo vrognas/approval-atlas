@@ -59,6 +59,9 @@ const TEXT_PAIRS = [
   ...HEAT_STEPS.map((step) => [`--heat-${step}-text`, `--heat-${step}`]),
 ];
 
+// The hue mids also stack "Approvals per year" by ATC group (each group's own hue) and by holder or
+// child class (main.js STACK_HUES). Their Other segment is the --raised fill with a --field-border
+// outline (phase 4c review; NON_TEXT_PAIRS checks that outline on the card and on the fill).
 const MARK_PAIRS = [
   "--type-other", "--type-generic", "--type-biosimilar", "--type-advanced-therapy",
   "--series-products", "--series-substances", "--bar", "--status-authorized",
@@ -68,12 +71,14 @@ const MARK_PAIRS = [
 // WCAG 1.4.11: text-field borders against the field and what surrounds it; the year slider's
 // thumb ring and selected track against the card and the unselected track; the approval-years
 // bars outside the range and the unselected track: a --field-border outline against the card and
-// their --raised fill.
+// their --raised fill. The sidebar splitter (sidebar-resize.js): its grip (--field-border) and its
+// line on hover, focus and drag (--accent) against the sidebar and the page.
 const NON_TEXT_PAIRS = [
   ...["--input", ...BACKGROUNDS].map((background) => ["--field-border", background]),
   ["--field-border", "--raised"],
   ["--accent", "--surface"],
   ["--accent", "--raised"],
+  ["--accent", "--page"],
 ];
 
 for (const [mode, tokens] of [["light", light], ["dark", dark]]) {

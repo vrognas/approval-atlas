@@ -59,6 +59,40 @@ export function yearHistogram(products, predicates, [first, last]) {
   return rows;
 }
 
+// The stack key of every key beyond the top ones (topWithOther()).
+export const OTHER_KEY = "__other__";
+
+// The n keys with the most products (topKeys()), then OTHER_KEY when any product has another key;
+// keysOf maps those other keys to OTHER_KEY.
+export function topWithOther(products, keysOf, n) {
+  const counts = keyCounts(products, keysOf);
+  const top = topKeys(counts, n);
+  const shown = new Set(top);
+  return {
+    keys: counts.size > top.length ? [...top, OTHER_KEY] : top,
+    keysOf: (product) => keysOf(product).map((key) => (shown.has(key) ? key : OTHER_KEY)),
+  };
+}
+
+// "Approvals per year": the products with an approval date per year of [first, last] (zeros
+// included), each counted once in every stack key it has (keysOf(product): its keys, e.g. its
+// medicine type, ATC classes or holder) and not at all without one. Rows: { year (a string, the
+// chart's band domain), total: the products counted, counts: key -> products }.
+export function yearStacks(products, keysOf, [first, last]) {
+  const byYear = new Map();
+  for (const product of products) {
+    const keys = new Set(product.year === null ? [] : keysOf(product));
+    if (keys.size === 0) continue;
+    if (!byYear.has(product.year)) byYear.set(product.year, { total: 0, counts: new Map() });
+    const row = byYear.get(product.year);
+    row.total += 1;
+    for (const key of keys) row.counts.set(key, (row.counts.get(key) ?? 0) + 1);
+  }
+  const rows = [];
+  for (let year = first; year <= last; year++) rows.push({ year: String(year), ...(byYear.get(year) ?? { total: 0, counts: new Map() }) });
+  return rows;
+}
+
 // Products per current status, most first (ties in stack order): the headline dek's breakdown.
 export function statusBreakdown(products) {
   return [...keyCounts(products, FACET_VALUES.status)]
@@ -79,6 +113,24 @@ export function holderActivity(products, keysOf, n = 15) {
     .sort(([a, rowsA], [b, rowsB]) => rowsB.length - rowsA.length || a.localeCompare(b))
     .slice(0, n)
     .map(([mah, rows]) => ({ mah, count: rows.length, cells: keyCounts(rows, keysOf) }));
+}
+
+// Holder rows (holderActivity() output) in the chosen order: "total" (most products first, ties by
+// name), "name" (A-Z) or a column key (most in that column first, ties by total, then name).
+export function sortActivityRows(rows, sort) {
+  const byName = (a, b) => a.mah.localeCompare(b.mah);
+  const byTotal = (a, b) => b.count - a.count || byName(a, b);
+  const byColumn = (a, b) => (b.cells.get(sort) ?? 0) - (a.cells.get(sort) ?? 0) || byTotal(a, b);
+  return [...rows].sort({ name: byName, total: byTotal }[sort] ?? byColumn);
+}
+
+// Activity columns ({ key, label, other }) in the chosen order: "key" (ATC groups by code, therapeutic
+// areas by name; by: "atc" | "area") or "count" (most products first, counts: key -> products, ties
+// by key). The Other column stays last.
+export function orderActivityColumns(columns, counts, order, by) {
+  const byKey = by === "atc" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => a.label.localeCompare(b.label);
+  const byCount = (a, b) => (counts.get(b.key) ?? 0) - (counts.get(a.key) ?? 0) || a.key.localeCompare(b.key);
+  return [...columns.filter((column) => !column.other).sort(order === "count" ? byCount : byKey), ...columns.filter((column) => column.other)];
 }
 
 // Checkbox rows: values with products, most first (ties by label), matching the query. Selected
@@ -152,28 +204,34 @@ export function sentenceParts(state, lookups) {
   const areas = areaTokens.length
     ? joined(areaTokens)
     : [{ key: "areas", text: UI.sentence.defaults.area, active: false, clears: ["branch", "area"] }];
+  // Without a year filter, every medicine counts, the never approved too: "approved in [any year]"
+  // (phase 4c review; a year range there read as if they were left out). A range leaves them out,
+  // and says so.
   const from = tokenLabel("from", state, lookups);
-  const oneYear = (state.from !== null || state.to !== null) && from === tokenLabel("to", state, lookups);
-  const years = oneYear
-    ? [words.approvedIn, { key: "year", text: from, active: true, clears: ["from", "to"] }]
-    : [words.approved, token("from"), words.to, token("to")];
+  const ranged = state.from !== null || state.to !== null;
+  const oneYear = ranged && from === tokenLabel("to", state, lookups);
+  let years = [words.approvedIn, { key: "years", text: UI.sentence.anyYear, active: false, clears: ["from", "to"] }];
+  if (oneYear) years = [words.approvedIn, { key: "year", text: from, active: true, clears: ["from", "to"] }, words.undatedOut];
+  else if (ranged) years = [words.approved, token("from"), words.to, token("to"), words.undatedOut];
   return [
     words.showing, typeToken, words.in, ...atc, words.from, token("mah"), words.in, ...areas,
     ...years, words.with, token("status"), words.end,
   ];
 }
 
-// The n therapeutic areas with the most products (ties by term); descriptorOf: EMA term -> MeSH
+// The n therapeutic areas with the most products (ties by term), each with how many of them have
+// EMA status Authorised (the condition page lists those first); descriptorOf: EMA term -> MeSH
 // descriptor UI, so a term can open its condition lookup (null when unknown).
 export function topAreas(products, descriptorOf, n = 8) {
   const counts = new Map();
+  const authorized = keyCounts(products.filter((product) => product.medicine_status === "Authorised"), (product) => product.areas);
   for (const product of products) {
     for (const term of new Set(product.areas)) counts.set(term, (counts.get(term) ?? 0) + 1);
   }
   return [...counts]
     .sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b))
     .slice(0, n)
-    .map(([term, count]) => ({ term, count, descriptorUi: descriptorOf.get(term) ?? null }));
+    .map(([term, count]) => ({ term, count, authorized: authorized.get(term) ?? 0, descriptorUi: descriptorOf.get(term) ?? null }));
 }
 
 // key -> (medicine type -> products), each product once per distinct key (keysOf(product)).

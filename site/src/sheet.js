@@ -9,11 +9,16 @@ export function createSheet(dialog, { onClear }) {
   const body = dialog.querySelector("#sheet-body");
   const clear = dialog.querySelector("#sheet-clear");
   const done = dialog.querySelector("#sheet-done");
+  const closeButton = dialog.querySelector("#sheet-close");
   let current = null;
 
   clear.textContent = UI.sheet.clear;
   clear.addEventListener("click", () => onClear(current.clears));
   done.addEventListener("click", () => dialog.close());
+  // A visible way out besides the backdrop, Escape and "Show N medicines".
+  closeButton.setAttribute("aria-label", UI.sheet.close);
+  closeButton.title = UI.sheet.close;
+  closeButton.addEventListener("click", () => dialog.close());
   // A click outside the sheet's box lands on the dialog itself (its backdrop).
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
@@ -48,7 +53,9 @@ export function createSheet(dialog, { onClear }) {
       // The title, not the first control: a search field would open the phone keyboard.
       title.focus();
     },
-    close() {
+    // restoreFocus false: a link in the sheet opened a page, whose heading takes focus instead.
+    close({ restoreFocus = true } = {}) {
+      if (!restoreFocus && current) current.restore = () => null;
       if (dialog.open) dialog.close();
     },
     isOpen: () => dialog.open,

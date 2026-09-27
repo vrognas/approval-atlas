@@ -1,5 +1,4 @@
 import * as d3 from "d3";
-import { MEDICINE_TYPES } from "./approvals.js";
 import { UI } from "./labels.js";
 import { attachYearBrush } from "./year-brush.js";
 
@@ -14,14 +13,15 @@ export function typeColor(type) {
   return `var(--type-${type.toLowerCase().replaceAll(" ", "-")})`;
 }
 
-function totalOf(row) {
-  return d3.sum(MEDICINE_TYPES, (type) => row[type]);
+// A column's height: its stack counts summed (in the ATC stacks a medicine can count in several).
+function stackedOf(row, series) {
+  return d3.sum(series, (item) => row.counts.get(item.key) ?? 0);
 }
 
-function stackSegments(row) {
+function stackSegments(row, series) {
   let lower = 0;
-  return MEDICINE_TYPES.filter((type) => row[type] > 0).map((type) => {
-    const segment = { type, lower, upper: lower + row[type] };
+  return series.filter((item) => row.counts.get(item.key) > 0).map((item) => {
+    const segment = { item, lower, upper: lower + row.counts.get(item.key) };
     lower = segment.upper;
     return segment;
   });
@@ -34,9 +34,10 @@ function columnPath(x, y, width, height, radius) {
     `H${x + width - r}Q${x + width},${y} ${x + width},${y + r}V${y + height}Z`;
 }
 
-function summaryText(rows) {
-  const peak = d3.greatest(rows, totalOf);
-  return UI.years.summary(rows[0].year, rows.at(-1).year, d3.sum(rows, totalOf), peak.year, totalOf(peak));
+// The medicines counted (each once), not the stacked height.
+function summaryText(rows, by) {
+  const peak = d3.greatest(rows, (row) => row.total);
+  return UI.years.summary(rows[0].year, rows.at(-1).year, d3.sum(rows, (row) => row.total), peak.year, peak.total, by);
 }
 
 function xTickValues(years, plotWidth) {
@@ -45,13 +46,16 @@ function xTickValues(years, plotWidth) {
   return years.filter((year) => Number(year) % step === 0);
 }
 
+// A low-key series (Other: stroke) is drawn as an outline on its fill; swatches and keys too.
+const outline = (item) => (item.stroke ? `inset 0 0 0 1px ${item.stroke}` : null);
+
 // One tooltip per chart container: the value leads, the series name follows, keyed by a short line.
 export function showTooltip(container, [left, top], title, items) {
   const tooltip = d3.select(container).selectAll(".tooltip").data([null]).join("div").attr("class", "tooltip").attr("hidden", null);
   tooltip.selectChildren().remove();
   tooltip.append("p").attr("class", "tooltip-title").text(title);
   const rows = tooltip.selectAll("p.tooltip-row").data(items).join("p").attr("class", "tooltip-row");
-  rows.append("span").attr("class", "line-key").style("background", (item) => item.color);
+  rows.append("span").attr("class", "line-key").style("background", (item) => item.color).style("box-shadow", outline);
   rows.append("strong").text((item) => formatCount(item.value));
   rows.append("span").text((item) => item.label);
   const width = tooltip.node().offsetWidth;
@@ -64,19 +68,33 @@ export function hideTooltip(container) {
 }
 
 // types: the medicine types to list (the stacked ATC breakdown shows only those present).
-export function renderLegend(list, types = MEDICINE_TYPES) {
+export function renderLegend(list, types) {
   const items = d3.select(list).selectAll("li").data(types).join("li");
   items.selectChildren().remove();
   items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", typeColor);
   items.append("span").text((type) => type);
 }
 
-// rows cover every year of the data (zeros included) so the brush's year grid stays fixed.
-// The chart ignores the approval-year filter itself: years outside the range are greyed.
-export function renderChart(container, rows, { from, to }, onRange, onReadout) {
+// The per-year chart's legend: "Bottom to top:", then the stack series in stack order (position
+// tells the segments apart, not only colour). series: [{ key, label, color }].
+export function renderStackLegend(list, series) {
+  const root = d3.select(list);
+  root.selectChildren().remove();
+  if (series.length === 0) return;
+  root.append("li").attr("class", "legend-lead").text(UI.yearStrip.legendLead);
+  const items = root.selectAll("li.legend-series").data(series).join("li").attr("class", "legend-series");
+  items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", (item) => item.color).style("box-shadow", outline);
+  items.append("span").text((item) => item.label);
+}
+
+// rows: yearStacks() output, every year of the data (zeros included) so the brush's year grid stays
+// fixed. series: [{ key, label, color, stroke: an outline for a low-key series }] bottom to top.
+// by: what the columns are stacked by, for the summary (UI.years.by). The chart ignores the
+// approval-year filter itself: years outside the range are greyed.
+export function renderChart(container, { rows, series, by }, { from, to }, onRange, onReadout) {
   const root = d3.select(container);
   root.selectChildren().remove();
-  if (d3.sum(rows, totalOf) === 0) {
+  if (d3.sum(rows, (row) => stackedOf(row, series)) === 0) {
     root.append("p").attr("class", "muted").text(UI.years.empty);
     return;
   }
@@ -85,7 +103,7 @@ export function renderChart(container, rows, { from, to }, onRange, onReadout) {
   const years = rows.map((row) => row.year);
   // paddingOuter = paddingInner / 2 makes the bands tile the range, so the brush snaps to years.
   const x = d3.scaleBand(years, [MARGIN.left, width - MARGIN.right]).paddingInner(0.2).paddingOuter(0.1);
-  const y = d3.scaleLinear([0, d3.max(rows, totalOf)], [HEIGHT - MARGIN.bottom, MARGIN.top]).nice();
+  const y = d3.scaleLinear([0, d3.max(rows, (row) => stackedOf(row, series))], [HEIGHT - MARGIN.bottom, MARGIN.top]).nice();
   const barWidth = Math.min(MAX_BAR_WIDTH, x.bandwidth());
   const barOffset = (x.bandwidth() - barWidth) / 2;
   const inRange = (year) => (from === null || Number(year) >= from) && (to === null || Number(year) <= to);
@@ -95,7 +113,7 @@ export function renderChart(container, rows, { from, to }, onRange, onReadout) {
     .attr("height", HEIGHT)
     .attr("viewBox", [0, 0, width, HEIGHT])
     .attr("role", "img")
-    .attr("aria-label", summaryText(rows));
+    .attr("aria-label", summaryText(rows, by));
 
   svg.append("g")
     .attr("class", "axis y-axis")
@@ -139,14 +157,16 @@ export function renderChart(container, rows, { from, to }, onRange, onReadout) {
   // A 1px surface-colored gap separates stacked segments (neighbours of similar lightness stay
   // apart); a 1px floor keeps a single-medicine segment visible when the gap would swallow it.
   columns.selectAll("path")
-    .data((row) => stackSegments(row).map((segment) => ({ ...segment, row })))
+    .data((row) => stackSegments(row, series).map((segment) => ({ ...segment, row })))
     .join("path")
-    .style("fill", (segment) => (inRange(segment.row.year) ? typeColor(segment.type) : "var(--out-of-range)"))
+    .style("fill", (segment) => (inRange(segment.row.year) ? segment.item.color : "var(--out-of-range)"))
+    .style("stroke", (segment) => (inRange(segment.row.year) && segment.item.stroke ? segment.item.stroke : null))
+    .style("stroke-width", (segment) => (segment.item.stroke ? "1px" : null))
     .attr("d", (segment) => {
       const top = y(segment.upper);
       const gap = segment.lower > 0 ? SEGMENT_GAP : 0;
       const height = Math.max(1, y(segment.lower) - top - gap);
-      const isTop = segment.upper === totalOf(segment.row);
+      const isTop = segment.upper === stackedOf(segment.row, series);
       return columnPath(x(segment.row.year) + barOffset, top, barWidth, height, isTop ? CORNER_RADIUS : 0);
     });
 
@@ -159,9 +179,11 @@ export function renderChart(container, rows, { from, to }, onRange, onReadout) {
     const row = rows[index];
     hits.classed("hover", (candidate) => candidate === row);
     if (!row) return hideTooltip(container);
-    // Listed top to bottom, as stacked.
-    const items = [...MEDICINE_TYPES].reverse().map((type) => ({ value: row[type], label: type, color: typeColor(type) }));
-    showTooltip(container, [pointerX, pointerY], UI.years.tooltipTitle(row.year, totalOf(row)), items);
+    // Listed top to bottom, as stacked; the series without medicines that year are left out.
+    const items = [...series].reverse()
+      .filter((item) => row.counts.get(item.key) > 0)
+      .map((item) => ({ value: row.counts.get(item.key), label: item.label, color: item.color, stroke: item.stroke }));
+    showTooltip(container, [pointerX, pointerY], UI.years.tooltipTitle(row.year, row.total), items);
   });
   svg.on("pointerleave", () => {
     hits.classed("hover", false);

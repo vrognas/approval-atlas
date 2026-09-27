@@ -48,6 +48,8 @@ test("every ATC level-1 group has its own hue; codes take the hue of their first
   assert.equal(atcHue("A"), "gold");
   assert.equal(atcHue("LX1XX02"), "blue");
   assert.equal(atcHue("X01"), "slate");
+  // Phase 4c review: a row without an EMA code (atc_code_human null) never throws.
+  assert.equal(atcHue(null), "slate");
 });
 
 test("style.css defines the five level shades, mid and text colour of every hue", () => {

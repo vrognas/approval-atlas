@@ -1,8 +1,8 @@
 import * as d3 from "d3";
-import { atcPrefixes } from "./atc.js";
+import { atcCode, atcIncomplete, atcOrigin, atcPrefixes } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
-import { UI, atcClassLabel, statusDateLine, statusLabel } from "./labels.js";
+import { UI, atcClassLabel, atcOriginFlag, atcOriginText, statusDateLine, statusLabel } from "./labels.js";
 import { documentLinks } from "./lookup.js";
 
 const PAGE_SIZE = 100;
@@ -24,16 +24,18 @@ function toggleIndication(event, product) {
 
 // "L01FA01" -> one name per level found in atc_classes (level 1 in title case, the others verbatim).
 function atcLevelNames(row, atcNames) {
-  return atcPrefixes(row.atc_code_human)
+  return atcPrefixes(atcCode(row))
     .filter((prefix) => atcNames.has(prefix))
     .map((prefix) => atcClassLabel(prefix, atcNames.get(prefix)));
 }
 
-// Tooltip: the level names one per line, then the source.
-function atcTitle(row, atcNames) {
+// Tooltip: the level names one per line, how the code differs from EMA's, then the source.
+function atcTitle(row, atcNames, retiredYears) {
   const lines = atcLevelNames(row, atcNames);
-  if (row.atc_incomplete) lines.push(UI.table.incompleteTitle);
-  return [...lines, UI.table.source(row.source)].join("\n");
+  if (atcIncomplete(atcCode(row))) lines.push(UI.table.incompleteTitle);
+  const origin = atcOriginText(atcOrigin(row), atcNames, retiredYears);
+  if (origin) lines.push(origin);
+  return [...lines, UI.table.source(row.atc_code_source ?? row.source)].join("\n");
 }
 
 // The PI and EPAR links under the name (for its EMA status: quickDocuments()), replaced when the
@@ -45,19 +47,10 @@ function renderDocumentLinks(cell, product, documents) {
   if (links) cell.append(() => links);
 }
 
-// Name link, then the active substance(s) in secondary text, then the PI and EPAR links.
-function renderNameCell(cell, product, substances, documents) {
-  // URLs come from third-party data; only link https so a javascript: URL can never become a link.
-  if (product.medicine_url?.startsWith("https://")) {
-    cell.append("a")
-      .attr("class", "medicine-name")
-      .attr("href", product.medicine_url)
-      .attr("rel", "noopener noreferrer")
-      .attr("target", "_blank")
-      .text(product.name_of_medicine);
-  } else {
-    cell.append("span").attr("class", "medicine-name").text(product.name_of_medicine);
-  }
+// The name (a link to its medicine card: medicineLink()), then the active substance(s) in
+// secondary text, then the PI and EPAR links.
+function renderNameCell(cell, product, substances, documents, medicineLink) {
+  cell.append(() => medicineLink(product));
   if (substances.length) cell.append("span").attr("class", "medicine-substances").text(substances.join("; "));
   renderDocumentLinks(cell, product, documents);
 }
@@ -82,16 +75,24 @@ function appendAtcBadge(parent, code, atcNames) {
   return badge;
 }
 
-function renderAtcCell(cell, product, atcNames) {
-  const codes = cell.selectAll("span.code").data(product.atc).join("span").attr("class", "code").attr("title", (row) => atcTitle(row, atcNames));
+// One badge per code to use (atcCode(); rows without one are skipped), flagged when incomplete or
+// when it differs from EMA's published code (atcOrigin(): a short flag, the sentence as tooltip and
+// for screen readers).
+function renderAtcCell(cell, product, atcNames, retiredYears) {
+  const rows = product.atc.filter((row) => atcCode(row) !== null);
+  const codes = cell.selectAll("span.code").data(rows).join("span").attr("class", "code").attr("title", (row) => atcTitle(row, atcNames, retiredYears));
   codes.each(function badge(row) {
     const code = d3.select(this);
-    appendAtcBadge(code, row.atc_code_human, atcNames);
+    appendAtcBadge(code, atcCode(row), atcNames);
     // The tooltip is out of reach for keyboard, touch and screen-reader users.
     const names = atcLevelNames(row, atcNames);
     if (names.length) code.append("span").attr("class", "visually-hidden").text(` (${names.join("; ")})`);
+    if (atcIncomplete(atcCode(row))) code.append("span").attr("class", "flag").text(UI.table.incomplete);
+    const origin = atcOrigin(row);
+    if (!origin) return;
+    code.append("span").attr("class", "flag").attr("aria-hidden", "true").text(atcOriginFlag(origin));
+    code.append("span").attr("class", "visually-hidden").text(` ${atcOriginText(origin, atcNames, retiredYears)}`);
   });
-  codes.filter((row) => row.atc_incomplete).append("span").attr("class", "flag").text(UI.table.incomplete);
 }
 
 function renderTypeCell(cell, product) {
@@ -122,20 +123,30 @@ function renderStatusCell(cell, product, register) {
   flag.append("span").attr("class", "visually-hidden").text(text);
 }
 
-function renderAreaCell(cell, product, branchNamesByTerm) {
+// Each term links to its condition page where its MeSH descriptor is known (conditionLink()); its
+// branch names as tooltip.
+function renderAreaCell(cell, product, branchNamesByTerm, conditionLink) {
   cell.selectAll("span.term")
     .data(product.areas)
     .join("span")
     .attr("class", "term")
     .attr("title", (term) => (branchNamesByTerm.get(term) ?? []).join("\n") || UI.table.noBranch)
-    .text((term, index) => (index < product.areas.length - 1 ? `${term}; ` : term));
+    .each(function term(value, index) {
+      const link = conditionLink(value);
+      if (link) this.append(link);
+      else this.append(value);
+      if (index < product.areas.length - 1) this.append("; ");
+    });
 }
 
 // lookups: substanceIndex (product -> EMA active substances), atcNames (code -> name),
-// branchNamesByTerm (MeSH term -> branch names). onAtcSelect(code): an ATC segment was clicked;
-// focusFallback(): where focus goes when the clicked segment's row is gone after the update.
-// All text goes through .text(): decoded indications contain literal "<" and ">".
-export function createTable(table, moreButton, { substanceIndex, atcNames, branchNamesByTerm, onAtcSelect, focusFallback }) {
+// atcRetiredYears (retired code -> the year WHO retired it), branchNamesByTerm (MeSH term ->
+// branch names). medicineLink(product): the name as a link to its
+// medicine card; conditionLink(term): a link to the term's condition page, or null.
+// onAtcSelect(code): an ATC segment was clicked; focusFallback(): where focus goes when the
+// clicked segment's row is gone after the update.
+// All text goes through .text() or text nodes: decoded indications contain literal "<" and ">".
+export function createTable(table, moreButton, captionNode, { substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, onAtcSelect, focusFallback }) {
   let current = null;
   let shown = 0;
   let refocus = null; // { number, code } of a clicked ATC segment, until the next update
@@ -189,27 +200,28 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
     else focusFallback();
   }
 
-  // One tbody per medicine keeps its full-width indication row directly beneath it.
+  // One tbody per medicine keeps its full-width indication row directly beneath it. Explicit roles
+  // keep the table semantics where narrow cards stack the rows (style.css).
   function appendRows(products) {
-    const groups = d3.select(table).selectAll(null).data(products).enter().append("tbody");
-    const rows = groups.append("tr");
+    const groups = d3.select(table).selectAll(null).data(products).enter().append("tbody").attr("role", "rowgroup");
+    const rows = groups.append("tr").attr("role", "row");
     rows.append("td").attr("class", "breakable").each(function nameCell(product) {
-      renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? [], current.documents);
+      renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? [], current.documents, medicineLink);
     });
-    rows.append("td").text((product) => product.marketing_authorisation_developer_applicant_holder);
+    rows.append("td").attr("class", "holder-cell").text((product) => product.marketing_authorisation_developer_applicant_holder);
     rows.append("td").attr("class", "status-cell").each(function statusCell(product) {
       renderStatusCell(d3.select(this), product, current.register);
     });
-    rows.append("td").each(function typeCell(product) {
+    rows.append("td").attr("class", "type-cell").each(function typeCell(product) {
       renderTypeCell(d3.select(this), product);
     });
     rows.append("td").attr("class", "atc").each(function atcCell(product) {
-      renderAtcCell(d3.select(this), product, atcNames);
+      renderAtcCell(d3.select(this), product, atcNames, atcRetiredYears);
     });
     rows.append("td").attr("class", "area").each(function areaCell(product) {
-      renderAreaCell(d3.select(this), product, branchNamesByTerm);
+      renderAreaCell(d3.select(this), product, branchNamesByTerm, conditionLink);
     });
-    rows.append("td")
+    rows.append("td").attr("class", "indication-cell")
       .filter(hasIndication)
       .append("button")
       .attr("type", "button")
@@ -220,12 +232,14 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
       .on("click", toggleIndication);
     groups.filter(hasIndication)
       .append("tr")
+      .attr("role", "row")
       .attr("class", "indication")
       .attr("id", indicationRowId)
       .attr("hidden", "")
       .append("td")
       .attr("colspan", HEADERS.length)
       .text((product) => product.therapeutic_indication);
+    groups.selectAll("td").attr("role", "cell");
   }
 
   function showMore() {
@@ -240,6 +254,9 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
   }
 
   d3.select(moreButton).on("click", showMore);
+  // Named by the card's heading and described by the caption above the scroll area (inside it, a
+  // wide table's caption was cut off on phones).
+  d3.select(table).attr("role", "table").attr("aria-labelledby", "table-title").attr("aria-describedby", captionNode.id);
 
   // Rebuilds only when the rows, caption or register (ema_medicine_register_status.json rows by
   // product, null until loaded) changed, so resizes keep the pages already shown. selectedAtc: the
@@ -266,12 +283,13 @@ export function createTable(table, moreButton, { substanceIndex, atcNames, branc
     shown = 0;
     const root = d3.select(table);
     root.selectChildren().remove();
-    root.append("caption").text(caption);
-    root.append("thead").append("tr")
+    captionNode.textContent = caption;
+    root.append("thead").attr("role", "rowgroup").append("tr").attr("role", "row")
       .selectAll("th")
       .data(HEADERS)
       .join("th")
       .attr("scope", "col")
+      .attr("role", "columnheader")
       .text((header) => header);
     showMore();
     if (refocus) restoreFocus();

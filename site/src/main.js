@@ -6,40 +6,47 @@ import {
   breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
-  countApprovalsByYear,
   countTiles,
   isAuthorizedNow,
   newestFirst,
+  sortBreakdownRows,
 } from "./approvals.js";
 import { renderActivity } from "./activity.js";
-import { atcChildren, atcExactCounts, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
+import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
 import { atcHue, typeTipId } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
-import { renderChart, renderLegend } from "./chart.js";
+import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart.js";
 import { createFacetPanel } from "./facet-panel.js";
 import {
   FACET_VALUES,
+  OTHER_KEY,
   TYPE_ORDER,
   facetCounts,
   holderActivity,
   keyCounts,
+  orderActivityColumns,
   sentenceParts,
+  sortActivityRows,
   statusBreakdown,
   topAreas,
   topKeys,
+  topWithOther,
   typeSplit,
   yearHistogram,
+  yearStacks,
 } from "./facets.js";
 import { renderSentence } from "./filter-sentence.js";
 import { filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { UI, atcClassLabel, atcName } from "./labels.js";
+import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { createSearchBox } from "./search-box.js";
 import { buildLookupIndex, suggest, suggestAtcClasses } from "./search.js";
 import { createSheet } from "./sheet.js";
+import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
 import { renderTiles } from "./tiles.js";
 import {
@@ -50,7 +57,9 @@ import {
   decodeState,
   lookupView,
   patchFilterParams,
+  patchIsSet,
   scheduleUrlWrite,
+  togglePatch,
   withoutLookup,
 } from "./url.js";
 import { createYearStrip } from "./year-slider.js";
@@ -86,7 +95,7 @@ const SHEET_SECTIONS = {
 };
 const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", branch: "areas", area: "areas", areas: "areas", status: "status" };
 const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], branch: ["branch"], area: ["area"], status: ["status"] };
-const YEAR_THUMBS = { from: "start", to: "end", year: "start" };
+const YEAR_THUMBS = { from: "start", to: "end", year: "start", years: "start" };
 // Desktop: the control each token focuses, the first one of its own section (ATC: the tree's
 // first checked class, else its search: atc-tree.js focusTarget()).
 const TOKEN_TARGETS = {
@@ -103,8 +112,21 @@ const FACETS = ["type", "status", "branch", "area", "mah"];
 const ACTIVITY_HOLDERS = 15;
 const ACTIVITY_AREAS = 12;
 const ACTIVITY_OTHER = "__other__";
+// "Approvals per year" stacked by holder, or by the child classes of one ATC class: the top ones,
+// then Other on top. Their colours: damped hue mids, neighbouring hues far apart (1px gaps
+// separate the segments too). Level-1 ATC groups: the top six, each in its own group's hue. Other:
+// the raised fill with a --field-border outline (3:1, palette.test.js), so it does not outweigh
+// the named series.
+const STACK_TOP = 8;
+const STACK_ATC_GROUPS = 6;
+const STACK_HUES = ["blue", "gold", "teal", "red", "indigo", "olive", "pink", "sky"];
+const STACK_OTHER = { color: "var(--raised)", stroke: "var(--field-border)" };
 
 const $ = (selector) => document.querySelector(selector);
+
+// Desktop: the sidebar's width, the viewer's stored one set now, before the first render, so the
+// layout does not jump. The charts wait for a drag's end to follow the new width (resizeObserver).
+const sidebar = createSidebarResize($("#sidebar-resize"), { label: UI.sidebar.resize, hint: UI.sidebar.hint, onDragEnd: () => scheduleRender() });
 
 const files = new Map();
 function loadFile(file) {
@@ -163,12 +185,21 @@ function applyUrl() {
   urlNote.textContent = UI.ignoredValues(decoded.dropped.length);
 }
 
+// The tab's title names the view (a card, condition, search or drug class), so history, tabs and
+// bookmarks tell them apart and screen readers hear the change (WCAG 2.4.2).
+function updateTitle() {
+  document.title = UI.pageTitle(lookupView(state).kind !== null ? lookup.title(state) : dashboard?.title() ?? null);
+}
+
 function render() {
   lookup.render(state);
   const lookupOpen = lookupView(state).kind !== null;
   $("#lookup-try").hidden = lookupOpen; // home state only
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
+  // Below a lookup result, the dashboard is the overview of every medicine, under its own heading.
+  $("#explore").hidden = !lookupOpen;
   dashboard?.render();
+  updateTitle();
   if (scrollAnchor) {
     const { element, top } = scrollAnchor;
     scrollAnchor = null;
@@ -276,12 +307,14 @@ function setupTips() {
   }, true);
 }
 
-// Filled before any data loads, so it shows even when the data files are missing.
+// Filled before any data loads, so it shows even when the data files are missing. The footer's
+// links to other websites are marked as such (after their text is set).
 function renderAbout() {
   d3.select("#about-summary").text(UI.about.summary);
   d3.select("#about-use").text(UI.about.intendedUse);
   d3.select("#about-privacy").text(UI.about.privacy);
   d3.select("#about-security").text(UI.about.security);
+  for (const anchor of document.querySelectorAll('footer a[target="_blank"]')) markExternal(anchor);
 }
 
 function showOfflineNote(meta) {
@@ -371,10 +404,21 @@ function startLookup([meta, searchRows, entryTermRows]) {
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
   });
-  // Conditions and drug classes join the suggestions once their background data has loaded.
+  // Conditions and drug classes join the suggestions once their background data has loaded (and a
+  // condition page's title its name).
   lookup.onData((name) => {
     if (["conditions", "atc", "atcCounts"].includes(name)) searchBox.refresh();
+    if (name === "conditions") updateTitle();
   });
+  // The wordmark opens the overview: every lookup and filter cleared, one history entry.
+  $("#home-link").addEventListener("click", (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    searchBox.setText("");
+    navigate(structuredClone(DEFAULT_STATE));
+  });
+  d3.select("#explore-title").text(UI.explore.title);
+  d3.select("#explore-note").text(UI.explore.note);
   for (const name of ["conditions", "atc", "atcCounts"]) lookup.need(name);
 
   applyUrl();
@@ -397,6 +441,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   const seriesDates = seriesRows.map((row) => row.date);
   const approvalYears = d3.extent(products, (product) => product.year);
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
+  const atcRetiredYears = new Map(atcClasses.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null]));
   const branchNames = new Map(branchRows.filter((row) => row.branch !== null).map((row) => [row.branch, row.branch_name]));
   const branchNamesByTerm = d3.rollup(
     branchRows.filter((row) => row.branch !== null),
@@ -405,6 +450,16 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   );
   // EMA term -> MeSH descriptor, so a common condition opens its condition lookup.
   const descriptorOf = new Map(branchRows.map((row) => [row.therapeutic_area_mesh, row.mesh_descriptor_ui]));
+  // A therapeutic area term as a link to its condition page (a lookup: ?cond=), or null when its
+  // descriptor is unknown.
+  const conditionLink = (term) => (descriptorOf.get(term) ? lookup.link(term, { cond: descriptorOf.get(term) }) : null);
+  // A small icon link to a condition page (ui: its descriptor) after a row: sidebar area rows,
+  // therapeutic area group bars. name: the condition, for its accessible name and tooltip.
+  const conditionIconLink = (ui, name) => {
+    const link = lookup.link(openIcon(), { cond: ui }, "cond-link", UI.conditions.open(name));
+    link.title = UI.conditions.open(name);
+    return link;
+  };
   const domain = {
     mahs: new Set(products.map((product) => product.mah)),
     branches: new Set(branchNames.keys()),
@@ -419,12 +474,21 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     mah: (mah) => mah,
   };
 
-  renderLegend($("#legend"));
   renderOverTimeLegend($("#over-time-legend"));
 
   // Every filter key reset to its default (the sentence's remove buttons, Clear, Reset).
   const cleared = (keys) => Object.fromEntries(keys.map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
-  const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch), labelOf: { branch: branchName } });
+  // Area rows link to their condition page; followed from a sheet, the sheet closes (the page's
+  // heading takes focus, not the token that opened the sheet).
+  const areaRowLink = (term) => {
+    if (!descriptorOf.get(term)) return null;
+    const link = conditionIconLink(descriptorOf.get(term), term);
+    link.addEventListener("click", (event) => {
+      if (event.defaultPrevented) sheet.close({ restoreFocus: false }); // a plain click: opened here
+    });
+    return link;
+  };
+  const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch), labelOf: { branch: branchName }, linkOf: { area: areaRowLink } });
   $("#reset-all").addEventListener("click", () => {
     setState(cleared(FILTER_KEYS));
     $("#facets-title").focus(); // the button is disabled now
@@ -495,24 +559,56 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   };
 
   d3.selectAll("#breakdown-by button").on("click", (event) => setState({ by: event.currentTarget.dataset.by }));
-  // The activity card's columns: ATC groups or therapeutic area groups (UI state, not in the URL).
+  // The breakdown's bar order: most first, or by code (ATC) or name (UI state, not in the URL).
+  let breakdownSort = "count";
+  d3.select("#breakdown-sort-label").text(UI.breakdown.sort.label);
+  d3.selectAll("#breakdown-sort button").on("click", (event) => {
+    breakdownSort = event.currentTarget.dataset.sort;
+    scheduleRender();
+  });
+  // The activity card's columns: ATC groups or therapeutic area groups; their order (ATC groups by
+  // code and areas by count at first); the holder rows' sort: "total", "name" or a column key (UI
+  // state, not in the URL).
   let activityMode = "atc";
+  const activityOrder = { atc: "key", area: "count" };
+  let activitySort = "total";
   d3.selectAll("#activity-by button")
     .text(function label() {
       return UI.activity.modes[this.dataset.mode];
     })
     .on("click", (event) => {
+      if (activityMode !== event.currentTarget.dataset.mode) activitySort = "total"; // the columns change
       activityMode = event.currentTarget.dataset.mode;
       scheduleRender();
     });
   $("#activity-by").setAttribute("aria-label", UI.activity.modesLabel);
   d3.select("#activity-title").text(UI.activity.title);
   d3.select("#activity-note").text(UI.activity.note);
+  d3.select("#activity-order-label").text(UI.activity.order.label);
+  d3.selectAll("#activity-order button").on("click", (event) => {
+    activityOrder[activityMode] = event.currentTarget.dataset.order;
+    scheduleRender();
+  });
+  // "Approvals per year": stacked by medicine type, ATC class or holder (UI state, not in the URL).
+  let stackMode = "type";
+  d3.select("#chart-stack-label").text(UI.years.stack.label);
+  d3.selectAll("#chart-stack button")
+    .text(function label() {
+      return UI.years.stack.modes[this.dataset.stack];
+    })
+    .on("click", (event) => {
+      stackMode = event.currentTarget.dataset.stack;
+      scheduleRender();
+    });
 
-  const table = createTable($("#medicines-table"), $("#table-more"), {
+  const table = createTable($("#medicines-table"), $("#table-more"), $("#table-caption"), {
     substanceIndex: buildSubstanceIndex(substanceRows),
     atcNames,
+    atcRetiredYears,
     branchNamesByTerm,
+    // Names open the medicine card (EMA's page is linked from there), terms their condition page.
+    medicineLink: (product) => lookup.link(product.name_of_medicine, { med: product.ema_product_number }, "medicine-name"),
+    conditionLink,
     // A segment adds its class to the ATC filter; pressed again, it removes it.
     onAtcSelect: toggleAtc,
     focusFallback: focusAtcFilter,
@@ -529,24 +625,35 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     setState({ [filter]: values.includes(key) ? values.filter((value) => value !== key) : [...values, key] });
   }
 
+  // After a therapeutic area group's bar: its condition page (the group's root descriptor, found by
+  // name once the lookup's conditions data has loaded; the card re-renders then).
+  function branchLink(row) {
+    const ui = lookup.conditions()?.uiByName.get(branchName(row.key));
+    return ui ? conditionIconLink(ui, branchName(row.key)) : null;
+  }
+
   // Union Register rows by product; null until the file has loaded (or if it failed).
   let register = null;
+  // The one ATC class the dashboard shows alone (its headline names it; so does the tab), or null.
+  let classTitle = null;
   const registerDiffers = (product) => register?.get(product.ema_product_number)?.agrees_with_ema === false;
   const showCount = (selector, count, text) => d3.select(selector).text(count ? text(count) : "").attr("hidden", count ? null : "");
 
   // The answer headline counts the medicines matching the filters (every status) and those
-  // authorized today; with exactly one ATC code and no other filter it names the class, with its
-  // levels below. The dek: the medicines by status, then substances and types.
-  function renderHeadline(predicates, filtered, atcCounts) {
+  // currently authorized; with exactly one ATC code and no other filter it names the class, with its
+  // levels below. The dek: the medicines by status (the authorized ones without an approval date
+  // named, as the headline leaves them out), then substances and types.
+  function renderHeadline(predicates, filtered, atcCounts, undatedAuthorized) {
     const authorized = filtered.filter(isAuthorizedNow).length;
     const activeCount = Object.keys(predicates).length;
     const classCode = activeCount === 1 ? drillCode() : null;
+    classTitle = classCode ? atcClassLabel(classCode, atcNames.get(classCode)) : null;
     let parts;
     if (classCode) parts = UI.headline.atcClass(filtered.length, authorized, atcClassLabel(classCode, atcNames.get(classCode)));
     else if (activeCount) parts = UI.headline.filtered(filtered.length, authorized);
     else parts = UI.headline.home(filtered.length, authorized);
     $("#headline").replaceChildren(...headlineNodes(parts));
-    d3.select("#headline-dek").text([UI.headline.statuses(statusBreakdown(filtered)), UI.headline.dek(countTiles(filtered))].filter(Boolean).join(" "));
+    d3.select("#headline-dek").text([UI.headline.statuses(statusBreakdown(filtered), undatedAuthorized), UI.headline.dek(countTiles(filtered))].filter(Boolean).join(" "));
     const classPath = $("#class-path");
     classPath.hidden = classCode === null;
     if (classCode) renderAtcPath(classPath, { current: classCode, counts: atcCounts, names: atcNames, onSelect: openAtc, all: false, label: UI.atc.classPath });
@@ -618,16 +725,18 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     if (focused !== undefined) container.querySelector(`[data-focus-key="${focused}"]`)?.focus();
   }
 
-  // With any filter active: the therapeutic areas of the medicines shown, as links to their
-  // condition lookup where the MeSH descriptor is known.
-  function renderConditions(filtered) {
+  // Always shown (phase 4c; it used to show only with a filter): the therapeutic areas of the
+  // medicines shown, as links to their condition page where the MeSH descriptor is known, with a
+  // hint that the pages exist; a line instead when none of the medicines has one. Rebuilt on every
+  // render: a focused link keeps its focus.
+  function renderConditions(filtered, anyFilter) {
     const rows = topAreas(filtered, descriptorOf);
-    const card = $("#conditions");
-    card.hidden = rows.length === 0;
-    if (card.hidden) return;
     d3.select("#conditions-title").text(UI.conditions.title);
-    d3.select("#conditions-subtitle").text(UI.conditions.subtitle(filtered.length));
-    const list = d3.select("#conditions-list");
+    d3.select("#conditions-subtitle").text(UI.conditions.subtitle(filtered.length, anyFilter));
+    d3.select("#conditions-hint").text(rows.some((row) => row.descriptorUi) ? UI.conditions.hint : "");
+    d3.select("#conditions-empty").text(rows.length ? "" : UI.conditions.empty(filtered.length));
+    const list = d3.select("#conditions-list").attr("hidden", rows.length ? null : "");
+    const focused = list.node().contains(document.activeElement) ? document.activeElement.textContent : null;
     list.selectChildren().remove();
     for (const row of rows) {
       const item = list.append("li");
@@ -635,8 +744,11 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       else item.append("span").text(row.term);
       item.append("span").attr("class", "bar-track").attr("aria-hidden", "true")
         .append("span").attr("class", "bar-fill").style("width", `${(100 * row.count) / rows[0].count}%`);
-      item.append("span").attr("class", "bar-value").text(d3.format(",")(row.count));
+      const value = item.append("span").attr("class", "bar-value");
+      value.append("span").text(d3.format(",")(row.count));
+      value.append("span").attr("class", "bar-authorized").text(UI.conditions.authorized(row.authorized));
     }
+    if (focused !== null) [...list.node().querySelectorAll("a")].find((link) => link.textContent === focused)?.focus();
   }
 
   // The breakdown card over every matching medicine: ATC (stacked by type), areas or holders.
@@ -644,12 +756,19 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     d3.selectAll("#breakdown-by button").attr("aria-pressed", function pressed() {
       return String(this.dataset.by === state.by);
     });
+    d3.selectAll("#breakdown-sort button")
+      .text(function label() {
+        return this.dataset.sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[state.by];
+      })
+      .attr("aria-pressed", function pressed() {
+        return String(this.dataset.sort === breakdownSort);
+      });
     const card = $("#breakdown").closest(".chart-card");
     const hadFocus = card.contains(document.activeElement);
     const atcTypes = state.by === "atc"
       ? {
-        prefix: typeSplit(withoutAtcFilter, (product) => product.atc.flatMap((row) => atcPrefixes(row.atc_code_human))),
-        exact: typeSplit(withoutAtcFilter, (product) => product.atc.map((row) => row.atc_code_human).filter(atcLevel)),
+        prefix: typeSplit(withoutAtcFilter, (product) => product.atc.flatMap((row) => atcPrefixes(atcCode(row)))),
+        exact: typeSplit(withoutAtcFilter, (product) => product.atc.map(atcCode).filter(atcLevel)),
       }
       : null;
     const atc = atcTypes ? atcBreakdown(atcCounts, atcExact, atcTypes) : null;
@@ -661,9 +780,10 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     $("#breakdown-legend").hidden = legendTypes.length === 0;
     renderBreakdownPath(atc?.current ?? null);
     const population = filterProducts(products, predicates, BREAKDOWN_FILTER[state.by]);
-    renderBreakdown($("#breakdown"), atc ? atc.rows : breakdownCounts(population, state.by, breakdownLabel[state.by]), atc
+    const rows = sortBreakdownRows(atc ? atc.rows : breakdownCounts(population, state.by, breakdownLabel[state.by]), breakdownSort, state.by);
+    renderBreakdown($("#breakdown"), rows, atc
       ? { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) }
-      : { isSelected: isBreakdownSelected, onToggle: toggleBreakdown });
+      : { isSelected: isBreakdownSelected, onToggle: toggleBreakdown, linkOf: state.by === "area" ? branchLink : undefined });
     const { excluded } = UI.breakdown[state.by];
     // Products without any ATC code matter at level 1 only.
     showCount("#breakdown-excluded", excluded && !atc?.current ? breakdownExcluded(population, state.by) : 0, excluded);
@@ -673,22 +793,32 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
 
   // "Who is active where": the top holders of the medicines shown by ATC group (the classes one
   // level below a drilled-into code: drillCode()) or by the top therapeutic area groups (+ Other).
+  // Columns in the chosen order, rows sorted by total, name or one column; headers and cells toggle
+  // the filters they set (togglePatch()).
   function renderActivityCard(filtered) {
     d3.selectAll("#activity-by button").attr("aria-pressed", function pressed() {
       return String(this.dataset.mode === activityMode);
     });
+    d3.selectAll("#activity-order button")
+      .text(function label() {
+        return this.dataset.order === "count" ? UI.activity.order.count : UI.activity.order.key[activityMode];
+      })
+      .attr("aria-pressed", function pressed() {
+        return String(this.dataset.order === activityOrder[activityMode]);
+      });
     let keysOf;
     let columns;
+    let parentClass = null;
     if (activityMode === "atc") {
       const parent = drillCode();
-      const depth = parent ? atcLevel(parent) : 0;
+      // The class split into its children: a toggle above the table that clears it again.
+      if (parent !== null) {
+        const name = atcNames.get(parent);
+        parentClass = { key: parent, badge: parent, label: atcClassLabel(parent, name), name: atcName(name), filter: { atc: [parent] } };
+      }
       // A product's classes at the column level (the leaf itself when parent is level 5).
-      keysOf = (product) => product.atc
-        .map((row) => atcPrefixes(row.atc_code_human))
-        .filter((prefixes) => parent === null || prefixes.includes(parent))
-        .map((prefixes) => prefixes[depth] ?? (depth === 5 ? parent : null))
-        .filter(Boolean);
-      columns = [...keyCounts(filtered, keysOf).keys()].sort().map((code) => ({
+      keysOf = (product) => atcClassesAt(product, parent);
+      columns = [...keyCounts(filtered, keysOf).keys()].map((code) => ({
         key: code, badge: code, label: atcClassLabel(code, atcNames.get(code)), title: atcClassLabel(code, atcNames.get(code)), filter: { atc: [code] },
       }));
     } else {
@@ -698,44 +828,132 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       const other = filtered.some((product) => product.branches.some((branch) => !shown.has(branch)));
       columns = [
         ...top.map((branch) => ({ key: branch, label: branchName(branch), filter: { branch: [branch] } })),
-        ...(other ? [{ key: ACTIVITY_OTHER, label: UI.activity.other, title: UI.activity.otherTitle, filter: null }] : []),
+        ...(other ? [{ key: ACTIVITY_OTHER, label: UI.activity.other, title: UI.activity.otherTitle, filter: null, other: true }] : []),
       ];
     }
-    const rows = holderActivity(filtered, keysOf, ACTIVITY_HOLDERS);
+    columns = orderActivityColumns(columns, keyCounts(filtered, keysOf), activityOrder[activityMode], activityMode);
+    // A column sort whose column is gone (other filters) falls back to the total.
+    const sort = ["total", "name"].includes(activitySort) || columns.some((column) => column.key === activitySort) ? activitySort : "total";
+    const rows = sortActivityRows(holderActivity(filtered, keysOf, ACTIVITY_HOLDERS), sort);
     d3.select("#activity-subtitle").text(rows.length ? UI.activity.subtitle(rows.length) : "");
-    renderActivity($("#activity-table"), { rows, columns, labelledBy: "activity-title", describedBy: "activity-subtitle", onFilter: (patch) => setState(patch) });
+    // Touch screens show no tooltips: the ATC columns' names under the table.
+    d3.select("#activity-legend").text(columns.filter((column) => column.badge).map((column) => column.label).join(" · "));
+    renderActivity($("#activity-table"), {
+      rows,
+      columns,
+      sort,
+      parent: parentClass,
+      labelledBy: "activity-title",
+      describedBy: "activity-subtitle",
+      onFilter: (patch) => setState(togglePatch(state, patch)),
+      onSort: (next) => {
+        activitySort = next;
+        scheduleRender();
+      },
+      isSet: (patch) => patchIsSet(state, patch),
+    });
+  }
+
+  // The per-year chart's stacks for its mode: keysOf(product), series ([{ key, label, color }] bottom
+  // to top), by (the summary's phrase), counting (the note's) and unstacked (the dated medicines no
+  // stack holds: without an ATC class at the level shown; "" when none). dated: the medicines shown.
+  function yearStackSpec(dated) {
+    if (stackMode === "type") {
+      return {
+        keysOf: (product) => [product.medicine_type],
+        series: MEDICINE_TYPES.map((type) => ({ key: type, label: type, color: typeColor(type) })),
+        by: UI.years.by.type,
+        counting: UI.years.counting.type,
+        unstacked: "",
+      };
+    }
+    // The top holders (most at the bottom), or the top classes (in code order: level-1 groups in
+    // their group's hue, child classes of one ATC class in STACK_HUES); Other on top, low-key
+    // (STACK_OTHER) so the named series carry the colour. counted: the top ones, and whether the
+    // rest are an Other segment.
+    const topSeries = (keys, colorOf, labelOf, other) => keys.map((key, index) => (key === OTHER_KEY
+      ? { key, label: other, ...STACK_OTHER }
+      : { key, label: labelOf(key), color: colorOf(key, index) }));
+    const counted = (keys) => [keys.filter((key) => key !== OTHER_KEY).length, keys.includes(OTHER_KEY)];
+    if (stackMode === "mah") {
+      const top = topWithOther(dated, (product) => [product.mah], STACK_TOP);
+      return {
+        keysOf: top.keysOf,
+        series: topSeries(top.keys, (key, index) => `var(--${STACK_HUES[index]}-mid)`, (mah) => mah, UI.years.other.mah),
+        by: UI.years.by.mah,
+        counting: UI.years.counting.mah(...counted(top.keys)),
+        unstacked: "",
+      };
+    }
+    const parent = drillCode();
+    const classesOf = (product) => atcClassesAt(product, parent);
+    const missing = dated.filter((product) => classesOf(product).length === 0).length;
+    const unstacked = missing === 0 ? "" : parent === null ? UI.breakdown.atc.excluded(missing) : UI.years.onlyCoded(missing, parent);
+    const label = (code) => atcClassLabel(code, atcNames.get(code));
+    // Level-1 groups: the top STACK_ATC_GROUPS (14 neighbouring hues could not be told apart).
+    const top = topWithOther(dated, classesOf, parent === null ? STACK_ATC_GROUPS : STACK_TOP);
+    const keys = [...top.keys.filter((key) => key !== OTHER_KEY).sort(), ...top.keys.filter((key) => key === OTHER_KEY)];
+    const colorOf = parent === null ? (code) => `var(--${atcHue(code)}-mid)` : (code, index) => `var(--${STACK_HUES[index]}-mid)`;
+    return {
+      keysOf: top.keysOf,
+      series: topSeries(keys, colorOf, label, UI.years.other.atc),
+      by: parent === null ? UI.years.by.atc : UI.years.by.atcIn(label(parent)),
+      counting: UI.years.counting.atc(...counted(keys)),
+      unstacked,
+    };
   }
 
   function renderYears(withoutDateFilter) {
+    d3.selectAll("#chart-stack button").attr("aria-pressed", function pressed() {
+      return String(this.dataset.stack === stackMode);
+    });
     const dated = withoutDateFilter.filter((product) => product.year !== null);
-    const rows = countApprovalsByYear(dated, MEDICINE_TYPES, approvalYears);
-    renderChart($("#chart"), rows, state, (range) => {
+    const stack = yearStackSpec(dated);
+    const rows = yearStacks(dated, stack.keysOf, approvalYears);
+    renderChart($("#chart"), { rows, series: stack.series, by: stack.by }, state, (range) => {
       keepInPlace($("#chart"));
       setState(range);
     }, ({ from, to }) => showReadout(from, to));
+    renderStackLegend($("#legend"), stack.series);
+    d3.select("#chart-note").text(UI.years.note(stack.counting));
     d3.select("#undated-note").text(UI.years.undated(withoutDateFilter.length - dated.length));
+    d3.select("#unstacked-note").text(stack.unstacked);
   }
+
+  // One part's failure (data it cannot handle) must not blank the parts after it: the error is
+  // logged and the part says its content is not available until a render succeeds.
+  function safely(container, draw) {
+    const note = container.querySelector(":scope > .card-error");
+    try {
+      draw();
+      note?.remove();
+    } catch (error) {
+      console.error(error);
+      if (!note) d3.select(container).append("p").attr("class", "muted card-error").text(UI.lookup.notAvailable);
+    }
+  }
+  const cardOf = (selector) => $(selector).closest(".chart-card");
 
   function renderDashboard() {
     showReadout(state.from ?? approvalYears[0], state.to ?? approvalYears[1]);
 
     const predicates = makePredicates(state, atcClasses);
     const activeCount = Object.keys(predicates).length;
-    facetPanel.render({
+    safely($("#facets"), () => facetPanel.render({
       state,
       counts: Object.fromEntries(FACETS.map((dimension) => [dimension, facetCounts(products, predicates, dimension, FACET_VALUES[dimension])])),
       activeCount,
-    });
+    }));
     // The per-year chart, the strip and the over-time line ignore the approval-year filter and
     // mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
-    yearStrip.render({
+    safely($("#year-strip"), () => yearStrip.render({
       rows: yearHistogram(products, predicates, approvalYears),
       from: state.from,
       to: state.to,
       undated: withoutDateFilter.filter((product) => product.year === null).length,
-    });
-    renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, branchNames, atcNames }), {
+    }));
+    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, branchNames, atcNames }), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
       popup: !DESKTOP.matches,
@@ -743,52 +961,59 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       // One of two ATC pills removes its class only.
       onRemove: (token) => setState(token.value === undefined ? cleared(token.clears) : { atc: state.atc.filter((value) => value !== token.value) }),
       onReset: () => setState(cleared(FILTER_KEYS)),
-    });
+    }));
     // ATC counts per prefix (and per exact code, for the products coded only down to an
     // incomplete level) of the medicines matching every other filter: tree, breakdown, class path.
     const withoutAtcFilter = filterProducts(products, predicates, "atc");
     const atcCounts = atcPrefixCounts(withoutAtcFilter);
     const atcExact = atcExactCounts(withoutAtcFilter);
-    atcTree.render({ ...atcSelection(), counts: atcCounts, exact: atcExact, classNames: atcNames });
+    safely($("#facet-atc"), () => atcTree.render({ ...atcSelection(), counts: atcCounts, exact: atcExact, classNames: atcNames }));
 
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
     const authorizedNow = filtered.filter(isAuthorizedNow);
     sheet.update(filtered.length);
-    renderHeadline(predicates, filtered, atcCounts);
-    renderTiles($("#tiles"), { ...countTiles(filtered), authorized: authorizedNow.length }, activeCount > 0);
+    const undatedAuthorized = filtered.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
+    safely($(".answer"), () => renderHeadline(predicates, filtered, atcCounts, undatedAuthorized.length));
+    safely($(".tiles-frame"), () => renderTiles($("#tiles"), { ...countTiles(filtered), authorized: authorizedNow.length }, activeCount > 0));
     showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
-    const undatedAuthorized = withoutDateFilter.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
     showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
-    renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact);
-    renderActivityCard(filtered);
-    renderYears(withoutDateFilter);
-    if (activeCount > 0) renderConditions(filtered);
-    else $("#conditions").hidden = true;
+    safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact));
+    safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
+    safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
+    safely(cardOf("#conditions-list"), () => renderConditions(filtered, activeCount > 0));
 
-    renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
-    const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
-    d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
+    safely(cardOf("#over-time"), () => {
+      renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
+      const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
+      d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
+    });
 
     const undated = filtered.filter((product) => product.year === null).length;
-    table(newestFirst(filtered), UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents());
+    safely(cardOf("#medicines-table"), () => table(newestFirst(filtered), UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents()));
   }
 
-  dashboard = { domain, render: renderDashboard };
+  dashboard = { domain, render: renderDashboard, title: () => classTitle };
   applyUrl();
   scheduleUrlWrite(state); // canonical form, invalid values removed
   d3.select("#app-loading").attr("hidden", "");
   d3.select("#app").attr("hidden", null);
   d3.select("#facets").attr("hidden", null);
-  const resizeObserver = new ResizeObserver(scheduleRender);
+  d3.select("#sidebar-resize").attr("hidden", null);
+  // The charts follow their width; while the sidebar is dragged they wait for its release (a
+  // render per frame would stutter the drag).
+  const resizeObserver = new ResizeObserver(() => {
+    if (!sidebar.dragging()) scheduleRender();
+  });
   for (const selector of ["#chart", "#over-time", "#year-hist"]) resizeObserver.observe($(selector));
   render();
   loadFile(REGISTER_FILE).then((rows) => {
     register = new Map(rows.map((row) => [row.ema_product_number, row]));
     scheduleRender();
   }, () => {});
-  // The table's PI and EPAR links: the documents index (~5 MB, shared with the cards) in the background.
+  // The table's PI and EPAR links: the documents index (~5 MB, shared with the cards) in the
+  // background; the therapeutic area groups' condition page links: the conditions data.
   lookup.onData((name) => {
-    if (name === "documents") scheduleRender();
+    if (name === "documents" || name === "conditions") scheduleRender();
   });
   lookup.need("documents");
 }
