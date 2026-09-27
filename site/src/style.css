@@ -481,6 +481,11 @@ button {
   transform: rotate(45deg);
 }
 
+/* The year tokens only move focus to the slider: no dropdown chevron. */
+.token:not([data-sheet])::after {
+  display: none;
+}
+
 .token-pill {
   display: inline-flex;
   align-items: center;
@@ -535,6 +540,213 @@ button {
   .sentence {
     font-size: 1.1875rem;
     line-height: 40px;
+  }
+}
+
+/* Approval years (main column, every width): a per-year histogram above a two-thumb slider — two
+   native range inputs over one track; only their thumbs take the pointer (track clicks reach the
+   slider, year-slider.js). --thumb is the thumb's box, --thumb-edge its transparent rim (the
+   phone hit area around the visible circle);
+   year-slider.js reads --thumb so each bar sits right above its year's thumb position. */
+.year-strip {
+  margin: 8px 0 0;
+  padding: 8px 16px;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.year-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.year-strip-head h2 {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.year-hist {
+  /* 72px of bars and 18px of year labels (TICK_HEIGHT). */
+  height: 90px;
+}
+
+.year-hist svg {
+  display: block;
+  overflow: visible;
+}
+
+/* A click on a year's column or the track moves the nearest thumb there (year-slider.js). */
+.year-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+/* Outside the range: a --field-border outline (3:1 on the card and the fill, WCAG 1.4.11). */
+.year-bar {
+  fill: var(--raised);
+  stroke: var(--field-border);
+  stroke-width: 1px;
+  cursor: pointer;
+}
+
+.year-bar.in-range {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.year-baseline {
+  stroke: var(--axis);
+}
+
+.year-tick {
+  fill: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+}
+
+.year-values {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.year-slider {
+  --thumb: 24px;
+  --thumb-edge: 0px;
+  position: relative;
+  height: var(--thumb);
+  margin: 4px 0;
+  cursor: pointer;
+}
+
+/* The thumbs' centres travel from --thumb / 2 to 100% - --thumb / 2: the track spans exactly
+   that, so the selected part's percentages are the thumbs' fractions of the range. */
+.year-track {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--thumb) / 2);
+  right: calc(var(--thumb) / 2);
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--field-border);
+}
+
+.year-track-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.year-slider input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Where the thumbs overlap, the one that can move away lies on top (startOnTop()). */
+.year-slider.start-on-top #year-start {
+  z-index: 1;
+}
+
+/* The thumb shows focus, not the full-width input. */
+.year-slider input:focus-visible {
+  outline: none;
+}
+
+.year-slider input::-webkit-slider-runnable-track {
+  height: 100%;
+  border: 0;
+  background: none;
+}
+
+.year-slider input::-moz-range-track {
+  height: 100%;
+  border: 0;
+  background: none;
+}
+
+.year-slider input::-moz-range-progress {
+  background: none;
+}
+
+.year-slider input::-webkit-slider-thumb {
+  box-sizing: border-box;
+  width: var(--thumb);
+  height: var(--thumb);
+  border: var(--thumb-edge) solid transparent;
+  border-radius: 50%;
+  background: var(--surface) padding-box;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.year-slider input::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--thumb);
+  height: var(--thumb);
+  border: var(--thumb-edge) solid transparent;
+  border-radius: 50%;
+  background: var(--surface) padding-box;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.year-slider input:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+
+.year-slider input:active::-moz-range-thumb {
+  cursor: grabbing;
+}
+
+/* A ring 2px outside the visible circle (inside the phone's transparent rim), on any focus: a
+   clicked year token or track focuses a thumb without :focus-visible. */
+.year-slider input:focus::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: calc(2px - var(--thumb-edge));
+}
+
+.year-slider input:focus::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: calc(2px - var(--thumb-edge));
+}
+
+/* Phones: 56px of bars; 28px visible thumbs in a 44px hit area. */
+@media (max-width: 720px) {
+  .year-hist {
+    height: 74px;
+  }
+
+  .year-slider {
+    --thumb: 44px;
+    --thumb-edge: 8px;
+    margin: 0;
   }
 }
 
@@ -643,8 +855,7 @@ button {
 }
 
 .facet-search,
-.atc-filter input,
-.year-range input {
+.atc-filter input {
   min-height: 40px;
   padding: 8px 10px;
   border: 1px solid var(--field-border);
@@ -679,59 +890,6 @@ input::placeholder {
   display: block;
   margin-bottom: 4px;
   font-size: 0.875rem;
-}
-
-/* Approval years: per-year bars of the population (decorative; the inputs are the control). */
-.year-bars-plot {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 48px;
-}
-
-.year-bars-plot span {
-  flex: 1;
-  min-height: 1px;
-  border-radius: 1px 1px 0 0;
-  background: var(--out-of-range);
-}
-
-.year-bars-plot span.in-range {
-  background: var(--accent);
-}
-
-.year-bars-axis {
-  display: flex;
-  justify-content: space-between;
-  margin: 4px 0 8px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.year-range {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.year-range label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--ink-secondary);
-  font-size: 0.875rem;
-}
-
-.year-range input {
-  width: 100%;
-  font-variant-numeric: tabular-nums;
-}
-
-/* "Reset" beside the section heading. */
-.facet-title-row .text-button {
-  min-height: 24px;
-  padding: 0;
 }
 
 .atc-picker {
@@ -887,7 +1045,6 @@ input::placeholder {
 
 .sheet .facet-search,
 .sheet .atc-filter input,
-.sheet .year-range input,
 .sheet .atc-browse,
 .sheet .text-button,
 .sheet .atc-path button {
@@ -2609,9 +2766,48 @@ code {
 
   .bar-fill,
   .meter-fill,
-  .year-bars-plot span.in-range {
+  .year-track-fill {
     forced-color-adjust: none;
     background: CanvasText;
+  }
+
+  /* Approval years: bars outside the range outlined, inside filled; the track keeps its outline
+     (a border, as the inset shadow is dropped) and the thumbs their ring. */
+  .year-bar {
+    forced-color-adjust: none;
+    fill: Canvas;
+    stroke: GrayText;
+  }
+
+  .year-bar.in-range {
+    fill: CanvasText;
+    stroke: CanvasText;
+  }
+
+  .year-track {
+    border: 1px solid GrayText;
+  }
+
+  .year-slider input {
+    forced-color-adjust: none;
+  }
+
+  .year-slider input::-webkit-slider-thumb {
+    background: Canvas padding-box;
+    box-shadow: inset 0 0 0 2px CanvasText;
+  }
+
+  .year-slider input::-moz-range-thumb {
+    background: Canvas padding-box;
+    box-shadow: inset 0 0 0 2px CanvasText;
+  }
+
+  .year-slider input:focus::-webkit-slider-thumb {
+    outline-color: Highlight;
+  }
+
+  .year-slider input:focus::-moz-range-thumb {
+    outline-color: Highlight;
   }
 
   /* Colours are set per segment; the 1px gaps still separate the types. */

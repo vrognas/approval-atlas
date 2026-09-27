@@ -5,8 +5,9 @@
 import * as d3 from "d3";
 import { UI } from "./labels.js";
 
-// sheetOf(key): the filter a token opens (tokens opening the same one share it); popup: tokens
-// open a dialog (the sheets below 1024px); onOpen(key), onRemove(token), onReset().
+// sheetOf(key): the filter a token opens (tokens opening the same one share it; none for the year
+// tokens, which focus the approval-years slider); popup: tokens with a sheet open a dialog (the
+// sheets below 1024px); onOpen(key), onRemove(token), onReset().
 export function renderSentence(container, parts, { anyActive, sheetOf, popup, onOpen, onRemove, onReset }) {
   const active = container.contains(document.activeElement) ? document.activeElement : null;
   container.replaceChildren(); // text nodes too
@@ -17,7 +18,7 @@ export function renderSentence(container, parts, { anyActive, sheetOf, popup, on
     .attr("data-focus-key", `${part.key}:open`)
     .attr("data-sheet", sheetOf(part.key))
     .attr("aria-label", UI.sentence.tokenName(part.key, part.text))
-    .attr("aria-haspopup", popup ? "dialog" : null)
+    .attr("aria-haspopup", popup && sheetOf(part.key) ? "dialog" : null)
     .text(part.text)
     .on("click", () => onOpen(part.key));
   // The year range ("[1995]–[2026]") does not break across lines.

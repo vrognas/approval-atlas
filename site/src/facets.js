@@ -39,6 +39,15 @@ export function facetCounts(products, predicates, dimension, valuesOf, populatio
   return counts;
 }
 
+// The approval-years strip's histogram: products per approval year by the facet rule (every
+// filter but the year filter, the view's population), one row per year of [first, last].
+export function yearHistogram(products, predicates, view, [first, last]) {
+  const counts = facetCounts(products, predicates, "date", FACET_VALUES.date, facetPopulation(view, "date"));
+  const rows = [];
+  for (let year = first; year <= last; year++) rows.push({ year, count: counts.get(year) ?? 0 });
+  return rows;
+}
+
 // Checkbox rows: values with products, most first (ties by label), matching the query. Selected
 // values are always listed (count 0 included), first when pinned; so are kept ones (keep: values
 // just unchecked, so the row and its focus stay). limit: how many other rows to show. total: the
