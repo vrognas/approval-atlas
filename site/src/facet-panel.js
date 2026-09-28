@@ -6,9 +6,6 @@ import { statusHue, statusTip, typeTip } from "./badges.js";
 import { TYPE_ORDER, facetRows } from "./facets.js";
 import { UI, statusLabel } from "./labels.js";
 
-// Rows shown before "Show more", and how many more each click shows.
-const TOP = 8;
-const MORE = 20;
 const formatCount = d3.format(",");
 const slug = (text) => text.toLowerCase().replaceAll(" ", "-");
 
@@ -46,16 +43,14 @@ function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = 
 }
 
 // root: the sidebar (its head stays; sections are found by id, as a sheet may hold them).
-// onChange(patch): a checkbox changed its dimension's values. The ATC classes and therapeutic
-// areas are trees of their own (atc-tree.js, area-tree.js; phase 4f).
+// onChange(patch): a checkbox changed its dimension's values. The ATC classes, therapeutic areas
+// and companies are trees of their own (atc-tree.js, area-tree.js, phase 4f; company-tree.js,
+// companies part 2).
 export function createFacetPanel(root, { onChange }) {
   const section = (key) => document.getElementById(`facet-${key}`);
-  const limits = { mah: TOP };
-  const queries = { mah: "" };
-  // Values unchecked here stay listed (facetRows() keep) until the search or the limit changes,
-  // so the row keeps its focus even when it was listed only because it was selected.
-  const kept = { mah: new Set(), status: new Set() };
-  const totals = {};
+  // Values unchecked here stay listed (facetRows() keep), so the row keeps its focus even when it
+  // was listed only because it was selected.
+  const kept = { status: new Set() };
   let model = null;
 
   const toggle = (key) => (value, checked) => {
@@ -64,53 +59,9 @@ export function createFacetPanel(root, { onChange }) {
     onChange({ [key]: checked ? [...values, value] : values.filter((item) => item !== value) });
   };
 
-  for (const key of ["mah"]) {
-    const search = section(key).querySelector(".facet-search");
-    const status = section(key).querySelector(".facet-live");
-    let timer = 0;
-    search.setAttribute("aria-label", UI.facets.searchLabel[key]);
-    search.addEventListener("input", () => {
-      queries[key] = search.value;
-      limits[key] = TOP;
-      kept[key].clear();
-      render(model);
-      // The list changes silently: announce the matches once typing pauses.
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        status.textContent = queries[key].trim() ? UI.facets.matches(totals[key]) : "";
-      }, 400);
-    });
-    // In a sheet, the search goes to the top so the rows it filters show below it (above the
-    // phone keyboard).
-    search.addEventListener("focus", () => {
-      if (search.closest(".sheet-body")) search.scrollIntoView({ block: "start" });
-    });
-  }
-  for (const key of ["mah"]) {
-    section(key).querySelector(".facet-more").addEventListener("click", (event) => {
-      const button = event.currentTarget;
-      const list = section(key).querySelector(".facet-list");
-      const before = new Set(d3.select(list).selectAll(":scope > li").data().map((row) => row.value));
-      limits[key] += MORE;
-      kept[key].clear();
-      render(model);
-      // Rows added: focus the first one revealed (the button moved out of view below them).
-      const revealed = d3.select(list).selectAll(":scope > li").filter((row) => !before.has(row.value)).select("input").node();
-      if (revealed) revealed.focus();
-      else button.scrollIntoView({ block: "nearest" });
-    });
-  }
-
-  // "Show 20 more" only adds rows.
-  function renderMore(key, { hidden }) {
-    const button = section(key).querySelector(".facet-more");
-    button.hidden = hidden === 0;
-    button.textContent = UI.facets.showMore(Math.min(MORE, hidden));
-  }
-
-  // model: { state, counts: { type, status, mah } (facetCounts()), activeCount }. The approval
-  // years are the main column's strip (year-slider.js); the ATC and therapeutic area sections are
-  // trees (atc-tree.js, area-tree.js).
+  // model: { state, counts: { type, status } (facetCounts()), activeCount }. The approval
+  // years are the main column's strip (year-slider.js); the ATC, therapeutic area and company
+  // sections are trees (atc-tree.js, area-tree.js, company-tree.js).
   function render(next) {
     model = next;
     const { state, counts, activeCount } = model;
@@ -125,17 +76,6 @@ export function createFacetPanel(root, { onChange }) {
       dotClass: (row) => `type-${slug(row.value)}`,
       tipOf: (row) => typeTip(row.value),
     });
-
-    for (const key of ["mah"]) {
-      const container = section(key);
-      const available = [...counts[key].values()].filter((count) => count > 0).length;
-      container.querySelector(".facet-search").placeholder = UI.facets.search(available, UI.facets.nouns[key]);
-      const found = facetRows(counts[key], state[key], { labelOf: String, query: queries[key], limit: limits[key], pin: true, keep: kept[key] });
-      totals[key] = found.total;
-      renderChecklist(container.querySelector(".facet-list"), found.rows, { onToggle: toggle(key) });
-      d3.select(container.querySelector(".facet-empty")).text(UI.facets.noMatches).attr("hidden", found.total || !queries[key].trim() ? "" : null);
-      renderMore(key, found);
-    }
 
     const status = facetRows(counts.status, state.status, { labelOf: statusLabel, keep: kept.status });
     renderChecklist(section("status").querySelector(".facet-list"), status.rows, {

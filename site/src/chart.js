@@ -1,4 +1,5 @@
 import * as d3 from "d3";
+import { companyBadge } from "./holders.js";
 import { UI } from "./labels.js";
 import { attachYearBrush } from "./year-brush.js";
 
@@ -77,8 +78,9 @@ export function renderLegend(list, types) {
 
 // The per-year chart's legend: "Bottom to top:", then the stack series in stack order (position
 // tells the segments apart, not only colour). series: [{ key, label, color, tip }]; an entry with a
-// tip (the statuses) explains itself on hover and on a tap (tabindex -1: focusable, no tab stop), as
-// the type and status badges do.
+// tip (the statuses; a company's EMA holder names) explains itself on hover and on a tap (tabindex
+// -1: focusable, no tab stop), as the type and status badges do; an entry with a badge (a company
+// group, companies part 2) shows its monogram before its name.
 export function renderStackLegend(list, series) {
   const root = d3.select(list);
   root.selectChildren().remove();
@@ -87,6 +89,7 @@ export function renderStackLegend(list, series) {
   const items = root.selectAll("li.legend-series").data(series).join("li").attr("class", "legend-series");
   items.filter((item) => item.tip).attr("data-tip", (item) => item.tip).attr("tabindex", "-1");
   items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", (item) => item.color).style("box-shadow", outline);
+  items.filter((item) => item.badge).append((item) => companyBadge(item.badge));
   items.append("span").text((item) => item.label);
 }
 

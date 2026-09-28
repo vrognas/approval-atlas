@@ -6,6 +6,7 @@
 // Which nodes are open is UI state: the levels above a newly selected node open by themselves.
 // Rows are keyed, so focus stays put across renders.
 import * as d3 from "d3";
+import { UI } from "./labels.js";
 
 const formatCount = d3.format(",");
 
@@ -25,12 +26,22 @@ const formatCount = d3.format(",");
 //   decorate(label, key): content before the name (the ATC code badge), optional
 //   link(key): an element after the row (a condition page link), or null; optional
 //   note(model): a line under the tree (older links' ATC name queries, root tags), or ""; optional
+//   limit, more: the top-level rows shown at first and how many more each click of the section's
+//     .facet-more button shows (the company tree's hundreds of groups); rows whose checkbox is not
+//     unchecked always show, and during a search every match. Optional: without them every row
+//     shows.
 export function createFacetTree(section, spec, { onToggle }) {
   const search = section.querySelector(".facet-search");
   const status = section.querySelector(".facet-live");
   const tree = section.querySelector(":scope > .atc-tree");
   const empty = section.querySelector(".facet-empty");
   const noteLine = section.querySelector(".tree-names");
+  const more = section.querySelector(":scope > .facet-more");
+  let limit = spec.limit ?? Infinity;
+  let hiddenTop = 0; // top-level rows the limit leaves out
+  // Rows toggled here stay listed (unchecked, at count 0, past the limit) until the search or "Show
+  // …" changes, so the checkbox that had focus is still there (as the flat facet lists' keep).
+  const kept = new Set();
   const expanded = new Set();
   // Levels the search opened that the user closed again (until the search changes).
   const closed = new Set();
@@ -45,6 +56,8 @@ export function createFacetTree(section, spec, { onToggle }) {
   tree.setAttribute("aria-label", spec.copy.tree);
   search.addEventListener("input", () => {
     closed.clear();
+    kept.clear();
+    limit = spec.limit ?? Infinity;
     render(model);
     // The tree changes silently: announce the matches once typing pauses.
     clearTimeout(timer);
@@ -55,6 +68,16 @@ export function createFacetTree(section, spec, { onToggle }) {
   // In a sheet, the search goes to the top so the rows show below it (above the phone keyboard).
   search.addEventListener("focus", () => {
     if (search.closest(".sheet-body")) search.scrollIntoView({ block: "start" });
+  });
+  // "Show 20 more" only adds rows: focus goes to the first one revealed (the button moved below them).
+  more?.addEventListener("click", () => {
+    const before = new Set(d3.select(tree).selectAll(":scope > li").data().map((row) => row.key));
+    kept.clear();
+    limit += spec.more;
+    render(model);
+    const revealed = d3.select(tree).selectAll(":scope > li").filter((row) => !before.has(row.key)).select(":scope > .atc-row input").node();
+    if (revealed) revealed.focus();
+    else more.scrollIntoView({ block: "nearest" });
   });
 
   // A boolean: it is written to aria-expanded ("undefined" would read as not expandable).
@@ -72,9 +95,15 @@ export function createFacetTree(section, spec, { onToggle }) {
   }
 
   // The rows under parent (the top level for null): its children the search shows (all without
-  // one), then, outside a search, the medicines at parent itself (a static row).
+  // one; the top-level limit applies outside a search only, so every match announced shows), then,
+  // outside a search, the medicines at parent itself (a static row).
   function rowsOf(parent) {
-    const children = spec.children(parent, visible, model).filter((key) => !found || found.shows(parent, key));
+    let children = spec.children(parent, visible, model).filter((key) => !found || found.shows(parent, key));
+    if (parent === null) {
+      const shown = found ? children : children.filter((key, index) => index < limit || kept.has(key) || spec.checkState(key, model) !== "unchecked");
+      hiddenTop = children.length - shown.length;
+      children = shown;
+    }
     const rows = children.map((key) => ({ key, count: model.counts.get(key) ?? 0 }));
     const exact = parent === null || found ? 0 : spec.exact(parent, model);
     return children.length && exact ? [...rows, { key: `${parent}#static`, parent, count: exact, static: true }] : rows;
@@ -96,7 +125,10 @@ export function createFacetTree(section, spec, { onToggle }) {
         .attr("class", "atc-expand")
         .on("click", () => toggleOpen(row.key));
       const label = line.append("label").attr("class", "facet-row atc-check");
-      label.append("input").attr("type", "checkbox").on("change", () => onToggle(row.key));
+      label.append("input").attr("type", "checkbox").on("change", () => {
+        kept.add(row.key);
+        onToggle(row.key);
+      });
       spec.decorate?.(label, row.key);
       // Name and count wrap together: short of room beside the badge, they move under it.
       const text = label.append("span").attr("class", "atc-text");
@@ -132,7 +164,8 @@ export function createFacetTree(section, spec, { onToggle }) {
         .property("disabled", state === "included")
         .attr("aria-label", ancestor ? spec.copy.included(row.key, row.count, ancestor, model) : spec.copy.row(row.key, row.count, model));
       item.select(":scope > .atc-row .facet-name").text(text).classed("no-name", missing);
-      item.select(":scope > .atc-row .facet-row").classed("empty", row.count === 0);
+      // Muted at 0 unless checked: checked rows sit on the accent wash, never muted (as facet-panel.js).
+      item.select(":scope > .atc-row .facet-row").classed("empty", row.count === 0 && state !== "checked" && state !== "included");
       // A link after the row (the data it needs can arrive later): added once it exists.
       const line = item.select(":scope > .atc-row");
       if (spec.link && line.select(":scope > a").empty()) {
@@ -151,9 +184,10 @@ export function createFacetTree(section, spec, { onToggle }) {
     // A node selected elsewhere (table, breakdown, link): its levels open once.
     for (const key of model.selected.filter((value) => !seen.has(value))) for (const above of spec.levelsAbove(key)) expanded.add(above);
     seen = new Set(model.selected);
-    visible = spec.visible(model);
+    visible = new Set([...spec.visible(model), ...kept]);
     found = spec.search(visible, search.value, model);
     renderLevel(tree, null);
+    if (more) d3.select(more).attr("hidden", hiddenTop ? null : "").text(UI.facets.showMore(Math.min(spec.more, hiddenTop)));
     d3.select(empty).text(spec.copy.noMatches).attr("hidden", found && found.matches.length === 0 ? null : "");
     const note = spec.note?.(model) ?? "";
     if (noteLine) d3.select(noteLine).text(note).attr("hidden", note ? null : "");

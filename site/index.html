@@ -110,7 +110,7 @@
             <div id="breakdown-by" class="segmented" role="group" aria-label="Break down by">
               <button type="button" data-by="atc">ATC</button>
               <button type="button" data-by="area">Therapeutic area</button>
-              <button type="button" data-by="mah">Holder</button>
+              <button type="button" data-by="mah">Company</button>
             </div>
           </div>
           <p id="breakdown-note" class="muted"></p>
@@ -127,7 +127,7 @@
           <p id="breakdown-excluded" class="muted" hidden></p>
         </section>
 
-        <!-- Who is active where: the top holders by ATC group or therapeutic area group. -->
+        <!-- Who is active where: the top company groups by ATC group or therapeutic area group. -->
         <section class="chart-card" aria-labelledby="activity-title">
           <div class="card-head">
             <h2 id="activity-title"></h2>
@@ -150,7 +150,7 @@
           <p id="activity-note" class="muted"></p>
         </section>
 
-        <!-- Approvals per year, stacked by medicine type, ATC class, holder or status (UI state). -->
+        <!-- Approvals per year, stacked by medicine type, ATC class, company group or status (UI state). -->
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
             <h2 id="chart-title">Approvals per year</h2>
@@ -245,13 +245,15 @@
         <p class="facet-empty muted" hidden></p>
         <p class="muted atc-note tree-note"></p>
       </div>
+      <!-- One tree (companies part 2): company group › company › EMA holder name (company-tree.js). -->
       <div id="facet-mah" class="facet" role="group" aria-labelledby="facet-mah-title">
-        <h3 id="facet-mah-title" class="facet-title">Marketing authorization holder</h3>
-        <input class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <h3 id="facet-mah-title" class="facet-title">Company</h3>
+        <input id="company-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
         <p class="facet-live visually-hidden" role="status"></p>
-        <ul class="facet-list"></ul>
+        <ul id="company-tree" class="atc-tree company-tree"></ul>
         <p class="facet-empty muted" hidden></p>
         <button class="facet-more text-button" type="button" hidden></button>
+        <p class="muted atc-note tree-note"></p>
       </div>
       <div id="facet-status" class="facet" role="group" aria-labelledby="facet-status-title">
         <h3 id="facet-status-title" class="facet-title">Status</h3>
@@ -285,6 +287,7 @@
       <p id="credit-chembl"></p>
       <p id="credit-atc"></p>
       <p id="credit-union-register"></p>
+      <p id="credit-companies"></p>
       <p>
         Data files: a compilation licensed
         <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener noreferrer" target="_blank">CC BY-SA 4.0</a>;

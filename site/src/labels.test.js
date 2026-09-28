@@ -241,7 +241,7 @@ test("a medicine that is not authorized gets a status sentence built from EMA's 
 test("the medicines table merges approval date and status into one column", () => {
   assert.deepEqual(labels.UI.table.headers, [
     "Medicine",
-    "Marketing authorization holder",
+    "Company · Holder",
     "Approved · Status",
     "Type",
     "ATC",
@@ -579,7 +579,6 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(facets.active(0), null);
   assert.equal(facets.active(2), "2 active");
   assert.equal(facets.counts, "Counts: medicines matching the other filters.");
-  assert.equal(facets.search(659, "areas"), "Filter 659 areas");
   assert.equal(facets.showMore(20), "Show 20 more");
   assert.equal(facets.matches(0), "No matches");
   assert.equal(facets.matches(1), "1 match");
@@ -646,7 +645,7 @@ test("external links name their destination for screen readers and as a tooltip"
 });
 
 test("condition and substance results are tables with the medicines table's columns, holder last", () => {
-  assert.deepEqual(labels.UI.results.headers, ["Medicine", "ATC", "Approved · Status", "Type", "Holder"]);
+  assert.deepEqual(labels.UI.results.headers, ["Medicine", "ATC", "Approved · Status", "Type", "Company · Holder"]);
   // Phase 4c review: substance cards add what each medicine is for, after the medicine.
   assert.equal(labels.UI.results.areas, "Therapeutic area");
 });
@@ -677,9 +676,11 @@ test("the holder activity card: title, modes, cell names and the holder-name not
     "Novartis Europharm Limited, L Antineoplastic and Immunomodulating Agents: 30 medicines",
   );
   assert.equal(activity.cell("Accord Healthcare S.L.U.", "Neoplasms", 1), "Accord Healthcare S.L.U., Neoplasms: 1 medicine");
-  assert.equal(activity.subtitle(15), "The 15 holders with the most matching medicines; a medicine can count in several columns.");
-  assert.equal(activity.subtitle(1), "The holder of the matching medicines; a medicine can count in several columns.");
-  assert.equal(activity.note, "Holder names are shown as EMA publishes them; the same company can appear under several names.");
+  // Companies part 2: the rows are company groups, each naming the EMA holder names behind it.
+  assert.equal(activity.subtitle(15), "The 15 companies with the most matching medicines; a medicine can count in several columns.");
+  assert.equal(activity.subtitle(1), "The company of the matching medicines; a medicine can count in several columns.");
+  assert.equal(activity.note("2026-09-28"), "Companies by current owner as of 28 Sep 2026; each row lists the holder names EMA publishes in its tooltip.");
+  assert.equal(activity.holder, "Company");
   assert.equal(activity.other, "Other");
 });
 
@@ -721,7 +722,10 @@ test("the ATC breakdown copy counts medicines of every status", () => {
   assert.equal(labels.UI.breakdown.atc.titleIn("L04 Immunosuppressants"), "Medicines in L04 Immunosuppressants by ATC class");
   assert.equal(labels.UI.breakdown.atc.titleLeaf("L04AC05 Ustekinumab"), "Medicines in L04AC05 Ustekinumab");
   assert.equal(labels.UI.breakdown.area.title, "Medicines by therapeutic area group (MeSH branch)");
-  assert.equal(labels.UI.breakdown.mah.title, "Medicines by marketing authorization holder");
+  assert.equal(labels.UI.breakdown.mah.title, "Medicines by company");
+  assert.equal(labels.UI.breakdown.mah.titleIn("Sanofi", false), "Medicines of Sanofi by company");
+  assert.equal(labels.UI.breakdown.mah.titleIn("Genzyme Europe B.V.", true), "Medicines of Genzyme Europe B.V. by EMA holder name");
+  assert.equal(labels.UI.breakdown.mah.titleLeaf("Roche"), "Medicines of Roche");
   assert.equal(labels.UI.breakdown.empty, "No medicines match the current filters.");
   // Phase 4c review: retired and incomplete codes are mapped (atcCode()), so the note says how.
   // Phase 4e: curated codes (checked by hand) complete the rest.
@@ -746,7 +750,8 @@ test("drug classes are a lookup suggestion group with an authorized count", () =
 test("breakdown notes say how many medicines have no value", () => {
   assert.equal(labels.UI.breakdown.atc.excluded(20), "20 medicines without a valid ATC code are not shown.");
   assert.equal(labels.UI.breakdown.area.excluded(1), "1 medicine without a therapeutic area is not shown.");
-  assert.equal(labels.UI.breakdown.mah.excluded, undefined);
+  // Companies part 2: medicines without a holder have no company group.
+  assert.equal(labels.UI.breakdown.mah.excluded(5), "5 medicines without a holder are not shown.");
 });
 
 test("document lines leave out a missing update date instead of printing null", () => {
@@ -771,18 +776,19 @@ test("the breakdown sorts by count or by code (ATC) and name (areas, holders)", 
 
 test("the holder activity card: sort buttons, column order and row names with the total", () => {
   const { activity } = labels.UI;
-  assert.equal(activity.sortBy("L Antineoplastic and Immunomodulating Agents"), "Sort holders by L Antineoplastic and Immunomodulating Agents");
-  assert.equal(activity.sortByName, "Sort holders by name");
+  assert.equal(activity.sortBy("L Antineoplastic and Immunomodulating Agents"), "Sort companies by L Antineoplastic and Immunomodulating Agents");
+  assert.equal(activity.sortByName, "Sort companies by name");
   assert.equal(activity.order.label, "Column order");
   assert.deepEqual(activity.order.key, { atc: "Code", area: "Name" });
   assert.equal(activity.order.count, "Count");
   assert.equal(activity.holderRow("Novartis Europharm Limited", 30), "Novartis Europharm Limited, 30 medicines");
   assert.equal(activity.holderRow("Accord Healthcare S.L.U.", 1), "Accord Healthcare S.L.U., 1 medicine");
+  assert.equal(activity.holderRow("Roche", 40, "Roche Registration GmbH, Roche Registration Ltd."), "Roche, 40 medicines: Roche Registration GmbH, Roche Registration Ltd.");
   // Phase 4c review: a visible "Total" sort (the default), filter toggles that say what they do,
   // and the drilled-into class as a toggle of its own.
   assert.equal(activity.sortName, "Name");
   assert.equal(activity.sortTotal, "Total");
-  assert.equal(activity.sortByTotal, "Sort holders by their total of matching medicines");
+  assert.equal(activity.sortByTotal, "Sort companies by their total of matching medicines");
   assert.equal(activity.filterBy("Novartis Europharm Limited"), "Show only Novartis Europharm Limited");
   assert.equal(activity.pressedTitle, "Shown alone: click again to clear");
   assert.equal(activity.filterHint, "Filters the dashboard; select again to clear.");
@@ -792,14 +798,14 @@ test("the holder activity card: sort buttons, column order and row names with th
 test("approvals per year: stack modes, the summary and the counting note per mode", () => {
   const { years } = labels.UI;
   assert.equal(years.stack.label, "Stack by");
-  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Holder", status: "Status" });
+  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status" });
   assert.equal(
     years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
     "Stacked column chart of EMA approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",
   );
   assert.equal(years.by.atcIn("L04 Immunosuppressants"), "ATC class in L04 Immunosuppressants");
   assert.equal(years.by.atc, "ATC group");
-  assert.equal(years.by.mah, "marketing authorization holder");
+  assert.equal(years.by.mah, "company");
   const howTo = "Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.";
   assert.equal(years.note(years.counting.type), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
   assert.equal(years.note(years.counting.atc(6, false)), `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each. ${howTo}`);
@@ -810,10 +816,10 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   );
   assert.equal(
     years.note(years.counting.mah(8, true)),
-    `Year of EU marketing authorization; each medicine counted once: the 8 holders with the most matching medicines, the rest as Other holders. ${howTo}`,
+    `Year of EU marketing authorization; each medicine counted once: the 8 companies with the most matching medicines, the rest as Other companies. ${howTo}`,
   );
   assert.equal(years.note(years.counting.mah(1, false)), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
-  assert.deepEqual(years.other, { atc: "Other classes", mah: "Other holders" });
+  assert.deepEqual(years.other, { atc: "Other classes", mah: "Other companies" });
   assert.equal(years.onlyCoded(3, "L04AC"), "3 medicines coded only as L04AC are not shown.");
   assert.equal(years.onlyCoded(1, "L04AC"), "1 medicine coded only as L04AC is not shown.");
 });
@@ -878,4 +884,144 @@ test("page titles name the view; the overview under a result is headed as such",
   assert.equal(UI.textTitle("wegovy"), "“wegovy”");
   assert.equal(UI.explore.title, "Explore all EMA medicines");
   assert.equal(UI.explore.note, "The filters apply to this overview, not to the result above.");
+});
+
+// Companies part 2 (user decisions 2026-09-28): holders grouped by their current owner; EMA's
+// holder name stays visible wherever a company is shown (once when the same).
+test("companies: the line under a company group keeps EMA's holder name and says how the holder was decided", () => {
+  const { companies } = labels.UI;
+  assert.equal(companies.holderLine({ holder: "Roche Registration GmbH", register: null, basis: "ema" }, "Roche"), "Roche Registration GmbH");
+  assert.equal(companies.holderLine({ holder: "Krka", register: null, basis: "ema" }, "Krka"), null);
+  assert.equal(
+    companies.holderLine({ holder: "Mylan Pharmaceuticals Limited", register: "Viatris Limited", basis: "register" }, "Viatris"),
+    "EMA: Mylan Pharmaceuticals Limited · via register: Viatris Limited",
+  );
+  assert.equal(
+    companies.holderLine({ holder: "FGK Representative Service GmbH", register: null, basis: "curated_sponsor" }, "Acme"),
+    "via a regulatory representative: FGK Representative Service GmbH",
+  );
+  // A sponsor in another group is named (Avanir, Otsuka's); Zokinvy: EMA names one representative, the
+  // Union Register (deciding) another; EMA's name stays.
+  assert.equal(
+    companies.holderLine({ holder: "Jenson Pharmaceutical Services Limited", register: null, basis: "curated_sponsor", company: { name: "Avanir Pharmaceuticals" } }, "Otsuka"),
+    "Avanir Pharmaceuticals · via a regulatory representative: Jenson Pharmaceutical Services Limited",
+  );
+  assert.equal(
+    companies.holderLine({ holder: "TMC Pharma (EU) Limited", register: "Integral Pharma Solutions EU Limited", basis: "curated_sponsor", company: { name: "Sentynl Therapeutics" } }, "Zydus Lifesciences"),
+    "Sentynl Therapeutics · EMA: TMC Pharma (EU) Limited · via register: Integral Pharma Solutions EU Limited, a regulatory representative",
+  );
+  assert.equal(
+    companies.holderLine({ holder: "FGK Representative Service GmbH", register: null, basis: "curated_sponsor", company: { name: "Bio-Thera Solutions" } }, "Bio-Thera Solutions"),
+    "via a regulatory representative: FGK Representative Service GmbH",
+  );
+  assert.equal(
+    companies.holderLine({ holder: "FGK Representative Service GmbH", register: null, basis: "ema" }, "FGK Representative Service GmbH", true),
+    "held via a regulatory representative",
+  );
+  assert.equal(companies.tipHolder("Roche", "Roche Registration GmbH"), "Roche (Roche Registration GmbH)");
+  assert.equal(companies.tipHolder("Krka", "Krka"), "Krka");
+  // EMA names no holder (the Union Register does): said so, never as a holder name "Not stated".
+  assert.equal(
+    companies.holderLine({ holder: null, register: "Janssen-Cilag International NV", basis: "register" }, "Johnson & Johnson"),
+    "EMA names no holder · via register: Janssen-Cilag International NV",
+  );
+  assert.equal(companies.holderLine({ holder: null, register: null, basis: null }, "Johnson & Johnson"), null);
+  assert.equal(companies.tipHolder("Johnson & Johnson", null), "Johnson & Johnson");
+  assert.equal(companies.noHolder, "No EMA holder name");
+});
+
+test("companies: a company under several groups names its group where no group shows beside it, and counts per group", () => {
+  const { companies } = labels.UI;
+  assert.equal(companies.inGroup("Merck Sharp & Dohme B.V.", "Organon"), "Merck Sharp & Dohme B.V. (Organon)");
+  assert.equal(companies.groupCount(10), "(10 medicines)");
+  assert.equal(companies.groupCount(1), "(1 medicine)");
+});
+
+test("companies: aggregated views name the EMA holder names behind a company, the first 8 then how many more", () => {
+  const { companies } = labels.UI;
+  assert.equal(companies.named("Roche", ["Roche Registration GmbH", "Roche Registration Ltd."]), "Roche: Roche Registration GmbH, Roche Registration Ltd.");
+  const many = Array.from({ length: 11 }, (_, index) => `Holder ${index + 1}`);
+  assert.equal(companies.legalNames(many), "Holder 1, Holder 2, Holder 3, Holder 4, Holder 5, Holder 6, Holder 7, Holder 8 and 3 more");
+  assert.equal(companies.barLabel("Roche", 40, ["Roche Registration GmbH"]), "Roche, 40 medicines: Roche Registration GmbH");
+  assert.equal(companies.barLabel("Roche Registration GmbH", 1, []), "Roche Registration GmbH, 1 medicine");
+  // A company named after one of its holder names: the others, after "also".
+  const roche = ["Roche Registration GmbH", "Roche Registration Ltd.", "Roche Registration Limited"];
+  assert.equal(companies.legalNames(roche, "Roche Registration GmbH"), "also Roche Registration Ltd., Roche Registration Limited");
+  assert.equal(companies.named("Roche Registration GmbH", roche), "Roche Registration GmbH: also Roche Registration Ltd., Roche Registration Limited");
+  assert.equal(companies.barLabel("Roche Registration GmbH", 41, roche), "Roche Registration GmbH, 41 medicines: also Roche Registration Ltd., Roche Registration Limited");
+  assert.equal(companies.legalNames(roche, "Roche"), roche.join(", "));
+  assert.equal(companies.legalNames(["Holder 0", ...many], "Holder 0"), `also ${companies.legalNames(many)}`);
+});
+
+test("companies: tree, company page, search and footer copy", () => {
+  const { companies, lookup, footer, sentence, card } = labels.UI;
+  assert.equal(companies.find, "Find a company");
+  assert.equal(companies.expand("Sanofi", false), "Companies in Sanofi");
+  assert.equal(companies.expand("Genzyme Europe B.V.", true), "Holder names of Genzyme Europe B.V.");
+  assert.equal(companies.count("Roche", 1), "Roche, 1 medicine");
+  assert.equal(companies.included("Roche Registration GmbH", 38, "Roche"), "Roche Registration GmbH, 38 medicines, included in Roche");
+  assert.equal(companies.open("Roche"), "Open company page: Roche");
+  const text = (parts) => parts.map((part) => (typeof part === "string" ? part : part.text)).join("");
+  assert.equal(text(companies.headline("Roche", 40, 31)), "Roche: 40 medicines, 31 currently authorized.");
+  assert.equal(text(companies.headline("Sanofi Pasteur MSD (joint venture)", 1, 0)), "Sanofi Pasteur MSD (joint venture): 1 medicine, none currently authorized.");
+  assert.equal(companies.asOf("2026-09-28"), "Company group as of 28 Sep 2026: the current owner, not the owner at approval. Each medicine keeps the holder name EMA publishes.");
+  assert.equal(companies.from(["EMA holder names", "company groups checked by hand"]), "From EMA holder names and company groups checked by hand.");
+  assert.equal(lookup.groups.companies, "Companies");
+  assert.equal(lookup.companyMeta("Genzyme Europe B.V.", 12), "matches “Genzyme Europe B.V.” · 12 authorized");
+  assert.equal(lookup.companyMeta(null, 31), "31 authorized");
+  assert.equal(sentence.defaults.mah, "all companies");
+  assert.equal(sentence.remove("mah", "Roche"), "Remove company filter: Roche");
+  assert.equal(card.company, "Company");
+  assert.equal(labels.UI.kicker.company, "Company");
+  assert.equal(labels.UI.external.destinations["search.gleif.org"], "GLEIF website");
+  assert.match(footer.companies("2026-09-28"), /^Company groups \(current owner as of 28 Sep 2026\) curated by Approval Atlas; LEI data from .*GLEIF.*CC0\. GLEIF does not provide or endorse this site\.$/);
+  // The answer strip leads with the company group, as the table's "Company · Holder" column.
+  assert.equal(card.strip.company, "Company");
+  assert.equal(companies.atcHint, "Each opens the overview filtered to this company and ATC group.");
+});
+
+test("companies: the company page's medicine list says which statuses it shows", () => {
+  const { companies } = labels.UI;
+  assert.equal(companies.medicines(31, false), "Authorized medicines (31)");
+  assert.equal(companies.medicines(1234, true), "Medicines of every status (1,234)");
+});
+
+test("companies: an EMA holder name as a filter value, and a holder name that repeats its company's", () => {
+  const { companies } = labels.UI;
+  assert.equal(companies.holderValue("Roche Registration GmbH"), "Roche Registration GmbH (EMA holder name)");
+  assert.equal(companies.holderValue("Roche Registration Ltd.", "Galenus Mannheim GmbH"), "Roche Registration Ltd. (EMA holder name, Galenus Mannheim GmbH)");
+  assert.equal(companies.sameName, "(same name)");
+  assert.equal(companies.sameNameLabel("Roche Registration GmbH"), "Roche Registration GmbH (same name)");
+});
+
+test("companies: provenance, why a medicine sits under its group, a sponsor, a group's ownership notes", () => {
+  const { companies, external } = labels.UI;
+  // Notes are fragments: a sentence ends with one full stop.
+  assert.equal(companies.why("AbbVie", "Abbott's pharmaceuticals became AbbVie in 2013 (the holder stayed with Abbott)"),
+    "Why AbbVie: Abbott's pharmaceuticals became AbbVie in 2013 (the holder stayed with Abbott).");
+  assert.equal(companies.why("Organon", "Went to Organon in 2021."), "Why Organon: Went to Organon in 2021.");
+  assert.equal(companies.sponsor("AcelRx's medicine"), "Sponsor: AcelRx's medicine.");
+  assert.equal(companies.sponsorEvidence, "Sponsor evidence");
+  assert.equal(companies.evidence, "Source");
+  // A sponsor note naming a rename ("AcelRx (renamed Talphera in 2024)"): a second link, to the
+  // rename's evidence.
+  assert.equal(companies.renameEvidence, "Rename source");
+  assert.equal(companies.ownership, "Ownership");
+  assert.equal(companies.ownershipNote(["Wyeth Europa Ltd", "Wyeth Lederle Vaccines S.A."], "Wyeth acquired by Pfizer in 2009"),
+    "Wyeth Europa Ltd, Wyeth Lederle Vaccines S.A.: Wyeth acquired by Pfizer in 2009.");
+  assert.equal(`Trudexa${companies.moved("AbbVie", "Humira's second brand")}`, "Trudexa (under AbbVie): Humira's second brand.");
+  // On the page of the group it is under: no "(under …)"; a plain note (the medicine not moved) too.
+  assert.equal(`Trudexa${companies.moved(null, "Humira's second brand")}`, "Trudexa: Humira's second brand.");
+  // A plain note (group_note without a per-medicine move): about its later ownership, no "Why".
+  assert.equal(companies.note("Coherus sold its U.S. rights in 2025"), "Ownership: Coherus sold its U.S. rights in 2025.");
+  // On phones a long note sits behind a disclosure: its summary, then the note alone.
+  assert.equal(companies.whySummary("Theramex"), "Why Theramex?");
+  assert.equal(companies.sponsorSummary, "Sponsor");
+  assert.equal(companies.noteSummary, "Ownership");
+  assert.equal(companies.noteBody("Went to Organon in 2021"), "Went to Organon in 2021.");
+  // A company all of whose medicines went to another owner is not part of that group.
+  assert.equal(companies.medicinesUnder(1), "Its medicine is under ");
+  assert.equal(companies.medicinesUnder(3), "Its medicines are under ");
+  assert.equal(external.destinations["en.wikipedia.org"], "Wikipedia");
+  assert.equal(external.destinations["www.sec.gov"], "SEC website");
 });

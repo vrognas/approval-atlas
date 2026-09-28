@@ -124,6 +124,31 @@ test("therapeutic areas: a linked term that is a node loads as that node, a root
   assert.deepEqual(decodeState(new URLSearchParams("area=Breast+Neoplasms"), plain).state.area, ["Breast Neoplasms"]);
 });
 
+// Companies part 2: group keys, company keys and EMA holder names (older links) in one list; a
+// value a tree row stands for loads as that row's (a company folded into its group), and a value
+// within another selected one is dropped.
+test("companies: older holder links still load, keys load as the tree selects them, none within another", () => {
+  const companies = {
+    ...domain,
+    mahs: new Set([...domain.mahs, "g.roche", "c.roche", "Roche Registration GmbH", "g.sanofi", "c.genzyme-europe", "Genzyme Europe B.V."]),
+    mahAncestors: (value) => new Map([
+      ["c.roche", new Set(["g.roche"])],
+      ["Roche Registration GmbH", new Set(["g.roche", "c.roche"])],
+      ["c.genzyme-europe", new Set(["g.sanofi"])],
+      ["Genzyme Europe B.V.", new Set(["g.sanofi", "c.genzyme-europe"])],
+    ]).get(value) ?? new Set(),
+    // Roche's one company has its name: its row is the group's.
+    mahCanonical: (value) => (value === "c.roche" ? ["g.roche"] : [value]),
+  };
+  const load = (search) => decodeState(new URLSearchParams(search), companies);
+  assert.deepEqual(load("mah=Roche+Registration+GmbH"), { state: { ...structuredClone(DEFAULT_STATE), mah: ["Roche Registration GmbH"] }, dropped: [] });
+  assert.deepEqual(load("mah=c.roche").state.mah, ["g.roche"]);
+  assert.deepEqual(load("mah=g.roche&mah=Roche+Registration+GmbH&mah=Genzyme+Europe+B.V.").state.mah, ["Genzyme Europe B.V.", "g.roche"]);
+  assert.deepEqual(load("mah=c.genzyme-europe&mah=Genzyme+Europe+B.V.&mah=g.nobody").state.mah, ["c.genzyme-europe"]);
+  assert.deepEqual(load("mah=g.nobody").dropped, [{ key: "mah", value: "g.nobody" }]);
+  assert.equal(encodeState(load("mah=c.roche").state).toString(), "mah=g.roche");
+});
+
 // The "Authorized now" / "Approvals per year" tabs (view=years) are gone: one dashboard (phase 4a).
 test("old links with a view key still load: the key is ignored, not reported", () => {
   assert.deepEqual(decode("view=years&atc=L04AC"), { state: { ...structuredClone(DEFAULT_STATE), atc: ["L04AC"] }, dropped: [] });
@@ -170,19 +195,21 @@ test("a full ATC class name in a link survives the URL round trip", () => {
   assert.deepEqual(decode(encode({ atc: [name] })), { state: { ...structuredClone(DEFAULT_STATE), atc: [name] }, dropped: [] });
 });
 
-// Lookup keys: q (free text), med (EMA product number), sub (substance_key), cond (MeSH descriptor UI).
+// Lookup keys: q (free text), med (EMA product number), sub (substance_key), cond (MeSH descriptor UI),
+// co (company group or company key; companies part 2).
 const lookupOf = (search) => decodeLookup(new URLSearchParams(search));
 
 test("lookup keys decode trimmed, with empty values as absent", () => {
   assert.deepEqual(lookupOf(""), DEFAULT_LOOKUP);
-  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943" });
+  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943", co: null });
+  assert.equal(lookupOf("co=+g.roche+").co, "g.roche");
   assert.equal(lookupOf(`q=${"x".repeat(LOOKUP_QUERY_MAX + 20)}`).q.length, LOOKUP_QUERY_MAX);
 });
 
 test("lookup keys come first in the URL, then the filters; values round-trip", () => {
-  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924" };
+  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924", co: "g.roche" };
   const query = encodeUrl({ ...structuredClone(DEFAULT_STATE), ...lookup, mah: ["A & B, C"] }).toString();
-  assert.equal(query, "q=type+2+diabetes&med=EMEA%2FH%2FC%2F003820&sub=tenofovir+disoproxil&cond=D003924&mah=A+%26+B%2C+C");
+  assert.equal(query, "q=type+2+diabetes&med=EMEA%2FH%2FC%2F003820&sub=tenofovir+disoproxil&cond=D003924&co=g.roche&mah=A+%26+B%2C+C");
   assert.deepEqual(lookupOf(query), lookup);
   assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP }).toString(), "");
 });
@@ -214,13 +241,15 @@ test("a drug class opens alone: default filters with only its ATC code", () => {
 });
 
 test("the filter decoder ignores lookup keys", () => {
-  assert.deepEqual(decode("q=hiv&med=M1&sub=s&cond=D1"), { state: structuredClone(DEFAULT_STATE), dropped: [] });
+  assert.deepEqual(decode("q=hiv&med=M1&sub=s&cond=D1&co=g.roche"), { state: structuredClone(DEFAULT_STATE), dropped: [] });
 });
 
-test("lookupView shows one result: medicine > substance > condition > free text of 2+ characters", () => {
+test("lookupView shows one result: medicine > substance > condition > company > free text of 2+ characters", () => {
   assert.deepEqual(lookupView({ q: "x", med: "M1", sub: "s", cond: "D1" }), { kind: "medicine", value: "M1" });
   assert.deepEqual(lookupView({ q: "x", med: null, sub: "s", cond: "D1" }), { kind: "substance", value: "s" });
   assert.deepEqual(lookupView({ q: "breast", med: null, sub: null, cond: "D1" }), { kind: "condition", value: "D1" });
+  assert.deepEqual(lookupView({ q: "breast", med: null, sub: null, cond: "D1", co: "g.roche" }), { kind: "condition", value: "D1" });
+  assert.deepEqual(lookupView({ q: "breast", med: null, sub: null, cond: null, co: "g.roche" }), { kind: "company", value: "g.roche" });
   assert.deepEqual(lookupView({ q: "breast", med: null, sub: null, cond: null }), { kind: "text", value: "breast" });
   assert.deepEqual(lookupView({ q: "b", med: null, sub: null, cond: null }), { kind: null, value: null });
 });

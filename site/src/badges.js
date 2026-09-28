@@ -78,6 +78,108 @@ export function statusColor(status) {
   return status === "Authorised" ? "var(--status-authorized)" : `var(--${statusHue(status)}-mid)`;
 }
 
+// Company monogram badges (companies part 2, user decision 2026-09-28; no logos): the largest
+// groups in a damped version of their brand colour (the user's list, and Krka, CSL and Gedeon
+// Richter among the 25 largest; tokens --co-{hue}-1, -mid and -text in style.css, checked in
+// palette.test.js), every other group in one of the damped hues, stable per group (a hash of its
+// key; slate, the hue of unknown values, left out).
+export const BRAND_HUES = {
+  "g.roche": { hue: "co-roche" },
+  "g.novartis": { hue: "co-novartis" },
+  "g.pfizer": { hue: "co-pfizer" },
+  "g.astrazeneca": { hue: "co-astrazeneca" },
+  "g.sanofi": { hue: "co-sanofi" },
+  "g.gsk": { hue: "co-gsk" },
+  "g.msd": { hue: "co-msd" },
+  "g.novo-nordisk": { hue: "co-novo-nordisk" },
+  "g.eli-lilly": { hue: "co-lilly" },
+  "g.bristol-myers-squibb": { hue: "co-bms" },
+  "g.johnson-johnson": { hue: "co-jnj" },
+  "g.abbvie": { hue: "co-abbvie" },
+  "g.bayer": { hue: "co-bayer" },
+  "g.boehringer-ingelheim": { hue: "co-boehringer" },
+  "g.takeda": { hue: "co-takeda" },
+  "g.gilead": { hue: "co-gilead" },
+  "g.amgen": { hue: "co-amgen" },
+  "g.teva": { hue: "co-teva" },
+  "g.sandoz": { hue: "co-sandoz" },
+  "g.viatris": { hue: "co-viatris" },
+  // Krka: Pantone 355 green; CSL: red; Gedeon Richter: deep blue.
+  "g.krka": { hue: "co-krka" },
+  "g.csl": { hue: "co-csl" },
+  "g.gedeon-richter": { hue: "co-gedeon-richter" },
+};
+
+const HASH_HUES = ["green", "teal", "blue", "indigo", "purple", "plum", "pink", "red", "orange", "gold", "olive", "brown", "sky"];
+
+// FNV-1a over the key's UTF-16 code units: the same hue for a group on every page and build.
+function hash(text) {
+  let value = 0x811c9dc5;
+  for (let index = 0; index < text.length; index++) value = Math.imul(value ^ text.charCodeAt(index), 0x01000193) >>> 0;
+  return value;
+}
+
+// A group's badge hue: { hue (the .hue-* class and token prefix) }.
+export function companyHue(key) {
+  return BRAND_HUES[key] ?? { hue: HASH_HUES[hash(key) % HASH_HUES.length] };
+}
+
+// Chart colours of groups stacked in one chart differ by at least this OKLab distance in light and
+// in dark mode (where the palette allows; palette.test.js checks the real top-8 sets).
+export const SERIES_DISTANCE = 0.06;
+
+const toLinear = (channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+
+// "#rrggbb" -> OKLab [L, a, b] (Björn Ottosson's matrices), or null for any other value.
+export function oklab(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex ?? "")) return null;
+  const [r, g, b] = [1, 3, 5].map((index) => toLinear(parseInt(hex.slice(index, index + 2), 16) / 255));
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+// The smaller OKLab distance of two colour tokens ("--co-roche-mid") over the palette's modes
+// (palette: { light, dark }: token -> "#rrggbb"); 0 for the same token, Infinity when unknown.
+export function tokenDistance(palette, a, b) {
+  if (a === b) return 0;
+  return Math.min(...[palette.light, palette.dark].map((tokens) => {
+    const [x, y] = [oklab(tokens?.[a]), oklab(tokens?.[b])];
+    return x && y ? Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) : Infinity;
+  }));
+}
+
+// Chart colours for groups stacked in one chart (keys: most medicines first), as CSS var()s. Each
+// takes the first of: its hue's mid, its text shade (another lightness), then the mids and text
+// shades of the other damped hues, nearest to its own first, that differs from every colour taken
+// before it by SERIES_DISTANCE in both modes (brand mids and damped mids can be near twins: Teva
+// and Pfizer, Roche and AbbVie); failing all, the one farthest from them.
+export function companySeriesColors(keys, palette = { light: {}, dark: {} }) {
+  const mid = (hue) => `--${hue}-mid`;
+  const text = (hue) => `--${hue}-text`;
+  const used = [];
+  const colors = new Map();
+  for (const key of keys) {
+    const own = companyHue(key).hue;
+    const others = HASH_HUES.filter((hue) => hue !== own)
+      .map((hue) => [hue, tokenDistance(palette, mid(own), mid(hue))])
+      .sort(([, a], [, b]) => a - b)
+      .map(([hue]) => hue);
+    const candidates = [mid(own), text(own), ...others.map(mid), ...others.map(text)].filter((token) => !used.includes(token));
+    const nearest = (token) => Math.min(Infinity, ...used.map((other) => tokenDistance(palette, token, other)));
+    const pick = candidates.find((token) => nearest(token) >= SERIES_DISTANCE)
+      ?? candidates.reduce((best, token) => (nearest(token) > nearest(best) ? token : best));
+    used.push(pick);
+    colors.set(key, `var(${pick})`);
+  }
+  return colors;
+}
+
 // The element holding a type's explanation (UI.typeTips), which focusable carriers reference with
 // aria-describedby: "Advanced therapy" -> "type-tip-advanced-therapy".
 export const typeTipId = (label) => `type-tip-${label.toLowerCase().replaceAll(" ", "-")}`;

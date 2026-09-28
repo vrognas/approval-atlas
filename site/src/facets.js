@@ -12,7 +12,6 @@ export const TYPE_ORDER = ["Other", "Generic", "Biosimilar", "Advanced therapy"]
 export const FACET_VALUES = {
   type: (product) => [product.medicine_type],
   status: (product) => [product.medicine_status],
-  mah: (product) => [product.mah],
   // The therapeutic area tree (phase 4f): every branch, node and term a medicine touches.
   area: (product) => product.areaKeys,
   date: (product) => (product.year === null ? [] : [product.year]),
@@ -89,19 +88,22 @@ export function statusBreakdown(products) {
     .map(([status, count]) => ({ status, count }));
 }
 
-// "Who is active where": the n holders with the most products (ties by name), each with its
+// "Who is active where": the n holders with the most products (ties by label), each with its
 // products per key (cells: key -> count; keysOf(product): its columns, a product counts once per
-// distinct key and can count in several).
-export function holderActivity(products, keysOf, n = 15) {
+// distinct key and can count in several) and its products (members). holderOf(product): its row
+// key (companies part 2: its company group; null: in no row), labelOf(key): the row's name.
+export function holderActivity(products, keysOf, n = 15, holderOf = (product) => product.mah, labelOf = (key) => key) {
   const byHolder = new Map();
   for (const product of products) {
-    if (!byHolder.has(product.mah)) byHolder.set(product.mah, []);
-    byHolder.get(product.mah).push(product);
+    const key = holderOf(product);
+    if (key === null) continue;
+    if (!byHolder.has(key)) byHolder.set(key, []);
+    byHolder.get(key).push(product);
   }
   return [...byHolder]
-    .sort(([a, rowsA], [b, rowsB]) => rowsB.length - rowsA.length || a.localeCompare(b))
-    .slice(0, n)
-    .map(([mah, rows]) => ({ mah, count: rows.length, cells: keyCounts(rows, keysOf) }));
+    .map(([key, members]) => ({ key, label: labelOf(key), count: members.length, cells: keyCounts(members, keysOf), members }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, n);
 }
 
 // A sort's first direction: names and codes ("name", "key") A-Z, "asc"; counts ("total", "count",
@@ -122,7 +124,7 @@ export function nextSort(current, key) {
 // direction reverses the order but not the ties ("asc": fewest first, "desc" for names: Z-A).
 export function sortActivityRows(rows, sort, direction = defaultSortDirection(sort)) {
   const sign = direction === "asc" ? 1 : -1;
-  const byName = (a, b) => a.mah.localeCompare(b.mah);
+  const byName = (a, b) => a.label.localeCompare(b.label);
   const byTotal = (a, b) => b.count - a.count || byName(a, b);
   const compare = {
     name: (a, b) => sign * byName(a, b),
@@ -176,18 +178,22 @@ function atcValueText(value, atcNames, short) {
 
 // One sentence token's text: the default phrase, or the selection. lookups: { years: [min, max],
 // areaNames (therapeutic area tree key -> name; areas.js labels: a root tag "tagged Neoplasms"),
-// atcNames: Map }.
-export function tokenLabel(dimension, state, { years, areaNames, atcNames }) {
+// atcNames: Map, mahName(value): a company group's or company's name (companies part 2; EMA holder
+// names as they are), mahSelection(values): the name of several values that are one company's
+// rows (a company under two groups), or null }.
+export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahName = (value) => value, mahSelection = () => null }) {
   const copy = UI.sentence;
   if (dimension === "from") return String(state.from ?? years[0]);
   if (dimension === "to") return String(state.to ?? years[1]);
   const values = state[dimension];
   if (values.length === 0) return copy.defaults[dimension];
   if (dimension === "atc" && values.length === 2) return values.map((value) => atcValueText(value, atcNames, true)).join(copy.words.and);
+  if (dimension === "mah" && values.length > 1 && mahSelection(values)) return mahSelection(values);
   if (values.length > 1) return copy.many[dimension](values.length);
   if (dimension === "atc") return atcValueText(values[0], atcNames, false);
   if (dimension === "area") return areaNames.get(values[0]) ?? values[0];
   if (dimension === "status") return copy.status(statusLabel(values[0]));
+  if (dimension === "mah") return mahName(values[0]);
   return values[0];
 }
 

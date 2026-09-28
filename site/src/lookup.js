@@ -2,10 +2,12 @@
 // a kicker, an answer headline and (medicine, substance) an answer strip.
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
-import { isAuthorizedNow, statusDate } from "./approvals.js";
+import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
 import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
+import { buildCompanies } from "./companies.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
+import { companyBadge, holderDisplay } from "./holders.js";
 import {
   NOT_STATED,
   UI,
@@ -28,6 +30,7 @@ import { renderTimeline } from "./timeline.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView } from "./url.js";
 
 const FAILED = Symbol("failed");
+const formatNumber = new Intl.NumberFormat("en-US").format;
 
 function el(tag, props, ...children) {
   const node = document.createElement(tag);
@@ -154,6 +157,11 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       orphan: groupBy(orphanRows, "ema_product_number"),
     })],
     register: [["ema_medicine_register_status.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
+    // Companies part 2: holders by company group (the dashboard loads the same files); the search
+    // counts a group's medicines with status Authorised, as the other suggestion groups.
+    companies: [["companies.json", "ema_medicine_companies.json"], (rows, medicineRows) => buildCompanies(rows, medicineRows, {
+      isAuthorized: (number) => index.byNumber.get(number)?.medicine_status === "Authorised",
+    })],
   };
   const values = new Map();
   const listeners = [];
@@ -199,6 +207,61 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   }
 
   const fact = (label, content) => (content === null || (Array.isArray(content) && content.length === 0) ? null : [el("dt", null, label), el("dd", null, content)]);
+
+  // A link to a company group's (or company's) page (companies part 2).
+  const companyLink = (text, key) => internalLink(text, { co: key }, "company-link");
+
+  // A medicine's Company · Holder (companies part 2): its company group (badge, a link to its
+  // page) with the holder name EMA publishes; EMA's name alone until the companies have loaded
+  // (medicines: the medicines dataset), null while both load.
+  function holderOf(number, medicines) {
+    const companies = need("companies");
+    const entry = ready(companies) ? companies.entry(number) : null;
+    if (entry) return holderDisplay(entry, { link: companyLink });
+    return ready(medicines) ? medicines.get(number)?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : null;
+  }
+
+  // A provenance line: the note, then a link to its evidence and, for a sponsor renamed since
+  // (its note names the rename), one to the rename's evidence (https only; none without one).
+  function evidenceLine(text, url, linkText = UI.companies.evidence, renameUrl = null) {
+    const links = [[linkText, url], [UI.companies.renameEvidence, renameUrl]]
+      .filter(([, href]) => href?.startsWith("https://"))
+      .map(([label, href], index) => [index > 0 ? " · " : text ? " " : null, externalLink(label, href)]);
+    return el("p", { class: "muted company-evidence" }, text, links);
+  }
+  // A note with its label ("Why Theramex: …"); on phones a long one sits behind a disclosure (its
+  // summary, then the note alone), so the Company fact stays compact. Decided when rendered: a
+  // rotated phone keeps it, and both forms show the note.
+  const LONG_NOTE = 120;
+  const PHONE = window.matchMedia("(max-width: 600px)");
+  function noteLine(text, note, url, summary, key, renameUrl = null) {
+    if (text.length <= LONG_NOTE || !PHONE.matches) return evidenceLine(text, url, UI.companies.evidence, renameUrl);
+    return el("details", { class: "company-note", "data-key": key }, el("summary", null, summary), evidenceLine(UI.companies.noteBody(note), url, UI.companies.evidence, renameUrl));
+  }
+
+  // The medicine card's Company fact: the holder display, the sponsor's evidence (a curated sponsor
+  // behind a regulatory representative; renamed since, the rename's too), why a per-medicine row
+  // put it under its group (or a plain note on its later ownership, the medicine not moved), then
+  // how current the group is. Provenance lines only where the data has them (older files: none).
+  function companyFact(number) {
+    const companies = need("companies");
+    const entry = ready(companies) ? companies.entry(number) : null;
+    if (!entry?.group) return null;
+    let sponsor = null;
+    if (entry.sponsorNote) {
+      sponsor = noteLine(UI.companies.sponsor(entry.sponsorNote), entry.sponsorNote, entry.sponsorEvidenceUrl, UI.companies.sponsorSummary, "company-sponsor",
+        entry.sponsorRenameEvidenceUrl);
+    } else if (entry.sponsorEvidenceUrl?.startsWith("https://")) {
+      sponsor = evidenceLine(null, entry.sponsorEvidenceUrl, UI.companies.sponsorEvidence);
+    }
+    let group = null;
+    if (entry.groupNote && entry.moved) {
+      group = noteLine(UI.companies.why(entry.group.name, entry.groupNote), entry.groupNote, entry.groupEvidenceUrl, UI.companies.whySummary(entry.group.name), "company-why");
+    } else if (entry.groupNote) {
+      group = noteLine(UI.companies.note(entry.groupNote), entry.groupNote, entry.groupEvidenceUrl, UI.companies.noteSummary, "company-note");
+    }
+    return [holderDisplay(entry, { link: companyLink }), sponsor, group, el("p", { class: "muted company-as-of" }, UI.companies.asOfShort(entry.group.as_of))];
+  }
 
   // ATC ladder of one code: a row per level (badge, name, medicines currently authorized) linking to
   // the dashboard filtered to that level alone. counts: null until loaded (rows show without
@@ -378,7 +441,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       sentence ? el("p", { class: "dek" }, sentence) : null,
       namesakeNotes(namesakes),
       strip([
-        [UI.card.strip.holder, ready(medicines) ? medicine?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : pending(medicines), true],
+        [UI.card.strip.company, holderOf(number, medicines) ?? pending(medicines), true],
         // Never-approved medicines (refused, withdrawn applications) have no approval cell.
         authorized || row.marketing_authorisation_date
           ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(row.marketing_authorisation_date) ?? NOT_STATED]
@@ -397,6 +460,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       documentsSection(documents, groups, rest, medicine, namesakeDocuments),
       el("dl", { class: "facts card-section" },
         fact(UI.card.substances, substances.map((link, position) => [link, position < substances.length - 1 ? "; " : ""])),
+        fact(UI.card.company, companyFact(number)),
         // A type without a badge (Other) as text with its explanation.
         fact(UI.card.type, [
           typeBadges({ medicine_type: row.medicine_type }).length
@@ -468,7 +532,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
           cell("result-atc", atcCodes(row.ema_product_number, atc)),
           cell("status-cell", statusBadge(row.medicine_status), dates ? el("span", { class: "status-date" }, dates) : null),
           cell("type-cell", typeBadgeList(row)),
-          cell("result-holder", ready(medicines) ? medicine?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : null)),
+          cell("result-holder", holderOf(row.ema_product_number, medicines))),
         snippet
           ? el("tr", { role: "row", class: "snippet-row" }, el("td", { role: "cell", colspan: headers.length },
             el("p", { class: "snippet" }, snippet.before, el("mark", null, snippet.match), snippet.after)))
@@ -488,6 +552,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   function timelineBlock(rows, medicines, mentioned = new Set()) {
     if (rows.filter((row) => row.marketing_authorisation_date).length < TIMELINE_MIN) return null;
     const container = el("div", { class: "timeline chart" });
+    const companies = need("companies");
+    // The tooltip's holder: the company group, then EMA's name when it differs (companies part 2).
+    const holderText = (number) => {
+      const entry = ready(companies) ? companies.entry(number) : null;
+      if (entry?.group) return UI.companies.tipHolder(entry.group.name, entry.holder);
+      return ready(medicines) ? medicines.get(number)?.marketing_authorisation_developer_applicant_holder ?? null : null;
+    };
     const items = rows.map((row) => ({
       id: row.ema_product_number,
       name: row.name_of_medicine,
@@ -495,7 +566,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       type: row.medicine_type,
       family: familyOf(row),
       status: row.medicine_status,
-      holder: ready(medicines) ? medicines.get(row.ema_product_number)?.marketing_authorisation_developer_applicant_holder ?? null : null,
+      holder: holderText(row.ema_product_number),
       mentioned: mentioned.has(row.ema_product_number),
     }));
     timeline = { container, items, width: null };
@@ -524,17 +595,28 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const first = rows[0]?.marketing_authorisation_date ? rows[0] : null;
     const authorizedRows = rows.filter((row) => statusKind(row.medicine_status) === "authorized");
     const authorized = authorizedRows.length;
-    // Holders of the medicines authorized now; of all its medicines when none is.
-    const holders = ready(medicines)
-      ? [...new Set((authorized ? authorizedRows : rows).map((row) => medicines.get(row.ema_product_number)?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED))]
-      : null;
+    // Holders of the medicines authorized now; of all its medicines when none is: one company group
+    // shows as the medicine card's (EMA's names joined), several are counted (companies part 2).
+    const companies = need("companies");
+    let holders = null;
+    if (ready(companies)) {
+      const entries = (authorized ? authorizedRows : rows).map((row) => companies.entry(row.ema_product_number)).filter(Boolean);
+      const groups = new Set(entries.map((entry) => entry.group?.key ?? entry.holder));
+      if (groups.size === 1 && entries[0].group) {
+        // EMA's names (none for a medicine EMA names no holder for).
+        const names = [...new Set(entries.map((entry) => entry.holder).filter((name) => name !== null))];
+        holders = holderDisplay({ ...entries[0], basis: null, holder: names.length ? names.join("; ") : null }, { link: companyLink });
+      } else {
+        holders = groups.size === 1 ? entries[0].holder ?? NOT_STATED : UI.substance.companies(groups.size);
+      }
+    }
     const [atc, atcCounts] = [need("atc"), need("atcCounts")];
     return el("article", { class: "card" },
       kicker("substance"),
       title(headlineNodes(UI.headline.substance(substance.name, authorized))),
       el("p", { class: "dek" }, UI.substance.firstApproval(first?.marketing_authorisation_date, first?.name_of_medicine)),
       strip([
-        [UI.card.strip.holder, holders === null ? pending(medicines) : holders.length === 1 ? holders[0] : UI.substance.holders(holders.length), true],
+        [UI.card.strip.company, holders ?? pending(companies), true],
         first ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(first.marketing_authorisation_date)] : null,
         // None authorized now: the statuses themselves (e.g. Withdrawn), which say more than "0 authorized".
         [UI.card.strip.status, authorized > 0
@@ -629,6 +711,167 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       mentioned ? resultTable(mentioned, medicines, "results-mentioned") : pending(medicines));
   }
 
+  // "a, b and c" of nodes (or node lists).
+  const joinNodes = (items) => items.map((item, position) => [
+    position === 0 ? "" : position === items.length - 1 ? UI.companies.and : ", ", item]);
+  // A group as its badge and a link to its page.
+  const groupLink = (group) => [companyBadge(group), " ", companyLink(group.name, group.key)];
+  // A bar's track and fill (share: of the longest bar, in percent); the width is set through the
+  // CSSOM (the page's CSP allows no style attributes).
+  function bar(share) {
+    const fill = el("span", { class: "bar-fill" });
+    fill.style.width = `${share}%`;
+    return el("span", { class: "bar-track", "aria-hidden": "true" }, fill);
+  }
+  // A mix row: a link (its name names the count), a bar and the count.
+  const mixRow = (link, count, max) => el("li", null, link, bar((100 * count) / max), el("span", { class: "bar-value" }, formatNumber(count)));
+  // Rows per key (keysOf(number): its keys, each once), most first (ties by key).
+  function mixCounts(numbers, keysOf) {
+    const counts = new Map();
+    for (const number of numbers) for (const key of new Set(keysOf(number))) counts.set(key, (counts.get(key) ?? 0) + 1);
+    return [...counts].sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b));
+  }
+
+  // Company page (companies part 2, ?co=): a company group (or one company) with its medicines of
+  // every status and those currently authorized; a joint venture's partners, a group's joint
+  // ventures or a company's group; how current the grouping is; its companies and EMA holder names
+  // (each opens the overview filtered to it); its approvals timeline, ATC groups (each opens the
+  // overview filtered to the company and group) and most common conditions; its medicines
+  // (authorized ones, or every status); and where the grouping comes from (GLEIF, sources, the
+  // ownership notes and the medicines moved to their current owner, with their evidence).
+  const MIX_AREAS = 8;
+  function companyPage(key) {
+    const companies = need("companies");
+    if (!ready(companies)) return el("article", { class: "card" }, kicker("company"), pending(companies));
+    const row = companies.row(key);
+    if (!row) return notFound("company", key);
+    // A company's groups: those its medicines are with (a medicine can have gone to another owner
+    // than the company's), else the company's own.
+    const groups = row.kind === "group" ? [row] : [...companies.groupsOf(key)].map(companies.row).filter(Boolean);
+    if (row.kind === "company" && groups.length === 0 && companies.row(row.group_key)) groups.push(companies.row(row.group_key));
+    const groupCount = (group) => companies.numbersOf(`${group.key}/${key}`).length;
+    groups.sort((a, b) => groupCount(b) - groupCount(a) || a.name.localeCompare(b.name));
+    const medicines = need("medicines");
+    const numbers = companies.numbersOf(key);
+    const all = numbers.map((number) => index.byNumber.get(number)).filter(Boolean).sort(byDate(-1));
+    // Currently authorized ones first (as condition pages; counted as the headline, so an authorized
+    // medicine without an approval date is under "Show all statuses"), every status with the
+    // toggle; a company with none currently authorized shows every status (no toggle then).
+    const { current, everyStatus, shown } = authorizedFirst(all, showAll);
+    const anyAuthorized = current > 0;
+    // The overview filtered to values (as the tree selects them: companies.js structure()) and more.
+    const filtered = (values, extra = {}) => ({ ...structuredClone(DEFAULT_STATE), mah: values, ...extra });
+
+    const partners = [...row.partners.map(companies.row).filter(Boolean).map(groupLink), ...row.other_partners];
+    const ventures = row.kind === "group" ? companies.jointVentures(key).map(companies.row).filter(Boolean).map(groupLink) : [];
+    // A company with medicines under several groups names each, with its medicines there.
+    const partOf = groups.length > 1 ? groups.map((group) => [groupLink(group), " ", UI.companies.groupCount(groupCount(group))]) : groups.map(groupLink);
+    // A company all of whose medicines a per-medicine row moved is not part of their group.
+    const partOfLead = companies.allMoved(key) ? UI.companies.medicinesUnder(numbers.length) : UI.companies.partOf;
+    const deks = [
+      row.joint_venture && partners.length ? el("p", { class: "dek" }, UI.companies.jointVentureOf, joinNodes(partners), ".") : null,
+      ventures.length ? el("p", { class: "dek" }, UI.companies.jointVentures, joinNodes(ventures), ".") : null,
+      row.kind === "company" && groups.length ? el("p", { class: "dek" }, partOfLead, joinNodes(partOf), ".") : null,
+      row.representative ? el("p", { class: "dek" }, UI.companies.representative) : null,
+      // A company's grouping is as current as its groups' curation (its own as_of is the snapshot's).
+      el("p", { class: "muted" }, UI.companies.asOf(row.kind === "group" ? row.as_of : groups.map((group) => group.as_of).sort().at(-1) ?? row.as_of)),
+    ];
+
+    // Its companies, each with its EMA holder names (left out when only its own name; its own name
+    // among others as "(same name)", as the tree) and its medicines EMA names no holder for.
+    const structure = companies.structure(key);
+    const holderLink = (holder, company) => (holder.name === companies.name(company.key)
+      ? internalLink(UI.companies.sameName, filtered(holder.values), null, UI.companies.sameNameLabel(holder.name))
+      : internalLink(holder.name, filtered(holder.values)));
+    const names = el("section", { class: "card-section" },
+      el("h3", null, UI.companies.names),
+      el("p", { class: "muted" }, UI.companies.namesHint),
+      el("ul", { class: "plain company-names" }, structure.map((company) => {
+        const own = company.holders.length === 1 && company.holders[0].name === companies.name(company.key) && !company.unnamed;
+        return el("li", null,
+          internalLink(companies.name(company.key), filtered(company.values)), " ", el("span", { class: "muted" }, UI.substance.products(company.count)),
+          own ? null : el("ul", { class: "plain company-holders" }, company.holders.map((holder) => el("li", null,
+            holderLink(holder, company), " ", el("span", { class: "muted" }, UI.substance.products(holder.count)))),
+          // The medicines EMA names no holder for (the Union Register does), as the tree's static row.
+          company.unnamed ? el("li", { class: "muted" }, UI.companies.noHolder, " ", UI.substance.products(company.unnamed)) : null));
+      })));
+
+    // ATC groups (level 1) of its medicines, every status.
+    const atc = need("atc");
+    let atcMix = null;
+    if (ready(atc)) {
+      const rows = mixCounts(numbers, (number) => (atc.byProduct.get(number) ?? []).flatMap((item) => atcPrefixes(atcCode(item)).slice(0, 1)));
+      atcMix = rows.length ? el("section", { class: "card-section" },
+        el("h3", null, UI.companies.atc),
+        el("p", { class: "muted" }, UI.companies.atcHint),
+        el("ol", { class: "condition-list company-mix" }, rows.map(([code, count]) => mixRow(
+          internalLink([el("span", { class: `letter-badge hue-${atcHue(code)}` }, code), " ", el("span", null, atcName(atc.names.get(code)))],
+            filtered(companies.canonical(key), { atc: [code] }), "mix-link", UI.companies.mixLink(atcClassLabel(code, atc.names.get(code)), count)),
+          count, rows[0][1])))) : null;
+    }
+
+    // Its most common conditions (EMA's therapeutic area terms), each opening its condition page.
+    const [areas, conditions] = [need("areas"), need("conditions")];
+    let areaMix = null;
+    if (ready(areas)) {
+      const rows = mixCounts(numbers, (number) => (areas.get(number) ?? []).map((item) => item.therapeutic_area_mesh)).slice(0, MIX_AREAS);
+      areaMix = rows.length ? el("section", { class: "card-section" },
+        el("h3", null, UI.companies.areas),
+        el("ol", { class: "condition-list company-mix" }, rows.map(([term, count]) => {
+          const ui = ready(conditions) ? conditions.termUi.get(term) : null;
+          return mixRow(ui ? internalLink(term, { cond: ui }, null, UI.companies.mixLink(term, count)) : el("span", null, term), count, rows[0][1]);
+        }))) : null;
+    }
+
+    const toggle = anyAuthorized ? el("label", { class: "toggle-all" },
+      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
+        showAll = event.currentTarget.checked;
+        render(lastState, true);
+      } }),
+      " ", UI.condition.showAll) : null;
+    const gleifUrl = row.lei ? `https://search.gleif.org/#/record/${encodeURIComponent(row.lei)}` : null;
+    // Ownership (provenance; none in older data files): the curated notes on its members
+    // (acquisitions, renames, spin-offs) and a renamed sponsor's old name (companies.ownership()),
+    // then its medicines' notes: those a per-medicine row put
+    // under their current owner (named unless it is this page's group) and plain notes on a
+    // medicine's later ownership, each with a link to its evidence.
+    const evidence = (url) => (url?.startsWith("https://") ? [" ", externalLink(UI.companies.evidence, url)] : null);
+    const ownership = companies.ownership(key);
+    const noted = numbers.map((number) => [number, companies.entry(number)]).filter(([, entry]) => entry?.groupNote && entry.group);
+    const ownershipPart = ownership.length || noted.length
+      ? [
+        el("h4", { class: "sources-part" }, UI.companies.ownership),
+        el("ul", { class: "plain company-ownership" },
+          ownership.map((item) => el("li", null, UI.companies.ownershipNote(item.holders, item.note), evidence(item.url))),
+          noted.map(([number, entry]) => el("li", null,
+            internalLink(index.byNumber.get(number)?.name_of_medicine ?? number, { med: number }),
+            UI.companies.moved(entry.moved && entry.group.key !== key ? entry.group.name : null, entry.groupNote), evidence(entry.groupEvidenceUrl)))),
+      ]
+      : null;
+    const sources = el("section", { class: "card-section" },
+      el("h3", null, UI.companies.sources),
+      gleifUrl ? el("p", null, externalLink(UI.companies.lei(row.lei), gleifUrl), row.gleif_legal_name ? [" ", UI.companies.legalName(row.gleif_legal_name)] : null) : null,
+      row.gleif_ultimate_parent && row.gleif_ultimate_parent !== row.gleif_legal_name ? el("p", null, UI.companies.parent(row.gleif_ultimate_parent)) : null,
+      el("p", null, UI.companies.from(row.sources.map((source) => UI.companies.sourceNames[source] ?? source))),
+      ownershipPart);
+
+    // The headline's badge: the group's own, a company's group (companies.json group_key: where its
+    // medicines are unless a per-medicine row moved some, so a company split between groups has one).
+    const badgeGroup = row.kind === "group" ? row : companies.row(row.group_key) ?? (groups.length === 1 ? groups[0] : null);
+    return el("article", { class: "card company-page" },
+      kicker("company"),
+      title([badgeGroup ? [companyBadge(badgeGroup), " "] : null, headlineNodes(UI.companies.headline(row.name, all.length, current))]),
+      deks,
+      names,
+      timelineBlock(shown, medicines),
+      atcMix,
+      areaMix,
+      el("h3", { id: "results-company" }, UI.companies.medicines(shown.length, everyStatus)),
+      toggle,
+      resultTable(shown.map((item) => ({ row: item })), medicines, "results-company"),
+      sources);
+  }
+
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
   function render(state, force = false) {
     lastState = state;
@@ -660,7 +903,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     try {
       content = view.kind === "medicine" ? medicineCard(view.value)
         : view.kind === "substance" ? substanceCard(view.value)
-          : conditionResults(view.kind === "condition" ? view.value : null, view.value);
+          : view.kind === "company" ? companyPage(view.value)
+            : conditionResults(view.kind === "condition" ? view.value : null, view.value);
     } catch (error) {
       console.error(error);
       timeline = null;
@@ -688,6 +932,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     if (kind === "medicine") return index.byNumber.get(value)?.name_of_medicine ?? null;
     if (kind === "substance") return index.substances.get(value)?.name ?? null;
     if (kind === "condition") return ready(values.get("conditions")) ? values.get("conditions").descriptors.get(value)?.name ?? null : null;
+    if (kind === "company") return ready(values.get("companies")) ? values.get("companies").row(value)?.name ?? null : null;
     return kind === "text" ? UI.textTitle(value) : null;
   }
 
@@ -696,6 +941,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     need,
     title: viewTitle,
     conditions: () => (ready(values.get("conditions")) ? values.get("conditions") : null),
+    // Company groups (the "Companies" suggestions): null until need("companies") has loaded them.
+    companies: () => (ready(values.get("companies")) ? values.get("companies") : null),
     // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
     documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.

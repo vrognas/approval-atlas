@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
   STATUS_ORDER,
+  authorizedFirst,
   authorizedSeries,
   byStatusOrder,
-  breakdownCounts,
   breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
@@ -121,6 +121,26 @@ test("buildProducts joins holder, year, MeSH terms, branches and ATC rows", () =
   assert.deepEqual([...first.areaKeys].sort(), ["C04", "C15", "C20", "Leukemia", "Lymphoma", "Unmatched term"]);
   assert.deepEqual([...first.areaExact].sort(), ["C04", "C15", "C20"]);
   assert.deepEqual([second.areaKeys, second.areaExact], [[], []]);
+  // Companies part 2: without company rows, no company or group; mah stays EMA's holder name.
+  assert.deepEqual([second.company_key, second.group_key, second.holder_ema], [null, null, "Holder A"]);
+});
+
+test("buildProducts joins each medicine's company, group and how its holder was decided", () => {
+  const [product, bare] = buildProducts([medicine("P1", { marketing_authorisation_developer_applicant_holder: "Mylan Pharmaceuticals Limited" }), medicine("P2")], {
+    areaRows: [],
+    branchRows: [],
+    atcRows: [],
+    companyRows: [{
+      ema_product_number: "P1", holder_ema: "Mylan Pharmaceuticals Limited", holder_register: "Viatris Limited", holder_used: "Viatris Limited",
+      holder_basis: "register", company_key: "c.viatris", group_key: "g.viatris", country: "IE", source: "curated",
+    }],
+  });
+  assert.equal(product.mah, "Mylan Pharmaceuticals Limited");
+  assert.deepEqual(
+    [product.holder_ema, product.holder_register, product.holder_basis, product.company_key, product.group_key],
+    ["Mylan Pharmaceuticals Limited", "Viatris Limited", "register", "c.viatris", "g.viatris"],
+  );
+  assert.deepEqual([bare.company_key, bare.group_key, bare.holder_basis, bare.holder_register], [null, null, null, null]);
 });
 
 test("buildProducts: tree keys from the subtree rows, and the nodes a product's terms are", () => {
@@ -161,6 +181,26 @@ test("isAuthorizedNow needs status Authorised and an approval date", () => {
   assert.equal(isAuthorizedNow(medicine("P1", {})), true);
   assert.equal(isAuthorizedNow(medicine("P2", { authorized_from: null })), false);
   assert.equal(isAuthorizedNow(medicine("P3", { medicine_status: "Withdrawn" })), false);
+});
+
+test("authorizedFirst lists the currently authorized search-index rows, counted as the headline does", () => {
+  // Epsilon is Authorised without an approval date: not currently authorized, so not listed.
+  const { current, everyStatus, shown } = authorizedFirst(medicines, false);
+  assert.equal(current, 2);
+  assert.equal(everyStatus, false);
+  assert.deepEqual(ids(shown), ["EMEA/H/C/000001", "EMEA/H/C/000003"]);
+  assert.equal(shown.length, current);
+});
+
+test("authorizedFirst lists every status when asked or when none is currently authorized", () => {
+  const all = authorizedFirst(medicines, true);
+  assert.equal(all.current, 2);
+  assert.equal(all.everyStatus, true);
+  assert.deepEqual(ids(all.shown), ids(medicines));
+  const undated = authorizedFirst(medicines.slice(3), false);
+  assert.equal(undated.current, 0);
+  assert.equal(undated.everyStatus, true);
+  assert.deepEqual(ids(undated.shown), ["EMEA/H/C/000004", "EMEA/H/C/000005"]);
 });
 
 test("countTiles counts products, distinct substance sets and flags", () => {
@@ -204,19 +244,6 @@ test(
   },
 );
 
-test("breakdownCounts counts a product once per distinct ATC level 1", () => {
-  const products = [
-    { atc: [{ atc_code_human: "L01XE" }, { atc_code_human: "L04AA" }] },
-    { atc: [{ atc_code_human: "A10BA02" }, { atc_code_human: "L01FA01" }] },
-    { atc: [] },
-  ];
-  const names = new Map([["L", "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS"], ["A", "ALIMENTARY TRACT AND METABOLISM"]]);
-  assert.deepEqual(breakdownCounts(products, "atc", (key) => names.get(key)), [
-    { key: "L", label: "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS", count: 2 },
-    { key: "A", label: "ALIMENTARY TRACT AND METABOLISM", count: 1 },
-  ]);
-});
-
 test("breakdownExcluded counts the products a breakdown cannot show", () => {
   const products = buildProducts(
     [medicine("P1", { marketing_authorisation_developer_applicant_holder: null }), medicine("P2", {}), medicine("P3", {})],
@@ -227,6 +254,10 @@ test("breakdownExcluded counts the products a breakdown cannot show", () => {
       ],
       branchRows: [{ therapeutic_area_mesh: "Lymphoma", branch: "C04" }, { therapeutic_area_mesh: "Unmatched term", branch: null }],
       atcRows: [{ ema_product_number: "P3", atc_code_human: "L01XE", atc_incomplete: true, source: "ema" }],
+      companyRows: [
+        { ema_product_number: "P2", holder_ema: "Holder A", company_key: "c.holder-a", group_key: "g.holder-a" },
+        { ema_product_number: "P3", holder_ema: "Holder A", company_key: "c.holder-a", group_key: "g.holder-a" },
+      ],
     },
   );
   assert.equal(breakdownExcluded(products, "atc"), 2);
@@ -242,29 +273,8 @@ test("breakdownExcluded counts the products a breakdown cannot show", () => {
     ],
   });
   assert.equal(breakdownExcluded(smpc, "atc"), 1);
-  assert.deepEqual(breakdownCounts(smpc, "atc").map((row) => [row.key, row.count]), [["L", 1]]);
-  // A missing holder is counted as "Not stated".
-  assert.equal(breakdownExcluded(products, "mah"), 0);
-});
-
-test("breakdownCounts counts a product in every branch it touches", () => {
-  const rows = breakdownCounts([{ branches: ["C04", "C15"] }, { branches: ["C04"] }], "area");
-  assert.deepEqual(rows, [{ key: "C04", label: "C04", count: 2 }, { key: "C15", label: "C15", count: 1 }]);
-});
-
-test("breakdownCounts keeps the top n and folds distinct remaining products into Other", () => {
-  const products = [
-    ...["A", "A", "A", "B", "B", "C", "D"].map((mah) => ({ mah, branches: [mah] })),
-    { mah: "E", branches: ["C", "D"] },
-  ];
-  assert.deepEqual(breakdownCounts(products, "mah", undefined, 2), [
-    { key: "A", label: "A", count: 3 },
-    { key: "B", label: "B", count: 2 },
-    { key: null, label: "Other", count: 3, other: true },
-  ]);
-  // Ties sort by label; Other counts each product once even when it has two tail branches.
-  assert.deepEqual(breakdownCounts(products, "area", undefined, 2).at(-1), { key: null, label: "Other", count: 3, other: true });
-  assert.deepEqual(breakdownCounts(products, "area", undefined, 2).map((row) => row.key), ["A", "B", null]);
+  // Companies part 2: the company breakdown shows company groups; a medicine without a holder has none.
+  assert.equal(breakdownExcluded(products, "mah"), 1);
 });
 
 // Phase 4c: the breakdown's Sort control (UI state).

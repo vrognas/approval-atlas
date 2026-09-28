@@ -144,27 +144,44 @@ is_register_address <- function(name) {
   grepl(",", name, fixed = TRUE) & !is.na(register_country(name))
 }
 
-# Per medicine: EMA's holder, the Union Register's when it names another
-# company (a transfer or rename EMA's field does not show yet; a spelling
-# of the same company, even a misspelt one, is not), and the one used; the
-# country from the register's holder address.
+# Per medicine: EMA's holder, the Union Register's when it decides, and the
+# one used; the country from the register's holder address. The register
+# decides (user decision 2026-09-28) when it names another company (a
+# transfer or rename EMA's field does not show yet; a spelling of the same
+# company, even a misspelt one, is not) and lists the product as Active: a
+# product no longer active can name an older holder (Ecokinase: Galenus
+# Mannheim, before Roche). Without an EMA holder, the register's name is the
+# only one (Zabdeno), whatever its status. The country is left out where
+# the register names another company that does not decide.
 build_medicine_holders <- function(medicines,
                                    register,
                                    aliases = curated_company_aliases()) {
   register_holders <- link_register_products(medicines, register) |>
     dplyr::inner_join(
-      dplyr::select(register$products, "uri", "holder_name", "holder_country"),
+      dplyr::select(
+        register$products,
+        "uri",
+        "holder_name",
+        "holder_country",
+        register_status = "status"
+      ),
       by = "uri",
       relationship = "many-to-one"
     ) |>
-    dplyr::select("ema_product_number", "holder_name", "holder_country") |>
+    dplyr::select(
+      "ema_product_number",
+      "holder_name",
+      "holder_country",
+      "register_status"
+    ) |>
     dplyr::mutate(
       register_name_is_address = is_register_address(.data$holder_name),
       holder_name = dplyr::if_else(
         .data$register_name_is_address,
         NA_character_,
         .data$holder_name
-      )
+      ),
+      register_active = is_register_authorised(.data$register_status)
     )
   medicines |>
     dplyr::select(
@@ -177,17 +194,28 @@ build_medicine_holders <- function(medicines,
       relationship = "one-to-one"
     ) |>
     dplyr::mutate(
+      register_names_other = !is.na(.data$holder_name) &
+        !(aliased_company_key(.data$holder_name, aliases) ==
+            aliased_company_key(.data$holder_ema, aliases)) %in% TRUE,
+      register_decides = .data$register_names_other &
+        (.data$register_active %in% TRUE | is.na(.data$holder_ema)),
       holder_register = dplyr::if_else(
-        (aliased_company_key(.data$holder_name, aliases) ==
-           aliased_company_key(.data$holder_ema, aliases)) %in% TRUE,
-        NA_character_,
-        .data$holder_name
+        .data$register_decides,
+        .data$holder_name,
+        NA_character_
       ),
       holder_used = dplyr::coalesce(.data$holder_register, .data$holder_ema),
       holder_basis = dplyr::case_when(
         !is.na(.data$holder_register) ~ "register",
         !is.na(.data$holder_ema) ~ "ema",
         .default = NA_character_
+      ),
+      register_not_active = .data$register_names_other &
+        !.data$register_decides,
+      holder_country = dplyr::if_else(
+        .data$register_not_active,
+        NA_character_,
+        .data$holder_country
       )
     ) |>
     dplyr::select(
@@ -197,7 +225,8 @@ build_medicine_holders <- function(medicines,
       "holder_used",
       "holder_basis",
       country = "holder_country",
-      "register_name_is_address"
+      "register_name_is_address",
+      "register_not_active"
     ) |>
     dplyr::mutate(
       register_name_is_address = .data$register_name_is_address %in% TRUE
@@ -238,11 +267,66 @@ judge_medicine_sponsors <- function(sponsors, medicine_holders, aliases) {
   )
 }
 
-# The company of each medicine: its holder's, or a reviewed sponsor's.
+# Per-medicine group rows whose holder still holds the medicine (checked
+# against the holder used, the register's where it decides, as sponsor rows
+# are: never against a sponsor) and that move it out of its company's group.
+# The others are listed: stale (another holder) or redundant (the company's
+# own group, e.g. once the holder became a member of the row's group).
+judge_medicine_groups <- function(medicine_groups,
+                                  assigned,
+                                  companies,
+                                  aliases) {
+  judged <- medicine_groups |>
+    dplyr::left_join(
+      dplyr::select(
+        assigned,
+        "ema_product_number",
+        "holder_used",
+        "company_match"
+      ),
+      by = "ema_product_number",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::left_join(
+      dplyr::select(
+        companies,
+        "company_match",
+        company_group_key = "group_key"
+      ),
+      by = "company_match",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::mutate(
+      holds = (aliased_company_key(.data$holder, aliases) ==
+                 aliased_company_key(.data$holder_used, aliases)) %in% TRUE,
+      redundant = .data$holds &
+        (.data$group_key == .data$company_group_key) %in% TRUE
+    )
+  list(
+    applied = dplyr::filter(judged, .data$holds, !.data$redundant),
+    stale = dplyr::filter(judged, !.data$holds),
+    redundant = dplyr::filter(judged, .data$redundant)
+  )
+}
+
+# The company of each medicine: its holder's, or a reviewed sponsor's (with
+# the sponsor row's note and evidence, and, for a sponsor renamed since, the
+# rename's evidence: its note names the sponsor as it was then).
 assign_medicine_companies <- function(medicine_holders, sponsors, aliases) {
+  renames <- dplyr::filter(aliases, !is.na(.data$evidence_url))
+  rename_evidence_urls <- stats::setNames(
+    renames$evidence_url,
+    company_match_key(renames$holder)
+  )
   medicine_holders |>
     dplyr::left_join(
-      dplyr::select(sponsors, "ema_product_number", "sponsor"),
+      dplyr::select(
+        sponsors,
+        "ema_product_number",
+        "sponsor",
+        sponsor_note = "note",
+        sponsor_evidence_url = "evidence_url"
+      ),
       by = "ema_product_number",
       relationship = "one-to-one"
     ) |>
@@ -252,9 +336,117 @@ assign_medicine_companies <- function(medicine_holders, sponsors, aliases) {
         .data$holder_basis,
         "curated_sponsor"
       ),
+      sponsor_rename_evidence_url = unname(
+        rename_evidence_urls[company_match_key(.data$sponsor)]
+      ),
       company_name = dplyr::coalesce(.data$sponsor, .data$holder_used),
-      company_match = aliased_company_key(.data$company_name, aliases)
+      company_match = aliased_company_key(.data$company_name, aliases),
+      # Whether EMA's and the used holder name name the medicine's company.
+      ema_is_own = (aliased_company_key(.data$holder_ema, aliases) ==
+                      .data$company_match) %in% TRUE,
+      used_is_own = (aliased_company_key(.data$holder_used, aliases) ==
+                       .data$company_match) %in% TRUE
     )
+}
+
+# The group of each medicine: its company's, or a per-medicine row's (the
+# business went to another owner than the holder's, with the row's note and
+# evidence); `source` says which.
+assign_medicine_groups <- function(assigned, companies, medicine_groups) {
+  assigned |>
+    dplyr::left_join(
+      dplyr::select(
+        companies,
+        "company_match",
+        company_key = "key",
+        company_group_key = "group_key",
+        company_group_source = "group_source"
+      ),
+      by = "company_match",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::left_join(
+      dplyr::select(
+        medicine_groups,
+        "ema_product_number",
+        medicine_group_key = "group_key",
+        group_note = "note",
+        group_evidence_url = "evidence_url"
+      ),
+      by = "ema_product_number",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::mutate(
+      group_key = dplyr::coalesce(
+        .data$medicine_group_key,
+        .data$company_group_key
+      ),
+      source = dplyr::if_else(
+        is.na(.data$medicine_group_key),
+        .data$company_group_source,
+        "curated_medicine"
+      )
+    )
+}
+
+# A curated note about a medicine's later ownership fills its group note
+# without moving it (`source` unchanged); check_curated_medicine_notes()
+# keeps it apart from per-medicine group rows.
+add_medicine_notes <- function(assigned, medicine_notes) {
+  assigned |>
+    dplyr::left_join(
+      dplyr::select(
+        medicine_notes,
+        "ema_product_number",
+        medicine_note = "note",
+        medicine_note_url = "evidence_url"
+      ),
+      by = "ema_product_number",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::mutate(
+      group_note = dplyr::coalesce(.data$group_note, .data$medicine_note),
+      group_evidence_url = dplyr::coalesce(
+        .data$group_evidence_url,
+        .data$medicine_note_url
+      )
+    ) |>
+    dplyr::select(-"medicine_note", -"medicine_note_url")
+}
+
+# A company none of whose medicines stays in its group (each moved by a
+# per-medicine row: Sanofi Pharma Bristol-Myers Squibb's DuoPlavin) joins
+# the group of most of them, so its own group is not left empty.
+regroup_moved_companies <- function(companies, assigned) {
+  moved <- assigned |>
+    dplyr::filter(!is.na(.data$company_match)) |>
+    dplyr::filter(
+      !any(.data$group_key == .data$company_group_key),
+      .by = "company_match"
+    ) |>
+    dplyr::count(.data$company_match, .data$group_key) |>
+    dplyr::arrange(
+      .data$company_match,
+      dplyr::desc(.data$n),
+      .data$group_key
+    ) |>
+    dplyr::distinct(.data$company_match, .keep_all = TRUE) |>
+    dplyr::select("company_match", moved_group_key = "group_key")
+  companies |>
+    dplyr::left_join(
+      moved,
+      by = "company_match",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::mutate(
+      group_source = dplyr::if_else(
+        is.na(.data$moved_group_key),
+        .data$group_source,
+        "curated_medicine"
+      ),
+      group_key = dplyr::coalesce(.data$moved_group_key, .data$group_key)
+    ) |>
+    dplyr::select(-"moved_group_key")
 }
 
 # A holder name without an address tail ("Kamada BioPharma Limited at
@@ -331,12 +523,6 @@ build_company_rows <- function(assigned, aliases, representatives) {
 
   assigned |>
     dplyr::filter(!is.na(.data$company_match)) |>
-    dplyr::mutate(
-      ema_is_own = (aliased_company_key(.data$holder_ema, aliases) ==
-                      .data$company_match) %in% TRUE,
-      used_is_own = (aliased_company_key(.data$holder_used, aliases) ==
-                       .data$company_match) %in% TRUE
-    ) |>
     dplyr::summarise(
       medicines = dplyr::n(),
       member_holders = list(sort(unique(c(
@@ -371,7 +557,10 @@ abort_curated_companies <- function(problem, offenders) {
 }
 
 company_key_pattern <- "^[cg]\\.[a-z0-9]+(-[a-z0-9]+)*$"
-monogram_pattern <- "^[A-Z0-9]{1,3}$"
+# Curated monograms can be a full ticker ("ABBV"; user decision 2026-09-28:
+# "4-letter badges are ok"); derived ones stay at 3 characters.
+monogram_pattern <- "^[A-Z0-9]{1,4}$"
+derived_monogram_pattern <- "^[A-Z0-9]{1,3}$"
 
 check_curated_companies <- function(curated) {
   groups <- curated$groups
@@ -392,7 +581,7 @@ check_curated_companies <- function(curated) {
   ]
   if (length(bad_monograms) > 0) {
     abort_curated_companies(
-      "monograms are not 1-3 unique capitals or digits",
+      "monograms are not 1-4 unique capitals or digits",
       bad_monograms
     )
   }
@@ -411,9 +600,11 @@ check_curated_companies <- function(curated) {
     )
   }
   unknown_groups <- setdiff(
-    c(curated$members$group_key, stats::na.omit(
-      curated$sponsors$sponsor_group_key
-    )),
+    c(
+      curated$members$group_key,
+      stats::na.omit(curated$sponsors$sponsor_group_key),
+      curated$medicine_groups$group_key
+    ),
     groups$group_key
   )
   if (length(unknown_groups) > 0) {
@@ -426,40 +617,147 @@ check_curated_companies <- function(curated) {
   if (length(chained) > 0) {
     abort_curated_companies("aliases point to aliases", chained)
   }
+  check_curated_members(curated$members)
+  check_curated_aliases(curated$aliases)
   check_curated_sponsors(curated$sponsors)
+  check_curated_medicine_groups(curated$medicine_groups)
+  check_curated_medicine_notes(
+    curated$medicine_notes,
+    curated$medicine_groups
+  )
   invisible(curated)
 }
 
-check_curated_sponsors <- function(sponsors) {
-  expected <- names(curated_medicine_sponsors())
-  if (!identical(names(sponsors), expected)) {
+# A member's ownership note ships in companies.json with its evidence URL.
+check_curated_members <- function(members) {
+  has_note <- !is.na(members$note)
+  is_invalid <- has_note != !is.na(members$evidence_url) |
+    (has_note & !grepl("^https://", members$evidence_url))
+  if (any(is_invalid)) {
     abort_curated_companies(
-      "the sponsor table has other columns",
-      c(setdiff(names(sponsors), expected), setdiff(expected, names(sponsors)))
+      "member notes need an https evidence URL, and evidence URLs a note",
+      members$holder[is_invalid]
     )
   }
-  quote_words <- lengths(
-    strsplit(stringr::str_squish(sponsors$evidence_quote), " ")
-  )
+  invisible(members)
+}
+
+# Renames carry evidence (curated_sponsor_renames()); other aliases may not.
+check_curated_aliases <- function(aliases) {
+  check_table_columns(aliases, curated_company_aliases(), "alias")
+  with_evidence <- !is.na(aliases$evidence_url) |
+    !is.na(aliases$evidence_quote) |
+    !is.na(aliases$checked_date)
+  is_invalid <- with_evidence & !has_evidence(aliases)
+  if (any(is_invalid)) {
+    abort_curated_companies(
+      paste(
+        "alias evidence needs an https URL, a quote of at most 20 words and",
+        "a checked date"
+      ),
+      aliases$holder[is_invalid]
+    )
+  }
+  invisible(aliases)
+}
+
+check_curated_sponsors <- function(sponsors) {
+  check_table_columns(sponsors, curated_medicine_sponsors(), "sponsor")
   is_invalid <- is.na(sponsors$ema_product_number) |
     duplicated(sponsors$ema_product_number) |
     is.na(sponsors$holder) |
     is.na(sponsors$sponsor) |
-    !grepl("^https://", sponsors$evidence_url) |
-    is.na(sponsors$evidence_quote) |
-    quote_words > 20 |
-    is.na(sponsors$checked_date) |
+    is.na(sponsors$note) |
+    !has_evidence(sponsors) |
     is.na(sponsors$reviewed)
   if (any(is_invalid)) {
     abort_curated_companies(
       paste(
-        "sponsor rows need a unique product, holder, sponsor, https evidence,",
-        "a quote of at most 20 words, a checked date and a review flag"
+        "sponsor rows need a unique product, holder, sponsor, note, https",
+        "evidence, a quote of at most 20 words, a checked date and a review",
+        "flag"
       ),
       sponsors$ema_product_number[is_invalid]
     )
   }
   invisible(sponsors)
+}
+
+check_curated_medicine_groups <- function(medicine_groups) {
+  check_table_columns(
+    medicine_groups,
+    curated_medicine_groups(),
+    "per-medicine group"
+  )
+  is_invalid <- is.na(medicine_groups$ema_product_number) |
+    duplicated(medicine_groups$ema_product_number) |
+    is.na(medicine_groups$holder) |
+    is.na(medicine_groups$group_key) |
+    is.na(medicine_groups$note) |
+    !has_evidence(medicine_groups)
+  if (any(is_invalid)) {
+    abort_curated_companies(
+      paste(
+        "per-medicine group rows need a unique product, holder, group, note,",
+        "https evidence, a quote of at most 20 words and a checked date"
+      ),
+      medicine_groups$ema_product_number[is_invalid]
+    )
+  }
+  invisible(medicine_groups)
+}
+
+check_curated_medicine_notes <- function(medicine_notes, medicine_groups) {
+  check_table_columns(medicine_notes, curated_medicine_notes(), "medicine note")
+  is_invalid <- is.na(medicine_notes$ema_product_number) |
+    duplicated(medicine_notes$ema_product_number) |
+    is.na(medicine_notes$note) |
+    !grepl("^https://", medicine_notes$evidence_url) |
+    is.na(medicine_notes$checked_date)
+  if (any(is_invalid)) {
+    abort_curated_companies(
+      paste(
+        "medicine notes need a unique product, a note, an https evidence URL",
+        "and a checked date"
+      ),
+      medicine_notes$ema_product_number[is_invalid]
+    )
+  }
+  # Both fill the medicine's one group note.
+  noted_twice <- intersect(
+    medicine_notes$ema_product_number,
+    medicine_groups$ema_product_number
+  )
+  if (length(noted_twice) > 0) {
+    abort_curated_companies(
+      "medicines with both a per-medicine group row and a note",
+      noted_twice
+    )
+  }
+  invisible(medicine_notes)
+}
+
+check_table_columns <- function(table, template, label) {
+  expected <- names(template)
+  if (!identical(names(table), expected)) {
+    abort_curated_companies(
+      paste("the", label, "table has other columns"),
+      c(setdiff(names(table), expected), setdiff(expected, names(table)))
+    )
+  }
+  invisible(table)
+}
+
+# An https evidence URL, a verbatim quote of at most 20 words and the date
+# it was checked.
+has_evidence <- function(rows) {
+  quote_words <- lengths(
+    strsplit(stringr::str_squish(rows$evidence_quote), " ")
+  )
+  grepl("^https://", rows$evidence_url) &
+    !is.na(rows$evidence_quote) &
+    quote_words <= 20 &
+    !is.na(rows$checked_date)
 }
 
 split_partners <- function(partners) {
@@ -545,7 +843,7 @@ monogram_candidates <- function(name) {
       paste0(first, pairs[1, ], pairs[2, ])
     }
   )
-  unique(candidate_list[grepl(monogram_pattern, candidate_list)])
+  unique(candidate_list[grepl(derived_monogram_pattern, candidate_list)])
 }
 
 first_free_monogram <- function(first, taken) {
@@ -618,20 +916,22 @@ build_company_tables <- function(medicine_holders,
       )
     )
   check_own_group_keys(companies, assigned, curated$groups)
+  medicine_groups <- judge_medicine_groups(
+    curated$medicine_groups,
+    assigned,
+    companies,
+    curated$aliases
+  )
+  assigned <- assign_medicine_groups(
+    assigned,
+    companies,
+    medicine_groups$applied
+  ) |>
+    add_medicine_notes(curated$medicine_notes)
+  companies <- regroup_moved_companies(companies, assigned)
   companies$sources <- company_sources(companies)
-  groups <- build_group_rows(companies, curated, snapshot_date)
+  groups <- build_group_rows(companies, assigned, curated, snapshot_date)
   medicine_companies <- assigned |>
-    dplyr::left_join(
-      dplyr::select(
-        companies,
-        "company_match",
-        company_key = "key",
-        "group_key",
-        source = "group_source"
-      ),
-      by = "company_match",
-      relationship = "many-to-one"
-    ) |>
     dplyr::select(
       "ema_product_number",
       "holder_ema",
@@ -641,7 +941,12 @@ build_company_tables <- function(medicine_holders,
       "company_key",
       "group_key",
       "country",
-      "source"
+      "source",
+      "group_note",
+      "group_evidence_url",
+      "sponsor_note",
+      "sponsor_evidence_url",
+      "sponsor_rename_evidence_url"
     ) |>
     dplyr::arrange(.data$ema_product_number)
   tables <- list(
@@ -658,8 +963,18 @@ build_company_tables <- function(medicine_holders,
     curated_groups = sum(groups$key %in% curated$groups$group_key),
     curated_stale = stale_curated_rows(curated, companies$company_match),
     sponsors_stale = sponsors$stale,
+    medicine_groups = medicine_groups$applied,
+    medicine_groups_stale = medicine_groups$stale,
+    medicine_groups_redundant = medicine_groups$redundant,
+    medicine_notes_stale = setdiff(
+      curated$medicine_notes$ema_product_number,
+      medicine_holders$ema_product_number
+    ),
+    # All their companies moved to another group, or none is in the data.
+    curated_groups_empty = setdiff(curated$groups$group_key, groups$key),
     gleif = judged_gleif,
-    register_addresses = sum(medicine_holders$register_name_is_address)
+    register_addresses = sum(medicine_holders$register_name_is_address),
+    register_not_active = sum(medicine_holders$register_not_active %in% TRUE)
   )
 }
 
@@ -704,7 +1019,7 @@ company_sources <- function(companies) {
     list(
       companies$from_register,
       companies$from_sponsor,
-      companies$group_source == "curated",
+      companies$group_source %in% c("curated", "curated_medicine"),
       !is.na(companies$lei)
     ),
     function(from_register, from_sponsor, curated_group, has_lei) {
@@ -717,6 +1032,8 @@ company_sources <- function(companies) {
     }
   )
 }
+
+company_source_order <- c("ema", "union_register", "curated", "gleif")
 
 company_output_rows <- function(companies, snapshot_date) {
   companies |>
@@ -736,9 +1053,62 @@ company_output_rows <- function(companies, snapshot_date) {
       .data$gleif_ultimate_parent_lei,
       .data$member_holders,
       .data$original_holders,
+      ownership = list(empty_ownership()),
       .data$sources,
       as_of = snapshot_date
     )
+}
+
+empty_ownership <- function() {
+  dplyr::tibble(
+    holder = character(),
+    note = character(),
+    evidence_url = character()
+  )
+}
+
+# Per group, the ownership changes behind it, by holder: each curated
+# member with a note (an acquisition, rename or spin-off) whose company is in
+# the group, and each alias with evidence (a renamed sponsor's old name:
+# curated_sponsor_renames()) whose company is in the group, an own group too.
+group_ownership <- function(companies, curated) {
+  member_notes <- curated$members |>
+    dplyr::filter(!is.na(.data$note)) |>
+    dplyr::mutate(
+      company_match = aliased_company_key(.data$holder, curated$aliases)
+    ) |>
+    dplyr::semi_join(
+      companies,
+      by = c("company_match", "group_key")
+    )
+  renames <- curated$aliases |>
+    dplyr::filter(!is.na(.data$evidence_url)) |>
+    dplyr::mutate(
+      company_match = aliased_company_key(.data$holder, curated$aliases)
+    ) |>
+    dplyr::inner_join(
+      dplyr::select(companies, "company_match", "group_key"),
+      by = "company_match",
+      relationship = "many-to-one"
+    )
+  note_columns <- c("group_key", "holder", "note", "evidence_url")
+  notes <- dplyr::bind_rows(
+    # A table without any note has logical NA columns.
+    dplyr::mutate(
+      dplyr::select(member_notes, dplyr::all_of(note_columns)),
+      dplyr::across(dplyr::everything(), as.character)
+    ),
+    dplyr::select(renames, dplyr::all_of(note_columns))
+  ) |>
+    dplyr::distinct(.data$group_key, .data$holder, .keep_all = TRUE) |>
+    dplyr::arrange(.data$group_key, .data$holder)
+  dplyr::tibble(
+    group_key = unique(notes$group_key),
+    ownership = unname(split(
+      dplyr::select(notes, "holder", "note", "evidence_url"),
+      factor(notes$group_key, levels = unique(notes$group_key))
+    ))
+  )
 }
 
 # Derived monograms avoid words and codes that read as something else
@@ -756,24 +1126,66 @@ reserved_monograms <- function(curated_names) {
   c(monogram_blocklist, substr(letters_only, 1, 3))
 }
 
-# One row per group with members: the curated groups as curated, the rest
-# named after their one company.
-build_group_rows <- function(companies, curated, snapshot_date) {
-  members <- companies |>
+# Per group, from its medicines: the holder names of its member companies
+# (`member_holders`) and EMA's names of its medicines that name another
+# company (`original_holders`: a register or sponsor decided, or a
+# per-medicine row moved the medicine here), its medicine count, sources
+# and whether only representatives hold them.
+group_members <- function(companies, assigned) {
+  memberships <- companies |>
     dplyr::summarise(
-      member_holders = list(sort(unique(as.character(
-        unlist(.data$member_holders)
-      )))),
-      original_holders = list(sort(as.character(setdiff(
-        unlist(.data$original_holders),
-        unlist(.data$member_holders)
-      )))),
-      medicines = sum(.data$medicines),
-      companies = dplyr::n(),
-      sources = list(unique(unlist(.data$sources))),
+      member_sources = list(unique(unlist(.data$sources))),
       representative = all(.data$representative),
       .by = "group_key"
     )
+  assigned |>
+    dplyr::filter(!is.na(.data$group_key)) |>
+    dplyr::left_join(
+      dplyr::select(companies, "company_match", member_group_key = "group_key"),
+      by = "company_match",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::mutate(
+      is_member = (.data$member_group_key == .data$group_key) %in% TRUE
+    ) |>
+    dplyr::summarise(
+      member_holders = list(sort(unique(c(
+        .data$holder_ema[.data$is_member & .data$ema_is_own],
+        .data$holder_used[.data$is_member & .data$used_is_own]
+      )))),
+      ema_holders = list(unique(stats::na.omit(.data$holder_ema))),
+      medicines = dplyr::n(),
+      moved_in = any(.data$source == "curated_medicine"),
+      .by = "group_key"
+    ) |>
+    dplyr::left_join(
+      memberships,
+      by = "group_key",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::mutate(
+      original_holders = purrr::map2(
+        .data$ema_holders,
+        .data$member_holders,
+        function(holders, members) sort(setdiff(holders, members))
+      ),
+      sources = purrr::map2(
+        .data$member_sources,
+        .data$moved_in,
+        function(sources, moved_in) {
+          present <- c("ema", sources, if (moved_in) "curated")
+          intersect(company_source_order, present)
+        }
+      ),
+      representative = .data$representative %in% TRUE
+    ) |>
+    dplyr::select(-"ema_holders", -"member_sources", -"moved_in")
+}
+
+# One row per group with medicines: the curated groups as curated, the rest
+# named after their one company; each with its ownership changes.
+build_group_rows <- function(companies, assigned, curated, snapshot_date) {
+  members <- group_members(companies, assigned)
   curated_rows <- curated$groups |>
     dplyr::inner_join(members, by = "group_key", relationship = "one-to-one") |>
     dplyr::mutate(
@@ -804,6 +1216,33 @@ build_group_rows <- function(companies, curated, snapshot_date) {
       as_of = snapshot_date
     )
   dplyr::bind_rows(curated_rows, own_rows) |>
+    dplyr::left_join(
+      group_ownership(companies, curated),
+      by = "group_key",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::mutate(
+      ownership = purrr::map(.data$ownership, function(rows) {
+        if (is.null(rows)) empty_ownership() else rows
+      }),
+      # A curated group's LEI and legal name are GLEIF's too; ownership
+      # notes are curated.
+      sources = purrr::pmap(
+        list(
+          .data$sources,
+          !is.na(.data$lei) | !is.na(.data$gleif_legal_name),
+          purrr::map_int(.data$ownership, nrow) > 0
+        ),
+        function(sources, from_gleif, has_ownership) {
+          present <- c(
+            sources,
+            if (has_ownership) "curated",
+            if (from_gleif) "gleif"
+          )
+          intersect(company_source_order, present)
+        }
+      )
+    ) |>
     dplyr::transmute(
       key = .data$group_key,
       kind = "group",
@@ -820,6 +1259,7 @@ build_group_rows <- function(companies, curated, snapshot_date) {
       .data$gleif_ultimate_parent_lei,
       .data$member_holders,
       .data$original_holders,
+      .data$ownership,
       .data$sources,
       .data$as_of
     )
@@ -855,15 +1295,22 @@ check_company_tables <- function(tables) {
     !grepl(monogram_pattern, groups$monogram) | duplicated(groups$monogram)
   ]
   if (length(bad_monograms) > 0) {
-    abort_company_tables("group monograms are not unique", bad_monograms)
+    abort_company_tables(
+      "group monograms are not 1-4 unique capitals or digits",
+      bad_monograms
+    )
   }
   company_rows <- companies[companies$kind == "company", ]
-  empty_groups <- setdiff(groups$key, company_rows$group_key)
+  empty_groups <- setdiff(groups$key, medicines$group_key)
   if (length(empty_groups) > 0) {
-    abort_company_tables("groups without members", empty_groups)
+    abort_company_tables("groups without members (medicines)", empty_groups)
   }
   missing_groups <- setdiff(
-    c(company_rows$group_key, unlist(groups$partners)),
+    c(
+      company_rows$group_key,
+      unlist(groups$partners),
+      stats::na.omit(medicines$group_key)
+    ),
     groups$key
   )
   if (length(missing_groups) > 0) {
@@ -909,15 +1356,19 @@ report_company_summary <- function(company_run, medicines) {
       relationship = "one-to-one"
     ) |>
     dplyr::mutate(authorised = .data$medicine_status == "Authorised")
-  is_curated <- per_medicine$source %in% c("curated", "gleif")
+  is_curated <- per_medicine$source %in%
+    c("curated", "curated_medicine", "gleif")
   representative_companies <- companies$key[
     companies$kind == "company" & companies$representative
   ]
+  # A curated sponsor can stand behind the register's holder (Zokinvy).
+  register_decided <- sum(!is.na(per_medicine$holder_register))
   cli::cli_alert_info(sprintf(
     paste(
       "Companies: %d companies in %d groups (%d curated);",
       "curated groups hold %d of %d medicines with a holder",
-      "(%d of %d Authorised); %d holders decided by the Union Register."
+      "(%d of %d Authorised); the Union Register decides the holder of %d",
+      "%s."
     ),
     sum(companies$kind == "company"),
     nrow(groups),
@@ -926,8 +1377,16 @@ report_company_summary <- function(company_run, medicines) {
     sum(!is.na(per_medicine$holder_used)),
     sum(is_curated & per_medicine$authorised),
     sum(!is.na(per_medicine$holder_used) & per_medicine$authorised),
-    sum(per_medicine$holder_basis %in% "register")
+    register_decided,
+    ngettext(register_decided, "medicine", "medicines")
   ))
+  if (company_run$register_not_active > 0) {
+    cli::cli_alert_info(paste(
+      "{company_run$register_not_active} Union Register holder{?s} of another",
+      "company not used: the register does not list the product as Active."
+    ))
+  }
+  report_medicine_groups(company_run, groups)
   cli::cli_alert_info(sprintf(
     paste(
       "Representatives: %d medicines resolved to a sponsor,",
@@ -955,12 +1414,34 @@ report_company_summary <- function(company_run, medicines) {
   }
   stale <- c(
     company_run$curated_stale,
-    company_run$sponsors_stale$ema_product_number
+    company_run$sponsors_stale$ema_product_number,
+    company_run$medicine_groups_stale$ema_product_number
   )
   if (length(stale) > 0) {
     cli::cli_alert_warning(
       "Curated company rows naming no current holder:
       {.val {offender_values(stale, max_shown = 20)}}"
+    )
+  }
+  stale_notes <- company_run$medicine_notes_stale
+  if (length(stale_notes) > 0) {
+    cli::cli_alert_warning(
+      "Curated medicine notes naming no medicine in the data:
+      {.val {offender_values(stale_notes, max_shown = 20)}}"
+    )
+  }
+  redundant <- company_run$medicine_groups_redundant$ema_product_number
+  if (length(redundant) > 0) {
+    cli::cli_alert_warning(
+      "Per-medicine group rows naming the company's own group (not applied;
+      drop them): {.val {offender_values(redundant, max_shown = 20)}}"
+    )
+  }
+  empty_groups <- company_run$curated_groups_empty
+  if (length(empty_groups) > 0) {
+    cli::cli_alert_warning(
+      "Curated groups without medicines (left out of companies.json):
+      {.val {offender_values(empty_groups, max_shown = 20)}}"
     )
   }
   if (company_run$register_addresses > 0) {
@@ -969,7 +1450,47 @@ report_company_summary <- function(company_run, medicines) {
       {?is an address/are addresses}: EMA's holder used."
     )
   }
+  report_live_joint_ventures(groups, per_medicine)
   invisible(company_run)
+}
+
+# The medicines a per-medicine row moved to another group than their
+# holder's.
+report_medicine_groups <- function(company_run, groups) {
+  moved <- company_run$medicine_groups
+  group_names <- stats::setNames(groups$name, groups$key)
+  labels <- sprintf(
+    "%s (%s) -> %s",
+    moved$ema_product_number,
+    moved$holder,
+    unname(group_names[moved$group_key])
+  )
+  if (length(labels) == 0) {
+    return(invisible(company_run))
+  }
+  cli::cli_alert_info(paste(
+    "Per-medicine groups: {nrow(moved)} medicine{?s} moved to the current",
+    "owner of {?its/their} business:",
+    "{.val {offender_values(labels, max_shown = length(labels))}}"
+  ))
+  invisible(company_run)
+}
+
+# Joint ventures stay their own group only while they are live (user
+# decision 2026-09-28): one holding no authorised medicine may have ended.
+report_live_joint_ventures <- function(groups, per_medicine) {
+  authorised_groups <- per_medicine$group_key[per_medicine$authorised %in% TRUE]
+  ended <- groups$name[
+    groups$joint_venture & !groups$key %in% authorised_groups
+  ]
+  if (length(ended) > 0) {
+    cli::cli_alert_warning(paste(
+      "Joint-venture groups without an authorised medicine (ended? map",
+      "their medicines to the partners in {.fn curated_medicine_groups}):",
+      "{.val {offender_values(ended, max_shown = length(ended))}}"
+    ))
+  }
+  invisible(groups)
 }
 
 # meta.json entries for the company data: the register's holders, the
@@ -1007,8 +1528,8 @@ company_source_entries <- function(register_source, gleif_matches) {
       attribution = paste0(
         "Company groups (current owner as of ",
         format(curated_companies_as_of),
-        ") curated by approval-atlas from company announcements, the Union ",
-        "Register and GLEIF"
+        ") curated by approval-atlas from company announcements and ",
+        "filings, EMA documents, the Union Register and GLEIF"
       )
     )
   ))

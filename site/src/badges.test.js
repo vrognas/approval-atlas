@@ -1,16 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import {
   ATC_CODE,
   ATC_GROUP_HUES,
   ATC_PREFIX_LENGTHS,
+  BRAND_HUES,
   atcHue,
+  companyHue,
+  companySeriesColors,
   atcSegments,
+  oklab,
   statusColor,
   statusHue,
   statusTip,
   statusTipId,
+  tokenDistance,
   typeBadges,
   typeTip,
   typeTipId,
@@ -125,4 +130,75 @@ test("a status's chart colour: its hue's mid, Authorized the darker --status-aut
   assert.equal(statusColor("Authorised"), "var(--status-authorized)");
   assert.equal(statusColor("Withdrawn"), "var(--red-mid)");
   assert.equal(statusColor("Something new"), "var(--slate-mid)");
+});
+
+// Companies part 2 (user decision 2026-09-28): monogram badges, the largest groups in a damped
+// version of their brand colour, every other group in a damped hue that is the same on every page.
+test("company badges: brand hues for the largest groups, a stable damped hue (never slate) for the rest", () => {
+  assert.deepEqual(companyHue("g.roche"), { hue: "co-roche" });
+  assert.deepEqual(companyHue("g.eli-lilly"), { hue: "co-lilly" });
+  const hue = companyHue("g.stada");
+  assert.deepEqual(companyHue("g.stada"), hue);
+  assert.ok(Object.values(ATC_GROUP_HUES).includes(hue.hue));
+  const hashed = Array.from({ length: 200 }, (_, index) => companyHue(`g.company-${index}`).hue);
+  assert.equal(hashed.includes("slate"), false);
+  assert.ok(new Set(hashed).size >= 10);
+  assert.equal(new Set(Object.values(BRAND_HUES).map((brand) => brand.hue)).size, Object.keys(BRAND_HUES).length);
+  // The ~25 largest groups (spec): the user's 20, then Krka, CSL and Gedeon Richter.
+  assert.ok(Object.keys(BRAND_HUES).length >= 23);
+});
+
+test("style.css defines each brand hue's fill, mid and text in both modes, and its hue class", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const light = css.match(/:root\s*\{([^}]*)\}/)[1];
+  const dark = css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([^}]*)\}/)[1];
+  const missing = Object.values(BRAND_HUES).flatMap(({ hue }) => ["1", "mid", "text"].flatMap((step) =>
+    [[light, "light"], [dark, "dark"]].filter(([block]) => !block.includes(`--${hue}-${step}:`)).map(([, mode]) => `${mode} --${hue}-${step}`)));
+  assert.deepEqual(missing, []);
+  assert.deepEqual(Object.values(BRAND_HUES).filter(({ hue }) => !css.includes(`.hue-${hue} {`)), []);
+});
+
+// The brand keys are group keys the pipeline writes (skipped before a run).
+const companiesFile = new URL("../public/data/companies.json", import.meta.url);
+test("every brand hue belongs to a company group in companies.json", { skip: existsSync(companiesFile) ? false : "companies.json not found" }, () => {
+  const groups = new Set(JSON.parse(readFileSync(companiesFile, "utf8")).filter((row) => row.kind === "group").map((row) => row.key));
+  assert.deepEqual(Object.keys(BRAND_HUES).filter((key) => !groups.has(key)), []);
+});
+
+test("company chart colours: its mid, else its text shade, else the nearest other hue that differs from those taken", () => {
+  // A palette where Pfizer's mid is Roche's twin, Amgen's mid and text are Roche's and Pfizer's
+  // text, and the blue mid is near them too: the next nearest hue far enough, indigo.
+  const tokens = {
+    "--co-roche-mid": "#4662a5", "--co-roche-text": "#1d305d",
+    "--co-pfizer-mid": "#4763a6", "--co-pfizer-text": "#1e245c",
+    "--co-amgen-mid": "#4662a4", "--co-amgen-text": "#1e245d",
+    "--blue-mid": "#4a64a0", "--indigo-mid": "#8a4fb0", "--co-novartis-mid": "#a6763a",
+  };
+  const colors = companySeriesColors(["g.roche", "g.novartis", "g.pfizer", "g.amgen"], { light: tokens, dark: tokens });
+  assert.equal(colors.get("g.roche"), "var(--co-roche-mid)");
+  assert.equal(colors.get("g.novartis"), "var(--co-novartis-mid)");
+  assert.equal(colors.get("g.pfizer"), "var(--co-pfizer-text)");
+  assert.equal(colors.get("g.amgen"), "var(--indigo-mid)");
+  // Without the palette's colours: each its mid, a second group of one hue its text shade.
+  const firstOfHue = new Map();
+  let [a, b] = [null, null];
+  for (let index = 0; b === null; index++) {
+    const key = `g.company-${index}`;
+    const { hue } = companyHue(key);
+    if (firstOfHue.has(hue)) [a, b] = [firstOfHue.get(hue), key];
+    else firstOfHue.set(hue, key);
+  }
+  const plain = companySeriesColors(["g.roche", a, b]);
+  assert.equal(plain.get("g.roche"), "var(--co-roche-mid)");
+  assert.equal(plain.get(a), `var(--${companyHue(a).hue}-mid)`);
+  assert.equal(plain.get(b), `var(--${companyHue(b).hue}-text)`);
+});
+
+test("colour distance: OKLab, the smaller of both modes", () => {
+  assert.equal(tokenDistance({ light: {}, dark: {} }, "--a", "--a"), 0);
+  assert.equal(tokenDistance({ light: {}, dark: {} }, "--a", "--b"), Infinity);
+  const palette = { light: { "--a": "#000000", "--b": "#ffffff" }, dark: { "--a": "#000000", "--b": "#000000" } };
+  assert.equal(tokenDistance(palette, "--a", "--b"), 0);
+  assert.ok(Math.abs(oklab("#ffffff")[0] - 1) < 1e-6);
+  assert.equal(oklab("var(--x)"), null);
 });

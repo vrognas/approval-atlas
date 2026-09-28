@@ -6,6 +6,8 @@ export const BREAKDOWNS = ["atc", "area", "mah"];
 export const ATC_QUERY_MAX = 120;
 
 export const DEFAULT_STATE = Object.freeze({
+  // Companies part 2: company group keys ("g.roche"), company keys ("c.roche") and EMA holder
+  // names (older links carry those) in one list, combined with OR; none includes another.
   mah: [],
   from: null, // whole years, inclusive; null = open end
   to: null,
@@ -23,8 +25,9 @@ export const DEFAULT_STATE = Object.freeze({
 const IGNORED_KEYS = ["view"];
 
 // Repeated keys, because MAH names and MeSH terms contain commas. Value = domain set name. The
-// therapeutic areas (area, and branch from before phase 4f) are decoded on their own.
-const LIST_KEYS = { mah: "mahs", type: "types", status: "statuses" };
+// therapeutic areas (area, and branch from before phase 4f) and the companies (mah) are decoded on
+// their own.
+const LIST_KEYS = { type: "types", status: "statuses" };
 
 const sortedDistinct = (values) => [...new Set(values)].sort();
 
@@ -62,8 +65,10 @@ export function normalizeYearRange(from, to, [minYear, maxYear]) {
 
 // domain: { mahs, areas (every therapeutic area tree key), types, statuses: Set, years: [min, max],
 // areaAncestors(key): the branches and nodes above a tree key (a Set; optional), areaCanonical(key):
-// the keys a value is selected as (a term that is a branch or node: that key; optional) }.
-// Invalid values are dropped and returned so the page can say how many were ignored.
+// the keys a value is selected as (a term that is a branch or node: that key; optional),
+// mahAncestors(value), mahCanonical(value): the same for companies (companies.js ancestors(),
+// canonical(); optional) }. Invalid values are dropped and returned so the page can say how many
+// were ignored.
 export function decodeState(params, domain) {
   const state = structuredClone(DEFAULT_STATE);
   const dropped = [];
@@ -105,6 +110,18 @@ export function decodeState(params, domain) {
   }
   state.area = sortedDistinct(areas).filter((value) => !areas.some((other) => above(value).has(other)));
 
+  // Companies (companies part 2): group and company keys, and EMA holder names from older links; a
+  // value a row stands for loads as that row's (a company shown as its group), and a value within
+  // another selected one is dropped, as toggleCompany().
+  const mahAbove = domain.mahAncestors ?? (() => new Set());
+  const mahCanonical = domain.mahCanonical ?? ((value) => [value]);
+  const mahs = [];
+  for (const value of sortedDistinct(params.getAll("mah"))) {
+    if (domain.mahs.has(value)) mahs.push(...mahCanonical(value));
+    else dropped.push({ key: "mah", value });
+  }
+  state.mah = sortedDistinct(mahs).filter((value) => !mahs.some((other) => mahAbove(value).has(other)));
+
   // One value (links from before phase 4a) or several; a value too long for a class name is dropped.
   const atc = params.getAll("atc");
   for (const value of atc.filter((item) => item.trim().length > ATC_QUERY_MAX)) dropped.push({ key: "atc", value });
@@ -131,22 +148,24 @@ export function togglePatch(state, patch) {
 // filters cleared, ATC breakdown), so the link's href and its click agree.
 export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [code] });
 
-// Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI. Kept verbatim:
-// an unknown value shows a "not found" result instead of being dropped.
-export const LOOKUP_KEYS = ["q", "med", "sub", "cond"];
+// Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI, company group or
+// company key (companies part 2). Kept verbatim: an unknown value shows a "not found" result
+// instead of being dropped.
+export const LOOKUP_KEYS = ["q", "med", "sub", "cond", "co"];
 export const LOOKUP_QUERY_MAX = 100;
-export const DEFAULT_LOOKUP = Object.freeze({ q: "", med: null, sub: null, cond: null });
+export const DEFAULT_LOOKUP = Object.freeze({ q: "", med: null, sub: null, cond: null, co: null });
 
 export function decodeLookup(params) {
   const value = (key) => params.get(key)?.trim() || null;
-  return { q: (value("q") ?? "").slice(0, LOOKUP_QUERY_MAX), med: value("med"), sub: value("sub"), cond: value("cond") };
+  return { q: (value("q") ?? "").slice(0, LOOKUP_QUERY_MAX), med: value("med"), sub: value("sub"), cond: value("cond"), co: value("co") };
 }
 
 // The one result the page shows for a lookup state.
-export function lookupView({ q, med, sub, cond }) {
+export function lookupView({ q, med, sub, cond, co = null }) {
   if (med) return { kind: "medicine", value: med };
   if (sub) return { kind: "substance", value: sub };
   if (cond) return { kind: "condition", value: cond };
+  if (co) return { kind: "company", value: co };
   if (q.length >= 2) return { kind: "text", value: q };
   return { kind: null, value: null };
 }
