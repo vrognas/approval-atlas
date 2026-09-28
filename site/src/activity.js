@@ -4,13 +4,15 @@
 // by the holder and the column, the row and column headers by one of them; each is a toggle
 // (aria-pressed): a click on a filter it set exactly clears it again. Row headers show the holder's
 // matching medicines after the name. A second header row holds the sort buttons (toggles), so the
-// column headers keep their names: "Name" and "Total" under Holder (Total, the default, pressed
-// when no other sort is), an arrow under each column (most in that column first); aria-sort on the
-// sorted header. With one ATC class shown by its child classes (parent), that class is a pressed
-// toggle above the table, so the filter a column set can be cleared again. Rebuilt on every
-// render; focus goes back to the same control.
+// column headers keep their names: "Name" and "Total" under Holder (Total, most first, the default,
+// pressed when no other sort is), an arrow under each column (most in that column first); a
+// second click on the sort in force reverses it (fewest first, Z-A), its arrow shows the order and
+// its header has aria-sort. With one ATC class shown by its child classes (parent), that class is
+// a pressed toggle above the table, so the filter a column set can be cleared again. Rebuilt on
+// every render; focus goes back to the same control.
 import * as d3 from "d3";
 import { appendCodeBadge } from "./atc-picker.js";
+import { defaultSortDirection } from "./facets.js";
 import { UI } from "./labels.js";
 
 const STEPS = 5;
@@ -20,21 +22,33 @@ const HINT_ID = "activity-filter-hint";
 // A count's shade, 1-5, relative to the table's largest count.
 const shade = (count, max) => Math.max(1, Math.ceil((STEPS * count) / max));
 
-// A small button that sorts the rows: an arrow down (most first) or up (names A-Z), after its
-// visible text when it has one ("Name", "Total").
-function appendSortButton(parent, { key, label, text = null, pressed, ascending, onClick }) {
+// A sort arrow (decorative): up for ascending (fewest first, A-Z), down for descending. Also the
+// breakdown's and the column order's sort controls (main.js).
+export function appendSortIcon(parent, ascending) {
+  const icon = parent.append("svg").attr("class", "sort-icon").attr("viewBox", "0 0 16 16").attr("aria-hidden", "true").attr("focusable", "false");
+  icon.append("path").attr("d", ascending ? "M8 13V3M4 7l4-4 4 4" : "M8 3v10M4 9l4 4 4-4");
+  return icon;
+}
+
+// A small button that sorts the rows (key: "name", "total" or a column key; sort: the one in
+// force, { key, direction }): an arrow for the order in force, else for the order it starts in,
+// after its visible text when it has one ("Name", "Total"); its name says the order in force.
+function appendSortButton(parent, { key, label, text = null, sort, onSort }) {
+  const pressed = sort.key === key;
+  const direction = pressed ? sort.direction : defaultSortDirection(key);
   const button = parent.append("button")
     .attr("type", "button")
     .attr("class", text ? "sort-button sort-text" : "sort-button")
     .attr("data-focus-key", `sort:${key}`)
-    .attr("aria-label", label)
+    .attr("aria-label", UI.sortOrder.name(label, key === "name" ? "key" : "count", pressed ? direction : null))
     .attr("aria-pressed", String(pressed))
-    .on("click", onClick);
+    .on("click", () => onSort(key));
   if (text) button.append("span").text(text);
-  const icon = button.append("svg").attr("viewBox", "0 0 16 16").attr("aria-hidden", "true").attr("focusable", "false");
-  icon.append("path").attr("d", ascending ? "M8 13V3M4 7l4-4 4 4" : "M8 3v10M4 9l4 4 4-4");
+  appendSortIcon(button, direction === "asc");
   return button;
 }
+
+const ARIA_SORT = { asc: "ascending", desc: "descending" };
 
 // A filter toggle's tooltip ("Show only …") and its description: what a click does.
 const filterButton = (button, label, pressed) => button
@@ -45,8 +59,10 @@ const filterButton = (button, label, pressed) => button
 // rows: holderActivity() output, in display order. columns: [{ key, label: its name in cell names,
 // badge: an ATC code shown as a badge (else the label is the header's text), title: a tooltip,
 // filter: the filter patch its header and cells set (null: a static column, "Other")}] in display
-// order. sort: "total" | "name" | a column key. parent: the one ATC class whose child classes the
-// columns are ({ key, badge, label, filter }), or null. onFilter(patch), onSort(sort). isSet(patch):
+// order. sort: { key: "total" | "name" | a column key, direction: "asc" | "desc" }. parent: the one
+// ATC class or therapeutic area whose children the columns are ({ key, badge: an ATC code or null,
+// label, name, lead: the text before it, filter }), or null.
+// onFilter(patch), onSort(key): a sort button was clicked. isSet(patch):
 // the patch is exactly the current filter (the control is pressed). labelledBy, describedBy: the ids
 // naming and describing the table (outside the scroll area, so they stay readable on a phone).
 export function renderActivity(container, { rows, columns, sort, parent = null, labelledBy, describedBy, onFilter, onSort, isSet }) {
@@ -57,7 +73,7 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
   // The class the columns split: a pressed toggle (its click clears the ATC filter it set).
   if (parent) {
     const line = root.append("p").attr("class", "activity-parent");
-    line.append("span").attr("class", "tools-label").text(UI.activity.parentLead);
+    line.append("span").attr("class", "tools-label").text(parent.lead ?? UI.activity.parentLead);
     const button = line.append("button")
       .attr("type", "button")
       .attr("class", "activity-parent-button")
@@ -65,7 +81,7 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
       .attr("aria-label", parent.label)
       .on("click", () => onFilter(parent.filter));
     filterButton(button, parent.label, isSet(parent.filter));
-    appendCodeBadge(button, parent.badge);
+    if (parent.badge) appendCodeBadge(button, parent.badge);
     button.append("span").attr("class", "activity-parent-name").attr("aria-hidden", "true").text(parent.name);
     button.append("span").attr("class", "activity-parent-remove").attr("aria-hidden", "true").text("×");
   }
@@ -77,10 +93,11 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
   const table = root.append("table").attr("class", "activity").attr("aria-labelledby", labelledBy).attr("aria-describedby", describedBy);
   const thead = table.append("thead");
   const head = thead.append("tr");
-  // Holder names A-Z ("ascending"), or by total medicines, the default ("other": not by name).
-  head.append("th").attr("scope", "col").attr("aria-sort", { name: "ascending", total: "other" }[sort] ?? null).text(UI.activity.holder);
+  // The Holder column is sorted by name or by the total its cells show after the name.
+  const holderSorted = sort.key === "name" || sort.key === "total";
+  head.append("th").attr("scope", "col").attr("aria-sort", holderSorted ? ARIA_SORT[sort.direction] : null).text(UI.activity.holder);
   head.selectAll("th.activity-col").data(columns).join("th").attr("scope", "col").attr("class", "activity-col").each(function header(column) {
-    const cell = d3.select(this).attr("title", column.title ?? null).attr("aria-sort", sort === column.key ? "descending" : null);
+    const cell = d3.select(this).attr("title", column.title ?? null).attr("aria-sort", sort.key === column.key ? ARIA_SORT[sort.direction] : null);
     if (!column.filter) {
       cell.append("span").attr("class", "activity-col-name").text(column.label);
       return;
@@ -96,30 +113,10 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
   // The sort buttons, in a row of their own (not headers, so they are not part of a column's name).
   const sorts = thead.append("tr").attr("class", "activity-sorts");
   const holderSorts = sorts.append("td").append("span").attr("class", "activity-head");
-  appendSortButton(holderSorts, {
-    key: "name",
-    label: UI.activity.sortByName,
-    text: UI.activity.sortName,
-    pressed: sort === "name",
-    ascending: true,
-    onClick: () => onSort(sort === "name" ? "total" : "name"),
-  });
-  appendSortButton(holderSorts, {
-    key: "total",
-    label: UI.activity.sortByTotal,
-    text: UI.activity.sortTotal,
-    pressed: sort === "total",
-    ascending: false,
-    onClick: () => onSort("total"),
-  });
+  appendSortButton(holderSorts, { key: "name", label: UI.activity.sortByName, text: UI.activity.sortName, sort, onSort });
+  appendSortButton(holderSorts, { key: "total", label: UI.activity.sortByTotal, text: UI.activity.sortTotal, sort, onSort });
   sorts.selectAll("td.activity-sort").data(columns).join("td").attr("class", "activity-sort").each(function sortCell(column) {
-    appendSortButton(d3.select(this), {
-      key: column.key,
-      label: UI.activity.sortBy(column.title ?? column.label),
-      pressed: sort === column.key,
-      ascending: false,
-      onClick: () => onSort(sort === column.key ? "total" : column.key),
-    });
+    appendSortButton(d3.select(this), { key: column.key, label: UI.activity.sortBy(column.title ?? column.label), sort, onSort });
   });
   const lines = table.append("tbody").selectAll("tr").data(rows).join("tr");
   const holders = lines.append("th")

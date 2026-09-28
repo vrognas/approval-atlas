@@ -21,19 +21,49 @@ export function atcCode(row) {
   return row.current_atc_code ?? row.atc_code ?? row.atc_code_human ?? null;
 }
 
+// A curated code's evidence (phase 4e: the ATC/DDD Index page, WHO's temporary list or the product
+// information PDF, atc_code_document_url), by its URL.
+const CURATED_EVIDENCE = [
+  ["whocc_temporary", /^https:\/\/atcddd\.fhi\.no\/.*temporary/],
+  ["whocc_index", /^https:\/\/atcddd\.fhi\.no\/atc_ddd_index\//],
+  ["ema_smpc_text", /^https:\/\/www\.ema\.europa\.eu\/.*\.pdf(-\d+)?$/i],
+];
+
 // How the code shown (atcCode()) differs from EMA's published one, or null: "retired" (from: the
 // code WHO retired, now: its current code), "completed" / "conflict" (published: EMA's incomplete
-// code, which the product information completes or contradicts), "smpc" (EMA publishes none).
+// code, which the product information completes or contradicts), "smpc" (EMA publishes none),
+// "curated" (phase 4e: checked by hand; published: EMA's code or null, conflict, evidence:
+// "whocc_index" | "whocc_temporary" | "ema_smpc_text" | null, url: the evidence).
 export function atcOrigin(row) {
   const code = atcCode(row);
   if (code === null || code === row.atc_code_human) return null;
   if (row.current_atc_code) return { kind: "retired", from: row.atc_code ?? row.atc_code_human, now: row.current_atc_code };
+  if (row.atc_code_source === "curated") {
+    const url = row.atc_code_document_url ?? null;
+    const [evidence = null] = CURATED_EVIDENCE.find(([, pattern]) => url !== null && pattern.test(url)) ?? [];
+    return { kind: "curated", published: row.atc_code_human ?? null, conflict: Boolean(row.atc_code_conflict), evidence, url };
+  }
   if (row.atc_code_human === null) return { kind: "smpc" };
   return { kind: row.atc_code_conflict ? "conflict" : "completed", published: row.atc_code_human };
 }
 
 // Not a valid level-5 code: fewer levels, or malformed (EMA's "LX1XX02").
 export const atcIncomplete = (code) => atcLevel(code) !== ATC_PREFIX_LENGTHS.length;
+
+// Whether the code a row shows (atcCode()) is incomplete: the data's atc_final_level (phase 4e: a
+// level-4 code WHO does not subdivide, B03AC, or moved a code up to, J07BX03 -> J07BN, is
+// complete), else (older data files) not a level-5 code.
+export const atcRowIncomplete = (row) => (typeof row.atc_final_level === "boolean" ? !row.atc_final_level : atcIncomplete(atcCode(row)));
+
+// The valid codes some product is coded at exactly with an incomplete code (atcRowIncomplete()):
+// the tree's and breakdown's static row there reads "code incomplete", else "coded at this level".
+export function atcIncompleteAt(products) {
+  const codes = new Set();
+  for (const product of products) {
+    for (const row of product.atc) if (atcLevel(atcCode(row)) && atcRowIncomplete(row)) codes.add(atcCode(row));
+  }
+  return codes;
+}
 
 // products: buildProducts() rows (or any { atc: [rows] }, codes by atcCode()). A product counts once
 // per prefix, however many of its codes share it.

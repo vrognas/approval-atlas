@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 // WCAG 2.2 contrast of the style.css tokens, light and dark: text >= 4.5:1 on every background
-// it is used on, chart marks >= 3:1. Status dots and the stacked strip's status segments use the
-// hue mids, checked as chart marks.
+// it is used on, chart marks >= 3:1. Status dots and the per-year chart's status stacks (Stack by
+// Status) use the hue mids, checked as chart marks; the approval-years strip's bars are --bar.
 const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
 
 function declarations(block) {
@@ -97,9 +97,10 @@ for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
     assert.deepEqual(failing, []);
   });
 
-  // WCAG 1.4.1: Authorized, the bottom segment of every approval-years bar, differs in lightness
-  // from each status stacked on it (red/green alone fails for protan and deutan vision).
-  test(`${mode} the Authorized strip segment differs in lightness from every other status (1.5:1)`, () => {
+  // WCAG 1.4.1: Authorized, the bottom segment of every per-year column stacked by status (the
+  // approval-years strip's until phase 4f), differs in lightness from each status stacked on it
+  // (red/green alone fails for protan and deutan vision).
+  test(`${mode} the Authorized status segment differs in lightness from every other status (1.5:1)`, () => {
     const others = STATUS_HUES.filter((hue) => hue !== "green");
     const failing = others.map((hue) => [hue, contrast(tokens, "--status-authorized", `--${hue}-mid`)]).filter(([, ratio]) => ratio < 1.5);
     assert.deepEqual(failing, []);

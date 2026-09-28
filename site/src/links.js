@@ -28,8 +28,9 @@ function icon(className, paths) {
 // An arrow out of a box: the link leaves this site.
 const externalIcon = () => icon("link-icon", ["M9.5 2.5h4v4", "M13.5 2.5 7.5 8.5", "M11.5 9.5v4h-9v-9h4"]);
 
-// A chevron: the link opens a page of this site (a condition page).
-export const openIcon = () => icon("link-icon", ["M6 3.5 10.5 8 6 12.5"]);
+// A page with a folded corner: the link opens a page of this site (a condition page). Not a
+// chevron, which in the area tree's rows is the expand button.
+export const openIcon = () => icon("link-icon", ["M3.5 1.75h6l3 3v9.5h-9z", "M9.5 1.75v3h3", "M6 8.5h4", "M6 11.25h4"]);
 
 // anchor: an <a> to another website. Adds the icon (at the end of iconParent, the anchor itself
 // by default), the destination for screen readers (after its aria-label, else as visually hidden

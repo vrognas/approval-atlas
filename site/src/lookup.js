@@ -3,7 +3,7 @@
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { isAuthorizedNow, statusDate } from "./approvals.js";
-import { atcCode, atcIncomplete, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, mainAtcCode } from "./atc.js";
+import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 import {
@@ -76,8 +76,13 @@ export function headlineNodes(parts) {
 const title = (content) => el("h2", { tabindex: "-1", "data-focus-key": "title" }, content);
 const kicker = (kind) => el("p", { class: "kicker" }, UI.kicker[kind]);
 
-// Dot and label in the status's hue; pill: on its light fill (answer strip).
-const statusBadge = (status, pill = false) => el("span", { class: `status hue-${statusHue(status)}${pill ? " pill" : ""}` }, statusLabel(status));
+// Dot and label in the status's hue; pill: on its light fill (answer strip). It explains the
+// status on hover and on a tap (UI.statusTips; tabindex -1: focusable, no tab stop), as the type
+// badges do; label: the text shown instead of the status's (a substance's "3 authorized").
+function statusBadge(status, pill = false, label = statusLabel(status)) {
+  const badge = el("span", { class: `status hue-${statusHue(status)}${pill ? " pill" : ""}` }, label);
+  return UI.statusTips[status] ? el("span", { class: "status-tip", "data-tip": UI.statusTips[status], tabindex: "-1" }, badge) : badge;
+}
 
 // Each badge explains its type on hover and on a tap (tabindex -1: focusable, no tab stop).
 function typeBadgeList(row) {
@@ -212,18 +217,23 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   // Over the ladder counts, at the end of the ATC label's row.
   const ladderHead = (counts) => (ready(counts) ? el("span", { class: "ladder-head", "aria-hidden": "true" }, UI.atc.countsHead) : null);
 
-  // Medicine card: one ladder per code to use (atcCode()), incomplete codes flagged, and how the code
-  // differs from EMA's published one (atcOrigin()).
+  // Medicine card: one ladder per code to use (atcCode()), incomplete codes flagged (atc_final_level:
+  // atcRowIncomplete()), and how the code differs from EMA's published one (atcOrigin()); a curated
+  // code links its evidence (phase 4e: the WHO index page, WHO's temporary list or the SmPC).
   function atcLadders(number, atc, counts) {
     if (!ready(atc)) return pending(atc);
     const rows = atc.byProduct.get(number) ?? [];
     if (!rows.length) return null;
     return rows.map((row) => {
-      const origin = atcOriginText(atcOrigin(row), atc.names, atc.retiredYears);
+      const originRow = atcOrigin(row);
+      const origin = atcOriginText(originRow, atc.names, atc.retiredYears);
+      const evidence = originRow?.kind === "curated" && originRow.url?.startsWith("https://")
+        ? [" ", externalLink(UI.atc.evidenceLink[originRow.evidence ?? "other"], originRow.url)]
+        : null;
       return [
         atcLadderList(atcCode(row), atc.names, ready(counts) ? counts : null),
-        atcIncomplete(atcCode(row)) ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", title: UI.table.incompleteTitle }, UI.table.incomplete)) : null,
-        origin ? el("p", { class: "muted ladder-origin" }, origin) : null,
+        atcRowIncomplete(row) ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", title: UI.table.incompleteTitle }, UI.table.incomplete)) : null,
+        origin ? el("p", { class: "muted ladder-origin" }, origin, evidence) : null,
       ];
     });
   }
@@ -413,7 +423,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       return el("span", { class: "code", title: [...names, ...(origin ? [origin] : [])].join("\n") || null },
         atcBadge(code),
         names.length ? el("span", { class: "visually-hidden" }, ` (${names.join("; ")})`) : null,
-        atcIncomplete(code) ? el("span", { class: "flag", title: UI.table.incompleteTitle }, UI.table.incomplete) : null,
+        atcRowIncomplete(row) ? el("span", { class: "flag", title: UI.table.incompleteTitle }, UI.table.incomplete) : null,
         origin ? [el("span", { class: "flag", "aria-hidden": "true" }, atcOriginFlag(originRow)), el("span", { class: "visually-hidden" }, ` ${origin}`)] : null);
     });
   }
@@ -426,9 +436,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     });
   }
 
-  // entries: search-index rows (+ snippet, + terms: the narrower conditions a row is tagged with) ->
-  // a table, one tbody per medicine: Medicine (the name opens its card; substances, unless they are
-  // the card's own substance (sameSubstance(row)); the narrower terms; PI and EPAR once the
+  // entries: search-index rows (+ snippet, + terms: the narrower conditions a row is tagged with, +
+  // mentions: on a condition page, the indication's words that matched) -> a table, one tbody per
+  // medicine: Medicine (the name opens its card; substances, unless they are the card's own
+  // substance (sameSubstance(row)); the narrower terms or the words mentioned; PI and EPAR once the
   // documents index has loaded), with areas (substance cards: what each medicine is for) its
   // therapeutic areas, ATC, Approved · Status, Type, Holder, then the matched indication text in a
   // full-width row. Phones stack the rows (style.css); explicit roles keep the table semantics
@@ -439,7 +450,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const [areaRows, conditions] = areas ? [need("areas"), need("conditions")] : [null, null];
     const headers = areas ? [UI.results.headers[0], UI.results.areas, ...UI.results.headers.slice(1)] : UI.results.headers;
     const cell = (className, ...content) => el("td", { class: className, role: "cell" }, content);
-    const bodies = entries.map(({ row, snippet, terms }) => {
+    const bodies = entries.map(({ row, snippet, terms, mentions }) => {
       const medicine = ready(medicines) ? medicines.get(row.ema_product_number) : null;
       const dates = statusDateLine(row.medicine_status, row.marketing_authorisation_date, medicine?.authorized_until ?? null);
       const urls = ready(documents) ? quickDocuments(documents.get(row.ema_product_number) ?? [], row.medicine_status) : null;
@@ -449,6 +460,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
             internalLink(row.name_of_medicine, { med: row.ema_product_number }, "medicine-name"),
             row.substances && !sameSubstance(row) ? el("span", { class: "medicine-substances" }, row.substances) : null,
             terms?.length ? el("span", { class: "matched-terms" }, UI.condition.rowTagged, termLinks(terms, need("conditions"))) : null,
+            mentions ? el("span", { class: "matched-terms" }, UI.condition.rowMentions(mentions)) : null,
             documentLinks(row.name_of_medicine, urls)),
           areas
             ? cell("result-areas", ready(areaRows) ? termLinks((areaRows.get(row.ema_product_number) ?? []).map((item) => item.therapeutic_area_mesh), conditions) : null)
@@ -471,7 +483,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   const TIMELINE_MIN = 3;
 
   // A surface block holding the timeline and its caption; none with fewer than TIMELINE_MIN dated
-  // rows. mentioned: product numbers found only in indication texts (hollow dots).
+  // rows. mentioned: product numbers found only in indication texts (hollow dots; a legend then
+  // names the dots of each kind present: tagged by EMA, filled; mentioned, hollow).
   function timelineBlock(rows, medicines, mentioned = new Set()) {
     if (rows.filter((row) => row.marketing_authorisation_date).length < TIMELINE_MIN) return null;
     const container = el("div", { class: "timeline chart" });
@@ -486,8 +499,15 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       mentioned: mentioned.has(row.ema_product_number),
     }));
     timeline = { container, items, width: null };
+    const tagged = rows.some((row) => !mentioned.has(row.ema_product_number));
+    const legend = mentioned.size
+      ? el("ul", { class: "legend dot-legend" },
+        tagged ? el("li", null, el("span", { class: "dot-key", "aria-hidden": "true" }), UI.timeline.legend.tagged) : null,
+        el("li", null, el("span", { class: "dot-key hollow", "aria-hidden": "true" }), UI.timeline.legend.mentioned))
+      : null;
     return el("div", { class: "card-section" },
-      el("p", { class: "muted timeline-caption" }, UI.timeline.caption, mentioned.size ? [" ", UI.timeline.hollow] : null),
+      el("p", { class: "muted timeline-caption" }, UI.timeline.caption),
+      legend,
       container);
   }
 
@@ -518,7 +538,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         first ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(first.marketing_authorisation_date)] : null,
         // None authorized now: the statuses themselves (e.g. Withdrawn), which say more than "0 authorized".
         [UI.card.strip.status, authorized > 0
-          ? el("span", { class: `status pill hue-${statusHue("Authorised")}` }, UI.substance.authorized(authorized))
+          ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
           : el("span", { class: "badges" }, statusesByFrequency(rows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true)))],
       ]),
       timelineBlock(rows, medicines),
@@ -556,7 +576,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       if (!ready(conditions)) return el("article", { class: "card" }, pending(conditions));
       descriptor = conditions.descriptors.get(ui);
       if (!descriptor) return notFound("condition", ui);
-      heading = headlineNodes(UI.headline.condition(descriptor.name, descriptor.authorized, descriptor.narrowerTerms.length > 0));
+      // "or a narrower condition" only when some authorized medicine it counts is tagged only so (phase 4f).
+      const narrowerCounted = [...descriptor.narrowerByProduct.keys()].some((number) =>
+        !descriptor.ownProducts.has(number) && index.byNumber.get(number)?.medicine_status === "Authorised");
+      heading = headlineNodes(UI.headline.condition(descriptor.name, descriptor.authorized, narrowerCounted));
       phrases = conditionPhrases(descriptor);
     } else {
       heading = UI.condition.textHeading(query);
@@ -572,7 +595,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       .map((row) => ({ row, terms: descriptor.narrowerByProduct.get(row.ema_product_number) ?? [] }));
     const mentioned = ready(medicines)
       ? textMatches([...medicines.values()], phrases, new Set(tagged.map((row) => row.ema_product_number)))
-        .map(({ product, snippet }) => ({ row: index.byNumber.get(product.ema_product_number), snippet }))
+        // On a condition page each row says which words of its indication matched (phase 4f).
+        .map(({ product, snippet }) => ({ row: index.byNumber.get(product.ema_product_number), snippet, mentions: descriptor ? snippet?.match ?? null : null }))
         .filter(({ row }) => row && shown(row))
         .sort((a, b) => byDate(-1)(a.row, b.row))
       : null;
@@ -587,6 +611,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       kicker(ui ? "condition" : "text"),
       title(heading),
       descriptor ? narrowerDek(descriptor) : null,
+      // Both counts of the lists below (phase 4f): tagged by EMA, and only mentioned in the indication.
+      descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll)) : null,
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
         related.map((condition) => [internalLink(condition.name, { cond: condition.ui }), " "])) : null,
       toggle,

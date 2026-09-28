@@ -190,10 +190,18 @@ h1 {
   letter-spacing: -0.01em;
 }
 
-/* The wordmark links to the overview (every lookup and filter cleared). */
+/* The wordmark links to the overview (every lookup and filter cleared); the icon (public/icon.svg,
+   inline) before the name. */
 h1 a {
   color: inherit;
   text-decoration: none;
+}
+
+.brand-icon {
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  vertical-align: -7px;
 }
 
 h1 a:hover {
@@ -628,10 +636,10 @@ button {
   }
 }
 
-/* Approval years (main column, every width): a per-year histogram above a two-thumb slider — two
-   native range inputs over one track; only their thumbs take the pointer (track clicks reach the
-   slider, year-slider.js). --thumb is the thumb's box, --thumb-edge its transparent rim (the
-   phone hit area around the visible circle);
+/* Approval years (main column, every width): a slim one-colour per-year histogram above a
+   two-thumb slider — two native range inputs over one track; only their thumbs take the pointer
+   (track clicks reach the slider, year-slider.js). --thumb is the thumb's box, --thumb-edge its
+   transparent rim (the phone hit area around the visible circle);
    year-slider.js reads --thumb so each bar sits right above its year's thumb position. */
 .year-strip {
   margin: 8px 0 0;
@@ -656,8 +664,8 @@ button {
 }
 
 .year-hist {
-  /* 72px of bars and 18px of year labels (TICK_HEIGHT). */
-  height: 90px;
+  /* 36px of bars and 18px of year labels (TICK_HEIGHT). */
+  height: 54px;
 }
 
 .year-hist svg {
@@ -671,13 +679,8 @@ button {
   cursor: pointer;
 }
 
-/* Status segments (a .hue-* class each: statusHue()), 1px apart. Outside the range: greyed with a
-   --field-border outline (3:1 on the card and the fill, WCAG 1.4.11). Authorized (the one green
-   status) takes --status-authorized, in the bars and the legend. */
-.year-strip .hue-green {
-  --hue-mid: var(--status-authorized);
-}
-
+/* Inside the range: the accent (--bar, 3:1 on the card). Outside: greyed with a --field-border
+   outline (3:1 on the card and the fill, WCAG 1.4.11). */
 .year-bar {
   fill: var(--raised);
   stroke: var(--field-border);
@@ -686,22 +689,8 @@ button {
 }
 
 .year-col.in-range .year-bar {
-  fill: var(--hue-mid);
+  fill: var(--bar);
   stroke: none;
-}
-
-.year-legend {
-  margin: 4px 0 0;
-  font-size: 0.8125rem;
-}
-
-.year-legend .swatch {
-  background: var(--hue-mid);
-}
-
-.year-strip #year-undated {
-  margin: 2px 0 4px;
-  font-size: 0.8125rem;
 }
 
 .year-baseline {
@@ -842,10 +831,10 @@ button {
   outline-offset: calc(2px - var(--thumb-edge));
 }
 
-/* Phones: 56px of bars; 28px visible thumbs in a 44px hit area. */
+/* Phones: 28px of bars; 28px visible thumbs in a 44px hit area. */
 @media (max-width: 720px) {
   .year-hist {
-    height: 74px;
+    height: 46px;
   }
 
   .year-slider {
@@ -997,6 +986,11 @@ input::placeholder {
   grid-column: 2;
 }
 
+/* A therapeutic area row with its condition page link (area-tree.js): a third column. */
+.atc-row:has(> .cond-link) {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+}
+
 /* The static last row: the products coded only down to the parent class. */
 .atc-static {
   grid-column: 2;
@@ -1075,6 +1069,18 @@ input::placeholder {
 
 .atc-text .facet-name {
   overflow-wrap: break-word;
+}
+
+/* The therapeutic area tree has no badge to move under: the name stays beside the checkbox and a
+   word longer than the row breaks ("Otorhinolaryngologic"). */
+.area-tree .atc-text {
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.area-tree .atc-text .facet-name {
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 /* Sidebar (desktop): header, then the sections. Hidden below 1024px, where a sheet borrows
@@ -1252,6 +1258,10 @@ input::placeholder {
 
 .sheet .atc-row {
   grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.sheet .atc-row:has(> .cond-link) {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
 }
 
 .sheet .atc-expand {
@@ -2162,7 +2172,7 @@ td .doc-links {
 }
 
 /* Link icons (links.js), stroked in the link's colour: an arrow out of a box after every link to
-   another website, a chevron in the condition page links. */
+   another website, a page in the condition page links. */
 .link-icon {
   display: inline-block;
   flex: none;
@@ -2177,8 +2187,8 @@ td .doc-links {
   stroke-linejoin: round;
 }
 
-/* Condition page links after a row (sidebar area rows, therapeutic area group bars): an outlined
-   24px square with a chevron (WCAG 2.5.8), 44px on phones and in sheets. */
+/* Condition page links after a row (therapeutic area tree rows and bars): an outlined
+   24px square with a page icon (WCAG 2.5.8), 44px on phones and in sheets. */
 .cond-link {
   display: inline-flex;
   flex: none;
@@ -2200,22 +2210,16 @@ td .doc-links {
   margin: 0;
 }
 
-/* A breakdown row and its condition page link; a sidebar area row and its link. */
-.bar-item,
-.facet-list > li:has(> .cond-link) {
+/* A breakdown row and its condition page link (the area tree's rows: .atc-row). */
+.bar-item {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.bar-item > .bar-row,
-.facet-list > li > .facet-row {
+.bar-item > .bar-row {
   flex: 1;
   min-width: 0;
-}
-
-.facet-list > li:has(> .cond-link) > .facet-row {
-  margin-right: 0;
 }
 
 /* Status: an 8px dot in its status's hue (a .hue-* class: statusHue()), then the label in the
@@ -2242,6 +2246,12 @@ td .doc-links {
   border-radius: 999px;
   background: var(--hue-1);
   white-space: nowrap;
+}
+
+/* A status's explanation (data-tip) sits on a wrapper: the dot is the status's ::before, which
+   the tooltip's hover bridge would replace. */
+.status-tip {
+  display: inline-flex;
 }
 
 .status-date {
@@ -2277,9 +2287,10 @@ td.status-cell {
   white-space: nowrap;
 }
 
-/* Type explanations (UI.typeTips): a tooltip from data-tip on hover and keyboard focus; on touch
-   screens a tap focuses the carrier (badges: tabindex="-1", no tab stop; tiles: tabindex="0";
-   facet rows: their checkbox) and shows it until focus moves on. Generated (content) only while
+/* Type and status explanations (UI.typeTips, UI.statusTips): a tooltip from data-tip on hover and
+   keyboard focus; on touch screens a tap focuses the carrier (badges, statuses and the per-year
+   legend's statuses: tabindex="-1", no tab stop; tiles: tabindex="0"; facet rows: their checkbox)
+   and shows it until focus moves on. Generated (content) only while
    shown, so a hidden one never widens the page; left out of accessible names ("/ ''"): focusable
    carriers are described by a hidden element (aria-describedby), tiles carry the text visually
    hidden. */
@@ -2302,11 +2313,14 @@ td.status-cell {
   }
 }
 
+/* --tip-left: moved left when it would cross the viewport's right edge (setupTips()). Border box
+   (the * rule skips pseudo-elements), so max-width holds the padding and border too. */
 [data-tip]::after {
   position: absolute;
   z-index: 4;
   top: calc(var(--tip-top, 100%) + 4px);
-  left: 0;
+  left: var(--tip-left, 0);
+  box-sizing: border-box;
   width: max-content;
   max-width: min(16rem, calc(100vw - 32px));
   padding: 6px 10px;
@@ -2723,7 +2737,9 @@ table.activity {
   }
 }
 
-.sort-button svg {
+/* Sort arrows (appendSortIcon()): up for fewest first or A-Z, down for most first or Z-A. */
+.sort-icon {
+  flex: none;
   width: 14px;
   height: 14px;
   fill: none;
@@ -2731,6 +2747,18 @@ table.activity {
   stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* In the segmented sort controls (breakdown, column order): after the text. */
+.segmented .sort-icon {
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+  vertical-align: -1px;
+}
+
+.segmented button[aria-pressed="true"] .sort-icon {
+  stroke-width: 2.5;
 }
 
 /* Pressed toggles (the filter a header sets is the current one; the sort shown): the accent wash
@@ -2943,7 +2971,7 @@ table.activity {
   margin-top: 0;
 }
 
-/* Answer strip: Holder, Since, Status. */
+/* Answer strip: Holder, Since, Status. Not clipped: the status's explanation shows below it. */
 .strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2951,7 +2979,6 @@ table.activity {
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
-  overflow: hidden;
 }
 
 .strip > div {
@@ -2984,6 +3011,7 @@ table.activity {
   font-size: 1.0625rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 @media (min-width: 721px) {
@@ -3534,6 +3562,27 @@ mark {
   font-size: 0.8125rem;
 }
 
+/* Condition pages (phase 4f): the two kinds of dot, filled (tagged by EMA) and hollow (only
+   mentioned in the indication text), as the timeline draws them. */
+.dot-legend {
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+  color: var(--ink-secondary);
+}
+
+.dot-key {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--ink-secondary);
+  border-radius: 999px;
+  background: var(--ink-secondary);
+}
+
+.dot-key.hollow {
+  background: var(--surface);
+}
+
 .timeline-tip {
   position: absolute;
   z-index: 3;
@@ -3695,10 +3744,8 @@ code {
     background: CanvasText;
   }
 
-  /* Approval years: bars outside the range outlined, inside in their status hues (every mark is
-     3:1 on black and white; no stroke, so the 1px gaps between segments show) matching the
-     legend's swatches (kept, with a border); the track keeps its outline (a border, as the inset
-     shadow is dropped) and the thumbs their ring. */
+  /* Approval years: bars outside the range outlined, inside filled (as the breakdown's bars); the
+     track keeps its outline (a border, as the inset shadow is dropped) and the thumbs their ring. */
   .year-bar {
     forced-color-adjust: none;
     fill: Canvas;
@@ -3706,13 +3753,8 @@ code {
   }
 
   .year-col.in-range .year-bar {
-    fill: var(--hue-mid);
+    fill: CanvasText;
     stroke: none;
-  }
-
-  .year-legend .swatch {
-    forced-color-adjust: none;
-    border: 1px solid CanvasText;
   }
 
   /* Activity cells: the numbers carry the values; a border keeps the grid. Pressed headers,
@@ -3730,10 +3772,21 @@ code {
     outline-offset: 2px;
   }
 
-  /* The per-year chart's legend keeps its swatches (with a border), as the approval-years strip. */
+  /* The per-year chart's legend keeps its swatches (with a border). */
   .stack-legend .swatch {
     forced-color-adjust: none;
     border: 1px solid CanvasText;
+  }
+
+  /* The timeline's dot legend: filled and hollow stay told apart. */
+  .dot-key {
+    forced-color-adjust: none;
+    border-color: CanvasText;
+    background: CanvasText;
+  }
+
+  .dot-key.hollow {
+    background: Canvas;
   }
 
   .year-track {

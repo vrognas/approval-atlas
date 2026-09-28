@@ -1,4 +1,5 @@
 // Pure data helpers: no DOM, no D3, so they run under node:test.
+import { buildAreaTree } from "./areas.js";
 import { atcCode, atcPrefixes } from "./atc.js";
 import { NOT_STATED, UI } from "./labels.js";
 
@@ -13,7 +14,7 @@ export function buildSubstanceIndex(substanceRows) {
   return index;
 }
 
-// Statuses in stack order (the approval-years strip bottom up, undated table rows, dek ties):
+// Statuses in stack order ("Approvals per year" by status bottom up, undated table rows, dek ties):
 // authorized, the ended authorizations, never authorized, pending; unknown ones last, by name.
 export const STATUS_ORDER = [
   "Authorised", "Withdrawn", "Expired", "Lapsed", "Suspended", "Revoked",
@@ -50,8 +51,10 @@ function groupRows(rows, keyOf, valueOf) {
   return groups;
 }
 
-// One record per medicine with the fields the filters and views need.
-export function buildProducts(medicines, { areaRows, branchRows, atcRows }) {
+// One record per medicine with the fields the filters and views need. areaTree: buildAreaTree() of
+// branchRows and subtreeRows (built here when not given): areaKeys are a product's therapeutic area
+// tree keys (its terms and every branch and node above them), areaExact the nodes its terms are.
+export function buildProducts(medicines, { areaRows, branchRows, atcRows, subtreeRows = [], areaTree = buildAreaTree(branchRows, subtreeRows) }) {
   const areasByProduct = groupRows(areaRows, (row) => row.ema_product_number, (row) => row.therapeutic_area_mesh);
   const branchesByTerm = groupRows(
     branchRows.filter((row) => row.branch !== null),
@@ -67,6 +70,8 @@ export function buildProducts(medicines, { areaRows, branchRows, atcRows }) {
       year: medicine.authorized_from === null ? null : Number(medicine.authorized_from.slice(0, 4)),
       areas,
       branches: distinctSorted(areas.flatMap((area) => branchesByTerm.get(area) ?? [])),
+      areaKeys: areaTree.keysOf(areas),
+      areaExact: areaTree.exactOf(areas),
       atc: atcByProduct.get(medicine.ema_product_number) ?? [],
     };
   });
@@ -166,11 +171,14 @@ export function breakdownCounts(products, by, labelOf = (key) => key, n = 20) {
 }
 
 // Breakdown rows (breakdownCounts() output, or ATC classes) in the Sort control's order: "count"
-// as computed (most first), "key" ATC classes by code and areas and holders by name (A-Z). The
-// Other row and the incomplete-code row stay last.
-export function sortBreakdownRows(rows, order, by) {
-  if (order !== "key") return rows;
+// as computed (most first) or, direction "asc", fewest first (ties keep their order); "key" ATC
+// classes by code and areas and holders by name, A-Z or, direction "desc", Z-A. The Other row and
+// the incomplete-code row stay last.
+export function sortBreakdownRows(rows, order, by, direction = order === "key" ? "asc" : "desc") {
+  if (order !== "key" && direction === "desc") return rows;
   const last = (row) => Boolean(row.other || row.incomplete);
-  const compare = by === "atc" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => a.label.localeCompare(b.label);
+  const sign = direction === "asc" ? 1 : -1;
+  const byKey = by === "atc" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => a.label.localeCompare(b.label);
+  const compare = order === "key" ? (a, b) => sign * byKey(a, b) : (a, b) => a.count - b.count;
   return [...rows.filter((row) => !last(row)).sort(compare), ...rows.filter(last)];
 }

@@ -13,12 +13,19 @@
     <meta name="theme-color" content="#1b1c19" media="(prefers-color-scheme: dark)" />
     <title>Approval Atlas</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <!-- iOS home screen: icon.svg full bleed at 180px (iOS rounds the corners itself). -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <header>
-      <h1><a id="home-link" href="/">Approval Atlas</a></h1>
+      <!-- The wordmark opens the overview (main.js); the icon is public/icon.svg's, drawn inline. -->
+      <h1><a id="home-link" href="/" aria-label="Approval Atlas, home"><svg class="brand-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+        <rect width="64" height="64" rx="14" fill="#2B4A31" />
+        <path d="M17 51 L32 13 L47 51" fill="none" stroke="#F3F3EE" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M21 37 L28 43 L44 27" fill="none" stroke="#D8B45A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>Approval Atlas</a></h1>
       <p id="data-date" class="meta">EMA human medicines</p>
       <p id="offline-note" class="note" role="status" hidden></p>
     </header>
@@ -73,7 +80,8 @@
         </div>
         <p id="url-note" class="note" role="status" hidden></p>
 
-        <!-- Approval years (every width): per-year bars stacked by status above a two-thumb slider. -->
+        <!-- Approval years (every width): slim one-colour per-year bars above a two-thumb slider (the
+             status stacks are "Approvals per year", Stack by Status). -->
         <section id="year-strip" class="year-strip" aria-labelledby="year-strip-title">
           <div class="year-strip-head">
             <h2 id="year-strip-title">Approval years</h2>
@@ -87,8 +95,6 @@
             <input id="year-start" type="range" />
             <input id="year-end" type="range" />
           </div>
-          <ul id="year-legend" class="legend year-legend" aria-hidden="true"></ul>
-          <p id="year-undated" class="muted"></p>
         </section>
 
         <!-- One dashboard: every medicine matching the filters, whatever its status. The frame is the
@@ -144,7 +150,7 @@
           <p id="activity-note" class="muted"></p>
         </section>
 
-        <!-- Approvals per year, stacked by medicine type, ATC class or holder (UI state). -->
+        <!-- Approvals per year, stacked by medicine type, ATC class, holder or status (UI state). -->
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
             <h2 id="chart-title">Approvals per year</h2>
@@ -154,6 +160,7 @@
                 <button type="button" data-stack="type"></button>
                 <button type="button" data-stack="atc"></button>
                 <button type="button" data-stack="mah"></button>
+                <button type="button" data-stack="status"></button>
               </div>
             </div>
           </div>
@@ -223,23 +230,19 @@
         <h3 id="facet-atc-title" class="facet-title">ATC class</h3>
         <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
         <p class="facet-live visually-hidden" role="status"></p>
-        <p id="atc-names" class="muted" hidden></p>
+        <p id="atc-names" class="muted tree-names" hidden></p>
         <ul id="atc-tree" class="atc-tree"></ul>
         <p class="facet-empty muted" hidden></p>
         <p class="muted atc-note"></p>
       </div>
-      <div id="facet-branch" class="facet" role="group" aria-labelledby="facet-branch-title">
-        <h3 id="facet-branch-title" class="facet-title">Therapeutic area group</h3>
-        <ul id="facet-branch-list" class="facet-list"></ul>
-        <button class="facet-more text-button" type="button" aria-controls="facet-branch-list" hidden></button>
-      </div>
+      <!-- One tree (phase 4f): MeSH branch › level 2 › level 3 › EMA's terms (area-tree.js). -->
       <div id="facet-area" class="facet" role="group" aria-labelledby="facet-area-title">
         <h3 id="facet-area-title" class="facet-title">Therapeutic area</h3>
-        <input class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <input id="area-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
         <p class="facet-live visually-hidden" role="status"></p>
-        <ul class="facet-list"></ul>
+        <ul id="area-tree" class="atc-tree area-tree"></ul>
         <p class="facet-empty muted" hidden></p>
-        <button class="facet-more text-button" type="button" hidden></button>
+        <p class="muted atc-note tree-note"></p>
       </div>
       <div id="facet-mah" class="facet" role="group" aria-labelledby="facet-mah-title">
         <h3 id="facet-mah-title" class="facet-title">Marketing authorization holder</h3>

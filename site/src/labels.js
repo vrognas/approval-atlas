@@ -146,6 +146,7 @@ export function atcName(name) {
 export const SOURCE_LABELS = {
   ema: "EMA",
   ema_smpc: "EMA product information (SmPC)",
+  curated: "checked by hand (WHO ATC index, WHO temporary list or SmPC text)",
   chembl_atc_class: "ChEMBL",
 };
 
@@ -155,6 +156,7 @@ export function atcOriginText(origin, names, years) {
   if (!origin) return null;
   const copy = UI.atc.origin;
   if (origin.kind === "retired") return copy.retired(atcClassLabel(origin.from, names.get(origin.from)), years.get(origin.from) ?? null, origin.now);
+  if (origin.kind === "curated") return copy.curated(origin.published, origin.conflict, origin.evidence);
   return origin.kind === "smpc" ? copy.smpc : copy[origin.kind](origin.published);
 }
 
@@ -163,6 +165,7 @@ export function atcOriginFlag(origin) {
   if (!origin) return null;
   const copy = UI.atc.originFlag;
   if (origin.kind === "retired") return copy.retired(origin.from);
+  if (origin.kind === "curated" && !origin.published) return copy.curated[origin.evidence] ?? copy.curated.other;
   return origin.kind === "smpc" ? copy.smpc : copy.published(origin.published);
 }
 
@@ -225,7 +228,6 @@ export const UI = {
       type: "all medicine types",
       atc: "all ATC classes",
       mah: "all holders",
-      branch: "all therapeutic area groups",
       area: "all therapeutic areas",
       status: "any status",
     },
@@ -233,7 +235,6 @@ export const UI = {
       type: (count) => plural(count, "medicine type", "medicine types"),
       atc: (count) => plural(count, "ATC class", "ATC classes"),
       mah: (count) => plural(count, "holder", "holders"),
-      branch: (count) => plural(count, "therapeutic area group", "therapeutic area groups"),
       area: (count) => plural(count, "therapeutic area", "therapeutic areas"),
       status: (count) => plural(count, "status", "statuses"),
     },
@@ -244,8 +245,6 @@ export const UI = {
       type: "medicine type",
       atc: "ATC class",
       mah: "holder",
-      areas: "therapeutic area",
-      branch: "therapeutic area group",
       area: "therapeutic area",
       from: "start year",
       to: "end year",
@@ -265,10 +264,8 @@ export const UI = {
     active: (count) => (count ? `${formatCount(count)} active` : null),
     counts: "Counts: medicines matching the other filters.",
     search: (count, noun) => `Filter ${formatCount(count)} ${noun}`,
-    nouns: { area: "areas", mah: "holders" },
-    searchLabel: { area: "Filter therapeutic areas", mah: "Filter marketing authorization holders" },
-    showAll: (count) => `Show all ${formatCount(count)}`,
-    showFewer: "Show fewer",
+    nouns: { mah: "holders" },
+    searchLabel: { mah: "Filter marketing authorization holders" },
     showMore: (count) => `Show ${formatCount(count)} more`,
     noMatches: "No matches",
     // Announced after typing in a facet search.
@@ -279,29 +276,20 @@ export const UI = {
     clear: "Clear",
     close: "Close filters",
     // Sheets with more than one section; single sections take their heading.
-    titles: { areas: "Therapeutic areas", all: "Filters" },
+    titles: { all: "Filters" },
   },
   allYears: "All years",
   yearRange: (from, to) => (from === to ? `${from}` : `${from}–${to}`),
-  // The approval-years strip in the main column: a histogram of every medicine with an approval
-  // date, stacked by current status (aria-hidden; the summary is read instead; tooltips per bar)
-  // above a two-thumb slider. statuses: [{ status, count }] in stack order.
+  // The approval-years strip in the main column: a slim one-colour histogram of every medicine with
+  // an approval date (aria-hidden; the summary is read instead; a tooltip per bar,
+  // UI.years.tooltipTitle()) above a two-thumb slider.
   yearStrip: {
     start: "Start year",
     end: "End year",
-    summary: (first, last, total, peakYear, peakCount, statuses) => {
-      if (total === 0) return "No medicines with an approval date match the other filters.";
-      const split = statuses.map(({ status, count }) => `${formatCount(count)} ${statusLabel(status)}`).join(", ");
-      return `Column chart of approvals per year, ${first} to ${last}, stacked by current status, of the medicines matching the other filters: ` +
-        `${formatCount(total)} in total (${split}), most in ${peakYear} (${formatCount(peakCount)}).`;
-    },
-    tooltip: (year, total, statuses) =>
-      [UI.years.tooltipTitle(year, total), ...statuses.map(({ status, count }) => `${formatCount(count)} ${statusLabel(status)}`)].join("\n"),
-    // ranged: a year filter is set, which leaves them out of the dashboard's counts too.
-    undated: (count, ranged = false) =>
-      `${plural(count, "medicine", "medicines")} without an approval date (refused, application withdrawn, pending…) ${count === 1 ? "is" : "are"} not in this chart${ranged ? ", and the year filter leaves them out of every count" : ""}.`,
-    // Before the legend (in stack order): position tells the segments apart, not only colour.
-    legendLead: "Bottom to top:",
+    summary: (first, last, total, peakYear, peakCount) => (total === 0
+      ? "No medicines with an approval date match the other filters."
+      : `Column chart of approvals per year, ${first} to ${last}, of the medicines matching the other filters: ` +
+        `${formatCount(total)} in total, most in ${peakYear} (${formatCount(peakCount)}).`),
   },
 
   // Answer headlines: the dashboard's (home, filters, one ATC class) and the lookup results'. The
@@ -380,6 +368,29 @@ export const UI = {
     "Advanced therapy": "Gene therapy, cell therapy or tissue-engineered medicine.",
     Other: "Not a generic, biosimilar or advanced therapy (e.g. a new active substance).",
   },
+  // The same for the EMA statuses (keys: raw EMA values), wherever a status dot or pill, facet row,
+  // "Stack by Status" legend entry or the sentence's status token names one; at most 10 words.
+  statusTips: {
+    Authorised: "Can be marketed in the EU.",
+    Opinion: "EMA has given its opinion; EU decision pending.",
+    "Opinion under re-examination": "EMA is re-examining its opinion at the company's request.",
+    Refused: "The EU refused authorization.",
+    "Application withdrawn": "The company withdrew its application before a decision.",
+    "Withdrawn from rolling review": "The company stopped the early (rolling) review.",
+    Withdrawn: "Authorization withdrawn, usually at the company's request.",
+    Expired: "Authorization not renewed.",
+    Lapsed: "Authorization ended: not marketed for 3 years.",
+    Suspended: "Authorization temporarily suspended.",
+    Revoked: "Authorization canceled by the EU.",
+  },
+  // Sort controls (breakdown, activity rows and columns): a second click on the one in force
+  // reverses it; counts sort most first, names and codes A to Z. name(): a control's name, its
+  // visible text then the order in force (direction null: not in force).
+  sortOrder: {
+    count: { desc: "most first", asc: "fewest first" },
+    key: { asc: "A to Z", desc: "Z to A" },
+    name: (text, kind, direction) => (direction ? `${text}, ${UI.sortOrder[kind][direction]}` : text),
+  },
   // Links to other websites open in a new tab (links.js markExternal()): an icon, and the
   // destination, named by its host, said after the link text and shown as its tooltip. A host
   // missing here is named by itself.
@@ -390,6 +401,7 @@ export const UI = {
       "worldwide.espacenet.com": "Espacenet",
       "github.com": "GitHub",
       "creativecommons.org": "Creative Commons website",
+      "atcddd.fhi.no": "WHOCC website",
     },
     newTab: (destination) => `(opens ${destination} in a new tab)`,
     title: (destination, host) => (destination === host ? host : `${destination} (${host})`),
@@ -424,6 +436,9 @@ export const UI = {
     },
     area: {
       title: "Medicines by therapeutic area group (MeSH branch)",
+      // Drilled into an area (phase 4f, as the ATC breakdown); a leaf shows only itself.
+      titleIn: (name) => `Medicines in ${name} by therapeutic area`,
+      titleLeaf: (name) => `Medicines in ${name}`,
       note: "A medicine can appear in several areas.",
       excluded: (count) => `${plural(count, "medicine", "medicines")} without a therapeutic area ${count === 1 ? "is" : "are"} not shown.`,
     },
@@ -440,9 +455,10 @@ export const UI = {
   conditions: {
     title: "Most common conditions",
     // Each row counts every status, then the authorized ones (the list a condition page opens with).
-    subtitle: (count, filtered) => `${filtered
+    // within: a therapeutic area filter is set, and only the terms within it are listed.
+    subtitle: (count, filtered, within = false) => `${filtered
       ? `Therapeutic areas of the ${plural(count, "medicine", "medicines")} matching the filters`
-      : `Therapeutic areas of all ${plural(count, "medicine", "medicines")} in the EMA data`}: medicines of every status, then those authorized`,
+      : `Therapeutic areas of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}: medicines of every status, then those authorized`,
     authorized: (count) => `${formatCount(count)} authorized`,
     hint: "Open a condition to see its approval timeline.",
     // count: the medicines shown, none of which has a therapeutic area.
@@ -461,9 +477,9 @@ export const UI = {
     subtitle: (count) =>
       `${count === 1 ? "The holder of the matching medicines" : `The ${formatCount(count)} holders with the most matching medicines`}; a medicine can count in several columns.`,
     holder: "Holder",
-    // The therapeutic area groups beyond the top 12.
+    // The therapeutic areas beyond the top 12.
     other: "Other",
-    otherTitle: "Other therapeutic area groups",
+    otherTitle: "Other therapeutic areas",
     cell: (holder, column, count) => `${holder}, ${column}: ${plural(count, "medicine", "medicines")}`,
     // A row header: the holder, then its matching medicines (shown after the name).
     holderRow: (holder, count) => `${holder}, ${plural(count, "medicine", "medicines")}`,
@@ -480,24 +496,32 @@ export const UI = {
     pressedTitle: "Shown alone: click again to clear",
     filterHint: "Filters the dashboard; select again to clear.",
     // With one ATC class selected the columns are its child classes; the class is a toggle above.
+    // The same for one therapeutic area (phase 4f).
     parentLead: "Columns: classes in",
+    parentLeadArea: "Columns: areas in",
     // Column order (UI state): ATC groups by code, therapeutic areas by name, or most first.
     order: { label: "Column order", key: { atc: "Code", area: "Name" }, count: "Count" },
   },
   other: "Other",
 
-  // "Approvals per year", stacked by medicine type, ATC class or holder (UI state).
+  // "Approvals per year", stacked by medicine type, ATC class, holder or status (UI state).
   years: {
     undated: (count) => `${plural(count, "medicine", "medicines")} without an approval date ${count === 1 ? "is" : "are"} not shown.`,
+    // Stacked by status: the statuses the chart cannot show. ranged: a year filter is set, which
+    // leaves them out of the dashboard's counts too.
+    undatedStatuses: (count, ranged = false) =>
+      `${plural(count, "medicine", "medicines")} without an approval date (refused, application withdrawn, pending…) ${count === 1 ? "is" : "are"} not in this chart${ranged ? ", and the year filter leaves them out of every count" : ""}.`,
+    // Before the legend (in stack order): position tells the segments apart, not only colour.
+    legendLead: "Bottom to top:",
     empty: "No dated medicines match the current filters.",
     // by: what the columns are stacked by (UI.years.by).
     summary: (first, last, total, peakYear, peakCount, by) =>
       `Stacked column chart of EMA approvals per year by ${by}, ${first} to ${last}: ` +
       `${formatCount(total)} medicines in total, most in ${peakYear} (${formatCount(peakCount)}).`,
     tooltipTitle: (year, total) => `${year}: ${plural(total, "approval", "approvals")}`,
-    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Holder" } },
+    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Holder", status: "Status" } },
     // label: atcClassLabel() of the one ATC class selected, whose child classes the columns stack.
-    by: { type: "medicine type", atc: "ATC group", atcIn: (label) => `ATC class in ${label}`, mah: "marketing authorization holder" },
+    by: { type: "medicine type", atc: "ATC group", atcIn: (label) => `ATC class in ${label}`, mah: "marketing authorization holder", status: "current status" },
     // How a medicine is counted in each mode (the card's note); count: the top classes or holders
     // stacked, named only when the rest are an Other segment (other).
     counting: {
@@ -508,6 +532,7 @@ export const UI = {
       mah: (count, other) => `each medicine counted once${other
         ? `: the ${plural(count, "holder", "holders")} with the most matching medicines, the rest as Other holders`
         : ""}`,
+      status: "each medicine counted once, by its current status",
     },
     note: (counting) =>
       `Year of EU marketing authorization; ${counting}. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
@@ -575,15 +600,40 @@ export const UI = {
     nameQueries: (queries) => `Also filtering by class names matching ${queries.map((query) => `“${query}”`).join(" or ")}.`,
     // The products whose code stops at the parent class (no child class).
     incomplete: "code incomplete",
-    note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one.",
+    // The same when their codes are complete there (phase 4e, atc_final_level: B03AC, which WHO
+    // does not subdivide; J07BX03, which WHO moved up to J07BN).
+    codedHere: "coded at this level",
+    note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.",
     // A code shown that differs from EMA's (atcOriginText(), atcOriginFlag()).
     origin: {
       retired: (label, year, now) => `${label}: retired${year ? ` ${year}` : ""}, now ${now}.`,
       completed: (published) => `EMA publishes ${published}; the full code is from the product information (SmPC).`,
       conflict: (published) => `EMA publishes ${published}; this code is from the product information (SmPC).`,
       smpc: "EMA publishes no ATC code; this one is from the product information (SmPC).",
+      // Curated (phase 4e: checked by hand; evidence: atcOrigin()); published null: EMA has none.
+      curated: (published, conflict, evidence) => `${published
+        ? `EMA publishes ${published}; ${conflict ? "this code" : "the full code"}`
+        : "EMA publishes no ATC code; this one"} was added from ${UI.atc.evidence[evidence] ?? UI.atc.evidence.other}.`,
     },
-    originFlag: { retired: (from) => `was ${from}`, published: (code) => `EMA: ${code}`, smpc: "SmPC" },
+    originFlag: {
+      retired: (from) => `was ${from}`,
+      published: (code) => `EMA: ${code}`,
+      smpc: "SmPC",
+      curated: { whocc_index: "WHO index", whocc_temporary: "WHO temporary", ema_smpc_text: "SmPC text", other: "curated" },
+    },
+    // Where a curated code was checked, in running text and as the medicine card's evidence link.
+    evidence: {
+      whocc_index: "the WHO ATC index",
+      whocc_temporary: "WHO's temporary list (it can still change)",
+      ema_smpc_text: "the SmPC text",
+      other: "a source checked by hand",
+    },
+    evidenceLink: {
+      whocc_index: "WHO ATC index page",
+      whocc_temporary: "WHO temporary list (Excel)",
+      ema_smpc_text: "Product information (SmPC)",
+      other: "Evidence",
+    },
     up: "Up one level",
     // Ladders (medicine and substance cards): counts are the medicines currently authorized, no filters.
     ladder: (code) => `ATC levels of ${code}`,
@@ -592,6 +642,24 @@ export const UI = {
     countsHead: "Currently authorized",
     count: (count) => formatCount(count),
     classed: (names, code) => `${listing(names)} ${names.length === 1 ? "is" : "are"} classed ${code}.`,
+  },
+
+  // The therapeutic-area tree (phase 4f; areas.js, area-tree.js): MeSH branch › level 2 › level 3 ›
+  // EMA's terms, in the sidebar, the breakdown's path and the activity card.
+  areas: {
+    find: "Find a therapeutic area",
+    tree: "Therapeutic areas",
+    expand: (name) => `Areas in ${name}`,
+    // Rows, path items: the area and its count of medicines.
+    count: (name, count) => `${name}, ${plural(count, "medicine", "medicines")}`,
+    // An area under a checked one (on some path): checked and disabled.
+    included: (name, count, ancestor) => `${UI.areas.count(name, count)}, included in ${ancestor}`,
+    noMatches: "No matching therapeutic areas",
+    // The medicines tagged with the node's own term: a static last row.
+    notMoreSpecific: "not more specific",
+    note: "MeSH branches and their first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
+    all: "All therapeutic areas",
+    path: "Therapeutic area path",
   },
 
   offline: (date) => `Offline: data as of ${formatDate(date)}`,
@@ -717,6 +785,13 @@ export const UI = {
     taggedOwn: (name, count) => `Tagged by EMA with ${name} (${formatCount(count)})`,
     taggedNarrower: (count) => `Tagged with a narrower condition (${formatCount(count)})`,
     rowTagged: "Tagged with ",
+    // Phase 4f: a medicine found only through its indication text says which words matched (the
+    // indication's own spelling), and the dek gives both counts of the lists shown (every: "Show
+    // all statuses" is on; mentioned: null while the indication texts load).
+    rowMentions: (text) => `Indication mentions “${text}”`,
+    counts: (tagged, mentioned, every) => `${every ? "Every status" : "Authorized"}: ${plural(tagged, "medicine", "medicines")} tagged by EMA${mentioned === null
+      ? ""
+      : ` and ${formatCount(mentioned)}${tagged ? " more" : ""} mentioned in the indication text`}.`,
     alsoMentioned: "Also mentioned in indication text",
     mentioned: "Mentioned in indication text",
     showAll: "Show all statuses",
@@ -734,8 +809,9 @@ export const UI = {
 
   timeline: {
     caption: "One dot per medicine; lines join medicines with the same active substances (reference, generics, biosimilars). Tap or point at a dot for its name.",
-    // Condition pages: medicines found only in indication texts (hollow dots), and the dot's tooltip line.
-    hollow: "Hollow dots: only mentioned in the indication text.",
+    // Condition pages: a legend of the dots, filled (tagged by EMA) and hollow (found only in the
+    // indication text; phase 4f), and the hollow dot's tooltip line.
+    legend: { tagged: "Tagged by EMA", mentioned: "Mentioned in the indication" },
     mentioned: "Only mentioned in the indication text",
     summary: (count, first, last, lanes) =>
       `Timeline of ${plural(count, "approval", "approvals")} from ${first} to ${last}: ${lanes}.`,

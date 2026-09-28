@@ -1,7 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { ATC_CODE, ATC_GROUP_HUES, ATC_PREFIX_LENGTHS, atcHue, atcSegments, statusHue, typeBadges, typeTipId } from "./badges.js";
+import {
+  ATC_CODE,
+  ATC_GROUP_HUES,
+  ATC_PREFIX_LENGTHS,
+  atcHue,
+  atcSegments,
+  statusColor,
+  statusHue,
+  statusTip,
+  statusTipId,
+  typeBadges,
+  typeTip,
+  typeTipId,
+} from "./badges.js";
 
 test("the ATC code shape and level lengths are defined once, here", () => {
   assert.deepEqual(ATC_PREFIX_LENGTHS, [1, 3, 4, 5, 7]);
@@ -95,4 +108,21 @@ test("every status has its own hue; the two pending opinions share gold, the wit
 test("each type explanation has one element id, which focusable carriers are described by", () => {
   assert.equal(typeTipId("Advanced therapy"), "type-tip-advanced-therapy");
   assert.equal(typeTipId("Orphan"), "type-tip-orphan");
+});
+
+// Phase 4f: status explanations (UI.statusTips), shown and described as the type ones.
+test("each status explanation has one element id; tips give the text and that id, or null", () => {
+  assert.equal(statusTipId("Opinion under re-examination"), "status-tip-opinion-under-re-examination");
+  assert.equal(statusTipId("Authorised"), "status-tip-authorised");
+  assert.deepEqual(statusTip("Lapsed"), { text: "Authorization ended: not marketed for 3 years.", id: "status-tip-lapsed" });
+  assert.equal(statusTip("Something new"), null);
+  assert.deepEqual(typeTip("Orphan"), { text: "For rare diseases (at most 5 in 10,000 people in the EU).", id: "type-tip-orphan" });
+  assert.equal(typeTip(null), null);
+});
+
+// Phase 4f: "Approvals per year" stacked by status: the strip's colours of phase 4a.
+test("a status's chart colour: its hue's mid, Authorized the darker --status-authorized", () => {
+  assert.equal(statusColor("Authorised"), "var(--status-authorized)");
+  assert.equal(statusColor("Withdrawn"), "var(--red-mid)");
+  assert.equal(statusColor("Something new"), "var(--slate-mid)");
 });
