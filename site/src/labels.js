@@ -327,6 +327,14 @@ export const UI = {
     atcClass: (total, authorized, label) => (total === 0
       ? [`No medicines in the EMA data are classed ${label}.`]
       : [number(total), ` ${total === 1 ? "medicine" : "medicines"} in ${label}`, ...currentlyAuthorized(total, authorized)]),
+    // Only one therapeutic area is selected, no other filter (phase 4g): named as atcClass names its
+    // class, its levels below. tag: a tag matched at a branch root (older links: ?area=Neoplasms).
+    area: (total, authorized, name, tag = false) => {
+      const place = `${tag ? "tagged" : "in"} ${name}`;
+      return total === 0
+        ? [`No medicines in the EMA data are ${place}.`]
+        : [number(total), ` ${total === 1 ? "medicine" : "medicines"} ${place}`, ...currentlyAuthorized(total, authorized)];
+    },
     // kind: statusKind(); an opinion without a decision yet is "not yet" authorized.
     medicine: (name, kind) => {
       if (kind === "authorized") return [`${name} is authorized in the EU.`];
@@ -438,7 +446,8 @@ export const UI = {
       title: "Medicines by therapeutic area group (MeSH branch)",
       // Drilled into an area (phase 4f, as the ATC breakdown); a leaf shows only itself.
       titleIn: (name) => `Medicines in ${name} by therapeutic area`,
-      titleLeaf: (name) => `Medicines in ${name}`,
+      // tag: a tag matched at a branch root (UI.areas.tag()).
+      titleLeaf: (name, tag = false) => `Medicines ${tag ? "tagged" : "in"} ${name}`,
       note: "A medicine can appear in several areas.",
       excluded: (count) => `${plural(count, "medicine", "medicines")} without a therapeutic area ${count === 1 ? "is" : "are"} not shown.`,
     },
@@ -657,6 +666,16 @@ export const UI = {
     noMatches: "No matching therapeutic areas",
     // The medicines tagged with the node's own term: a static last row.
     notMoreSpecific: "not more specific",
+    // A branch's static last row (phase 4g): the medicines tagged only with its root tags (tags: the
+    // heading first, "Neoplasms", then its entry terms, "Cancer").
+    taggedOnly: (tags) => `Tagged only as ${tags.length > 1 ? `${tags.slice(0, -1).join(", ")} or ${tags.at(-1)}` : tags[0]}`,
+    // The one-area headline's level path (phase 4g).
+    classPath: "Levels of this therapeutic area",
+    // A tag matched at a branch root selected on its own (older links: ?area=Neoplasms filters the
+    // medicines tagged Neoplasms, not the branch): its name wherever it shows (areas.js label()),
+    // and the tree's note, as its branch row is only indeterminate.
+    tag: (name) => `tagged ${name}`,
+    tagNote: (tags) => `Also filtering by the ${tags.length === 1 ? "tag" : "tags"} ${tags.map((tag) => `“${tag}”`).join(" or ")}.`,
     note: "MeSH branches and their first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",

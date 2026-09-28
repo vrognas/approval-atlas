@@ -45,9 +45,11 @@ const ABOVE = new Map([
   ["C17.800", new Set(["C17"])],
   ["Psoriasis", new Set(["C17", "C17.800"])],
   ["Arthritis, Rheumatoid", new Set(["C05", "C17", "C20"])],
+  ["Cancer", new Set(["C04"])],
 ]);
-// EMA's terms that are a tree node or branch themselves (buildAreaTree().canonical()).
-const CANONICAL = new Map([["Breast Neoplasms", ["C04.588.180"]], ["Cancer", ["C04"]]]);
+// EMA's terms that are a tree node themselves (buildAreaTree().canonical()); a tag matched at a
+// branch root ("Cancer") is itself since phase 4g.
+const CANONICAL = new Map([["Breast Neoplasms", ["C04.588.180"]]]);
 const domain = {
   mahs: new Set(["Merck Sharp & Dohme B.V.", "Sanofi Pasteur MSD, SNC", "Pfizer Europe MA EEIG", "Not stated"]),
   areas: new Set(["C04", "C04.588", "C04.588.180", "C05", "C14", "C17", "C17.800", "C20", "Arthritis, Rheumatoid", "Breast Neoplasms", "Cancer", "Psoriasis"]),
@@ -109,12 +111,14 @@ test("therapeutic areas: old branch links load into the area list, and no select
   assert.equal(encodeState(decode("branch=C04&branch=C14").state).toString(), "area=C04&area=C14");
 });
 
-// Links from before phase 4f name EMA's terms; a term that is a tree node (or branch) loads as it,
-// so the tree shows one checked row for it.
-test("therapeutic areas: a linked term that is a node or branch loads as that node", () => {
+// Links from before phase 4f name EMA's terms; a term that is a tree node loads as it, so the tree
+// shows one checked row for it. A tag matched at a branch root (phase 4g) stays the tag.
+test("therapeutic areas: a linked term that is a node loads as that node, a root tag as itself", () => {
   assert.deepEqual(decode("area=Breast+Neoplasms").state.area, ["C04.588.180"]);
-  assert.deepEqual(decode("area=Cancer&area=C04.588.180&area=Psoriasis").state.area, ["C04", "Psoriasis"]);
+  assert.deepEqual(decode("area=Cancer&area=C04.588.180&area=Psoriasis").state.area, ["C04.588.180", "Cancer", "Psoriasis"]);
+  assert.deepEqual(decode("area=Cancer&area=C04").state.area, ["C04"]);
   assert.equal(encodeState(decode("area=Breast+Neoplasms").state).toString(), "area=C04.588.180");
+  assert.deepEqual(decode("area=Cancer"), { state: { ...structuredClone(DEFAULT_STATE), area: ["Cancer"] }, dropped: [] });
   // Without the tree (areaCanonical left out) terms stay as they are.
   const plain = { ...domain, areaCanonical: undefined };
   assert.deepEqual(decodeState(new URLSearchParams("area=Breast+Neoplasms"), plain).state.area, ["Breast Neoplasms"]);

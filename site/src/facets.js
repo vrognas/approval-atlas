@@ -175,7 +175,8 @@ function atcValueText(value, atcNames, short) {
 }
 
 // One sentence token's text: the default phrase, or the selection. lookups: { years: [min, max],
-// areaNames (therapeutic area tree key -> name), atcNames: Map }.
+// areaNames (therapeutic area tree key -> name; areas.js labels: a root tag "tagged Neoplasms"),
+// atcNames: Map }.
 export function tokenLabel(dimension, state, { years, areaNames, atcNames }) {
   const copy = UI.sentence;
   if (dimension === "from") return String(state.from ?? years[0]);

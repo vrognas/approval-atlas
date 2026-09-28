@@ -399,9 +399,20 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(areas.included("Psoriasis", 43, "Skin Diseases"), "Psoriasis, 43 medicines, included in Skin Diseases");
   assert.equal(areas.noMatches, "No matching therapeutic areas");
   assert.equal(areas.notMoreSpecific, "not more specific");
+  // Phase 4g: a branch's tags matched at its root, one static row.
+  assert.equal(areas.taggedOnly(["Neoplasms", "Cancer"]), "Tagged only as Neoplasms or Cancer");
+  assert.equal(areas.taggedOnly(["Diagnosis"]), "Tagged only as Diagnosis");
+  assert.equal(areas.taggedOnly(["A", "B", "C"]), "Tagged only as A, B or C");
+  assert.equal(areas.classPath, "Levels of this therapeutic area");
+  // Phase 4g review: a root tag selected on its own reads as a tag, never as its branch, and the
+  // tree names it under the search (the branch row is only indeterminate).
+  assert.equal(areas.tag("Neoplasms"), "tagged Neoplasms");
+  assert.equal(areas.tagNote(["Cancer"]), "Also filtering by the tag “Cancer”.");
+  assert.equal(areas.tagNote(["Neoplasms", "Cancer"]), "Also filtering by the tags “Neoplasms” or “Cancer”.");
   assert.equal(areas.all, "All therapeutic areas");
   assert.equal(labels.UI.breakdown.area.titleIn("Neoplasms"), "Medicines in Neoplasms by therapeutic area");
   assert.equal(labels.UI.breakdown.area.titleLeaf("Psoriasis"), "Medicines in Psoriasis");
+  assert.equal(labels.UI.breakdown.area.titleLeaf("Neoplasms", true), "Medicines tagged Neoplasms");
   assert.equal(labels.UI.activity.parentLeadArea, "Columns: areas in");
   assert.equal(labels.UI.activity.otherTitle, "Other therapeutic areas");
   assert.equal(
@@ -690,6 +701,18 @@ test("the class headline counts the medicines in one ATC class and those current
   assert.equal(plain(atcClass(1, 1, "L04AL")), "1 medicine in L04AL; it is currently authorized.");
   assert.equal(plain(atcClass(0, 0, "X01")), "No medicines in the EMA data are classed X01.");
   assert.deepEqual(toned(atcClass(0, 0, "X01")), []);
+});
+
+// Phase 4g: one therapeutic area as the only filter, named as the ATC class headline names its
+// class (the level path is below it, not in it); a root tag (older links) as a tag.
+test("the area headline counts the medicines in one therapeutic area and those currently authorized", () => {
+  const { area } = labels.UI.headline;
+  assert.equal(plain(area(97, 80, "Breast Neoplasms")), "97 medicines in Breast Neoplasms, 80 of them currently authorized.");
+  assert.deepEqual(toned(area(97, 80, "Breast Neoplasms")), [["97", "number"], ["80", "number"]]);
+  assert.equal(plain(area(1, 0, "Neoplasms")), "1 medicine in Neoplasms; it is not currently authorized.");
+  assert.equal(plain(area(0, 0, "Neoplasms")), "No medicines in the EMA data are in Neoplasms.");
+  assert.equal(plain(area(2, 2, "Neoplasms", true)), "2 medicines tagged Neoplasms, all of them currently authorized.");
+  assert.equal(plain(area(0, 0, "Cancer", true)), "No medicines in the EMA data are tagged Cancer.");
 });
 
 test("the ATC breakdown copy counts medicines of every status", () => {
