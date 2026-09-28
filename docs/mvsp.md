@@ -45,7 +45,8 @@ The project processes public regulatory data only. No personal data is collected
 | Data | Source | Sensitivity | Stored |
 |---|---|---|---|
 | Medicines: names, active substances, status, dates, indications, therapeutic areas, ATC codes, flags | EMA medicines data | Public | Repository (`site/public/data/`), GitHub Pages, visitors' offline cache |
-| Marketing authorization holders (company names; business addresses from the public Union Register planned) | EMA, European Commission Union Register | Public business data | As above |
+| Marketing authorization holders: company names, the country of the holder's registered address (ISO code; addresses are read to derive it and never stored; Human product rows only, as orphan-designation holders can be natural persons), companies and company groups (current owner) | EMA, European Commission Union Register, curated table (`R/curated-companies.R`) | Public business data | As above (`ema_medicine_companies.json`, `companies.json`) |
+| Legal Entity Identifiers, legal names and ultimate parents of holders (matched on demand, not in CI) | GLEIF LEI records (CC0) | Public business data | Repository (`data-raw/gleif-holder-matches.json`); the pipeline copies the applied values into `companies.json`; raw responses in the local download cache only |
 | EPAR document links, orphan designations | EMA | Public | As above |
 | EU register status, orphan market exclusivity dates | European Commission Union Register | Public | As above |
 | Therapeutic-area terms, tree branches and sub-areas (tree levels 2 and 3) | NLM MeSH | Public | As above |
@@ -66,12 +67,15 @@ flowchart LR
     nlm["NLM: MeSH"]
     ebi["EMBL-EBI: ChEMBL ATC"]
     whocc["WHOCC: ATC/DDD Index updates, alterations, index pages"]
+    gleif["GLEIF: LEI records (on demand, a local script)"]
   end
   ci["GitHub Actions: R pipeline (validate, derive) and Vite build"]
   repo["GitHub repository: code and data history"]
   pages["GitHub Pages: static files"]
   browser["Visitor's browser: search, filters, offline cache"]
   sources -- "HTTPS GET, throttled and cached" --> ci
+  gleif -- "HTTPS GET, throttled and cached; matches committed" --> repo
+  repo -- "committed GLEIF matches" --> ci
   ci -- "commit changed data" --> repo
   ci -- "deploy" --> pages
   pages -- "HTTPS: HTML, JS, CSS, JSON" --> browser

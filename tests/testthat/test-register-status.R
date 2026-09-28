@@ -31,10 +31,6 @@ fixture_register_status <- function(medicines = register_medicines(),
   build_register_status_table(medicines, register)
 }
 
-fixture_register <- function() {
-  read_union_register(fixture_union_register_path())
-}
-
 register_row <- function(register_status, product_number) {
   register_status[register_status$ema_product_number == product_number, ]
 }
@@ -53,7 +49,7 @@ test_that("read_union_register keeps the register fields of products", {
     products,
     c(
       "uri", "ema_link", "authorisation_date", "name", "eu_number", "status",
-      "category", "last_decision_date"
+      "category", "last_decision_date", "holder_name", "holder_country"
     )
   )
   pritor <- products[grepl("/h089\\.htm$", products$uri), ]
@@ -62,6 +58,94 @@ test_that("read_union_register keeps the register fields of products", {
   expect_identical(pritor$status, "Withdrawn")
   expect_identical(pritor$category, "Centrally authorised")
   expect_identical(pritor$last_decision_date, as.Date("2026-05-04"))
+  expect_identical(pritor$holder_name, "Bayer AG")
+  expect_identical(pritor$holder_country, "DE")
+})
+
+test_that("read_union_register keeps the holder's country, not its address", {
+  products <- fixture_register()$products
+  expect_false(any(grepl("address", names(products), ignore.case = TRUE)))
+  holders <- stats::setNames(products$holder_country, products$holder_name)
+  expect_identical(
+    holders[c("Takeda Pharma A/S", "UCB Pharma S.A.", "Sanofi B.V.")],
+    c(
+      "Takeda Pharma A/S" = "DK",
+      "UCB Pharma S.A." = "BE",
+      "Sanofi B.V." = "NL"
+    )
+  )
+})
+
+test_that("a Human product without a holder has no holder name or country", {
+  rows <- jsonlite::fromJSON(
+    fixture_union_register_path(),
+    simplifyVector = FALSE
+  )$data
+  is_pritor <- vapply(
+    rows,
+    function(row) grepl("/h089\\.htm$", row$URI),
+    logical(1)
+  )
+  rows[is_pritor][[1]]["MAH"] <- list(NULL)
+  path <- tempfile(fileext = ".json")
+  jsonlite::write_json(
+    list(data = rows),
+    path,
+    auto_unbox = TRUE,
+    null = "null"
+  )
+  pritor <- read_union_register(path)$products |>
+    dplyr::filter(grepl("/h089\\.htm$", .data$uri))
+  expect_identical(pritor$holder_name, NA_character_)
+  expect_identical(pritor$holder_country, NA_character_)
+})
+
+test_that("read_union_register aborts when a holder field goes", {
+  rows <- jsonlite::fromJSON(
+    fixture_union_register_path(),
+    simplifyVector = FALSE
+  )$data
+  is_pritor <- vapply(
+    rows,
+    function(row) grepl("/h089\\.htm$", row$URI),
+    logical(1)
+  )
+  without_address <- rows
+  without_address[is_pritor][[1]]$MAH$Address <- NULL
+  path <- tempfile(fileext = ".json")
+  jsonlite::write_json(
+    list(data = without_address),
+    path,
+    auto_unbox = TRUE,
+    null = "null"
+  )
+  expect_error(read_union_register(path), "Address")
+
+  without_holder <- rows
+  without_holder[is_pritor][[1]]$MAH <- NULL
+  jsonlite::write_json(
+    list(data = without_holder),
+    path,
+    auto_unbox = TRUE,
+    null = "null"
+  )
+  expect_error(read_union_register(path), "MAH")
+})
+
+test_that("register_country reads the country an address ends with", {
+  expect_identical(
+    register_country(c(
+      "Dr.-Otto-Röhm-Straße 1, 12345 Berlin, Deutschland",
+      "Allée de la Recherche 60, 1070 Bruxelles, Belgique/België",
+      "Riverside, Cambridge CB21 6GT United Kingdom",
+      "Via Palermo 26/A, 43122 Parma, Italia.",
+      "Rue x, 75013 Paris, FRANCE",
+      "Str. 1, Athina, Ελλάδα",
+      "Str. 1, 13 435 Berlin",
+      NA
+    )),
+    c("DE", "BE", "GB", "IT", "FR", "GR", NA, NA)
+  )
 })
 
 test_that("read_union_register aborts when a register status field goes", {

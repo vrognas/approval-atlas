@@ -1,7 +1,8 @@
 run_ema_pipeline <- function(output_directory = "site/public/data",
                              cache_path = ".cache/ema/medicines.json",
                              downloads_directory = ".cache/downloads",
-                             smpc_budget = smpc_budget_from_env()) {
+                             smpc_budget = smpc_budget_from_env(),
+                             gleif_path = gleif_matches_path) {
   ema <- read_ema_json(download_ema_json(destination = cache_path))
   ema$data |>
     check_expected_columns() |>
@@ -29,6 +30,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   )
   documents <- read_epar_documents(documents_source$path)
   orphan_designations <- read_ema_orphan_designations(orphan_source$path)
+  union_register <- read_union_register(register_source$path)
+  gleif_matches <- read_gleif_matches(gleif_path)
   clean_medicines <- clean_ema_medicines(ema$data)
   atc_class_rows <- jsonlite::fromJSON(atc_class_path)
   atc_sources <- prepare_atc_sources(
@@ -47,13 +50,19 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
     snapshot_date = snapshot_date,
     epar_documents = documents$data,
     orphan_designations = orphan_designations$data,
-    union_register = read_union_register(register_source$path),
+    union_register = union_register,
     atc_sources = atc_sources
   )
   tables$ema_medicines |>
     check_no_future_approval_dates() |>
     check_single_medicine_type_flag() |>
     check_tile_matches_series(snapshot_date)
+  company_run <- build_company_tables(
+    build_medicine_holders(tables$ema_medicines, union_register),
+    gleif_matches,
+    snapshot_date
+  )
+  tables <- c(tables, company_run$tables)
 
   meta <- build_meta(
     ema_medicines_url,
@@ -70,11 +79,15 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
         orphan_designations$meta$timestamp
       ),
       union_register_source_entry(register_source)
-    ), atc_sources$source_entries)
+    ), atc_sources$source_entries, company_source_entries(
+      register_source,
+      gleif_matches
+    ))
   )
   write_ema_outputs(tables, meta, output_directory)
   report_pipeline_summary(tables, snapshot_date)
   report_atc_summary(tables, atc_sources)
+  report_company_summary(company_run, tables$ema_medicines)
   invisible(tables)
 }
 

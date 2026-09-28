@@ -43,18 +43,19 @@ register_candidates <- function(medicine_keys, register_products, key) {
     dplyr::select("ema_product_number", "uri")
 }
 
-build_register_status_table <- function(medicines, register) {
+# The centrally authorised register product of each EMA product, found by
+# EMA page or name with MA dates at most a day apart; a product with several
+# candidates has none.
+link_register_products <- function(medicines, register) {
   register_products <- register$products |>
     dplyr::filter(.data$category == "Centrally authorised") |>
     dplyr::mutate(
-      register_authorised = is_register_authorised(.data$status),
       link_key = normalise_ema_link(.data$ema_link),
       name_key = normalise_medicine_name(.data$name)
     )
   medicine_keys <- medicines |>
     dplyr::transmute(
       .data$ema_product_number,
-      .data$medicine_status,
       .data$marketing_authorisation_date,
       link_key = normalise_ema_link(.data$medicine_url),
       name_key = normalise_medicine_name(.data$name_of_medicine)
@@ -69,14 +70,17 @@ build_register_status_table <- function(medicines, register) {
     relationship = "one-to-one"
   ) |>
     dplyr::inner_join(
-      medicine_keys,
+      dplyr::select(
+        medicine_keys,
+        "ema_product_number",
+        "marketing_authorisation_date"
+      ),
       by = "ema_product_number",
       relationship = "many-to-one"
     ) |>
     dplyr::inner_join(
-      register_products,
+      dplyr::select(register_products, "uri", "authorisation_date"),
       by = "uri",
-      suffix = c("", "_register"),
       relationship = "many-to-one"
     ) |>
     dplyr::filter(is_same_authorisation_date(
@@ -89,6 +93,29 @@ build_register_status_table <- function(medicines, register) {
     dplyr::filter(
       dplyr::n() == 1 | .data$matched_by_link %in% TRUE,
       .by = "uri"
+    ) |>
+    dplyr::select(
+      "ema_product_number",
+      "uri",
+      "matched_by_link",
+      "matched_by_name"
+    )
+}
+
+build_register_status_table <- function(medicines, register) {
+  register_products <- register$products |>
+    dplyr::filter(.data$category == "Centrally authorised") |>
+    dplyr::mutate(register_authorised = is_register_authorised(.data$status))
+  link_register_products(medicines, register) |>
+    dplyr::inner_join(
+      dplyr::select(medicines, "ema_product_number", "medicine_status"),
+      by = "ema_product_number",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::inner_join(
+      register_products,
+      by = "uri",
+      relationship = "many-to-one"
     ) |>
     dplyr::transmute(
       .data$ema_product_number,
