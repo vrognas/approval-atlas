@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import {
   areaBreakdownRows,
   areaCheckState,
+  areaExactLabel,
   areaIncludedIn,
   areaTreeChildren,
   areaTreeKeys,
@@ -11,6 +13,8 @@ import {
   inAreas,
   toggleArea,
 } from "./areas.js";
+import { tokenLabel } from "./facets.js";
+import { DEFAULT_STATE, decodeState, encodeState } from "./url.js";
 
 // Real rows (ema_therapeutic_area_branches.json, ema_therapeutic_area_subtree.json, 2026-09-28).
 const branch = (term, name, code, branchName) => ({ therapeutic_area_mesh: term, mesh_descriptor_name: name, branch: code, branch_name: branchName });
@@ -79,13 +83,57 @@ test("area tree: a term whose descriptor is a level-2/3 node shows once, as that
   assert.deepEqual(tree.children("C05.550.114"), ["Arthritis, Juvenile", "Arthritis, Juvenile Rheumatoid"]);
 });
 
-test("area tree: a term matched at a branch root is that branch (no leaf 'Neoplasms › Neoplasms')", () => {
+// Phase 4g (user decision 2026-09-28): tags matched at a branch root are one static row of the
+// branch ("Tagged only as Neoplasms or Cancer"), not a leaf and not the branch itself.
+test("area tree: tags matched at a branch root are the branch's static row, not leaves", () => {
   assert.deepEqual(tree.children("C04"), ["C04.588"]);
-  // The heading and its entry term: the branch's "not more specific" medicines.
-  assert.deepEqual(tree.exact("C04"), ["Cancer", "Neoplasms"]);
-  assert.deepEqual(tree.parents("Cancer"), []);
+  assert.deepEqual(tree.exact("C04"), []);
+  // The heading first, then its entry terms by name.
+  assert.deepEqual(tree.rootTerms("C04"), ["Neoplasms", "Cancer"]);
+  assert.deepEqual(tree.rootTerms("C04.588.180"), []);
+  assert.equal(areaExactLabel(tree, "C04"), "Tagged only as Neoplasms or Cancer");
+  assert.equal(areaExactLabel(tree, "C04.588.180"), "not more specific");
+  // A tag of the branch: its parent (the path and "Up one level" go through the branch).
+  assert.deepEqual(tree.parents("Cancer"), ["C04"]);
+  assert.deepEqual(tree.path("Cancer"), ["C04", "Cancer"]);
+  assert.equal(tree.isTerm("Neoplasms"), true);
+  // The static row counts the medicines tagged only at the root: none more specific in that branch.
   assert.deepEqual(tree.exactOf(["Cancer", "Psoriasis"]), ["C04"]);
+  assert.deepEqual(tree.exactOf(["Neoplasms", "Cancer"]), ["C04"]);
+  assert.deepEqual(tree.exactOf(["Cancer", "Breast Neoplasms"]), ["C04.588.180"]);
+  assert.deepEqual(tree.exactOf(["Cancer", "Triple Negative Breast Neoplasms"]), []);
+  // A search still finds the branch by its tags.
   assert.deepEqual(areaTreeSearch(tree, everyKey, "cancer").matches, ["C04"]);
+});
+
+test("area selection: a root tag (older links) is selected as itself, within its branch", () => {
+  assert.deepEqual(tree.canonical("Neoplasms"), ["Neoplasms"]);
+  assert.equal(areaCheckState(tree, "C04", ["Cancer"]), "mixed");
+  assert.equal(inAreas(tree, ["C04"], "Cancer"), true);
+  assert.deepEqual(toggleArea(tree, ["Cancer"], "C04"), ["C04"]);
+  assert.deepEqual(toggleArea(tree, ["C04.588", "Psoriasis"], "Cancer"), ["C04.588", "Psoriasis", "Cancer"]);
+  // A link loads it without an error, as the tag (the medicines tagged with it); the branch covers it.
+  const domain = { mahs: new Set(), types: new Set(), statuses: new Set(), years: [1995, 2026], areas: everyKey, areaAncestors: tree.ancestors, areaCanonical: tree.canonical };
+  const { state, dropped } = decodeState(new URLSearchParams("area=Neoplasms&area=Cancer"), domain);
+  assert.deepEqual([state.area, dropped], [["Cancer", "Neoplasms"], []]);
+  assert.equal(encodeState(state).toString(), "area=Cancer&area=Neoplasms");
+  assert.deepEqual(decodeState(new URLSearchParams("area=Cancer&area=C04"), domain).state.area, ["C04"]);
+});
+
+// Phase 4g review: `?area=Neoplasms` filters the medicines tagged Neoplasms, not the branch, so
+// it never shows by the branch's name alone ("Neoplasms › Neoplasms"): headline, paths, sentence
+// token and activity columns read tree.label().
+test("area labels: a root tag reads as a tag, every other key by its name", () => {
+  assert.deepEqual(["Neoplasms", "Cancer", "C04", "C04.588", "Psoriasis", "Breast Neoplasms"].map(tree.isRootTag), [true, true, false, false, false, false]);
+  assert.equal(tree.label("Neoplasms"), "tagged Neoplasms");
+  assert.equal(tree.label("C04"), "Neoplasms");
+  assert.equal(tree.label("Psoriasis"), "Psoriasis");
+  assert.deepEqual(tree.path("Neoplasms").map(tree.label), ["Neoplasms", "tagged Neoplasms"]);
+  assert.equal(tree.labels.get("Cancer"), "tagged Cancer");
+  assert.equal(tree.labels.get("C04.588"), "Neoplasms by Site");
+  const lookups = { years: [1995, 2026], areaNames: tree.labels, atcNames: new Map() };
+  assert.equal(tokenLabel("area", { ...DEFAULT_STATE, area: ["Neoplasms"] }, lookups), "tagged Neoplasms");
+  assert.equal(tokenLabel("area", { ...DEFAULT_STATE, area: ["C04"] }, lookups), "Neoplasms");
 });
 
 // A term exact at two nodes (one descriptor, two tree numbers) and at none elsewhere.
@@ -100,9 +148,9 @@ const alcohol = buildAreaTree(
   ],
 );
 
-test("area tree: a term that is a node or branch is selected as it; other keys as themselves", () => {
+test("area tree: a term that is a node is selected as it; other keys (root tags too) as themselves", () => {
   assert.deepEqual(tree.canonical("Breast Neoplasms"), ["C04.588.180"]);
-  assert.deepEqual(tree.canonical("Cancer"), ["C04"]);
+  assert.deepEqual(tree.canonical("Cancer"), ["Cancer"]);
   assert.deepEqual(tree.canonical("Arthritis, Juvenile Rheumatoid"), ["C05.799.056"]);
   assert.deepEqual(alcohol.canonical("Alcohol-Related Disorders"), ["C25.775.100", "F03.900.100"]);
   assert.deepEqual(tree.canonical("Psoriasis"), ["Psoriasis"]);
@@ -157,7 +205,6 @@ test("area selection: a term that is a node toggles as that node, from its leaf 
   assert.deepEqual(toggleArea(tree, [], "Breast Neoplasms"), ["C04.588.180"]);
   assert.deepEqual(toggleArea(tree, ["C04.588.180"], "Breast Neoplasms"), []);
   assert.deepEqual(toggleArea(tree, ["Triple Negative Breast Neoplasms", "C05"], "Breast Neoplasms"), ["C05", "C04.588.180"]);
-  assert.deepEqual(toggleArea(tree, ["C04.588"], "Cancer"), ["C04"]);
   assert.deepEqual(toggleArea(alcohol, ["C25.775.100"], "Alcohol-Related Disorders"), ["C25.775.100", "F03.900.100"]);
   assert.deepEqual(toggleArea(alcohol, ["C25.775.100", "F03.900.100", "C17"], "Alcohol-Related Disorders"), ["C17"]);
 });
@@ -198,20 +245,46 @@ test("area tree search: matching nodes and leaves with their levels opened, a ma
 const product = (areas) => ({ areas, areaKeys: tree.keysOf(areas), areaExact: tree.exactOf(areas) });
 
 test("area breakdown: the level below a node, most first, then the medicines at the node itself", () => {
-  const products = [product(["Breast Neoplasms"]), product(["Triple Negative Breast Neoplasms"]), product(["Psoriasis", "Cancer"])];
-  assert.deepEqual(areaBreakdownRows(tree, null, products).map((row) => [row.key, row.count]), [["C04", 3], ["C17", 3]]);
+  const products = [
+    product(["Breast Neoplasms"]),
+    product(["Triple Negative Breast Neoplasms"]),
+    product(["Psoriasis", "Cancer"]),
+    product(["Neoplasms", "Breast Neoplasms"]),
+  ];
+  assert.deepEqual(areaBreakdownRows(tree, null, products).map((row) => [row.key, row.count]), [["C04", 4], ["C17", 4]]);
   assert.deepEqual(areaBreakdownRows(tree, "C04.588.180", products), [
     { key: "Triple Negative Breast Neoplasms", label: "Triple Negative Breast Neoplasms", count: 1 },
-    { key: "C04.588.180", label: "not more specific", count: 1, static: true, incomplete: true },
+    { key: "C04.588.180", label: "not more specific", count: 2, static: true, incomplete: true },
   ]);
-  // A branch ends with its own medicines too (tagged Cancer or Neoplasms).
+  // A branch ends with the medicines tagged only at its root (one static row; the medicine also
+  // tagged Breast Neoplasms counts under Neoplasms by Site only).
   assert.deepEqual(areaBreakdownRows(tree, "C04", products), [
-    { key: "C04.588", label: "Neoplasms by Site", count: 2 },
-    { key: "C04", label: "not more specific", count: 1, static: true, incomplete: true },
+    { key: "C04.588", label: "Neoplasms by Site", count: 3 },
+    { key: "C04", label: "Tagged only as Neoplasms or Cancer", count: 1, static: true, incomplete: true },
   ]);
   // A leaf has no rows of its own; the breakdown shows it alone.
   assert.deepEqual(areaBreakdownRows(tree, "Psoriasis", products), []);
+  assert.deepEqual(areaBreakdownRows(tree, "Cancer", products), []);
   // Beyond n rows: one Other row counting each medicine once.
   const rows = areaBreakdownRows(tree, null, products, 1);
-  assert.deepEqual(rows.map((row) => [row.key, row.count, row.other ?? false]), [["C04", 3, false], [null, 3, true]]);
+  assert.deepEqual(rows.map((row) => [row.key, row.count, row.other ?? false]), [["C04", 4, false], [null, 4, true]]);
 });
+
+// Real data (ema_therapeutic_area_branches.json, ema_therapeutic_area_subtree.json).
+const dataFile = (name) => new URL(`../public/data/${name}`, import.meta.url);
+const realFiles = ["ema_therapeutic_area_branches.json", "ema_therapeutic_area_subtree.json"].map(dataFile);
+test(
+  "area tree (real data): every level lists its children by name; root tags are no one's children",
+  { skip: realFiles.every(existsSync) ? false : "therapeutic area data files not found" },
+  () => {
+    const [branches, subtree] = realFiles.map((file) => JSON.parse(readFileSync(file, "utf8")));
+    const real = buildAreaTree(branches, subtree);
+    const byName = (keys) => [...keys].sort((a, b) => real.name(a).localeCompare(real.name(b)) || a.localeCompare(b));
+    const keys = [null, ...real.names.keys()];
+    assert.deepEqual(keys.filter((key) => real.children(key).join() !== byName(real.children(key)).join()), []);
+    const rootTags = real.roots.flatMap((key) => real.rootTerms(key));
+    assert.deepEqual(real.rootTerms("C04"), ["Neoplasms", "Cancer"]);
+    assert.deepEqual(rootTags.filter((term) => keys.some((key) => real.children(key).includes(term))), []);
+    assert.deepEqual(rootTags.filter((term) => real.canonical(term).join() !== term), []);
+  },
+);

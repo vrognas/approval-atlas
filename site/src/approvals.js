@@ -53,7 +53,8 @@ function groupRows(rows, keyOf, valueOf) {
 
 // One record per medicine with the fields the filters and views need. areaTree: buildAreaTree() of
 // branchRows and subtreeRows (built here when not given): areaKeys are a product's therapeutic area
-// tree keys (its terms and every branch and node above them), areaExact the nodes its terms are.
+// tree keys (its terms and every branch and node above them), areaExact the keys of its static rows
+// (the nodes its terms are, the branches it is tagged only at the root of; areas.js exactOf()).
 export function buildProducts(medicines, { areaRows, branchRows, atcRows, subtreeRows = [], areaTree = buildAreaTree(branchRows, subtreeRows) }) {
   const areasByProduct = groupRows(areaRows, (row) => row.ema_product_number, (row) => row.therapeutic_area_mesh);
   const branchesByTerm = groupRows(

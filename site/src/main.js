@@ -14,7 +14,7 @@ import {
 } from "./approvals.js";
 import { appendSortIcon, renderActivity } from "./activity.js";
 import { createAreaTree, renderAreaPath } from "./area-tree.js";
-import { areaBreakdownRows, buildAreaTree, inAreas, toggleArea } from "./areas.js";
+import { areaBreakdownRows, areaExactLabel, buildAreaTree, inAreas, toggleArea } from "./areas.js";
 import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
@@ -116,6 +116,8 @@ const FACETS = ["type", "status", "mah"];
 const ACTIVITY_HOLDERS = 15;
 const ACTIVITY_AREAS = 12;
 const ACTIVITY_OTHER = "__other__";
+// The column of the medicines at the area itself (areas.js areaExactLabel()).
+const ACTIVITY_EXACT = "__exact__";
 // "Approvals per year" stacked by holder, or by the child classes of one ATC class: the top ones,
 // then Other on top. Their colours: damped hue mids, neighbouring hues far apart (1px gaps
 // separate the segments too). Level-1 ATC groups: the top six, each in its own group's hue. Other:
@@ -685,23 +687,27 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   const showCount = (selector, count, text) => d3.select(selector).text(count ? text(count) : "").attr("hidden", count ? null : "");
 
   // The answer headline counts the medicines matching the filters (every status) and those
-  // currently authorized; with exactly one ATC code and no other filter it names the class, with its
-  // levels below. The dek: the medicines by status (the authorized ones without an approval date
-  // named, as the headline leaves them out), then substances and types.
-  function renderHeadline(predicates, filtered, atcCounts, undatedAuthorized) {
+  // currently authorized; with exactly one ATC code, or one therapeutic area (phase 4g), and no
+  // other filter it names the class or area, with its levels below. The dek: the medicines by status
+  // (the authorized ones without an approval date named, as the headline leaves them out), then
+  // substances and types. areaCounts: medicines per area key matching every filter but the area one.
+  function renderHeadline(predicates, filtered, atcCounts, areaCounts, undatedAuthorized) {
     const authorized = filtered.filter(isAuthorizedNow).length;
     const activeCount = Object.keys(predicates).length;
     const classCode = activeCount === 1 ? drillCode() : null;
+    const areaKey = activeCount === 1 ? drillArea() : null;
     classTitle = classCode ? atcClassLabel(classCode, atcNames.get(classCode)) : null;
     let parts;
     if (classCode) parts = UI.headline.atcClass(filtered.length, authorized, atcClassLabel(classCode, atcNames.get(classCode)));
+    else if (areaKey) parts = UI.headline.area(filtered.length, authorized, meshTree.name(areaKey), meshTree.isRootTag(areaKey));
     else if (activeCount) parts = UI.headline.filtered(filtered.length, authorized);
     else parts = UI.headline.home(filtered.length, authorized);
     $("#headline").replaceChildren(...headlineNodes(parts));
     d3.select("#headline-dek").text([UI.headline.statuses(statusBreakdown(filtered), undatedAuthorized), UI.headline.dek(countTiles(filtered))].filter(Boolean).join(" "));
     const classPath = $("#class-path");
-    classPath.hidden = classCode === null;
+    classPath.hidden = classCode === null && areaKey === null;
     if (classCode) renderAtcPath(classPath, { current: classCode, counts: atcCounts, names: atcNames, onSelect: openAtc, all: false, label: UI.atc.classPath });
+    else if (areaKey) renderAreaPath(classPath, { tree: meshTree, current: areaKey, counts: areaCounts, onSelect: openArea, all: false, label: UI.areas.classPath });
     else classPath.replaceChildren();
     if (!announceFilters) return;
     announceFilters = false;
@@ -757,9 +763,10 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
 
   // Therapeutic area breakdown (phase 4f, as the ATC one): with exactly one area selected
   // (drillArea()), the areas one level below it, then the medicines tagged with it itself (a static
-  // row); an area without children shows only itself. Otherwise the MeSH branches; with several
-  // areas selected, the branches holding one are marked (toggles: a marked branch removes its
-  // areas, another is added). population: every filter but the area one.
+  // row; a branch's: tagged only at its root, phase 4g); an area without children shows only
+  // itself. Otherwise the MeSH branches; with several areas selected, the branches holding one are
+  // marked (toggles: a marked branch removes its areas, another is added). population: every
+  // filter but the area one.
   function areaBreakdown(population) {
     const current = drillArea();
     const rows = areaBreakdownRows(meshTree, current, population);
@@ -780,7 +787,9 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const name = meshTree.name(current);
     if (rows.length) return { current, title: UI.breakdown.area.titleIn(name), rows, isSelected: null, onToggle: openArea };
     const count = population.filter((product) => product.areaKeys.includes(current)).length;
-    return { current, title: UI.breakdown.area.titleLeaf(name), rows: count ? [{ key: current, label: name, count, static: true }] : [], isSelected: null, onToggle: openArea };
+    // A root tag (older links) reads as a tag, not as its branch (phase 4g review).
+    const title = UI.breakdown.area.titleLeaf(name, meshTree.isRootTag(current));
+    return { current, title, rows: count ? [{ key: current, label: meshTree.label(current), count, static: true }] : [], isSelected: null, onToggle: openArea };
   }
 
   // Above the drilled-down ATC or area bars: "Up one level" and the path of levels (by: the mode).
@@ -902,7 +911,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       // leaf itself; that area is a toggle above the table (phase 4f, as the ATC classes).
       const parent = drillArea();
       if (parent !== null) {
-        const name = meshTree.name(parent);
+        const name = meshTree.label(parent);
         parentClass = { key: parent, badge: null, label: name, name, lead: UI.activity.parentLeadArea, filter: { area: [parent] } };
       }
       const children = parent === null ? meshTree.roots : meshTree.children(parent);
@@ -910,11 +919,18 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       const inLevel = (product) => product.areaKeys.filter((key) => level.has(key));
       const top = topKeys(keyCounts(filtered, inLevel), ACTIVITY_AREAS);
       const shown = new Set(top);
-      keysOf = (product) => inLevel(product).map((key) => (shown.has(key) ? key : ACTIVITY_OTHER));
+      // A branch with root tags (phase 4g): a static last column of the medicines tagged only with
+      // them, as the breakdown's static row (no child column holds them). Not for a node, where it
+      // would mostly repeat the total (phase 4g review).
+      const tagged = parent !== null && children.length > 0 && meshTree.rootTerms(parent).length > 0;
+      const atParent = (product) => tagged && product.areaExact.includes(parent);
+      keysOf = (product) => [...inLevel(product).map((key) => (shown.has(key) ? key : ACTIVITY_OTHER)), ...(atParent(product) ? [ACTIVITY_EXACT] : [])];
       const other = filtered.some((product) => inLevel(product).some((key) => !shown.has(key)));
+      const exactLabel = tagged ? areaExactLabel(meshTree, parent) : null;
       columns = [
-        ...top.map((key) => ({ key, label: meshTree.name(key), filter: { area: meshTree.canonical(key) } })),
+        ...top.map((key) => ({ key, label: meshTree.label(key), filter: { area: meshTree.canonical(key) } })),
         ...(other ? [{ key: ACTIVITY_OTHER, label: UI.activity.other, title: UI.activity.otherTitle, filter: null, other: true }] : []),
+        ...(filtered.some(atParent) ? [{ key: ACTIVITY_EXACT, label: exactLabel, title: exactLabel, filter: null, other: true }] : []),
       ];
     }
     const order = activityOrder[activityMode];
@@ -1052,7 +1068,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     // mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
     safely($("#year-strip"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
-    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, areaNames: meshTree.names, atcNames }), {
+    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, areaNames: meshTree.labels, atcNames }), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
       popup: !DESKTOP.matches,
@@ -1069,11 +1085,13 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const atcIncomplete = atcIncompleteAt(withoutAtcFilter);
     const { codes: atcCodes, names: atcQueries } = atcSelection();
     safely($("#facet-atc"), () => atcTree.render({ selected: atcCodes, names: atcQueries, counts: atcCounts, exact: atcExact, incompleteAt: atcIncomplete, classNames: atcNames }));
-    // Therapeutic areas: medicines per tree key, and tagged at each node itself, matching every other filter.
+    // Therapeutic areas: medicines per tree key, and in each key's static row (tagged at a node itself,
+    // only at a branch's root), matching every other filter.
     const withoutAreaFilter = filterProducts(products, predicates, "area");
+    const areaCounts = keyCounts(withoutAreaFilter, (product) => product.areaKeys);
     safely($("#facet-area"), () => areaFacet.render({
       selected: state.area,
-      counts: keyCounts(withoutAreaFilter, (product) => product.areaKeys),
+      counts: areaCounts,
       exact: keyCounts(withoutAreaFilter, (product) => product.areaExact),
     }));
 
@@ -1081,7 +1099,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const authorizedNow = filtered.filter(isAuthorizedNow);
     sheet.update(filtered.length);
     const undatedAuthorized = filtered.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
-    safely($(".answer"), () => renderHeadline(predicates, filtered, atcCounts, undatedAuthorized.length));
+    safely($(".answer"), () => renderHeadline(predicates, filtered, atcCounts, areaCounts, undatedAuthorized.length));
     safely($(".tiles-frame"), () => renderTiles($("#tiles"), { ...countTiles(filtered), authorized: authorizedNow.length }, activeCount > 0));
     showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
     showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);

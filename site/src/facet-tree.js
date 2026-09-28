@@ -24,7 +24,7 @@ const formatCount = d3.format(",");
 //   name(key, model): { text, missing }
 //   decorate(label, key): content before the name (the ATC code badge), optional
 //   link(key): an element after the row (a condition page link), or null; optional
-//   note(model): a line under the tree (older links' ATC name queries), or ""; optional
+//   note(model): a line under the tree (older links' ATC name queries, root tags), or ""; optional
 export function createFacetTree(section, spec, { onToggle }) {
   const search = section.querySelector(".facet-search");
   const status = section.querySelector(".facet-live");

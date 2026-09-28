@@ -116,8 +116,8 @@ test("buildProducts joins holder, year, MeSH terms, branches and ATC rows", () =
   assert.deepEqual(second.atc.map((row) => row.atc_code_human), ["L01XE"]);
   assert.deepEqual([second.areas, second.branches], [[], []]);
   // Phase 4f: the therapeutic area tree keys (terms and every branch and node above them) and the
-  // nodes a term is itself; no subtree rows here, so each term is matched at its branch roots: it
-  // is those branches.
+  // nodes a term is itself; no subtree rows here, so each term is matched at its branch roots: the
+  // product is tagged only at those roots (phase 4g: the branches' static rows).
   assert.deepEqual([...first.areaKeys].sort(), ["C04", "C15", "C20", "Leukemia", "Lymphoma", "Unmatched term"]);
   assert.deepEqual([...first.areaExact].sort(), ["C04", "C15", "C20"]);
   assert.deepEqual([second.areaKeys, second.areaExact], [[], []]);

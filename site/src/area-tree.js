@@ -1,9 +1,9 @@
 // The facet sidebar's therapeutic area section (the phone sheet borrows it; phase 4f): one tree of
 // MeSH branch › level 2 › level 3 › EMA's terms (areas.js, facet-tree.js), each row with its name,
 // count and a link to its condition page once known. Checked areas combine with OR (state.area).
-// Also the breakdown's path of areas (renderAreaPath()).
+// Also the path of areas of the breakdown and the one-area headline (renderAreaPath()).
 import * as d3 from "d3";
-import { areaCheckState, areaIncludedIn, areaTreeChildren, areaTreeKeys, areaTreeSearch } from "./areas.js";
+import { areaCheckState, areaExactLabel, areaIncludedIn, areaTreeChildren, areaTreeKeys, areaTreeSearch } from "./areas.js";
 import { createFacetTree } from "./facet-tree.js";
 import { UI } from "./labels.js";
 
@@ -19,7 +19,7 @@ export function createAreaTree(section, { tree, onToggle, linkOf }) {
       tree: UI.areas.tree,
       noMatches: UI.areas.noMatches,
       matches: UI.facets.matches,
-      static: () => UI.areas.notMoreSpecific,
+      static: (parent) => areaExactLabel(tree, parent),
       expand: (key) => UI.areas.expand(tree.name(key)),
       row: (key, count) => UI.areas.count(tree.name(key), count),
       included: (key, count, ancestor) => UI.areas.included(tree.name(key), count, tree.name(ancestor)),
@@ -36,22 +36,28 @@ export function createAreaTree(section, { tree, onToggle, linkOf }) {
     levelsAbove: (key) => [...tree.ancestors(key)].filter((above) => above !== key),
     name: (key) => ({ text: tree.name(key), missing: false }),
     link: linkOf,
+    // A selected root tag (older links) has no row of its own: its branch is only indeterminate.
+    note: (model) => {
+      const tags = model.selected.filter(tree.isRootTag);
+      return tags.length ? UI.areas.tagNote(tags) : "";
+    },
   }, { onToggle });
 }
 
 const formatCount = d3.format(",");
 
-// Above the drilled-down area bars: "All therapeutic areas", then one button per level of the path
-// to current (the last is current, aria-current); counts: medicines per key (null: none shown).
-// Controls carry data-focus-key so a rebuild can put focus back.
-export function renderAreaPath(container, { tree, current, counts = null, onSelect }) {
+// Above the drilled-down area bars and under the one-area headline (phase 4g): "All therapeutic
+// areas" (all), then one button per level of the path to current (the last is current,
+// aria-current); counts: medicines per key (null: none shown); label: the list's name. Controls
+// carry data-focus-key so a rebuild can put focus back.
+export function renderAreaPath(container, { tree, current, counts = null, onSelect, all = true, label = UI.areas.path }) {
   const focused = container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
   const root = d3.select(container);
   root.selectChildren().remove();
-  const items = [null, ...tree.path(current)];
+  const items = [...(all ? [null] : []), ...tree.path(current)];
   const buttons = root.append("ol")
     .attr("class", "atc-path")
-    .attr("aria-label", UI.areas.path)
+    .attr("aria-label", label)
     .selectAll("li")
     .data(items)
     .join("li")
@@ -63,8 +69,9 @@ export function renderAreaPath(container, { tree, current, counts = null, onSele
   buttons.filter((key) => key === null).attr("class", "path-all").text(UI.areas.all);
   buttons.filter((key) => key !== null).each(function level(key) {
     const count = counts?.get(key) ?? null;
-    const button = d3.select(this).attr("aria-label", count === null ? tree.name(key) : UI.areas.count(tree.name(key), count));
-    button.append("span").text(tree.name(key));
+    const name = tree.label(key); // a root tag: "tagged Neoplasms", not its branch's name
+    const button = d3.select(this).attr("aria-label", count === null ? name : UI.areas.count(name, count));
+    button.append("span").text(name);
     if (count !== null) button.append("span").attr("class", "path-count").text(formatCount(count));
   });
   if (focused !== undefined) (container.querySelector(`[data-focus-key="${CSS.escape(focused)}"]`) ?? container.querySelector("[aria-current]"))?.focus();
