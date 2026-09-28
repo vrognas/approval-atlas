@@ -295,4 +295,13 @@ test("submitChoice: the suggestion whose label (or class code) the query is, els
   assert.equal(submitChoice(groups, "weg"), null);
   assert.deepEqual(submitChoice([{ key: "medicines", options: [{ label: "Keytruda", value: "P1" }] }], "keytr"), { group: "medicines", value: "P1" });
   assert.equal(submitChoice([], "anything"), null);
+  // Companies part 2: a company group the query names by its monogram ("msd" on a phone) opens,
+  // though its label differs and other suggestions show.
+  const companies = [
+    { key: "companies", options: [{ label: "MSD (Merck & Co.)", value: "g.msd", named: true }] },
+    { key: "medicines", options: [{ label: "MSD Vaccine", value: "P2" }, { label: "Other", value: "P3" }] },
+  ];
+  assert.deepEqual(submitChoice(companies, "msd"), { group: "companies", value: "g.msd" });
+  companies[0].options[0].named = false;
+  assert.equal(submitChoice(companies, "msd"), null);
 });

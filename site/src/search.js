@@ -70,7 +70,7 @@ export function searchWords(text) {
 }
 
 // Every query word starts some word of the term (whole-word match for short words when asked).
-function matchesWords(tokens, words, shortWhole) {
+export function matchesWords(tokens, words, shortWhole) {
   return words.every((word) => tokens.some((token) => (shortWhole && word.length < SHORT_WORD ? token === word : token.startsWith(word))));
 }
 
@@ -200,13 +200,14 @@ export function suggest(index, conditions, query) {
   };
 }
 
-// Enter without a picked option: the suggestion the query names (folded label, or an ATC class's
-// code), first in group order, else the only suggestion, else null (a text search). groups: the
-// search box's [{ key, options: [{ label, value }] }].
+// Enter without a picked option: the suggestion the query names (folded label, an ATC class's
+// code, or an option marked named: a company group's monogram or other name), first in group
+// order, else the only suggestion, else null (a text search). groups: the search box's
+// [{ key, options: [{ label, value, named }] }].
 export function submitChoice(groups, query) {
   const folded = foldSearchText(query);
   const options = groups.flatMap((group) => group.options.map((option) => ({ group: group.key, option })));
-  const named = options.find(({ group, option }) => foldSearchText(option.label) === folded || (group === "classes" && foldSearchText(option.value) === folded));
+  const named = options.find(({ group, option }) => option.named || foldSearchText(option.label) === folded || (group === "classes" && foldSearchText(option.value) === folded));
   const choice = named ?? (options.length === 1 ? options[0] : null);
   return choice ? { group: choice.group, value: choice.option.value } : null;
 }

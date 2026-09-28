@@ -4,7 +4,8 @@
 # `curated_companies_as_of`: current owner only. Joint ventures are their own
 # group, with the partner groups listed. Holders are named as EMA or the
 # Union Register spell them; every holder that folds to the same company
-# (company_match_key()) follows.
+# (company_match_key()) follows. Notes are UI copy: U.S. spelling, no
+# em-dashes; evidence quotes stay verbatim.
 curated_companies_as_of <- as.Date("2026-09-28")
 
 curated_company_data <- function() {
@@ -14,6 +15,8 @@ curated_company_data <- function() {
     aliases = curated_company_aliases(),
     representatives = curated_representatives(),
     sponsors = curated_medicine_sponsors(),
+    medicine_groups = curated_medicine_groups(),
+    medicine_notes = curated_medicine_notes(),
     as_of = curated_companies_as_of
   )
 }
@@ -34,7 +37,7 @@ curated_company_groups <- function() {
     "INTAS PHARMACEUTICALS LIMITED", NA, NA, NA,
     "g.msd", "MSD (Merck & Co.)", "MSD", "4YV9Y5M8S0BRK1RP0397",
     "MERCK & CO., INC.", NA, NA, NA,
-    "g.teva", "Teva", "TEV", "549300BAFGM4RC74ZJ94",
+    "g.teva", "Teva", "TEVA", "549300BAFGM4RC74ZJ94",
     "TEVA PHARMACEUTICAL INDUSTRIES LIMITED", NA, NA, NA,
     "g.johnson-johnson", "Johnson & Johnson", "JNJ", "549300G0CFPGEF6X2043",
     "Johnson & Johnson", NA, NA, NA,
@@ -46,7 +49,7 @@ curated_company_groups <- function() {
     NA, NA, NA,
     "g.eli-lilly", "Eli Lilly", "LLY", "FRDRIPF3EKNDJ2CQJL29",
     "ELI LILLY AND COMPANY", NA, NA, NA,
-    "g.viatris", "Viatris", "VTR", "254900ZZTSW7NL773X71", "VIATRIS INC.",
+    "g.viatris", "Viatris", "VTRS", "254900ZZTSW7NL773X71", "VIATRIS INC.",
     NA, NA, NA,
     "g.bristol-myers-squibb", "Bristol Myers Squibb", "BMS",
     "HLYYNH7UQUORYSJQCN42", "BRISTOL-MYERS SQUIBB COMPANY", NA, NA, NA,
@@ -54,7 +57,7 @@ curated_company_groups <- function() {
     "NOVO NORDISK A/S", NA, NA, NA,
     "g.krka", "Krka", "KRK", "549300H9RLRTRTLRUZ73",
     "KRKA, tovarna zdravil, d.d., Novo mesto", NA, NA, NA,
-    "g.gilead", "Gilead", "GIL", "549300WTZWR07K8MNV44",
+    "g.gilead", "Gilead", "GILD", "549300WTZWR07K8MNV44",
     "GILEAD SCIENCES, INC.", NA, NA, NA,
     "g.bayer", "Bayer", "BAY", "549300J4U55H3WP1XT59",
     "Bayer Aktiengesellschaft", NA, NA, NA,
@@ -62,9 +65,9 @@ curated_company_groups <- function() {
     "g.boehringer-ingelheim", "Boehringer Ingelheim", "BI",
     "529900UYZPE4QQMRRE87", "Boehringer Ingelheim International GmbH",
     "529900P5FAANZASUYL28", "C.H. Boehringer Sohn AG & Co. KG", NA,
-    "g.amgen", "Amgen", "AMG", "62QBXGPJ34PQ72Z12S66", "AMGEN INC.",
+    "g.amgen", "Amgen", "AMGN", "62QBXGPJ34PQ72Z12S66", "AMGEN INC.",
     NA, NA, NA,
-    "g.abbvie", "AbbVie", "ABV", "FR5LCKFTG8054YNNRU85", "ABBVIE INC.",
+    "g.abbvie", "AbbVie", "ABBV", "FR5LCKFTG8054YNNRU85", "ABBVIE INC.",
     NA, NA, NA,
     "g.gedeon-richter", "Gedeon Richter", "GR", NA, NA, NA, NA, NA,
     "g.stada", "STADA", "STA", "529900FMTTLMH0P0DL10",
@@ -91,7 +94,7 @@ curated_company_groups <- function() {
     "g.merck-kgaa", "Merck KGaA", "MKG", NA, NA, NA, NA, NA,
     "g.organon", "Organon", "OGN", "549300AMCKY57OK2CO56", "ORGANON & CO.",
     NA, NA, NA,
-    "g.sobi", "Sobi", "SBI", "549300124Y3MQI87PT35",
+    "g.sobi", "Sobi", "SOBI", "549300124Y3MQI87PT35",
     "Swedish Orphan Biovitrum AB (publ)", NA, NA, NA,
     "g.csl", "CSL", "CSL", "529900ECSECK5ZDQTE14", "CSL LIMITED",
     NA, NA, NA,
@@ -107,11 +110,11 @@ curated_company_groups <- function() {
     "g.medac", "medac", "MDC", "529900CYHUGUOZJN0I17",
     "Medac Gesellschaft für klinische Spezialpräparate m.b.H.",
     NA, NA, NA,
-    "g.biogen", "Biogen", "BGN", "W8J5WZB5IY3K0NDQT671", "BIOGEN INC.",
+    "g.biogen", "Biogen", "BIIB", "W8J5WZB5IY3K0NDQT671", "BIOGEN INC.",
     NA, NA, NA,
     "g.otsuka", "Otsuka", "OTS", NA, NA, NA, NA, NA,
     "g.advanz", "Advanz Pharma", "ADV", NA, NA, NA, NA, NA,
-    "g.biomarin", "BioMarin", "BMN", "NSLL8ITTRR0J5HEMR848",
+    "g.biomarin", "BioMarin", "BMRN", "NSLL8ITTRR0J5HEMR848",
     "BIOMARIN PHARMACEUTICAL INC.", NA, NA, NA,
     "g.neuraxpharm", "Neuraxpharm", "NXP", "959800C6U9VUWDQL8408",
     "NEURAXPHARM PHARMACEUTICALS S.L.(SOCIEDAD UNIPERSONAL)", NA, NA, NA,
@@ -126,14 +129,14 @@ curated_company_groups <- function() {
     "g.esteve", "Esteve", "EST", "95980020140005174448",
     "ESTEVE PHARMACEUTICALS S.A.", "959800YD5H9DYP7YT664",
     "ESTEVE HEALTHCARE S.L.", NA,
-    "g.incyte", "Incyte", "INC", NA, NA, NA, NA, NA,
+    "g.incyte", "Incyte", "INCY", NA, NA, NA, NA, NA,
     "g.curium", "Curium", "CUR", NA, NA, NA, NA, NA,
     "g.menarini", "Menarini", "MEN", "8156002DC6B01873B624",
     "A. MENARINI - INDUSTRIE FARMACEUTICHE RIUNITE - S.R.L.", NA, NA, NA,
     "g.kyowa-kirin", "Kyowa Kirin", "KK", NA, NA, NA, NA, NA,
     "g.abbott", "Abbott", "ABT", "HQD377W2YR662HK5JX27",
     "ABBOTT LABORATORIES", NA, NA, NA,
-    "g.vertex", "Vertex", "VRT", NA, NA, NA, NA, NA,
+    "g.vertex", "Vertex", "VRTX", NA, NA, NA, NA, NA,
     "g.almirall", "Almirall", "ALM", "95980020140005007996", "ALMIRALL S.A.",
     NA, NA, NA,
     "g.lundbeck", "Lundbeck", "LUN", "5493006R4KC2OI5D3470",
@@ -144,10 +147,10 @@ curated_company_groups <- function() {
     "Grünenthal GmbH", NA, NA, NA,
     "g.theramex", "Theramex", "TMX", NA, NA, NA, NA, NA,
     "g.eisai", "Eisai", "EIS", NA, NA, NA, NA, NA,
-    "g.jazz", "Jazz Pharmaceuticals", "JAZ", "635400GAUMJCLEZRRV50",
+    "g.jazz", "Jazz Pharmaceuticals", "JAZZ", "635400GAUMJCLEZRRV50",
     "Jazz Pharmaceuticals Public Limited Company", NA, NA, NA,
     "g.dr-reddys", "Dr. Reddy's", "RDY", NA, NA, NA, NA, NA,
-    "g.perrigo", "Perrigo", "PRG", NA, NA, NA, NA, NA,
+    "g.perrigo", "Perrigo", "PRGO", NA, NA, NA, NA, NA,
     "g.glenmark", "Glenmark", "GMK", "335800WKECZXIIT9GK20",
     "GLENMARK PHARMACEUTICALS LIMITED", NA, NA, NA,
     "g.merz", "Merz", "MRZ", NA, NA, NA, NA, NA,
@@ -159,16 +162,24 @@ curated_company_groups <- function() {
     "BRACCO IMAGING S.P.A.", "549300IPJJS0DK6UEY77", "BRACCO S.P.A.", NA,
     "g.cosmo", "Cosmo Pharmaceuticals", "COS", "724500OX0EBQRYTVV639",
     "COSMO Pharmaceuticals N.V.", NA, NA, NA,
-    "g.pharming", "Pharming", "PHR", "724500DCJ9MPG74JEH91",
+    "g.pharming", "Pharming", "PHAR", "724500DCJ9MPG74JEH91",
     "Pharming Group N.V.", NA, NA, NA,
+    "g.haleon", "Haleon", "HLN", "549300PSB3WWEODCUP19", "HALEON PLC",
+    NA, NA, NA,
+    "g.zydus", "Zydus Lifesciences", "ZYD", NA, NA, NA, NA, NA,
+    # The current owners of medicines whose later holder only the Union
+    # Register names (Optimark, Thorinane): curated_medicine_groups().
+    "g.guerbet", "Guerbet", "GBT", "969500WV1U1WQ059L135", "GUERBET",
+    NA, NA, NA,
+    "g.techdow", "Techdow", "TDW", NA, NA, NA, NA, NA,
+    # Live joint ventures only (user decision 2026-09-28): each still holds
+    # an authorised medicine (Eliquis, Vaxelis, Velphoro). The medicines of
+    # dissolved ones (Sanofi Pasteur MSD, the Sanofi and Bristol-Myers
+    # Squibb alliance) go to the partner that took them, per medicine
+    # (curated_medicine_groups()).
     "g.bristol-myers-squibb-pfizer",
     "Bristol Myers Squibb and Pfizer (joint venture)", "BPF", NA, NA, NA, NA,
     "g.bristol-myers-squibb;g.pfizer",
-    "g.sanofi-bristol-myers-squibb",
-    "Sanofi and Bristol Myers Squibb (joint venture)", "SBM", NA, NA, NA,
-    NA, "g.bristol-myers-squibb;g.sanofi",
-    "g.sanofi-pasteur-msd", "Sanofi Pasteur MSD (joint venture)", "SPM",
-    NA, NA, NA, NA, "g.msd;g.sanofi",
     "g.mcm-vaccine", "MCM Vaccine (joint venture)", "MCM", NA, NA, NA, NA,
     "g.msd;g.sanofi",
     "g.vifor-fresenius-medical-care",
@@ -196,6 +207,21 @@ curated_group_members <- function() {
     "g.novartis", "Novartis Europharm Limited", NA, NA,
     "g.novartis", "Novartis", NA, NA,
     "g.novartis", "Novartis Ophthalmics Europe Ltd.", NA, NA,
+    # Lumark: withdrawn in 2026 at the request of I.D.B. Holland B.V. (the
+    # Union Register's holder), of the same IDB Group, which Advanced
+    # Accelerator Applications bought in 2016 (https://www.globenewswire.com/
+    # news-release/2016/01/07/800133/0/en/Advanced-Accelerator-Applications-
+    # Acquires-the-IDB-Group.html) and Novartis with AAA in 2018. The
+    # evidence shows the current owner: "IDB (part of Novartis Netherlands)".
+    "g.novartis", "I.D.B. Radiopharmacy B.V.",
+    paste(
+      "IDB is part of Novartis Netherlands (Dutch nuclear safety authority,",
+      "2024)"
+    ),
+    paste0(
+      "https://english.autoriteitnvs.nl/latest/news/2024/11/12/",
+      "permission-for-idb-to-use-new-production-location-pending-licence"
+    ),
     "g.sandoz", "Sandoz GmbH", "Spun off from Novartis in 2023",
     wikipedia("Sandoz"),
     "g.sandoz", "Sandoz Pharmaceuticals d.d.",
@@ -206,19 +232,14 @@ curated_group_members <- function() {
     "https://www.sandoz.com/de-de/unsere-marken/1-pharma/",
     "g.pfizer", "Pfizer Europe MA EEIG", NA, NA,
     "g.pfizer", "Pfizer Ireland Pharmaceuticals", NA, NA,
-    "g.pfizer", "Roerig Farmaceutici Italiana S.p.A.",
-    "Merged into Pfizer Italiana in 2000",
-    "https://www.gazzettaufficiale.it/eli/id/2000/01/24/S-654/p2",
     "g.pfizer", "Wyeth Europa Ltd", "Wyeth acquired by Pfizer in 2009",
     wikipedia("Wyeth"),
     "g.pfizer", "Wyeth Lederle Vaccines S.A.",
     "Wyeth acquired by Pfizer in 2009", wikipedia("Wyeth"),
-    "g.pfizer", "Pharmacia Europe EEIG",
-    paste(
-      "Pharmacia merged into Pfizer in 2003 (so Pharmacia - Pfizer EEIG,",
-      "the two companies' joint EEIG, is Pfizer's alone: Bextra, whose",
-      "holder the Union Register names Pharmacia Europe EEIG)"
-    ),
+    "g.pfizer", "Pharmacia Europe EEIG", "Pharmacia merged into Pfizer in 2003",
+    wikipedia("Pfizer"),
+    "g.pfizer", "Pharmacia - Pfizer EEIG",
+    "Pharmacia and Pfizer's joint EEIG; Pharmacia merged into Pfizer in 2003",
     wikipedia("Pfizer"),
     "g.pfizer", "Hospira UK Limited", "Hospira acquired by Pfizer in 2015",
     wikipedia("Hospira"),
@@ -461,6 +482,13 @@ curated_group_members <- function() {
     "g.otsuka", "Otsuka Novel Products GmbH", NA, NA,
     "g.otsuka", "Taiho Pharma Netherlands B.V.",
     "Taiho is an Otsuka Holdings company", wikipedia("Taiho_Pharmaceutical"),
+    # A sponsor behind a regulatory representative (Nuedexta), not a
+    # holder: curated_medicine_sponsors().
+    "g.otsuka", "Avanir Pharmaceuticals", "Avanir acquired by Otsuka in 2015",
+    paste0(
+      "https://www.sec.gov/Archives/edgar/data/0000858803/",
+      "000119312515008807/d850708dex99a5g.htm"
+    ),
     "g.advanz", "Advanz Pharma Limited", NA, NA,
     "g.advanz", "Amdipharm Limited",
     "Amdipharm Mercury acquired by Concordia in 2015, renamed Advanz Pharma",
@@ -561,26 +589,20 @@ curated_group_members <- function() {
     "https://search.gleif.org/#/record/8156002F30A40D4B5408",
     "g.pharming", "Pharming Group N.V.", NA, NA,
     "g.pharming", "Pharming Technologies B.V.", NA, NA,
+    "g.haleon", "Haleon Ireland Dungarvan Limited", NA, NA,
+    "g.guerbet", "Guerbet", NA, NA,
+    "g.techdow", "Techdow Pharma Netherlands B.V.", NA, NA,
+    # A sponsor behind regulatory representatives (Zokinvy, Nulibry), not a
+    # holder: curated_medicine_sponsors().
+    "g.zydus", "Sentynl Therapeutics",
+    "Acquired by the Zydus Group in 2017; wholly owned by Zydus Lifesciences",
+    paste0(
+      "https://sentynl.com/news/sentynl-therapeutics-announces-global-",
+      "acquisition-of-zokinvy-lonafarnib-for-treatment-of-hutchinson-",
+      "gilford-progeria-syndrome-from-eiger-biopharmaceuticals/"
+    ),
     "g.bristol-myers-squibb-pfizer", "Bristol-Myers Squibb / Pfizer EEIG",
     NA, NA,
-    "g.sanofi-bristol-myers-squibb", "Sanofi Pharma Bristol-Myers Squibb",
-    paste(
-      "Sanofi and Bristol-Myers Squibb's alliance; Bristol-Myers Squibb",
-      "returned its rights outside the U.S. to Sanofi from 1 January 2013"
-    ),
-    paste0(
-      "https://www.sec.gov/Archives/edgar/data/14272/",
-      "000119312512413254/d419788dex991.htm"
-    ),
-    "g.sanofi-pasteur-msd", "Sanofi Pasteur MSD, SNC",
-    paste(
-      "Sanofi Pasteur and MSD's vaccines joint venture, ended on",
-      "31 December 2016 (each took back its own vaccines)"
-    ),
-    paste0(
-      "https://www.merck.com/news/sanofi-pasteur-and-merck-confirm-closing-",
-      "date-to-end-joint-vaccines-operations-in-europe/"
-    ),
     "g.mcm-vaccine", "MCM Vaccine B.V.", NA, NA,
     "g.vifor-fresenius-medical-care",
     "Vifor Fresenius Medical Care Renal Pharma France",
@@ -634,8 +656,96 @@ curated_company_aliases <- function() {
     "Ascendis Pharma Bone Diseases A/S",
     "Ascendis Pharma Endocrinology Division A/S", "Two entities, one company",
     "JensonR+ Limited", "Jenson Pharmaceutical Services Limited",
-    "Renamed"
-  )
+    "Renamed",
+    # EMA's names of products the Union Register no longer lists as Active,
+    # where EMA's field decides (user decision 2026-09-28).
+    "Medac", "medac Gesellschaft für klinische Spezialpräparate mbH",
+    "Short form of the name",
+    "Takeda Europe R Centre Ltd.",
+    "Takeda Global Research and Development Centre (Europe)",
+    "Garbled in EMA's data (Takeda Europe R&D Centre)",
+    "Mitsubishi Pharma Europe Ltd", "Tanabe Pharma GmbH",
+    paste(
+      "Mitsubishi Pharma merged with Tanabe in 2007 (Mitsubishi Tanabe",
+      "Pharma, renamed Tanabe Pharma on 1 December 2025)"
+    )
+  ) |>
+    dplyr::bind_rows(curated_sponsor_renames())
+}
+
+# Sponsors renamed since (user decision 2026-09-28): the current name shows,
+# the name in curated_medicine_sponsors() is an alias. Evidence as for
+# sponsors: an https URL, a verbatim quote of at most 20 words and the date
+# checked.
+curated_sponsor_renames <- function() {
+  prnewswire <- "https://www.prnewswire.com/news-releases/"
+  sec <- "https://www.sec.gov/Archives/edgar/data/"
+  dplyr::tribble(
+    ~holder, ~company_holder, ~note, ~evidence_url, ~evidence_quote,
+    "AcelRx Pharmaceuticals", "Talphera", "Renamed Talphera in January 2024",
+    paste0(
+      prnewswire,
+      "acelrx-announces-rebranding-with-name-change-to-talphera-inc-",
+      "302029288.html"
+    ),
+    paste(
+      "today announced the rebranding of the Company, with a name change to",
+      "Talphera, Inc."
+    ),
+    "Sesen Bio", "Carisma Therapeutics",
+    "Merged with Carisma Therapeutics in March 2023, taking its name",
+    paste0(
+      prnewswire,
+      "carisma-therapeutics-closes-merger-with-sesen-bio-301765135.html"
+    ),
+    paste(
+      "The combined company will operate under the name Carisma Therapeutics",
+      "Inc."
+    ),
+    "Discovery Laboratories", "Windtree Therapeutics",
+    "Renamed Windtree Therapeutics in April 2016",
+    paste0(
+      prnewswire,
+      "discovery-labs-changes-name-to-windtree-therapeutics-inc-nasdaq-wint-",
+      "300252562.html"
+    ),
+    paste(
+      "today announced that it has changed its corporate name to Windtree",
+      "Therapeutics, Inc."
+    ),
+    "Cempra Pharmaceuticals", "Melinta Therapeutics",
+    "Merged with Melinta Therapeutics in November 2017, taking its name",
+    paste0(sec, "0001461993/000156459018005947/mlnt-10k_20171231.htm"),
+    paste(
+      "Immediately after the merger, Cempra, Inc. was renamed Melinta",
+      "Therapeutics, Inc."
+    ),
+    "Cleveland BioLabs", "Statera Biopharma",
+    paste(
+      "Merged with Cytocom in July 2021 and renamed Statera Biopharma in",
+      "September 2021"
+    ),
+    paste0(sec, "1318641/000143774921022790/ex_286725.htm"),
+    paste(
+      "On September 1, 2021, the newly merged company changed its name to",
+      "Statera BioPharma, Inc."
+    ),
+    "Advaxis, Inc.", "Ayala Pharmaceuticals",
+    "Merged with Ayala Pharmaceuticals in January 2023, taking its name",
+    paste0(sec, "1100397/000149315223002462/form8-k.htm"),
+    paste(
+      "changed its name on January 19, 2023 from Advaxis, Inc. to Ayala",
+      "Pharmaceuticals, Inc."
+    ),
+    "Coherus BioSciences", "Coherus Oncology",
+    "Renamed Coherus Oncology in May 2025",
+    paste0(sec, "1512762/000155837025008294/chrs-20250529x8k.htm"),
+    paste(
+      "changed its corporate name from Coherus BioSciences, Inc. to Coherus",
+      "Oncology, Inc."
+    )
+  ) |>
+    dplyr::mutate(checked_date = as.Date("2026-09-28"))
 }
 
 # Regulatory service firms that hold marketing authorisations for other
@@ -663,19 +773,561 @@ curated_representatives <- function() {
 
 # The sponsor behind a medicine held by a regulatory representative, looked
 # up by hand in the medicine's EPAR documents or product information (or a
-# company press release): the evidence URL, a quote of at most 20 words
-# and the date checked. Only rows a second, independent check confirmed
+# company press release): a note, the evidence URL, a quote of at most 20
+# words and the date checked. Only rows a second, independent check confirmed
 # (reviewed) are applied. sponsor_group_key: a curated group, or NA for the
-# sponsor's own group.
+# sponsor's own group. `holder` is the holder used when the row was checked
+# (the Union Register's where it decides). The sponsor is named as it was
+# then (AcelRx); a renamed one shows its current name (Talphera) through
+# curated_sponsor_renames(), and its note names both. User decision
+# 2026-09-28 ("I confirm the
+# medicine sponsor list"): the proposed sponsors of the review list; the
+# unresolved ones (Memantine FGK, Sildenafil FGK, Mevlyq, Ivabradine
+# JensonR, Ablavar) stay held via a regulatory representative, and the
+# holders that are no representative (Kamada and Genta with an address
+# tail; Clopidogrel Krka, whose holder the Union Register decides) need no
+# row.
 curated_medicine_sponsors <- function() {
-  dplyr::tibble(
-    ema_product_number = character(),
-    holder = character(),
-    sponsor = character(),
-    sponsor_group_key = character(),
-    evidence_url = character(),
-    evidence_quote = character(),
-    checked_date = as.Date(character()),
-    reviewed = logical()
+  sec <- "https://www.sec.gov/Archives/edgar/data/"
+  ema_documents <- "https://www.ema.europa.eu/en/documents/"
+  withdrawal_letter <- function(medicine) {
+    paste0(
+      ema_documents, "withdrawal-letter/withdrawal-letter-", medicine,
+      "_en.pdf"
+    )
+  }
+  fgk <- "FGK Representative Service GmbH"
+  akroswiss <- "Akroswiss AG"
+  sentynl <- "Sentynl Therapeutics"
+  henlius <- "Shanghai Henlius Biotech"
+  henlius_url <- paste0(
+    "https://www.organon.com/news/european-commission-ec-approves-henlius-",
+    "and-organons-bildyos-denosumab-and-bilprevda-denosumab-biosimilars-to-",
+    "prolia-denosumab-and-xgeva-denosumab-respectively/"
   )
+  henlius_quote <- paste(
+    "European Commission (EC) Approves Henlius and Organon's BILDYOS",
+    "(denosumab) and BILPREVDA (denosumab)"
+  )
+  midazolam_note <- function(use) {
+    paste0(
+      "One of Akroswiss's two midazolam nasal sprays (", use, "), applied for ",
+      "through Regulatory Pharma Net"
+    )
+  }
+  henlius_note <- paste(
+    "Henlius's denosumab biosimilar (HLX14); Organon markets it as a",
+    "licensee"
+  )
+  dplyr::tribble(
+    ~ema_product_number, ~holder, ~sponsor, ~sponsor_group_key, ~note,
+    ~evidence_url, ~evidence_quote,
+    "EMEA/H/C/002784", fgk, "AcelRx Pharmaceuticals", NA,
+    paste(
+      "The rights to Zalviso reverted from its licensee Grünenthal to AcelRx",
+      "(renamed Talphera in 2024) in 2021; the authorization then moved to",
+      "FGK"
+    ),
+    paste0(sec, "1427925/000143774921026589/acrx20210930_10q.htm"),
+    paste(
+      "The rights to market and sell Zalviso in the Zalviso Territory",
+      "reverted back to the Company on May 12, 2021."
+    ),
+    "EMEA/H/C/002830", fgk, "Corcept Therapeutics", NA,
+    "Corcept's mifepristone (Korlym in the U.S.), filed in the EU as Corluxin",
+    paste0(sec, "1088856/000110262413001359/corcepttherapeutics.htm"),
+    paste(
+      "approval to promote Korlym for endogenous Cushing's syndrome in the",
+      "European Union under the brand name Corluxin"
+    ),
+    "EMEA/H/C/004473", fgk, "Advaxis, Inc.", NA,
+    paste(
+      "FGK applied as the European legal representative of Advaxis (renamed",
+      "Ayala Pharmaceuticals on merging with it in 2023)"
+    ),
+    withdrawal_letter("raligize"),
+    "who is the European Legal Representative of Advaxis Inc.",
+    "EMEA/H/C/005551", fgk, "Mirum Pharmaceuticals", NA,
+    paste(
+      "Maralixibat for PFIC2, applied for by FGK on behalf of Mirum, which",
+      "holds its later Livmarli authorization itself"
+    ),
+    withdrawal_letter("livmarli"),
+    paste(
+      "(maralixibat chloride) on behalf of Mirum Pharmaceuticals Inc. has",
+      "taken the decision to withdraw"
+    ),
+    "EMEA/H/C/005574", fgk, "Bio-Thera Solutions", NA,
+    paste(
+      "Bio-Thera's bevacizumab biosimilar (BAT1706); Sandoz markets it in",
+      "Europe as a licensee"
+    ),
+    paste0(
+      "https://www.prnewswire.com/news-releases/european-medicines-agency-",
+      "ema-approves-bio-thera-solutions-bat1706-avzivi-bevacizumab-a-",
+      "biosimilar-referencing-avastin-302209711.html"
+    ),
+    paste(
+      "European Medicines Agency (EMA) Approves Bio-Thera Solutions' BAT1706",
+      "(Avzivi, bevacizumab), a biosimilar referencing Avastin"
+    ),
+    "EMEA/H/C/006385", fgk, "Vyluma, Inc.", NA,
+    paste(
+      "Vyluma's low-dose atropine (NVK002), named by its study code in EMA's",
+      "refusal report"
+    ),
+    paste0(
+      ema_documents,
+      "assessment-report/atropine-sulfate-fgk-epar-refusal-public-",
+      "assessment-report_en.pdf"
+    ),
+    paste(
+      "Design of the phase 3 Study CP-NVK002-0001 including primary and",
+      "secondary efficacy"
+    ),
+    "EMEA/H/C/006537", "Rilonacept FGK Representative Service GmbH",
+    "Kiniksa Pharmaceuticals", NA,
+    "Kiniksa's rilonacept (Arcalyst), licensed from Regeneron",
+    paste0(sec, "1730430/000110465925086689/tm2525025d1_ex99-1.htm"),
+    paste(
+      "The European Commission granted Orphan Drug designation to ARCALYST",
+      "for the treatment of idiopathic pericarditis in 2021"
+    ),
+    "EMEA/H/C/005587", "YES Pharmaceutical Development Services GmbH",
+    "Siam Bioscience Co., Ltd.", NA,
+    paste(
+      "A pegfilgrastim biosimilar whose active substance Siam Bioscience",
+      "developed and makes; YES applied for it"
+    ),
+    paste0(
+      ema_documents,
+      "withdrawal-report/withdrawal-assessment-report-lutholaz_en.pdf"
+    ),
+    paste(
+      "Siam Bioscience Co. Ltd., Banmai, Nonthaburi, Thailand is the",
+      "manufacturer of the drug substance."
+    ),
+    "EMEA/H/C/004413", "ERA Consulting GmbH", "Coherus BioSciences", NA,
+    paste(
+      "The pegfilgrastim biosimilar of Coherus BioSciences (renamed Coherus",
+      "Oncology in 2025), held for it by ERA Consulting"
+    ),
+    paste0(
+      "https://www.globenewswire.com/news-release/2018/09/25/1576003/0/en/",
+      "Coherus-BioSciences-Receives-European-Commission-Approval-for-",
+      "UDENYCA-Pegfilgrastim-Biosimilar.html"
+    ),
+    paste(
+      "Coherus BioSciences, Inc. (Nasdaq: CHRS), today announced the European",
+      "Commission (EC) has granted marketing authorization to UDENYCA"
+    ),
+    "EMEA/H/C/004889", "Guidehouse Germany GmbH", "Lexicon Pharmaceuticals",
+    NA,
+    paste(
+      "Sotagliflozin; Lexicon regained the rights from Sanofi in 2019, and",
+      "the authorization moved to Guidehouse"
+    ),
+    paste0(sec, "1062822/000106282219000024/pressrelease09-10x2019.htm"),
+    paste(
+      "Lexicon will regain all rights to Zynquista and assume full",
+      "responsibility for the worldwide development and commercialization of",
+      "Zynquista"
+    ),
+    "EMEA/H/C/006317", "CATS Consultants GmbH", "Advenchen Laboratories, LLC",
+    NA,
+    paste(
+      "Catequentinib (anlotinib, AL3818), Advenchen's, applied for through",
+      "CATS Consultants"
+    ),
+    "https://advenchen.com/?page_id=17",
+    paste(
+      "Catequentinib Hydrochloride (AL3818) EMA Market Authorization",
+      "Application (MAA) has been successfully submitted."
+    ),
+    "EMEA/H/C/005657", "Regulatory Pharma Net S.r.l.", akroswiss, NA,
+    midazolam_note("premedication"),
+    paste0(
+      "https://www.ansa.it/sito/notizie/economia/business_wire/news/",
+      "2021-05-17_117165026.html"
+    ),
+    paste(
+      "The development of these Midazolam medicines comes in two independent",
+      "indications"
+    ),
+    "EMEA/H/C/005658", "Regulatory Pharma Net S.r.l.", akroswiss, NA,
+    midazolam_note("seizure rescue"),
+    paste0(
+      ema_documents,
+      "withdrawal-report/withdrawal-assessment-report-tuzodi_en.pdf"
+    ),
+    paste(
+      "developed by a private pharmaceutical company, fully dedicated to the",
+      "development and commercialisation of innovative nasal applications"
+    ),
+    "EMEA/H/C/004179", "Triskel EU Services Ltd", "Cempra Pharmaceuticals",
+    NA,
+    paste(
+      "Cempra (renamed Melinta Therapeutics on merging with it in 2017)",
+      "applied through Triskel EU Services"
+    ),
+    withdrawal_letter("solithromycin-triskel-eu-services"),
+    paste(
+      "Cempra Pharmaceuticals Inc., which Triskel EU Services Ltd represents",
+      "as the Applicant, has taken the decision to withdraw"
+    ),
+    "EMEA/H/C/005730", "DLRC Pharma Services Ltd", "Sesen Bio", NA,
+    paste(
+      "Sesen Bio (renamed Carisma Therapeutics on merging with it in 2023)",
+      "applied through DLRC Pharma Services"
+    ),
+    withdrawal_letter("oportuzumab-monatox-dlrc-pharma-services"),
+    paste(
+      "Sesen Bio is halting further regulatory activities relating to",
+      "oportuzumab monatox in Europe"
+    ),
+    "EMEA/H/C/000625", "Pharm Research Associates (UK) Limited",
+    "Discovery Laboratories", NA,
+    paste(
+      "Lucinactant; PRA International applied on behalf of Discovery",
+      "Laboratories (renamed Windtree Therapeutics in 2016)"
+    ),
+    withdrawal_letter("surfaxin"),
+    paste(
+      "the applicant, PRA International, on behalf of the US sponsor,",
+      "Discovery Laboratories, Inc."
+    ),
+    "EMEA/H/C/002560", "Jenson Pharmaceutical Services Limited",
+    "Avanir Pharmaceuticals", "g.otsuka",
+    paste(
+      "Avanir's dextromethorphan with quinidine, held for it by Jenson",
+      "Pharmaceutical Services; Avanir is Otsuka's since 2015"
+    ),
+    paste0(
+      "https://www.prnewswire.com/news-releases/avanir-pharmaceuticals-",
+      "announces-european-approval-of-nuedexta-212960871.html"
+    ),
+    paste(
+      "Avanir Pharmaceuticals, Inc. (NASDAQ: AVNR) today announced that the",
+      "European Commission has approved NUEDEXTA"
+    ),
+    "EMEA/H/C/004656", "TMC Pharma Services Ltd", "Cleveland BioLabs", NA,
+    paste(
+      "Entolimod of Cleveland BioLabs (renamed Statera Biopharma in 2021,",
+      "after merging with Cytocom), applied for through TMC Pharma Services"
+    ),
+    paste0(sec, "1318641/000131864118000015/pressrelease.htm"),
+    paste(
+      "regarding the company's Marketing Authorization Application (MAA) for",
+      "entolimod"
+    ),
+    "EMEA/H/C/005271", "Integral Pharma Solutions EU Limited", sentynl,
+    "g.zydus",
+    paste(
+      "Lonafarnib, authorized for Eiger; Sentynl, a Zydus company, bought it",
+      "in 2024"
+    ),
+    paste0(
+      "https://sentynl.com/news/sentynl-therapeutics-announces-global-",
+      "acquisition-of-zokinvy-lonafarnib-for-treatment-of-hutchinson-",
+      "gilford-progeria-syndrome-from-eiger-biopharmaceuticals/"
+    ),
+    paste(
+      "Sentynl Therapeutics Announces Global Acquisition of Zokinvy",
+      "(Lonafarnib) for Treatment of Hutchinson-Gilford Progeria Syndrome",
+      "from Eiger BioPharmaceuticals"
+    ),
+    "EMEA/H/C/005378", "TMC Pharma (EU) Limited", sentynl, "g.zydus",
+    paste(
+      "Fosdenopterin, developed by BridgeBio; Sentynl, a Zydus company,",
+      "acquired its global rights in March 2022"
+    ),
+    paste0(
+      "https://sentynl.com/news/bridgebio-pharma-and-sentynl-therapeutics-",
+      "receive-marketing-authorization-in-the-eu-for-nulibry-fosdenopterin-",
+      "for-the-treatment-of-mocd-type-a/"
+    ),
+    "In March 2022, Sentynl acquired the global rights to NULIBRY",
+    "EMEA/H/C/006434", "Sciencepharma Sp. z o.o", henlius, NA, henlius_note,
+    henlius_url, henlius_quote,
+    "EMEA/H/C/006435", "Sciencepharma Sp. z o.o", henlius, NA, henlius_note,
+    henlius_url, henlius_quote
+  ) |>
+    dplyr::mutate(
+      sponsor_group_key = as.character(.data$sponsor_group_key),
+      checked_date = as.Date("2026-09-28"),
+      reviewed = TRUE
+    )
+}
+
+# Medicines whose business went to another owner than their holder's
+# (user decision 2026-09-28): a split business (Abbott's pharmaceuticals
+# to AbbVie, Viatris's biosimilars to Biocon, MSD's women's health and
+# established brands to Organon), a dissolved joint venture (each partner
+# took its own products) or a later holder EMA's field does not show, named
+# by the Union Register, which no longer lists the product as Active
+# (Panretin, Optimark, Thorinane; Ioa's business went on to Theramex). The
+# medicine goes to that owner's group (a curated group); its holder stays
+# as published. `holder` is the holder used when the row was checked (EMA's,
+# or the Union Register's where it decides; never a sponsor): a row whose
+# holder no longer holds the medicine is not applied (listed as stale).
+# Evidence as for sponsors: an https URL, a verbatim quote of at most 20
+# words and the date checked.
+curated_medicine_groups <- function() {
+  sec <- "https://www.sec.gov/Archives/edgar/data/"
+  ema_documents <- "https://www.ema.europa.eu/en/documents/"
+  viatris_10k <- paste0(
+    sec, "1792044/000179204423000008/vtrs-20221231.htm"
+  )
+  viatris_quote <- paste(
+    "Viatris contributed its biosimilars portfolio, composed of the Biocon",
+    "collaboration programs, biosimilars to Humira®, Enbrel®, and Eylea®"
+  )
+  organon_10k <- paste0(sec, "1821825/000182182522000002/ogn-20211231.htm")
+  organon_desloratadine <- paste(
+    "several products that treat seasonal allergic rhinitis, including:",
+    "Singulair (montelukast sodium), Nasonex® (mometasone), and Clarinex®",
+    "(desloratadine)"
+  )
+  desloratadine_note <- paste(
+    "Desloratadine, as Aerius; MSD's established brands went to Organon in",
+    "2021 (Aerius, Azomyr and Neoclarityn are Organon's)"
+  )
+  alliance_8k <- paste0(sec, "14272/000119312512413254/d419788dex991.htm")
+  alliance_quote <- paste(
+    "Bristol-Myers Squibb will return to Sanofi its rights to Plavix and",
+    "Avapro/Avalide in all markets worldwide"
+  )
+  alliance_note <- function(medicine, sanofi_medicines) {
+    paste0(
+      medicine, " of Sanofi and Bristol-Myers Squibb's alliance, whose ",
+      "rights in the EU returned to Sanofi from 1 January 2013 (",
+      sanofi_medicines, ")"
+    )
+  }
+  dplyr::tribble(
+    ~ema_product_number, ~holder, ~group_key, ~note, ~evidence_url,
+    ~evidence_quote,
+    "EMEA/H/C/000482", "Abbott Laboratories Ltd.", "g.abbvie",
+    paste(
+      "Trudexa is adalimumab, a second brand of Humira; Abbott's",
+      "proprietary pharmaceuticals, Humira included, became AbbVie on",
+      "1 January 2013 (the holder stayed with Abbott)"
+    ),
+    paste0(sec, "0000001800/000110465911057748/a11-27657_2ex99d1.htm"),
+    paste(
+      "portfolio of market-leading brands, including Humira, Lupron,",
+      "Synagis, Kaletra, Creon and Synthroid"
+    ),
+    "EMEA/H/C/002019", "Abbott Laboratories Ltd.", "g.abbvie",
+    paste(
+      "Ozespa is briakinumab (ABT-874), from Abbott's proprietary",
+      "pharmaceuticals, which became AbbVie in 2013: its psoriasis trials",
+      "name AbbVie as sponsor"
+    ),
+    "https://clinicaltrials.gov/study/NCT00679731",
+    "AbbVie (prior sponsor, Abbott)",
+    "EMEA/H/C/000624", "Elan Pharma International Ltd.", "g.biogen",
+    paste(
+      "Biogen bought Elan's share of natalizumab (Tysabri) in 2013; the",
+      "Elan entity went to Perrigo"
+    ),
+    paste0(
+      sec, "0000875045/000087504513000014/cloveracquisitioncompletio.htm"
+    ),
+    paste(
+      "has completed its purchase of Elan Corporation's interest in",
+      "TYSABRI® (natalizumab)"
+    ),
+    "EMEA/H/C/000874", "Sanofi Pharma Bristol-Myers Squibb", "g.sanofi",
+    alliance_note(
+      "Clopidogrel with acetylsalicylic acid (the Plavix franchise)",
+      "the authorized DuoPlavin is Sanofi's"
+    ),
+    alliance_8k, alliance_quote,
+    # Bristol-Myers Squibb's own copies of the alliance's medicines.
+    "EMEA/H/C/000784", "Bristol-Myers Squibb Pharma EEIG", "g.sanofi",
+    alliance_note(
+      "Irbesartan with hydrochlorothiazide (Avalide), a copy of CoAprovel",
+      "CoAprovel and Karvezide are Sanofi's"
+    ),
+    alliance_8k, alliance_quote,
+    "EMEA/H/C/000786", "Bristol-Myers Squibb Pharma EEIG", "g.sanofi",
+    alliance_note(
+      "Irbesartan (Avapro), a copy of Aprovel",
+      "Aprovel and Karvea are Sanofi's"
+    ),
+    alliance_8k, alliance_quote,
+    "EMEA/H/C/000875", "Bristol Myers Squibb Pharma EEIG", "g.sanofi",
+    alliance_note(
+      "Clopidogrel with acetylsalicylic acid, a copy of DuoPlavin",
+      paste(
+        "the authorized DuoCover, now Clopidogrel/Acetylsalicylic acid",
+        "Zentiva, is Sanofi's"
+      )
+    ),
+    alliance_8k, alliance_quote,
+    "EMEA/H/C/000974", "Bristol-Myers Squibb Pharma EEIG", "g.sanofi",
+    alliance_note(
+      "Clopidogrel (Plavix), a copy of Plavix",
+      "Plavix and Iscover are Sanofi's"
+    ),
+    alliance_8k, alliance_quote,
+    "EMEA/H/C/000231", "Sanofi Pasteur MSD, SNC", "g.msd",
+    paste(
+      "Merck's vaccine (Comvax in the U.S.): Merck made its active",
+      "substances; Sanofi Pasteur MSD, the joint venture, ended on",
+      "31 December 2016"
+    ),
+    paste0(
+      ema_documents,
+      "product-information/procomvax-epar-product-information_en.pdf"
+    ),
+    paste(
+      "made of the antigenic components used in producing Merck PRP-OMPC",
+      "Vaccine and Merck Hepatitis B (Recombinant) Vaccine"
+    ),
+    "EMEA/H/C/000298", "Sanofi Pasteur MSD, SNC", "g.sanofi",
+    paste(
+      "Sanofi Pasteur made the vaccine and released its batches (Merck",
+      "supplied the hepatitis B antigen); Sanofi Pasteur MSD, the joint",
+      "venture, ended on 31 December 2016"
+    ),
+    paste0(
+      ema_documents,
+      "product-information/hexavac-epar-product-information_en.pdf"
+    ),
+    "Manufactured by: Sanofi Pasteur SA, F-69280 Marcy l’Etoile",
+    "EMEA/H/C/004262", "Mylan S.A.S", "g.biocon",
+    paste(
+      "Pegfilgrastim, a Mylan and Biocon biosimilar; Viatris's",
+      "biosimilars went to Biocon Biologics in 2022 (the authorized Fulphila",
+      "is Biocon's)"
+    ),
+    viatris_10k, viatris_quote,
+    "EMEA/H/C/004346", "Mylan S.A.S.", "g.biocon",
+    paste(
+      "Trastuzumab, a Mylan and Biocon biosimilar; Viatris's biosimilars",
+      "went to Biocon Biologics in 2022 (the authorized Ogivri is Biocon's)"
+    ),
+    viatris_10k, viatris_quote,
+    "EMEA/H/C/005611", "Mylan IRE Healthcare Limited", "g.biocon",
+    paste(
+      "Bevacizumab, a Mylan and Biocon biosimilar authorized with Abevmy",
+      "on 21 April 2021; Viatris's biosimilars went to Biocon Biologics in",
+      "2022 (Abevmy is Biocon's)"
+    ),
+    viatris_10k, viatris_quote,
+    "EMEA/H/C/001042", "Merck Sharp & Dohme B.V.", "g.organon",
+    paste(
+      "Follitropin beta, as Puregon; MSD's women's health business went to",
+      "Organon in 2021 (Puregon is Organon's)"
+    ),
+    organon_10k, "Follistim (follitropin beta injection)",
+    "EMEA/H/C/000311", "Schering-Plough Europe", "g.organon",
+    desloratadine_note, organon_10k, organon_desloratadine,
+    "EMEA/H/C/000312", "Schering-Plough Europe", "g.organon",
+    desloratadine_note, organon_10k, organon_desloratadine,
+    "EMEA/H/C/001217", "Schering-Plough Europe", "g.organon",
+    paste(
+      "Mometasone furoate with formoterol (Dulera in the U.S.); MSD's",
+      "established brands went to Organon in 2021"
+    ),
+    organon_10k,
+    paste(
+      "which is also marketed as Zenhale™ in certain markets outside the",
+      "United States"
+    ),
+    "EMEA/H/C/001108", "Wyeth Consumer Healthcare", "g.haleon",
+    # The evidence shows the current owner (GSK introducing Haleon, its
+    # consumer health business, before the July 2022 demerger).
+    paste(
+      "Ibuprofen with diphenhydramine (Advil): Pfizer's consumer health",
+      "portfolio joined GSK's in 2019, and that business became Haleon in",
+      "2022, with Advil among its global brands"
+    ),
+    paste0(
+      "https://www.gsk.com/en-gb/media/press-releases/",
+      "gsk-introduces-haleon-to-investors/"
+    ),
+    paste(
+      "The portfolio comprises global power brands such as Sensodyne,",
+      "Panadol, Advil, Voltaren, Theraflu, Otrivin, and Centrum"
+    ),
+    # Ioa: MSD held it when it was withdrawn in 2014 (EMA's field names
+    # Organon N.V.; the Union Register, MSD).
+    "EMEA/H/C/002068", "Organon N.V.", "g.theramex",
+    paste(
+      "Nomegestrol acetate with estradiol, as Zoely; MSD, Ioa's holder when",
+      "it was withdrawn in 2014, sold its further rights to Zoely to Theramex",
+      "in 2020, keeping the U.S. and Canada (the authorized Zoely is",
+      "Theramex's)"
+    ),
+    paste0(
+      "https://www.prnewswire.com/news-releases/theramex-acquires-commercial-",
+      "rights-for-oral-contraceptive-zoely-300990650.html"
+    ),
+    paste(
+      "entered into a definitive agreement to acquire further rights to",
+      "Zoely®, a patented oral contraceptive, from MSD"
+    ),
+    # Later holders that only the Union Register names (not Active there,
+    # so EMA's older holder is used), confirmed by EMA's medicine page.
+    "EMEA/H/C/000279", "Eisai GmbH", "g.advanz",
+    paste(
+      "Alitretinoin gel; Amdipharm (Advanz Pharma) held it when it was",
+      "withdrawn in 2021 (EMA's holder field still names Eisai)"
+    ),
+    "https://www.ema.europa.eu/en/medicines/human/EPAR/panretin",
+    paste(
+      "at the request of the marketing authorisation holder, Amdipharm",
+      "Limited, which notified the European Commission"
+    ),
+    "EMEA/H/C/000745", "Mallinckrodt Deutschland GmbH", "g.guerbet",
+    paste(
+      "Gadoversetamide; Guerbet held Optimark when it expired in 2017 (EMA's",
+      "holder field still names Mallinckrodt)"
+    ),
+    "https://www.ema.europa.eu/en/medicines/human/EPAR/optimark",
+    paste(
+      "expired on 25 July 2017 following the decision of the marketing",
+      "authorisation holder, Guerbet, not to apply for a renewal"
+    ),
+    "EMEA/H/C/003795", "Pharmathen S.A.", "g.techdow",
+    paste(
+      "Enoxaparin, a duplicate of Techdow's Inhixa; Techdow Pharma",
+      "Netherlands held it when it lapsed in 2019 (EMA's holder field still",
+      "names Pharmathen)"
+    ),
+    "https://www.ema.europa.eu/en/medicines/human/EPAR/thorinane",
+    paste(
+      "the marketing authorisation holder, Techdow Pharma Netherlands B.V.,",
+      "had not marketed Thorinane in the EU since its initial marketing",
+      "authorisation"
+    )
+  ) |>
+    dplyr::mutate(checked_date = as.Date("2026-09-28"))
+}
+
+# Notes about a medicine's later ownership that do not move it (user
+# decision 2026-09-28): the medicine stays in its company's group (`source`
+# unchanged) and the note and evidence URL fill its `group_note` and
+# `group_evidence_url`. A medicine has at most one group note, so a per-
+# medicine group row and a note for the same medicine stop the build.
+curated_medicine_notes <- function() {
+  dplyr::tribble(
+    ~ema_product_number, ~note, ~evidence_url,
+    # Udenyca stays with Coherus (user decision 2026-09-28): only its U.S.
+    # business was sold; the EU medicine is withdrawn.
+    "EMEA/H/C/004413",
+    paste(
+      "Coherus sold its U.S. Udenyca business to Intas in April 2025: Accord",
+      "BioPharma, Intas's U.S. specialty division, now owns it"
+    ),
+    paste0(
+      "https://www.globenewswire.com/news-release/2025/04/14/3060846/33333/",
+      "en/Coherus-Completes-Strategic-Transformation-with-Successful-",
+      "Divestiture-of-UDENYCA-Franchise.html"
+    )
+  ) |>
+    dplyr::mutate(checked_date = as.Date("2026-09-28"))
 }

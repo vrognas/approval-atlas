@@ -180,6 +180,8 @@ const NOT_YET = { text: "not yet", tone: "pending" };
 
 // "a, b and c".
 const listing = (items) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : items[0]);
+// A curated note (a fragment) as a sentence: one full stop at the end.
+const sentenceOf = (text) => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
 
 // The end of a dashboard headline: how many of the total medicines are currently authorized (not
 // "authorized today", which reads as "authorized on this date").
@@ -227,14 +229,14 @@ export const UI = {
     defaults: {
       type: "all medicine types",
       atc: "all ATC classes",
-      mah: "all holders",
+      mah: "all companies",
       area: "all therapeutic areas",
       status: "any status",
     },
     many: {
       type: (count) => plural(count, "medicine type", "medicine types"),
       atc: (count) => plural(count, "ATC class", "ATC classes"),
-      mah: (count) => plural(count, "holder", "holders"),
+      mah: (count) => plural(count, "company", "companies"),
       area: (count) => plural(count, "therapeutic area", "therapeutic areas"),
       status: (count) => plural(count, "status", "statuses"),
     },
@@ -244,7 +246,7 @@ export const UI = {
     dimensions: {
       type: "medicine type",
       atc: "ATC class",
-      mah: "holder",
+      mah: "company",
       area: "therapeutic area",
       from: "start year",
       to: "end year",
@@ -263,9 +265,6 @@ export const UI = {
   facets: {
     active: (count) => (count ? `${formatCount(count)} active` : null),
     counts: "Counts: medicines matching the other filters.",
-    search: (count, noun) => `Filter ${formatCount(count)} ${noun}`,
-    nouns: { mah: "holders" },
-    searchLabel: { mah: "Filter marketing authorization holders" },
     showMore: (count) => `Show ${formatCount(count)} more`,
     noMatches: "No matches",
     // Announced after typing in a facet search.
@@ -353,7 +352,7 @@ export const UI = {
         : [`No authorized medicines are ${what}`];
     },
   },
-  kicker: { medicine: "Medicine", substance: "Substance", condition: "Condition", text: "Indication text" },
+  kicker: { medicine: "Medicine", substance: "Substance", condition: "Condition", text: "Indication text", company: "Company" },
 
   // The medicines matching the filters (every status) and those currently authorized, then the four
   // types with their share of the medicines. captionFiltered: the caption while a filter is active.
@@ -410,6 +409,43 @@ export const UI = {
       "github.com": "GitHub",
       "creativecommons.org": "Creative Commons website",
       "atcddd.fhi.no": "WHOCC website",
+      "search.gleif.org": "GLEIF website",
+      // Evidence of the companies' ownership, sponsor and group notes (companies provenance; every
+      // host in companies.json, ema_medicine_companies.json and R/curated-companies.R on 2026-09-28,
+      // and Business Wire).
+      "en.wikipedia.org": "Wikipedia",
+      "www.sec.gov": "SEC website",
+      "www.prnewswire.com": "PR Newswire",
+      "www.globenewswire.com": "GlobeNewswire",
+      "www.businesswire.com": "Business Wire",
+      "clinicaltrials.gov": "ClinicalTrials.gov",
+      "www.nasdaq.com": "Nasdaq website",
+      "www.biospace.com": "BioSpace",
+      "www.ansa.it": "ANSA website",
+      "www.indiaratings.co.in": "India Ratings website",
+      "www.essonne.fr": "Essonne department website",
+      "english.autoriteitnvs.nl": "ANVS website",
+      "advenchen.com": "Advenchen website",
+      "www.amgen.com": "Amgen website",
+      "www.berlin-chemie.de": "Berlin-Chemie website",
+      "www.boehringer-ingelheim.com": "Boehringer Ingelheim website",
+      "www.gsk.com": "GSK website",
+      "investor.jazzpharma.com": "Jazz Pharmaceuticals website",
+      "johnsonandjohnson.gcs-web.com": "Johnson & Johnson website",
+      "www.krka.biz": "Krka website",
+      "mabxience.com": "mAbxience website",
+      "www.menarini.com": "Menarini website",
+      "investor.mylan.com": "Mylan website",
+      "www.novartis.com": "Novartis website",
+      "ir.orchard-tx.com": "Orchard Therapeutics website",
+      "www.organon.com": "Organon website",
+      "investor.perrigo.com": "Perrigo website",
+      "www.pfizer.com": "Pfizer website",
+      "www.sandoz.com": "Sandoz website",
+      "sentynl.com": "Sentynl website",
+      "www.shionogi.com": "Shionogi website",
+      "ir.tevapharm.com": "Teva website",
+      "www.teva.de": "Teva Germany website",
     },
     newTab: (destination) => `(opens ${destination} in a new tab)`,
     title: (destination, host) => (destination === host ? host : `${destination} (${host})`),
@@ -451,8 +487,16 @@ export const UI = {
       note: "A medicine can appear in several areas.",
       excluded: (count) => `${plural(count, "medicine", "medicines")} without a therapeutic area ${count === 1 ? "is" : "are"} not shown.`,
     },
-    // A missing holder is counted as "Not stated", so no medicine is left out.
-    mah: { title: "Medicines by marketing authorization holder", note: "" },
+    // Companies by current owner (companies part 2): the groups, a group's companies (its holder
+    // names when its one company has its name), a company's holder names; byHolder: the bars are
+    // holder names. Medicines without a holder have no company.
+    mah: {
+      title: "Medicines by company",
+      titleIn: (name, byHolder) => `Medicines of ${name} by ${byHolder ? "EMA holder name" : "company"}`,
+      titleLeaf: (name) => `Medicines of ${name}`,
+      note: "Companies by current owner; each bar lists the holder names EMA publishes in its tooltip.",
+      excluded: (count) => `${plural(count, "medicine", "medicines")} without a holder ${count === 1 ? "is" : "are"} not shown.`,
+    },
     empty: "No medicines match the current filters.",
     // Bar order (UI state): most first, or ATC classes by code and areas and holders by name.
     sort: { label: "Sort", count: "Count", key: { atc: "Code", area: "Name", mah: "Name" } },
@@ -484,22 +528,24 @@ export const UI = {
     modes: { atc: "ATC groups", area: "Therapeutic areas" },
     modesLabel: "Columns",
     subtitle: (count) =>
-      `${count === 1 ? "The holder of the matching medicines" : `The ${formatCount(count)} holders with the most matching medicines`}; a medicine can count in several columns.`,
-    holder: "Holder",
+      `${count === 1 ? "The company of the matching medicines" : `The ${formatCount(count)} companies with the most matching medicines`}; a medicine can count in several columns.`,
+    holder: "Company",
     // The therapeutic areas beyond the top 12.
     other: "Other",
     otherTitle: "Other therapeutic areas",
     cell: (holder, column, count) => `${holder}, ${column}: ${plural(count, "medicine", "medicines")}`,
-    // A row header: the holder, then its matching medicines (shown after the name).
-    holderRow: (holder, count) => `${holder}, ${plural(count, "medicine", "medicines")}`,
-    note: "Holder names are shown as EMA publishes them; the same company can appear under several names.",
+    // A row header: the company, then its matching medicines (shown after the name), then the
+    // holder names EMA publishes for them (names: UI.companies.legalNames(); companies part 2).
+    holderRow: (holder, count, names = null) => `${holder}, ${plural(count, "medicine", "medicines")}${names ? `: ${names}` : ""}`,
+    // Rows are company groups (companies part 2); date: their curation date.
+    note: (date) => `Companies by current owner${date ? ` as of ${formatDate(date)}` : ""}; each row lists the holder names EMA publishes in its tooltip.`,
     // Sort buttons (toggles) in their own header row: rows by holder name ("Name"), by total ("Total",
     // the default) or by a column's count (an arrow).
-    sortBy: (column) => `Sort holders by ${column}`,
-    sortByName: "Sort holders by name",
+    sortBy: (column) => `Sort companies by ${column}`,
+    sortByName: "Sort companies by name",
     sortName: "Name",
     sortTotal: "Total",
-    sortByTotal: "Sort holders by their total of matching medicines",
+    sortByTotal: "Sort companies by their total of matching medicines",
     // Row and column headers and cells filter the dashboard (tooltips say what a click does).
     filterBy: (label) => `Show only ${label}`,
     pressedTitle: "Shown alone: click again to clear",
@@ -528,9 +574,9 @@ export const UI = {
       `Stacked column chart of EMA approvals per year by ${by}, ${first} to ${last}: ` +
       `${formatCount(total)} medicines in total, most in ${peakYear} (${formatCount(peakCount)}).`,
     tooltipTitle: (year, total) => `${year}: ${plural(total, "approval", "approvals")}`,
-    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Holder", status: "Status" } },
+    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status" } },
     // label: atcClassLabel() of the one ATC class selected, whose child classes the columns stack.
-    by: { type: "medicine type", atc: "ATC group", atcIn: (label) => `ATC class in ${label}`, mah: "marketing authorization holder", status: "current status" },
+    by: { type: "medicine type", atc: "ATC group", atcIn: (label) => `ATC class in ${label}`, mah: "company", status: "current status" },
     // How a medicine is counted in each mode (the card's note); count: the top classes or holders
     // stacked, named only when the rest are an Other segment (other).
     counting: {
@@ -539,14 +585,14 @@ export const UI = {
         ? `: the ${plural(count, "class", "classes")} with the most matching medicines, the rest as Other classes`
         : ""}`,
       mah: (count, other) => `each medicine counted once${other
-        ? `: the ${plural(count, "holder", "holders")} with the most matching medicines, the rest as Other holders`
+        ? `: the ${plural(count, "company", "companies")} with the most matching medicines, the rest as Other companies`
         : ""}`,
       status: "each medicine counted once, by its current status",
     },
     note: (counting) =>
       `Year of EU marketing authorization; ${counting}. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
     // The segment on top of the stacks beyond the top ones.
-    other: { atc: "Other classes", mah: "Other holders" },
+    other: { atc: "Other classes", mah: "Other companies" },
     // One ATC class selected: its medicines coded only down to it have no child class to stack in.
     onlyCoded: (count, code) => `${plural(count, "medicine", "medicines")} coded only as ${code} ${count === 1 ? "is" : "are"} not shown.`,
   },
@@ -565,7 +611,7 @@ export const UI = {
   table: {
     headers: [
       "Medicine",
-      "Marketing authorization holder",
+      "Company · Holder",
       "Approved · Status",
       "Type",
       "ATC",
@@ -681,6 +727,125 @@ export const UI = {
     path: "Therapeutic area path",
   },
 
+  // Companies (companies part 2, user decisions 2026-09-28): holders grouped by their current owner
+  // (companies.js), a monogram badge per group, EMA's holder name always shown.
+  companies: {
+    // The line under a medicine's company group: EMA's holder name (left out when it is the name
+    // shown above it), how the holder was decided. entry: companies.js entry(); shown: the group's
+    // name; representative: the company is a regulatory representative holding for another.
+    // holder: null when EMA names none (the Union Register does).
+    holderLine: ({ holder, register, basis, company }, shown, representative = false) => {
+      // A sponsor's medicine: the sponsor when its group has another name (Avanir, Otsuka's), then
+      // the representative holding it (the Union Register's when it decided).
+      if (basis === "curated_sponsor") {
+        const held = register
+          ? [holder === null ? "EMA names no holder" : `EMA: ${holder}`, `via register: ${register}, a regulatory representative`]
+          : [`via a regulatory representative: ${holder}`];
+        return [...(company?.name && company.name !== shown ? [company.name] : []), ...held].join(" · ");
+      }
+      const parts = basis === "register" && register
+        ? [holder === null ? "EMA names no holder" : `EMA: ${holder}`, `via register: ${register}`]
+        : holder === null || holder === shown ? [] : [holder];
+      if (representative) parts.push("held via a regulatory representative");
+      return parts.length ? parts.join(" · ") : null;
+    },
+    // Before a plain EMA holder name, for screen readers, and its tooltip.
+    emaHolder: "EMA holder name: ",
+    holderTitle: "The holder name as EMA publishes it",
+    // The results timeline's tooltip: the group, then EMA's name when it differs.
+    tipHolder: (group, holder) => (holder === null || group === holder ? group : `${group} (${holder})`),
+    // The company tree's and breakdown's static row: a company's medicines EMA names no holder for.
+    noHolder: "No EMA holder name",
+    // A row's value that also shows under another group, named with its group (the filter sentence).
+    inGroup: (name, group) => `${name} (${group})`,
+    // An EMA holder name as a filter value (the sentence's pill; a company can have the same name),
+    // with its group when the row's value is its path.
+    holderValue: (name, group = null) => `${name} (EMA holder name${group ? `, ${group}` : ""})`,
+    // A holder name that repeats its company's name one level down (tree rows, the company page).
+    sameName: "(same name)",
+    sameNameLabel: (name) => `${name} (same name)`,
+    // Aggregated views (breakdown bars, activity rows, the per-year legend): the EMA holder names
+    // behind a company, most medicines first; the first 8, then how many more. own: the row's name;
+    // when it is one of several names, the others after "also" (the row already names it).
+    legalNames: (names, own = null) => {
+      const others = names.length > 1 && names.includes(own) ? names.filter((name) => name !== own) : names;
+      const list = others.length > 8 ? `${others.slice(0, 8).join(", ")} and ${formatCount(others.length - 8)} more` : others.join(", ");
+      return others.length < names.length ? `also ${list}` : list;
+    },
+    named: (name, names) => `${name}: ${UI.companies.legalNames(names, name)}`,
+    barLabel: (name, count, names) => `${name}, ${plural(count, "medicine", "medicines")}${names.length ? `: ${UI.companies.legalNames(names, name)}` : ""}`,
+    // The company tree (company-tree.js): group › company › EMA holder name.
+    find: "Find a company",
+    tree: "Companies",
+    // kind: companies.js kind() of the row's value; byHolder: its rows are holder names.
+    expand: (name, byHolder) => `${byHolder ? "Holder names of" : "Companies in"} ${name}`,
+    count: (name, count) => `${name}, ${plural(count, "medicine", "medicines")}`,
+    included: (name, count, ancestor) => `${UI.companies.count(name, count)}, included in ${ancestor}`,
+    noMatches: "No matching companies",
+    note: (date) => `Companies by current owner${date ? ` as of ${formatDate(date)}` : ""}, then the companies they hold and the holder names EMA publishes. A level that only repeats a name is left out.`,
+    open: (name) => `Open company page: ${name}`,
+    all: "All companies",
+    path: "Company path",
+    // The company page (a lookup, ?co=): the group (or company), its medicines of every status and
+    // those currently authorized.
+    headline: (name, total, authorized) => [
+      `${name}: `, number(total), ` ${total === 1 ? "medicine" : "medicines"}, `,
+      ...(authorized ? [number(authorized), " currently authorized."] : ["none currently authorized."]),
+    ],
+    jointVentureOf: "A joint venture of ",
+    jointVentures: "Its joint ventures: ",
+    partOf: "Part of ",
+    // A company all of whose medicines went to another owner (per-medicine rows): not part of it.
+    medicinesUnder: (count) => (count === 1 ? "Its medicine is under " : "Its medicines are under "),
+    // After each group of a company whose medicines are with several: its medicines there.
+    groupCount: (count) => `(${plural(count, "medicine", "medicines")})`,
+    and: " and ",
+    representative: "A regulatory representative: it holds medicines on behalf of other companies.",
+    asOf: (date) => `Company group as of ${formatDate(date)}: the current owner, not the owner at approval. Each medicine keeps the holder name EMA publishes.`,
+    // The medicine card's fact.
+    asOfShort: (date) => `Company group as of ${formatDate(date)} (current owner).`,
+    // Provenance (curated notes are fragments; a sentence ends with one full stop): why a
+    // per-medicine row put the medicine under its group, a plain note on a medicine's later
+    // ownership (group_note without a move: no "Why"), a curated sponsor behind a regulatory
+    // representative (its evidence link alone when there is no note), each followed by a link to
+    // its evidence ("Source"); a sponsor renamed since, whose note names the rename ("AcelRx
+    // (renamed Talphera in 2024)"), then a second link to the rename's evidence ("Rename source").
+    // On phones a long note sits behind a disclosure: its summary, then the note alone (noteBody).
+    why: (group, note) => `Why ${group}: ${sentenceOf(note)}`,
+    note: (note) => `Ownership: ${sentenceOf(note)}`,
+    sponsor: (note) => `Sponsor: ${sentenceOf(note)}`,
+    whySummary: (group) => `Why ${group}?`,
+    noteSummary: "Ownership",
+    sponsorSummary: "Sponsor",
+    noteBody: (note) => sentenceOf(note),
+    sponsorEvidence: "Sponsor evidence",
+    evidence: "Source",
+    renameEvidence: "Rename source",
+    // The company page's Sources: the ownership notes of its members (acquisitions, renames,
+    // spin-offs), the holders of one note together, and its medicines' notes (after the medicine's
+    // name, a link to its card): the group a per-medicine row moved it to, unless that is the page's
+    // own (group null), then the note.
+    ownership: "Ownership",
+    ownershipNote: (holders, note) => `${holders.join(", ")}: ${sentenceOf(note)}`,
+    moved: (group, note) => `${group ? ` (under ${group})` : ""}: ${sentenceOf(note)}`,
+    names: "Companies and EMA holder names",
+    namesHint: "Each opens the overview filtered to it.",
+    atc: "ATC groups",
+    atcHint: "Each opens the overview filtered to this company and ATC group.",
+    areas: "Most common conditions",
+    // The medicine list: authorized ones (as condition pages), or every status (the "Show all
+    // statuses" toggle, or a company with no authorized medicine).
+    medicines: (count, everyStatus) => `${everyStatus ? "Medicines of every status" : "Authorized medicines"} (${formatCount(count)})`,
+    // A mix row's link: the group or area, then its count.
+    mixLink: (label, count) => `${label}, ${plural(count, "medicine", "medicines")}`,
+    sources: "Sources",
+    lei: (lei) => `LEI ${lei}`,
+    legalName: (name) => `Legal name (GLEIF): ${name}`,
+    parent: (name) => `Ultimate parent reported to GLEIF: ${name}`,
+    sourceNames: { ema: "EMA holder names", union_register: "the EU Union Register", curated: "company groups checked by hand", gleif: "GLEIF LEI records" },
+    from: (sources) => `From ${listing(sources)}.`,
+  },
+
   offline: (date) => `Offline: data as of ${formatDate(date)}`,
 
   // The splitter on the desktop sidebar's right edge (sidebar-resize.js); hint: its tooltip.
@@ -690,11 +855,13 @@ export const UI = {
   },
 
   lookup: {
-    groups: { medicines: "Medicines", substances: "Substances", conditions: "Conditions", classes: "Drug classes" },
+    groups: { medicines: "Medicines", substances: "Substances", conditions: "Conditions", classes: "Drug classes", companies: "Companies" },
     medicineMeta: (status, year) => [statusLabel(status), year].filter(Boolean).join(" · "),
     substanceMeta: (count) => plural(count, "medicine", "medicines"),
     conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     classMeta: (count, unnamed = false) => [unnamed ? NO_ATC_NAME : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
+    // synonym: the other name that matched (a company, spelling or EMA holder name of the group).
+    companyMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     noMatches: "No matches",
     matches: (count) => plural(count, "suggestion", "suggestions"),
     loading: "Loading…",
@@ -714,11 +881,14 @@ export const UI = {
     notFoundTitle: "Not found",
     notFound: (kind, value) => `No ${kind} “${value}” in the EMA data.`,
     noDate: "no approval date",
-    kinds: { medicine: "medicine", substance: "substance", condition: "condition" },
+    kinds: { medicine: "medicine", substance: "substance", condition: "condition", company: "company" },
     // Answer strip under a lookup headline: "Since" while authorized, "Approved" otherwise.
-    strip: { label: "Answer summary", holder: "Holder", since: "Since", approved: "Approved", status: "Status" },
+    // "Company": it leads with the company group, as the table's "Company · Holder" column.
+    strip: { label: "Answer summary", company: "Company", since: "Since", approved: "Approved", status: "Status" },
     documentMeta: (isPdf, date) => [isPdf ? UI.card.pdf : null, UI.card.updated(date)].filter(Boolean).join(" · "),
     substances: "Active substance(s)",
+    // The medicine's company group and holder (companies part 2), with the groups' as-of date.
+    company: "Company",
     type: "Medicine type",
     atc: "ATC classification",
     areas: "Therapeutic areas",
@@ -790,7 +960,7 @@ export const UI = {
   substance: {
     firstApproval: (date, name) => (date ? `First EU approval: ${formatDate(date)} (${name})` : "No EU approval date"),
     products: (count) => plural(count, "medicine", "medicines"),
-    holders: (count) => plural(count, "holder", "holders"),
+    companies: (count) => plural(count, "company", "companies"),
     authorized: (count) => `${formatCount(count)} authorized`,
   },
 
@@ -821,7 +991,7 @@ export const UI = {
   // Condition, indication-text and substance results: a table, one row per medicine (lookup.js
   // resultTable()); the name opens its card.
   results: {
-    headers: ["Medicine", "ATC", "Approved · Status", "Type", "Holder"],
+    headers: ["Medicine", "ATC", "Approved · Status", "Type", "Company · Holder"],
     // Substance cards: what each medicine is for, after the Medicine column.
     areas: "Therapeutic area",
   },
@@ -842,7 +1012,9 @@ export const UI = {
     chembl: (version) => `ATC classification from ChEMBL${version ? ` (${version})` : ""}. ChEMBL data is from https://www.ebi.ac.uk/chembl.`,
     atc: "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology.",
     // CC BY 4.0 requires indicating that the material was modified.
-    unionRegister: "Orphan exclusivity and EU register status: © European Union, Union Register, CC BY 4.0, modified.",
+    unionRegister: "Orphan exclusivity, EU register status and holders: © European Union, Union Register, CC BY 4.0, modified.",
+    // date: the company groups' curation date.
+    companies: (date) => `Company groups (current owner${date ? ` as of ${formatDate(date)}` : ""}) curated by Approval Atlas; LEI data from the Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site.`,
   },
 
   about: {

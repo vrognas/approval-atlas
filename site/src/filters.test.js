@@ -46,6 +46,40 @@ test("mah matches any selected holder, including the null-holder option", () => 
   assert.deepEqual(run({ mah: ["Not stated", "Sanofi Pasteur MSD, SNC"] }), ["P1", "P4"]);
 });
 
+// Companies part 2: company group keys, company keys and EMA holder names, combined with OR.
+test("mah matches a product's company group, company or EMA holder name", () => {
+  const grouped = [
+    product("C1", { company_key: "c.pfizer", group_key: "g.pfizer" }),
+    product("C2", { mah: "Wyeth Europa Ltd.", company_key: "c.wyeth", group_key: "g.pfizer" }),
+    product("C3", { mah: "Sanofi Pasteur MSD, SNC", company_key: "c.sanofi-pasteur-msd", group_key: "g.sanofi-pasteur-msd" }),
+    product("C4", { mah: "Not stated", company_key: null, group_key: null }),
+  ];
+  const match = (mah) => ids(filterProducts(grouped, makePredicates({ ...structuredClone(DEFAULT_STATE), mah }, atcClasses)));
+  assert.deepEqual(match(["g.pfizer"]), ["C1", "C2"]);
+  assert.deepEqual(match(["c.wyeth"]), ["C2"]);
+  assert.deepEqual(match(["c.wyeth", "Sanofi Pasteur MSD, SNC"]), ["C2", "C3"]);
+  assert.deepEqual(match(["Not stated"]), ["C4"]);
+});
+
+// A company tree row whose value also shows under another group (or company) selects by its path:
+// "group/company" or "group/company/EMA holder name", only the medicines that row counts.
+test("mah matches a row path: that group's medicines of the company (and EMA holder name)", () => {
+  const split = [
+    product("M1", { mah: "Merck Sharp & Dohme B.V.", company_key: "c.msd", group_key: "g.msd" }),
+    product("M2", { mah: "Merck Sharp & Dohme B.V.", company_key: "c.msd", group_key: "g.organon" }),
+    product("M3", { mah: "Organon N.V.", company_key: "c.organon", group_key: "g.organon" }),
+    product("M4", { mah: "Merck Sharp & Dohme Ltd", company_key: "c.msd", group_key: "g.msd" }),
+  ];
+  const match = (mah) => ids(filterProducts(split, makePredicates({ ...structuredClone(DEFAULT_STATE), mah }, atcClasses)));
+  assert.deepEqual(match(["g.organon/c.msd"]), ["M2"]);
+  assert.deepEqual(match(["g.msd/c.msd"]), ["M1", "M4"]);
+  assert.deepEqual(match(["g.msd/c.msd/Merck Sharp & Dohme B.V."]), ["M1"]);
+  assert.deepEqual(match(["g.organon/c.msd", "M4"]), ["M2"]);
+  assert.deepEqual(match(["g.organon/c.msd", "Merck Sharp & Dohme Ltd"]), ["M2", "M4"]);
+  // The plain company is all of it.
+  assert.deepEqual(match(["c.msd"]), ["M1", "M2", "M4"]);
+});
+
 test("the approval-year range is inclusive, open-ended and drops undated products only when set", () => {
   assert.deepEqual(run({ from: 2010, to: 2020 }), ["P2", "P4"]);
   assert.deepEqual(run({ from: 2010 }), ["P2", "P4"]);

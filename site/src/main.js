@@ -2,7 +2,6 @@ import * as d3 from "d3";
 import {
   MEDICINE_TYPES,
   authorizedSeries,
-  breakdownCounts,
   breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
@@ -18,9 +17,11 @@ import { areaBreakdownRows, areaExactLabel, buildAreaTree, inAreas, toggleArea }
 import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
-import { atcHue, statusColor, statusTipId, typeTipId } from "./badges.js";
+import { atcHue, companySeriesColors, statusColor, statusTipId, typeTipId } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart.js";
+import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, suggestCompanies, toggleCompany } from "./companies.js";
+import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
 import { createFacetPanel } from "./facet-panel.js";
 import {
   FACET_VALUES,
@@ -44,6 +45,7 @@ import {
 } from "./facets.js";
 import { renderSentence } from "./filter-sentence.js";
 import { filterProducts, makePredicates, splitAtcValues } from "./filters.js";
+import { companyBadge, holderDisplay } from "./holders.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
@@ -80,6 +82,9 @@ const DASHBOARD_FILES = [
   "ema_therapeutic_area_branches.json",
   "ema_authorized_series.json",
   "ema_therapeutic_area_subtree.json",
+  // Companies part 2: holders by company group (shared with the lookup's cards and search).
+  "companies.json",
+  "ema_medicine_companies.json",
 ];
 // Loaded after the dashboard's first render; shared with the medicine card (same loadFile promise),
 // as is the documents index (lookup.need("documents")).
@@ -102,15 +107,14 @@ const SHEET_SECTIONS = {
 const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", area: "area", status: "status" };
 const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"] };
 const YEAR_THUMBS = { from: "start", to: "end", year: "start", years: "start" };
-// Desktop: the control each token focuses, the first one of its own section (the ATC and
-// therapeutic area trees: their first checked row, else their search: facet-tree.js focusTarget()).
+// Desktop: the control each token focuses, the first one of its own section (the ATC, therapeutic
+// area and company trees: their first checked row, else their search: facet-tree.js focusTarget()).
 const TOKEN_TARGETS = {
   type: "#facet-type input",
-  mah: "#facet-mah .facet-search",
   status: "#facet-status input",
 };
-// The checklist sections (facet-panel.js); the ATC classes and therapeutic areas are trees.
-const FACETS = ["type", "status", "mah"];
+// The checklist sections (facet-panel.js); the ATC classes, therapeutic areas and companies are trees.
+const FACETS = ["type", "status"];
 // "Who is active where": holders (rows), therapeutic area columns, and the column key of the areas
 // beyond them.
 const ACTIVITY_HOLDERS = 15;
@@ -118,9 +122,10 @@ const ACTIVITY_AREAS = 12;
 const ACTIVITY_OTHER = "__other__";
 // The column of the medicines at the area itself (areas.js areaExactLabel()).
 const ACTIVITY_EXACT = "__exact__";
-// "Approvals per year" stacked by holder, or by the child classes of one ATC class: the top ones,
-// then Other on top. Their colours: damped hue mids, neighbouring hues far apart (1px gaps
-// separate the segments too). Level-1 ATC groups: the top six, each in its own group's hue. Other:
+// "Approvals per year" stacked by company group, or by the child classes of one ATC class: the top
+// ones, then Other on top. Child classes: damped hue mids, neighbouring hues far apart (1px gaps
+// separate the segments too); company groups: their own colours (badges.js companySeriesColors()).
+// Level-1 ATC groups: the top six, each in its own group's hue. Other:
 // the raised fill with a --field-border outline (3:1, palette.test.js), so it does not outweigh
 // the named series.
 const STACK_TOP = 8;
@@ -263,6 +268,8 @@ function renderFooter(meta) {
   d3.select("#credit-chembl").text(UI.footer.chembl(versionOf(/chembl/i)));
   d3.select("#credit-atc").text(UI.footer.atc);
   d3.select("#credit-union-register").text(UI.footer.unionRegister);
+  // Companies part 2: the curated company groups ("As of 2026-09-28") and GLEIF's LEI data.
+  d3.select("#credit-companies").text(UI.footer.companies(versionOf(/company groups/i)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null));
 }
 
 // The type and status explanations as hidden elements, which describe the focusable carriers (facet
@@ -337,6 +344,35 @@ function renderAbout() {
   for (const anchor of document.querySelectorAll('footer a[target="_blank"]')) markExternal(anchor);
 }
 
+// The colour tokens of both modes (style.css :root and its prefers-color-scheme: dark override),
+// read once from the page's style sheets, so companySeriesColors() can keep the company stacks apart
+// in either mode. Empty maps when the sheets cannot be read (the colours are then not compared).
+let palette = null;
+function readPalette() {
+  if (palette) return palette;
+  const light = {};
+  const dark = {};
+  const read = (rule, into) => {
+    for (const name of rule.style) if (name.startsWith("--")) into[name] = rule.style.getPropertyValue(name).trim();
+  };
+  for (const sheet of document.styleSheets) {
+    let rules = [];
+    try {
+      rules = [...sheet.cssRules];
+    } catch {
+      continue; // a sheet from another origin
+    }
+    for (const rule of rules) {
+      if (rule.selectorText === ":root") read(rule, light);
+      else if (rule.media?.mediaText.includes("prefers-color-scheme: dark")) {
+        for (const inner of rule.cssRules) if (inner.selectorText === ":root") read(inner, dark);
+      }
+    }
+  }
+  palette = { light, dark: { ...light, ...dark } };
+  return palette;
+}
+
 function showOfflineNote(meta) {
   const note = $("#offline-note");
   const update = () => {
@@ -348,10 +384,19 @@ function showOfflineNote(meta) {
   update();
 }
 
-// result: suggest() output; classes: suggestAtcClasses() output.
-function suggestionGroups(result, classes) {
+// result: suggest() output; classes: suggestAtcClasses() output; companies: suggestCompanies() output.
+// The Companies group comes first when the query names a group (its name, monogram or another name
+// exactly: "msd", "pfizer"), and Enter then opens its page (submitChoice(): named).
+function suggestionGroups(result, classes, companies) {
   const copy = UI.lookup;
+  const companyGroup = {
+    key: "companies",
+    label: copy.groups.companies,
+    options: companies.map((row) => ({ label: row.name, meta: copy.companyMeta(row.synonym, row.authorized), value: row.key, named: row.named })),
+  };
+  const named = companies.some((row) => row.named);
   return [
+    ...(named ? [companyGroup] : []),
     {
       key: "medicines",
       label: copy.groups.medicines,
@@ -376,6 +421,7 @@ function suggestionGroups(result, classes) {
       label: copy.groups.classes,
       options: classes.map((row) => ({ label: atcClassLabel(row.code, row.name), meta: copy.classMeta(row.count, row.name === null), value: row.code })),
     },
+    ...(named ? [] : [companyGroup]),
   ];
 }
 
@@ -415,20 +461,26 @@ function startLookup([meta, searchRows, entryTermRows]) {
     substances: (value) => ({ sub: value }),
     conditions: (value) => ({ cond: value }),
     classes: classState, // the dashboard filtered to the class alone
+    companies: (value) => ({ co: value }), // the company page
   };
   const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
     suggestionsFor: (query) => {
       const atc = lookup.atcClasses();
-      return suggestionGroups(suggest(index, lookup.conditions(), query), atc ? suggestAtcClasses(query, atc.classes, atc.counts) : []);
+      const companies = lookup.companies();
+      return suggestionGroups(
+        suggest(index, lookup.conditions(), query),
+        atc ? suggestAtcClasses(query, atc.classes, atc.counts) : [],
+        companies ? suggestCompanies(companies, query) : [],
+      );
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
   });
-  // Conditions and drug classes join the suggestions once their background data has loaded (and a
-  // condition page's title its name).
+  // Conditions, drug classes and companies join the suggestions once their background data has
+  // loaded (and a condition or company page's title its name).
   lookup.onData((name) => {
-    if (["conditions", "atc", "atcCounts"].includes(name)) searchBox.refresh();
-    if (name === "conditions") updateTitle();
+    if (["conditions", "atc", "atcCounts", "companies"].includes(name)) searchBox.refresh();
+    if (name === "conditions" || name === "companies") updateTitle();
   });
   // The wordmark opens the overview: every lookup and filter cleared, one history entry.
   $("#home-link").addEventListener("click", (event) => {
@@ -439,7 +491,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
   });
   d3.select("#explore-title").text(UI.explore.title);
   d3.select("#explore-note").text(UI.explore.note);
-  for (const name of ["conditions", "atc", "atcCounts"]) lookup.need(name);
+  for (const name of ["conditions", "atc", "atcCounts", "companies"]) lookup.need(name);
 
   applyUrl();
   searchBox.setText(state.q);
@@ -456,10 +508,12 @@ function startLookup([meta, searchRows, entryTermRows]) {
   Promise.all(DASHBOARD_FILES.map(loadFile)).then((rows) => startDashboard(meta, rows), showMissingData);
 }
 
-function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows]) {
+function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows, companyRows, medicineCompanyRows]) {
   // The therapeutic area tree (phase 4f): MeSH branch › level 2 › level 3 › EMA's terms.
   const meshTree = buildAreaTree(branchRows, subtreeRows);
-  const products = buildProducts(medicines, { areaRows, branchRows, atcRows, areaTree: meshTree });
+  // Companies part 2: company groups › companies › EMA holder names.
+  const companies = buildCompanies(companyRows, medicineCompanyRows);
+  const products = buildProducts(medicines, { areaRows, branchRows, atcRows, companyRows: medicineCompanyRows, areaTree: meshTree });
   const seriesDates = seriesRows.map((row) => row.date);
   const approvalYears = d3.extent(products, (product) => product.year);
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
@@ -481,8 +535,25 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     link.title = UI.conditions.open(name);
     return link;
   };
+  // A group's or company's page as a small icon link after a row (tree rows, company bars, activity
+  // rows; as the condition page links). value: its key.
+  const companyIconLink = (value) => {
+    const name = companies.name(value);
+    const link = lookup.link(openIcon(), { co: value }, "cond-link", UI.companies.open(name));
+    link.title = UI.companies.open(name);
+    return link;
+  };
+  // A medicine's Company · Holder (holders.js): its group, a link to its page, and EMA's holder name.
+  const companyLink = (text, key) => lookup.link(text, { co: key }, "company-link");
+  const holderOf = (product) => {
+    const entry = companies.entry(product.ema_product_number);
+    return entry ? holderDisplay(entry, { link: companyLink }) : product.mah;
+  };
   const domain = {
-    mahs: new Set(products.map((product) => product.mah)),
+    // Companies part 2: group and company keys, EMA holder names (older links).
+    mahs: new Set([...products.map((product) => product.mah), ...companies.values()]),
+    mahAncestors: companies.ancestors,
+    mahCanonical: companies.canonical,
     // Every tree key (branch codes, tree numbers, terms), and terms without a branch.
     areas: new Set([...meshTree.names.keys(), ...areaRows.map((row) => row.therapeutic_area_mesh)]),
     areaAncestors: meshTree.ancestors,
@@ -491,7 +562,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     statuses: new Set(products.map((product) => product.medicine_status)),
     years: approvalYears,
   };
-  const breakdownLabel = { mah: (mah) => mah };
 
   renderOverTimeLegend($("#over-time-legend"));
 
@@ -545,6 +615,21 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   // Exactly one area selected: the area the breakdown drills into and the activity card splits.
   const drillArea = () => (state.area.length === 1 && meshTree.has(state.area[0]) ? state.area[0] : null);
   const areaFacet = createAreaTree($("#facet-area"), { tree: meshTree, onToggle: toggleAreaKey, linkOf: areaRowLink });
+  // Companies (companies part 2): the tree adds or removes one value (toggleCompany()); drill-downs,
+  // paths and "Up one level" show one value alone (none: all), as the tree selects it (canonical()).
+  const toggleCompanyValue = (value) => setState({ mah: toggleCompany(companies, state.mah, value) });
+  const openCompany = (value) => setState({ mah: value === null ? [] : companies.canonical(value) });
+  // Exactly one company value selected: the value the company breakdown drills into.
+  const drillCompany = () => (state.mah.length === 1 && companies.has(state.mah[0]) ? state.mah[0] : null);
+  // Tree rows link to their company page; followed from a sheet, the sheet closes (as area rows).
+  const companyRowLink = (value) => {
+    const link = companyIconLink(value);
+    link.addEventListener("click", (event) => {
+      if (event.defaultPrevented) sheet.close({ restoreFocus: false });
+    });
+    return link;
+  };
+  const companyFacet = createCompanyTree($("#facet-mah"), { companies, onToggle: toggleCompanyValue, linkOf: companyRowLink });
   // The token whose sidebar section has focus (desktop): Escape goes back to it.
   let opener = null;
   // A sentence token (its key) or All filters ("all"): on desktop, the token's own section and
@@ -557,7 +642,8 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const sheetKey = TOKEN_SHEETS[key] ?? key;
     const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
     if (DESKTOP.matches) {
-      const target = (key === "atc" ? atcTree.focusTarget() : key === "area" ? areaFacet.focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
+      const trees = { atc: atcTree, area: areaFacet, mah: companyFacet };
+      const target = (trees[key] ? trees[key].focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
       target.closest(".facet").scrollIntoView({ block: "start" });
       target.focus({ preventScroll: true });
       opener = key;
@@ -617,7 +703,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     });
   $("#activity-by").setAttribute("aria-label", UI.activity.modesLabel);
   d3.select("#activity-title").text(UI.activity.title);
-  d3.select("#activity-note").text(UI.activity.note);
+  d3.select("#activity-note").text(UI.activity.note(companies.asOf));
   d3.select("#activity-order-label").text(UI.activity.order.label);
   d3.selectAll("#activity-order button").on("click", (event) => {
     activityOrder[activityMode] = nextSort(activityOrder[activityMode], event.currentTarget.dataset.order);
@@ -652,24 +738,15 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     atcNames,
     atcRetiredYears,
     branchNamesByTerm,
-    // Names open the medicine card (EMA's page is linked from there), terms their condition page.
+    // Names open the medicine card (EMA's page is linked from there), terms their condition page,
+    // company groups their company page.
     medicineLink: (product) => lookup.link(product.name_of_medicine, { med: product.ema_product_number }, "medicine-name"),
     conditionLink,
+    holderOf,
     // A segment adds its class to the ATC filter; pressed again, it removes it.
     onAtcSelect: toggleAtc,
     focusFallback: focusAtcFilter,
   });
-
-  // Holder rows toggle their filter value; ATC and area rows drill down (atcBreakdown(), areaBreakdown()).
-  function isBreakdownSelected(key) {
-    return state[BREAKDOWN_FILTER[state.by]].includes(key);
-  }
-
-  function toggleBreakdown(key) {
-    const filter = BREAKDOWN_FILTER[state.by];
-    const values = state[filter];
-    setState({ [filter]: values.includes(key) ? values.filter((value) => value !== key) : [...values, key] });
-  }
 
   // After a therapeutic area's bar: its condition page (areaDescriptor(): for a branch or tree node
   // found by name once the lookup's conditions data has loaded; the card re-renders then). None
@@ -792,6 +869,44 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     return { current, title, rows: count ? [{ key: current, label: meshTree.label(current), count, static: true }] : [], isSelected: null, onToggle: openArea };
   }
 
+  // Company breakdown (companies part 2, as the area one): with exactly one company value selected
+  // (drillCompany()), the level below it (a group's companies, or its holder names when its one
+  // company has its name; a company's holder names); a value without one shows only itself.
+  // Otherwise the company groups; with several values selected, the groups holding one are marked
+  // (toggles: a marked group removes its values, another is added). Each bar names the EMA holder
+  // names behind it (its tooltip and name); groups carry their badge and every bar a link to its
+  // company page. population: every filter but the company one.
+  function companyBreakdown(population) {
+    const current = drillCompany();
+    const toRow = (row) => (row.other ? row : {
+      ...row,
+      title: row.names.length ? UI.companies.named(row.label, row.names) : null,
+      ariaLabel: UI.companies.barLabel(row.label, row.count, row.names),
+    });
+    const rows = companyBreakdownRows(companies, current, population).map(toRow);
+    if (current === null) {
+      const selected = state.mah;
+      const under = (group) => selected.filter((value) => companies.groupsOf(value).has(group));
+      const marked = selected.length > 0;
+      return {
+        current,
+        title: UI.breakdown.mah.title,
+        rows,
+        isSelected: marked ? (group) => under(group).length > 0 : null,
+        onToggle: marked
+          ? (group) => (under(group).length ? setState({ mah: selected.filter((value) => !under(group).includes(value)) }) : toggleCompanyValue(group))
+          : openCompany,
+      };
+    }
+    const name = companies.name(current);
+    if (rows.length) {
+      return { current, title: UI.breakdown.mah.titleIn(name, companies.kind(rows[0].key) === "holder"), rows, isSelected: null, onToggle: openCompany };
+    }
+    const members = population.filter((product) => matchesCompany(current, product));
+    const self = toRow({ key: current, label: name, count: members.length, names: namesBehind(name, members) });
+    return { current, title: UI.breakdown.mah.titleLeaf(name), rows: members.length ? [{ ...self, static: true }] : [], isSelected: null, onToggle: openCompany };
+  }
+
   // Above the drilled-down ATC or area bars: "Up one level" and the path of levels (by: the mode).
   function renderBreakdownPath(by, current) {
     const container = $("#breakdown-path");
@@ -804,9 +919,14 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       .attr("class", "up-level")
       .attr("data-focus-key", "up")
       .text(UI.atc.up)
-      .on("click", () => (by === "area" ? openArea(meshTree.parent(current)) : openAtc(atcPrefixes(current).at(-2) ?? null)));
+      .on("click", () => {
+        if (by === "area") openArea(meshTree.parent(current));
+        else if (by === "mah") openCompany(companies.parentOf(current));
+        else openAtc(atcPrefixes(current).at(-2) ?? null);
+      });
     const path = container.appendChild(document.createElement("div"));
     if (by === "area") renderAreaPath(path, { tree: meshTree, current, onSelect: openArea });
+    else if (by === "mah") renderCompanyPath(path, { companies, current, onSelect: openCompany });
     else renderAtcPath(path, { current, names: atcNames, onSelect: openAtc, label: UI.atc.path });
     if (focused !== undefined) container.querySelector(`[data-focus-key="${CSS.escape(focused)}"]`)?.focus();
   }
@@ -858,23 +978,31 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       : null;
     const atc = atcTypes ? atcBreakdown(atcCounts, atcExact, atcTypes, atcIncomplete) : null;
     const population = filterProducts(products, predicates, BREAKDOWN_FILTER[state.by]);
-    // The ATC and area modes drill down (a tree each); holders are one level.
-    const tree = atc ?? (state.by === "area" ? areaBreakdown(population) : null);
-    d3.select("#breakdown-title").text(tree?.title ?? UI.breakdown[state.by].title);
+    // Every mode drills down (a tree each: ATC classes, therapeutic areas, companies).
+    const tree = atc ?? (state.by === "area" ? areaBreakdown(population) : companyBreakdown(population));
+    d3.select("#breakdown-title").text(tree.title);
     d3.select("#breakdown-note").text(UI.breakdown[state.by].note).attr("hidden", UI.breakdown[state.by].note ? null : "");
     // One legend per card: the medicine types the stacked ATC bars show.
     const legendTypes = TYPE_ORDER.filter((type) => atc?.rows.some((row) => row.segments.some((segment) => segment.type === type)));
     renderLegend($("#breakdown-legend"), legendTypes);
     $("#breakdown-legend").hidden = legendTypes.length === 0;
-    renderBreakdownPath(state.by, tree?.current ?? null);
-    const rows = sortBreakdownRows(tree ? tree.rows : breakdownCounts(population, state.by, breakdownLabel[state.by]), breakdownSort.key, state.by, breakdownSort.direction);
-    let options = { isSelected: isBreakdownSelected, onToggle: toggleBreakdown };
+    renderBreakdownPath(state.by, tree.current);
+    const rows = sortBreakdownRows(tree.rows, breakdownSort.key, state.by, breakdownSort.direction);
+    let options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink };
     if (atc) options = { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) };
-    else if (tree) options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink };
+    // Company groups carry their monogram badge; groups and companies link to their page.
+    else if (state.by === "mah") {
+      options = {
+        isSelected: tree.isSelected,
+        onToggle: tree.onToggle,
+        badgeOf: (row) => (!row.incomplete && companies.kind(row.key) === "group" ? { element: () => companyBadge(companies.row(row.key)) } : null),
+        linkOf: (row) => (row.incomplete || companies.pageOf(row.key) === null ? null : companyIconLink(companies.pageOf(row.key))),
+      };
+    }
     renderBreakdown($("#breakdown"), rows, options);
     const { excluded } = UI.breakdown[state.by];
-    // Products without any ATC code or therapeutic area matter at the top level only.
-    showCount("#breakdown-excluded", excluded && !tree?.current ? breakdownExcluded(population, state.by) : 0, excluded);
+    // Products without any ATC code, therapeutic area or holder matter at the top level only.
+    showCount("#breakdown-excluded", excluded && !tree.current ? breakdownExcluded(population, state.by) : 0, excluded);
     // Drilling down or going up rebuilds the controls: keep focus in the card.
     if (hadFocus && !card.contains(document.activeElement)) (card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"))?.focus();
   }
@@ -937,7 +1065,12 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     columns = orderActivityColumns(columns, keyCounts(filtered, keysOf), order.key, activityMode, order.direction);
     // A column sort whose column is gone (other filters) falls back to the total.
     const sort = ["total", "name"].includes(activitySort.key) || columns.some((column) => column.key === activitySort.key) ? activitySort : TOTAL_SORT;
-    const rows = sortActivityRows(holderActivity(filtered, keysOf, ACTIVITY_HOLDERS), sort.key, sort.direction);
+    // Rows: company groups (companies part 2), each with its badge and the EMA holder names behind it.
+    const groups = holderActivity(filtered, keysOf, ACTIVITY_HOLDERS, (product) => product.group_key, companies.name).map((row) => {
+      const names = namesBehind(row.label, row.members);
+      return { ...row, badge: companies.row(row.key), names: names.length ? UI.companies.legalNames(names, row.label) : null };
+    });
+    const rows = sortActivityRows(groups, sort.key, sort.direction);
     d3.select("#activity-subtitle").text(rows.length ? UI.activity.subtitle(rows.length) : "");
     // Touch screens show no tooltips: the ATC columns' names under the table.
     d3.select("#activity-legend").text(columns.filter((column) => column.badge).map((column) => column.label).join(" · "));
@@ -954,6 +1087,8 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
         scheduleRender();
       },
       isSet: (patch) => patchIsSet(state, patch),
+      // After the row's filter button: its company page (a secondary way in).
+      linkOf: (row) => companyIconLink(row.key),
     });
   }
 
@@ -991,14 +1126,26 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       ? { key, label: other, ...STACK_OTHER }
       : { key, label: labelOf(key), color: colorOf(key, index) }));
     const counted = (keys) => [keys.filter((key) => key !== OTHER_KEY).length, keys.includes(OTHER_KEY)];
+    // Company groups (companies part 2): each in its group's colour, or, too near a colour already
+    // in the chart in either mode, its text shade or the nearest other hue (companySeriesColors()),
+    // with its badge and, as the legend's
+    // explanation, the EMA holder names behind it.
     if (stackMode === "mah") {
-      const top = topWithOther(dated, (product) => [product.mah], STACK_TOP);
+      const groupOf = (product) => (product.group_key ? [product.group_key] : []);
+      const top = topWithOther(dated, groupOf, STACK_TOP);
+      const colors = companySeriesColors(top.keys.filter((key) => key !== OTHER_KEY), readPalette());
+      const series = topSeries(top.keys, (key) => colors.get(key), companies.name, UI.years.other.mah).map((item) => {
+        if (item.key === OTHER_KEY) return item;
+        const names = namesBehind(item.label, dated.filter((product) => product.group_key === item.key));
+        return { ...item, badge: companies.row(item.key), tip: names.length ? UI.companies.named(item.label, names) : null };
+      });
+      const missing = dated.filter((product) => groupOf(product).length === 0).length;
       return {
         keysOf: top.keysOf,
-        series: topSeries(top.keys, (key, index) => `var(--${STACK_HUES[index]}-mid)`, (mah) => mah, UI.years.other.mah),
+        series,
         by: UI.years.by.mah,
         counting: UI.years.counting.mah(...counted(top.keys)),
-        unstacked: "",
+        unstacked: missing ? UI.breakdown.mah.excluded(missing) : "",
       };
     }
     const parent = drillCode();
@@ -1068,7 +1215,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     // mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
     safely($("#year-strip"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
-    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, areaNames: meshTree.labels, atcNames }), {
+    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName }), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
       popup: !DESKTOP.matches,
@@ -1093,6 +1240,11 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       selected: state.area,
       counts: areaCounts,
       exact: keyCounts(withoutAreaFilter, (product) => product.areaExact),
+    }));
+    // Companies: medicines per tree row (group, company, EMA holder name) matching every other filter.
+    safely($("#facet-mah"), () => companyFacet.render({
+      selected: state.mah,
+      counts: keyCounts(filterProducts(products, predicates, "mah"), companies.countKeys),
     }));
 
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;

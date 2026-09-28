@@ -147,10 +147,11 @@ function renderAreaCell(cell, product, branchNamesByTerm, conditionLink) {
 // atcRetiredYears (retired code -> the year WHO retired it), branchNamesByTerm (MeSH term ->
 // branch names). medicineLink(product): the name as a link to its
 // medicine card; conditionLink(term): a link to the term's condition page, or null.
-// onAtcSelect(code): an ATC segment was clicked; focusFallback(): where focus goes when the
-// clicked segment's row is gone after the update.
+// holderOf(product): its Company · Holder cell's content (holders.js holderDisplay(); companies
+// part 2), a node or text. onAtcSelect(code): an ATC segment was clicked; focusFallback(): where
+// focus goes when the clicked segment's row is gone after the update.
 // All text goes through .text() or text nodes: decoded indications contain literal "<" and ">".
-export function createTable(table, moreButton, captionNode, { substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, onAtcSelect, focusFallback }) {
+export function createTable(table, moreButton, captionNode, { substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, holderOf, onAtcSelect, focusFallback }) {
   let current = null;
   let shown = 0;
   let refocus = null; // { number, code } of a clicked ATC segment, until the next update
@@ -212,7 +213,9 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
     rows.append("td").attr("class", "breakable").each(function nameCell(product) {
       renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? [], current.documents, medicineLink);
     });
-    rows.append("td").attr("class", "holder-cell").text((product) => product.marketing_authorisation_developer_applicant_holder);
+    rows.append("td").attr("class", "holder-cell").each(function holderCell(product) {
+      this.append(holderOf(product));
+    });
     rows.append("td").attr("class", "status-cell").each(function statusCell(product) {
       renderStatusCell(d3.select(this), product, current.register);
     });

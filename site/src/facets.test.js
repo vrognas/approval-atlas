@@ -64,7 +64,7 @@ test("a facet's counts ignore its own filter and apply every other one", () => {
   // Selecting a type does not change the type counts...
   assert.deepEqual(counted({ type: ["Generic"] }, "type"), { Biosimilar: 2, Generic: 2, Other: 2 });
   // ...but narrows the others.
-  assert.deepEqual(counted({ type: ["Biosimilar"] }, "mah"), { "Pfizer Europe MA EEIG": 2 });
+  assert.deepEqual(counted({ type: ["Biosimilar"] }, "status"), { Authorised: 2 });
   assert.deepEqual(counted({ mah: ["Accord Healthcare S.L.U."] }, "type"), { Generic: 1 });
   assert.deepEqual(counted({ type: ["Generic"] }, "status"), { Authorised: 2 });
   assert.deepEqual(counted({ status: ["Withdrawn"] }, "status"), { Authorised: 4, Withdrawn: 1, Refused: 1 });
@@ -168,7 +168,7 @@ test("sentence tokens read as defaults without filters", () => {
   const label = (dimension) => tokenLabel(dimension, stateOf({}), lookups);
   assert.deepEqual(
     ["type", "atc", "mah", "area", "from", "to", "status"].map(label),
-    ["all medicine types", "all ATC classes", "all holders", "all therapeutic areas", "1995", "2026", "any status"],
+    ["all medicine types", "all ATC classes", "all companies", "all therapeutic areas", "1995", "2026", "any status"],
   );
 });
 
@@ -176,7 +176,7 @@ test("sentence tokens name one selection, or count several", () => {
   assert.equal(tokenLabel("type", stateOf({ type: ["Biosimilar"] }), lookups), "Biosimilar");
   assert.equal(tokenLabel("type", stateOf({ type: ["Biosimilar", "Generic"] }), lookups), "2 medicine types");
   assert.equal(tokenLabel("mah", stateOf({ mah: ["Novo Nordisk A/S"] }), lookups), "Novo Nordisk A/S");
-  assert.equal(tokenLabel("mah", stateOf({ mah: ["A", "B", "C"] }), lookups), "3 holders");
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["A", "B", "C"] }), lookups), "3 companies");
   // Phase 4f: one therapeutic area list: a branch, tree node or term by its name.
   assert.equal(tokenLabel("area", stateOf({ area: ["C17"] }), lookups), "Skin and Connective Tissue Diseases");
   assert.equal(tokenLabel("area", stateOf({ area: ["C17.800"] }), lookups), "Skin Diseases");
@@ -202,7 +202,7 @@ const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `
 test("the filter sentence: defaults, one therapeutic area token", () => {
   assert.equal(
     text(sentenceParts(stateOf({}), lookups)),
-    "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved in [any year], with [any status].",
+    "Showing [all medicine types] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [any year], with [any status].",
   );
   const [areas] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "area");
   assert.deepEqual(areas, { key: "area", text: "all therapeutic areas", active: false, clears: ["area"] });
@@ -216,7 +216,7 @@ test("the filter sentence: active tokens, each clearing its own filter", () => {
   const parts = sentenceParts(stateOf({ type: ["Biosimilar"], atc: ["L04AC"], area: ["C17"], from: 2015, status: ["Authorised"] }), lookups);
   assert.equal(
     text(parts),
-    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all holders] in [Skin and Connective Tissue Diseases], approved [2015]–[2026] (medicines without an approval date left out), with [status Authorized].",
+    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all companies] in [Skin and Connective Tissue Diseases], approved [2015]–[2026] (medicines without an approval date left out), with [status Authorized].",
   );
   const tokens = parts.filter((part) => typeof part !== "string");
   assert.deepEqual(tokens.filter((part) => part.active).map((part) => [part.key, part.clears]), [
@@ -229,7 +229,7 @@ test("the filter sentence: one approval year is one token clearing both ends", (
   const parts = sentenceParts(stateOf({ from: 2024, to: 2024 }), lookups);
   assert.equal(
     text(parts),
-    "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved in [2024] (medicines without an approval date left out), with [any status].",
+    "Showing [all medicine types] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [2024] (medicines without an approval date left out), with [any status].",
   );
   assert.deepEqual(parts.find((part) => part.key === "year"), { key: "year", text: "2024", active: true, clears: ["from", "to"] });
   // The data's first or last year alone keeps that end open (normalizeYearRange()).
@@ -299,25 +299,25 @@ test("key counts and the top keys: most first, ties by key", () => {
 
 // Phase 4c: the holder rows sort by total, name or one column; the columns by code/name or count.
 const activityRows = [
-  { mah: "Pfizer Europe MA EEIG", count: 5, cells: new Map([["C17", 3], ["C05", 1]]) },
-  { mah: "Accord Healthcare S.L.U.", count: 1, cells: new Map() },
-  { mah: "Zentiva k.s.", count: 3, cells: new Map([["C05", 2]]) },
-  { mah: "Amgen Europe B.V.", count: 3, cells: new Map([["C05", 2]]) },
+  { key: "g.pfizer", label: "Pfizer Europe MA EEIG", count: 5, cells: new Map([["C17", 3], ["C05", 1]]) },
+  { key: "g.accord", label: "Accord Healthcare S.L.U.", count: 1, cells: new Map() },
+  { key: "g.zentiva", label: "Zentiva k.s.", count: 3, cells: new Map([["C05", 2]]) },
+  { key: "g.amgen", label: "Amgen Europe B.V.", count: 3, cells: new Map([["C05", 2]]) },
 ];
 
 test("holder rows sort by total (ties by name), by name, or by a column's count (ties by total, then name)", () => {
-  const order = (sort) => sortActivityRows(activityRows, sort).map((row) => row.mah);
+  const order = (sort) => sortActivityRows(activityRows, sort).map((row) => row.label);
   assert.deepEqual(order("total"), ["Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Zentiva k.s.", "Accord Healthcare S.L.U."]);
   assert.deepEqual(order("name"), ["Accord Healthcare S.L.U.", "Amgen Europe B.V.", "Pfizer Europe MA EEIG", "Zentiva k.s."]);
   assert.deepEqual(order("C05"), ["Amgen Europe B.V.", "Zentiva k.s.", "Pfizer Europe MA EEIG", "Accord Healthcare S.L.U."]);
   assert.deepEqual(order("C17"), ["Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Zentiva k.s.", "Accord Healthcare S.L.U."]);
   // A copy: the rows keep their order.
-  assert.equal(activityRows[0].mah, "Pfizer Europe MA EEIG");
+  assert.equal(activityRows[0].label, "Pfizer Europe MA EEIG");
 });
 
 // Phase 4f: every sort reverses on a second click; ties keep their order (total, then name).
 test("holder rows sort in either direction: counts fewest first, names Z-A; ties by total, then name", () => {
-  const order = (sort, direction) => sortActivityRows(activityRows, sort, direction).map((row) => row.mah);
+  const order = (sort, direction) => sortActivityRows(activityRows, sort, direction).map((row) => row.label);
   assert.deepEqual(order("total", "asc"), ["Accord Healthcare S.L.U.", "Amgen Europe B.V.", "Zentiva k.s.", "Pfizer Europe MA EEIG"]);
   assert.deepEqual(order("total", "desc"), order("total"));
   assert.deepEqual(order("name", "desc"), ["Zentiva k.s.", "Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Accord Healthcare S.L.U."]);
@@ -406,10 +406,34 @@ test("year stacks by holder: the top n holders, the rest as Other on top", () =>
 
 test("holder activity: the top holders by medicines, each with its medicines per key", () => {
   const rows = holderActivity(products, (row) => row.branches);
-  assert.deepEqual(rows.map((row) => [row.mah, row.count, Object.fromEntries(row.cells)]), [
-    ["Pfizer Europe MA EEIG", 5, { C17: 3, C05: 1 }],
-    ["Accord Healthcare S.L.U.", 1, {}],
+  assert.deepEqual(rows.map((row) => [row.key, row.label, row.count, Object.fromEntries(row.cells)]), [
+    ["Pfizer Europe MA EEIG", "Pfizer Europe MA EEIG", 5, { C17: 3, C05: 1 }],
+    ["Accord Healthcare S.L.U.", "Accord Healthcare S.L.U.", 1, {}],
   ]);
-  assert.deepEqual(holderActivity(products, (row) => row.branches, 1).map((row) => row.mah), ["Pfizer Europe MA EEIG"]);
+  assert.deepEqual(rows[1].members.map((row) => row.ema_product_number), ["P3"]);
+  assert.deepEqual(holderActivity(products, (row) => row.branches, 1).map((row) => row.key), ["Pfizer Europe MA EEIG"]);
   assert.deepEqual(holderActivity([], (row) => row.branches), []);
+});
+
+// Companies part 2: the rows are company groups (holderOf), named by their group (labelOf); a
+// medicine without a group is in no row. Ties sort by name.
+test("holder activity by company group: rows by group key, named, ties by name", () => {
+  const groups = { P1: "g.b", P2: "g.b", P3: "g.a", P4: "g.c", P5: null, P6: "g.a" };
+  const names = { "g.a": "Zentiva", "g.b": "Pfizer", "g.c": "Amgen" };
+  const rows = holderActivity(products, (row) => row.branches, 15, (row) => groups[row.ema_product_number], (key) => names[key]);
+  assert.deepEqual(rows.map((row) => [row.key, row.label, row.count]), [["g.b", "Pfizer", 2], ["g.a", "Zentiva", 2], ["g.c", "Amgen", 1]]);
+  assert.deepEqual(sortActivityRows(rows, "name").map((row) => row.label), ["Amgen", "Pfizer", "Zentiva"]);
+});
+
+test("the company token names a group or company by its name, an EMA holder name as it is", () => {
+  const names = new Map([["g.roche", "Roche"], ["c.genzyme-europe", "Genzyme Europe B.V."]]);
+  const withNames = { ...lookups, mahName: (value) => names.get(value) ?? value };
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["g.roche"] }), withNames), "Roche");
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["c.genzyme-europe"] }), withNames), "Genzyme Europe B.V.");
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["Roche Registration GmbH"] }), withNames), "Roche Registration GmbH");
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["g.roche", "Roche Registration GmbH"] }), withNames), "2 companies");
+  // Several values that are one company's rows (under two groups) name that company.
+  const whole = { ...withNames, mahSelection: (values) => (values.every((value) => value.endsWith("/c.mylan")) ? "Mylan S.A.S" : null) };
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["g.biocon/c.mylan", "g.viatris/c.mylan"] }), whole), "Mylan S.A.S");
+  assert.equal(tokenLabel("mah", stateOf({ mah: ["g.biocon/c.mylan", "g.roche"] }), whole), "2 companies");
 });

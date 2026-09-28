@@ -2,6 +2,7 @@
 // Products come from buildProducts() in approvals.js.
 import { atcCode, atcPrefixes } from "./atc.js";
 import { ATC_CODE } from "./badges.js";
+import { matchesCompany } from "./companies.js";
 
 // "L01" / "l01fa" -> code prefix; anything else -> case-insensitive name search.
 export function parseAtcQuery(query) {
@@ -41,9 +42,11 @@ function atcPredicate(values, atcClasses) {
 export function makePredicates(state, atcClasses) {
   const predicates = {};
   const inSet = (values) => new Set(values);
+  // Companies part 2: company groups, companies, EMA holder names (older links) and tree row paths
+  // (a company in one group, companies.js matchesCompany()), with OR.
   if (state.mah.length) {
-    const selected = inSet(state.mah);
-    predicates.mah = (product) => selected.has(product.mah);
+    const values = [...new Set(state.mah)];
+    predicates.mah = (product) => values.some((value) => matchesCompany(value, product));
   }
   if (state.from !== null || state.to !== null) {
     const from = state.from ?? -Infinity;

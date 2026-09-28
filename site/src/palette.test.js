@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { ATC_GROUP_HUES as ATC_GROUPS, BRAND_HUES, SERIES_DISTANCE, companySeriesColors, tokenDistance } from "./badges.js";
+import { OTHER_KEY, topWithOther } from "./facets.js";
 
 // WCAG 2.2 contrast of the style.css tokens, light and dark: text >= 4.5:1 on every background
 // it is used on, chart marks >= 3:1. Status dots and the per-year chart's status stacks (Stack by
@@ -42,6 +44,9 @@ const STATUS_HUES = ["green", "red", "orange", "brown", "pink", "plum", "purple"
 const BACKGROUNDS = ["--page", "--surface"];
 // Holder activity cells: five accent shades, each with its own number colour.
 const HEAT_STEPS = [1, 2, 3, 4, 5];
+// Company badges (companies part 2): the brand hues (badges.js BRAND_HUES); other groups take the
+// hues above.
+const BRANDS = Object.values(BRAND_HUES).map((brand) => brand.hue);
 
 const TEXT_PAIRS = [
   ...["--ink", "--ink-secondary", "--muted", "--link", "--link-hover", "--accent"].flatMap((text) => BACKGROUNDS.map((background) => [text, background])),
@@ -57,15 +62,21 @@ const TEXT_PAIRS = [
   ...STATUS_HUES.flatMap((hue) => BACKGROUNDS.map((background) => [`--${hue}-text`, background])),
   ...ATC_HUES.flatMap((hue) => [1, 2, 3, 4, 5].map((level) => [`--${hue}-text`, `--${hue}-${level}`])),
   ...HEAT_STEPS.map((step) => [`--heat-${step}-text`, `--heat-${step}`]),
+  // A company badge's monogram on its fill.
+  ...BRANDS.map((hue) => [`--${hue}-text`, `--${hue}-1`]),
 ];
 
-// The hue mids also stack "Approvals per year" by ATC group (each group's own hue) and by holder or
-// child class (main.js STACK_HUES). Their Other segment is the --raised fill with a --field-border
+// The hue mids also stack "Approvals per year" by ATC group (each group's own hue) and by child
+// class (main.js STACK_HUES). Their Other segment is the --raised fill with a --field-border
 // outline (phase 4c review; NON_TEXT_PAIRS checks that outline on the card and on the fill).
+// Company groups stack by their hue's mid, a second group of one hue family by its text shade
+// (badges.js companySeriesColors()).
 const MARK_PAIRS = [
   "--type-other", "--type-generic", "--type-biosimilar", "--type-advanced-therapy",
   "--series-products", "--series-substances", "--bar", "--status-authorized",
   ...ATC_HUES.map((hue) => `--${hue}-mid`),
+  ...[...ATC_HUES, ...BRANDS].map((hue) => `--${hue}-text`),
+  ...BRANDS.map((hue) => `--${hue}-mid`),
 ].flatMap((mark) => BACKGROUNDS.map((background) => [mark, background]));
 
 // WCAG 1.4.11: text-field borders against the field and what surrounds it; the year slider's
@@ -106,6 +117,59 @@ for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
     assert.deepEqual(failing, []);
   });
 }
+
+// Checked facet rows sit on the accent wash, where --muted is under 4.5:1: a tree row's muted name
+// (.no-name: the company tree's "(same name)", an ATC class without a name) takes another colour
+// there, one that passes on the wash in both modes.
+test("checked facet rows recolour muted names for the accent wash", () => {
+  const selector = ".facet-row:has(input:checked) .no-name";
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g);
+  const rule = [...rules].find(([, selectors]) => selectors.split(",").map((part) => part.trim()).includes(selector));
+  assert.ok(rule, `no rule for ${selector}`);
+  const color = rule[2].match(/(?:^|[;\s])color:\s*var\((--[\w-]+)\)/)?.[1];
+  assert.ok(color, `${selector} sets no colour token`);
+  for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
+    assert.ok(contrast(tokens, color, "--accent-wash") >= 4.5, `${mode}: ${color} on --accent-wash`);
+  }
+});
+
+// "Approvals per year" stacked by company (companySeriesColors()): the 8 groups with the most dated
+// medicines, overall and within each ATC group, can be told apart in both modes (skipped before a
+// pipeline run). Same-hue brands (Teva and Pfizer, Roche and AbbVie) must not share a near twin.
+const dataFile = (name) => new URL(`../public/data/${name}`, import.meta.url);
+const stackFiles = ["ema_medicines.json", "ema_medicine_companies.json", "ema_medicine_atc_codes.json"];
+test(
+  "company stacks: the real top-8 sets differ by the series distance in light and dark",
+  { skip: stackFiles.every((name) => existsSync(dataFile(name))) ? false : "data files not found" },
+  () => {
+    const [medicines, companyRows, atcRows] = stackFiles.map((name) => JSON.parse(readFileSync(dataFile(name), "utf8")));
+    const tokensOf = (tokens) => Object.fromEntries(Object.keys(tokens).map((name) => [name, resolve(tokens, name)]));
+    const palette = { light: tokensOf(light), dark: tokensOf(dark) };
+    const groupOf = new Map(companyRows.map((row) => [row.ema_product_number, row.group_key]));
+    const lettersOf = new Map();
+    for (const row of atcRows) {
+      const letter = (row.current_atc_code ?? row.atc_code ?? row.atc_code_human ?? "").charAt(0);
+      if (!lettersOf.has(row.ema_product_number)) lettersOf.set(row.ema_product_number, new Set());
+      if (letter) lettersOf.get(row.ema_product_number).add(letter);
+    }
+    const dated = medicines.filter((row) => row.authorized_from !== null && groupOf.get(row.ema_product_number));
+    const sets = [["all", dated], ...Object.keys(ATC_GROUPS).map((letter) => [letter, dated.filter((row) => lettersOf.get(row.ema_product_number)?.has(letter))])];
+    const failing = [];
+    for (const [name, rows] of sets) {
+      const keys = topWithOther(rows, (row) => [groupOf.get(row.ema_product_number)], 8).keys.filter((key) => key !== OTHER_KEY);
+      const colors = [...companySeriesColors(keys, palette)].map(([key, color]) => [key, color.slice(4, -1)]);
+      for (const [mode, tokens] of Object.entries(palette)) {
+        for (const [index, [key, color]] of colors.entries()) {
+          for (const [other, otherColor] of colors.slice(index + 1)) {
+            const distance = tokenDistance({ light: tokens, dark: tokens }, color, otherColor);
+            if (distance < SERIES_DISTANCE) failing.push(`${name} ${mode}: ${key} ${color} ~ ${other} ${otherColor} (${distance.toFixed(3)})`);
+          }
+        }
+      }
+    }
+    assert.deepEqual(failing, []);
+  },
+);
 
 test("light tokens match the approved E · Sage palette", () => {
   const expected = {

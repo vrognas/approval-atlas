@@ -1,7 +1,7 @@
 // Pure data helpers: no DOM, no D3, so they run under node:test.
 import { buildAreaTree } from "./areas.js";
 import { atcCode, atcPrefixes } from "./atc.js";
-import { NOT_STATED, UI } from "./labels.js";
+import { NOT_STATED } from "./labels.js";
 
 export const MEDICINE_TYPES = ["Advanced therapy", "Biosimilar", "Generic", "Other"];
 
@@ -55,7 +55,10 @@ function groupRows(rows, keyOf, valueOf) {
 // branchRows and subtreeRows (built here when not given): areaKeys are a product's therapeutic area
 // tree keys (its terms and every branch and node above them), areaExact the keys of its static rows
 // (the nodes its terms are, the branches it is tagged only at the root of; areas.js exactOf()).
-export function buildProducts(medicines, { areaRows, branchRows, atcRows, subtreeRows = [], areaTree = buildAreaTree(branchRows, subtreeRows) }) {
+// companyRows: ema_medicine_companies.json (companies part 2): a product's company and group
+// (null without a holder), how its holder was decided and the Union Register's holder; mah stays
+// EMA's holder name (older links filter by it).
+export function buildProducts(medicines, { areaRows, branchRows, atcRows, companyRows = [], subtreeRows = [], areaTree = buildAreaTree(branchRows, subtreeRows) }) {
   const areasByProduct = groupRows(areaRows, (row) => row.ema_product_number, (row) => row.therapeutic_area_mesh);
   const branchesByTerm = groupRows(
     branchRows.filter((row) => row.branch !== null),
@@ -63,11 +66,18 @@ export function buildProducts(medicines, { areaRows, branchRows, atcRows, subtre
     (row) => row.branch,
   );
   const atcByProduct = groupRows(atcRows, (row) => row.ema_product_number, (row) => row);
+  const companyByProduct = new Map(companyRows.map((row) => [row.ema_product_number, row]));
   return medicines.map((medicine) => {
     const areas = areasByProduct.get(medicine.ema_product_number) ?? [];
+    const company = companyByProduct.get(medicine.ema_product_number);
     return {
       ...medicine,
       mah: medicine.marketing_authorisation_developer_applicant_holder ?? NOT_STATED,
+      holder_ema: medicine.marketing_authorisation_developer_applicant_holder ?? null,
+      holder_register: company?.holder_register ?? null,
+      holder_basis: company?.holder_basis ?? null,
+      company_key: company?.company_key ?? null,
+      group_key: company?.group_key ?? null,
       year: medicine.authorized_from === null ? null : Number(medicine.authorized_from.slice(0, 4)),
       areas,
       branches: distinctSorted(areas.flatMap((area) => branchesByTerm.get(area) ?? [])),
@@ -95,6 +105,15 @@ export function statusDate(medicine) {
 
 export function isAuthorizedNow(product) {
   return product.medicine_status === "Authorised" && product.authorized_from !== null;
+}
+
+// A lookup list of search-index rows (ema_search_index.json): the currently authorized ones (as
+// isAuthorizedNow(): status Authorised with an approval date, so a list's count matches its
+// headline's), or every status when showAll is set or none is currently authorized.
+export function authorizedFirst(rows, showAll) {
+  const authorized = rows.filter((row) => row.medicine_status === "Authorised" && Boolean(row.marketing_authorisation_date));
+  const everyStatus = showAll || authorized.length === 0;
+  return { current: authorized.length, everyStatus, shown: everyStatus ? rows : authorized };
 }
 
 function distinctSubstanceSets(products) {
@@ -147,7 +166,8 @@ export function authorizedSeries(products, dates) {
 const BREAKDOWN_VALUES = {
   atc: (product) => product.atc.flatMap((row) => atcPrefixes(atcCode(row)).slice(0, 1)),
   area: (product) => product.branches,
-  mah: (product) => [product.mah],
+  // Companies part 2: company groups; medicines without a holder have none.
+  mah: (product) => (product.group_key ? [product.group_key] : []),
 };
 
 // Products with no value for the breakdown, so the page can say they are not shown.
@@ -155,23 +175,8 @@ export function breakdownExcluded(products, by) {
   return products.filter((product) => BREAKDOWN_VALUES[by](product).length === 0).length;
 }
 
-// Products per value (a product counts once per distinct value), top n by count then label,
-// plus one Other row counting the distinct products that have any value outside the top n.
-export function breakdownCounts(products, by, labelOf = (key) => key, n = 20) {
-  const counts = new Map();
-  for (const product of products) {
-    for (const key of new Set(BREAKDOWN_VALUES[by](product))) counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  const rows = [...counts]
-    .map(([key, count]) => ({ key, label: labelOf(key), count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  if (rows.length <= n) return rows;
-  const tail = new Set(rows.slice(n).map((row) => row.key));
-  const otherCount = products.filter((product) => BREAKDOWN_VALUES[by](product).some((key) => tail.has(key))).length;
-  return [...rows.slice(0, n), { key: null, label: UI.other, count: otherCount, other: true }];
-}
-
-// Breakdown rows (breakdownCounts() output, or ATC classes) in the Sort control's order: "count"
+// Breakdown rows (areas.js areaBreakdownRows() or companies.js companyBreakdownRows() output, or
+// ATC classes) in the Sort control's order: "count"
 // as computed (most first) or, direction "asc", fewest first (ties keep their order); "key" ATC
 // classes by code and areas and holders by name, A-Z or, direction "desc", Z-A. The Other row and
 // the incomplete-code row stay last.

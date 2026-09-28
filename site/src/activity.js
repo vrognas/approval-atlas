@@ -13,6 +13,7 @@
 import * as d3 from "d3";
 import { appendCodeBadge } from "./atc-picker.js";
 import { defaultSortDirection } from "./facets.js";
+import { companyBadge } from "./holders.js";
 import { UI } from "./labels.js";
 
 const STEPS = 5;
@@ -56,7 +57,9 @@ const filterButton = (button, label, pressed) => button
   .attr("aria-describedby", HINT_ID)
   .attr("title", pressed ? UI.activity.pressedTitle : UI.activity.filterBy(label));
 
-// rows: holderActivity() output, in display order. columns: [{ key, label: its name in cell names,
+// rows: holderActivity() output, in display order (companies part 2: company groups, each with
+// badge: its group row, and names: the EMA holder names behind it, in its name and tooltip);
+// linkOf(row): a link after the row's button (its company page), or null. columns: [{ key, label: its name in cell names,
 // badge: an ATC code shown as a badge (else the label is the header's text), title: a tooltip,
 // filter: the filter patch its header and cells set (null: a static column, "Other")}] in display
 // order. sort: { key: "total" | "name" | a column key, direction: "asc" | "desc" }. parent: the one
@@ -65,7 +68,7 @@ const filterButton = (button, label, pressed) => button
 // onFilter(patch), onSort(key): a sort button was clicked. isSet(patch):
 // the patch is exactly the current filter (the control is pressed). labelledBy, describedBy: the ids
 // naming and describing the table (outside the scroll area, so they stay readable on a phone).
-export function renderActivity(container, { rows, columns, sort, parent = null, labelledBy, describedBy, onFilter, onSort, isSet }) {
+export function renderActivity(container, { rows, columns, sort, parent = null, labelledBy, describedBy, onFilter, onSort, isSet, linkOf = () => null }) {
   const focused = container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
   const root = d3.select(container);
   root.selectChildren().remove();
@@ -119,18 +122,25 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
     appendSortButton(d3.select(this), { key: column.key, label: UI.activity.sortBy(column.title ?? column.label), sort, onSort });
   });
   const lines = table.append("tbody").selectAll("tr").data(rows).join("tr");
-  const holders = lines.append("th")
-    .attr("scope", "row")
+  const heads = lines.append("th").attr("scope", "row");
+  const holders = heads.append("span").attr("class", "activity-row-head")
     .append("button")
     .attr("type", "button")
-    .attr("data-focus-key", (row) => `row:${row.mah}`)
-    .attr("aria-label", (row) => UI.activity.holderRow(row.mah, row.count))
+    .attr("data-focus-key", (row) => `row:${row.key}`)
+    .attr("aria-label", (row) => UI.activity.holderRow(row.label, row.count, row.names ?? null))
     .each(function holder(row) {
-      filterButton(d3.select(this), row.mah, isSet({ mah: [row.mah] }));
+      const button = filterButton(d3.select(this), row.label, isSet({ mah: [row.key] }));
+      // The EMA holder names behind the company, then what a click does.
+      if (row.names) button.attr("title", `${row.label}: ${row.names}\n${button.attr("title")}`);
     })
-    .on("click", (event, row) => onFilter({ mah: [row.mah] }));
-  holders.append("span").attr("class", "activity-holder").text((row) => row.mah);
+    .on("click", (event, row) => onFilter({ mah: [row.key] }));
+  holders.filter((row) => row.badge).append((row) => companyBadge(row.badge));
+  holders.append("span").attr("class", "activity-holder").text((row) => row.label);
   holders.append("span").attr("class", "activity-total").text((row) => formatCount(row.count));
+  heads.select(".activity-row-head").each(function link(row) {
+    const anchor = linkOf(row);
+    if (anchor) this.append(anchor);
+  });
   lines.selectAll("td")
     .data((row) => columns.map((column) => ({ row, column, count: row.cells.get(column.key) ?? 0 })))
     .join("td")
@@ -142,11 +152,11 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
         d3.select(this).append("span").text(text);
         return;
       }
-      const patch = { mah: [cell.row.mah], ...cell.column.filter };
+      const patch = { mah: [cell.row.key], ...cell.column.filter };
       d3.select(this).append("button")
         .attr("type", "button")
-        .attr("data-focus-key", `cell:${cell.row.mah}|${cell.column.key}`)
-        .attr("aria-label", UI.activity.cell(cell.row.mah, cell.column.label, cell.count))
+        .attr("data-focus-key", `cell:${cell.row.key}|${cell.column.key}`)
+        .attr("aria-label", UI.activity.cell(cell.row.label, cell.column.label, cell.count))
         .attr("aria-pressed", String(isSet(patch)))
         .attr("aria-describedby", HINT_ID)
         .text(text)

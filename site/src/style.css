@@ -59,6 +59,32 @@
   --brown-1: #e8ddd1; --brown-2: #ddcfc1; --brown-3: #d2c2b2; --brown-4: #c7b4a2; --brown-5: #bca692; --brown-mid: #8c6b4e; --brown-text: #4f3520;
   --sky-1: #d5e6ee; --sky-2: #c6dce6; --sky-3: #b7d1dd; --sky-4: #a9c7d5; --sky-5: #9abccc; --sky-mid: #5a8fa8; --sky-text: #174860;
   --slate-1: #e2e3df; --slate-2: #d6d7d2; --slate-3: #c9cbc6; --slate-4: #bdbeb9; --slate-5: #b0b2ad; --slate-mid: #7a7d76; --slate-text: #3d403b;
+  /* Company badges (companies part 2, user decision 2026-09-28): the largest groups in a damped
+     version of their brand colour (badges.js BRAND_HUES): badge fill, chart mid and text, as the
+     hue table; every other group takes one of the hues above. */
+  --co-roche-1: #dae1f1; --co-roche-mid: #4662a5; --co-roche-text: #1d305d;
+  --co-novartis-1: #f2e7d9; --co-novartis-mid: #a6763a; --co-novartis-text: #5f411c;
+  --co-pfizer-1: #dbddf0; --co-pfizer-mid: #414a95; --co-pfizer-text: #1e245c;
+  --co-astrazeneca-1: #efdce7; --co-astrazeneca-mid: #954b75; --co-astrazeneca-text: #572341;
+  --co-sanofi-1: #e6ddee; --co-sanofi-mid: #7d569f; --co-sanofi-text: #3f2655;
+  --co-gsk-1: #f2e0d9; --co-gsk-mid: #aa5d40; --co-gsk-text: #5f2d1c;
+  --co-msd-1: #d9f2f0; --co-msd-mid: #307873; --co-msd-text: #1c5f5a;
+  --co-novo-nordisk-1: #d9e2f2; --co-novo-nordisk-mid: #37568a; --co-novo-nordisk-text: #1c345f;
+  --co-lilly-1: #f2dad9; --co-lilly-mid: #a3433d; --co-lilly-text: #5f1f1c;
+  --co-bms-1: #dae7f1; --co-bms-mid: #407297; --co-bms-text: #1d435d;
+  --co-jnj-1: #f2ddd9; --co-jnj-mid: #b64f3f; --co-jnj-text: #5f251c;
+  --co-abbvie-1: #dce1ef; --co-abbvie-mid: #3a4973; --co-abbvie-text: #233157;
+  --co-bayer-1: #e6efdc; --co-bayer-mid: #5e7c3c; --co-bayer-text: #3f5921;
+  --co-boehringer-1: #dcefe9; --co-boehringer-mid: #336b5a; --co-boehringer-text: #215948;
+  --co-takeda-1: #f1dadc; --co-takeda-mid: #8f3d42; --co-takeda-text: #5d1d21;
+  --co-gilead-1: #f0dbde; --co-gilead-mid: #9a4654; --co-gilead-text: #5b1f29;
+  --co-amgen-1: #d9e6f2; --co-amgen-mid: #3c6e9f; --co-amgen-text: #1c3d5f;
+  --co-teva-1: #dfddee; --co-teva-mid: #5e54a1; --co-teva-text: #2b2456;
+  --co-sandoz-1: #dbe4f0; --co-sandoz-mid: #4e77ac; --co-sandoz-text: #1f395b;
+  --co-viatris-1: #daedf1; --co-viatris-mid: #35717d; --co-viatris-text: #1d535d;
+  --co-krka-1: #daf1e3; --co-krka-mid: #409661; --co-krka-text: #1d5d36;
+  --co-csl-1: #f2d9da; --co-csl-mid: #b33d41; --co-csl-text: #5e1c1e;
+  --co-gedeon-richter-1: #dae3f1; --co-gedeon-richter-mid: #385d94; --co-gedeon-richter-text: #1c375e;
   /* Medicine types (marks use the mids; stacked bottom to top Other, Generic, Biosimilar, Advanced therapy). */
   --type-other: var(--blue-mid);
   --type-generic: var(--gold-mid);
@@ -113,6 +139,29 @@
     --brown-1: #40362a; --brown-2: #473c2f; --brown-3: #4e4133; --brown-4: #564738; --brown-5: #5d4d3c; --brown-mid: #9a7d63; --brown-text: #dfd2c4;
     --sky-1: #304248; --sky-2: #354950; --sky-3: #3a5059; --sky-4: #3f5861; --sky-5: #445f6a; --sky-mid: #6e9cb2; --sky-text: #c9dde7;
     --slate-1: #3a3c38; --slate-2: #40423e; --slate-3: #474944; --slate-4: #4d4f4b; --slate-5: #545651; --slate-mid: #8a8d86; --slate-text: #d8d9d5;
+    --co-roche-1: #2b3650; --co-roche-mid: #7d91c0; --co-roche-text: #cad4ed;
+    --co-novartis-1: #523f28; --co-novartis-mid: #c6a276; --co-novartis-text: #edddc9;
+    --co-pfizer-1: #2b2f4f; --co-pfizer-mid: #7e84be; --co-pfizer-text: #cbceec;
+    --co-astrazeneca-1: #4c2e3f; --co-astrazeneca-mid: #b983a2; --co-astrazeneca-text: #e9cddd;
+    --co-sanofi-1: #3e304b; --co-sanofi-mid: #a086b7; --co-sanofi-text: #dccfe8;
+    --co-gsk-1: #523428; --co-gsk-mid: #c38d79; --co-gsk-text: #edd3c9;
+    --co-msd-1: #2a514e; --co-msd-mid: #7bc1bd; --co-msd-text: #c9edeb;
+    --co-novo-nordisk-1: #2a3851; --co-novo-nordisk-mid: #7b95c1; --co-novo-nordisk-text: #c9d7ed;
+    --co-lilly-1: #522b28; --co-lilly-mid: #c37d79; --co-lilly-text: #edcbc9;
+    --co-bms-1: #2b4050; --co-bms-mid: #7da4c0; --co-bms-text: #cadeed;
+    --co-jnj-1: #522e28; --co-jnj-mid: #c68176; --co-jnj-text: #edcec9;
+    --co-abbvie-1: #2e364c; --co-abbvie-mid: #8392b9; --co-abbvie-text: #cdd5e9;
+    --co-bayer-1: #3e4d2d; --co-bayer-mid: #a0bb81; --co-bayer-text: #dceacc;
+    --co-boehringer-1: #2d4d44; --co-boehringer-mid: #81bbaa; --co-boehringer-text: #cceae1;
+    --co-takeda-1: #502b2d; --co-takeda-mid: #c07d81; --co-takeda-text: #edcacc;
+    --co-gilead-1: #4e2c32; --co-gilead-mid: #bd7f8a; --co-gilead-text: #ebcbd1;
+    --co-amgen-1: #283d52; --co-amgen-mid: #799ec3; --co-amgen-text: #c9dbed;
+    --co-teva-1: #332f4c; --co-teva-mid: #8b84b8; --co-teva-text: #d1cee9;
+    --co-sandoz-1: #2c3b4e; --co-sandoz-mid: #7f9abd; --co-sandoz-text: #cbd9eb;
+    --co-viatris-1: #2b4a50; --co-viatris-mid: #7db4c0; --co-viatris-text: #cae7ed;
+    --co-krka-1: #2b5039; --co-krka-mid: #7cc096; --co-krka-text: #caedd7;
+    --co-csl-1: #52282a; --co-csl-mid: #c67679; --co-csl-text: #edc9cb;
+    --co-gedeon-richter-1: #2a3951; --co-gedeon-richter-mid: #7291c0; --co-gedeon-richter-text: #c9d8ed;
     --de-emphasis: #4a4b43;
     --out-of-range: #4a4b43;
     --range-band: rgba(167, 196, 160, 0.12);
@@ -134,6 +183,30 @@
 .hue-brown { --hue-1: var(--brown-1); --hue-2: var(--brown-2); --hue-3: var(--brown-3); --hue-4: var(--brown-4); --hue-5: var(--brown-5); --hue-mid: var(--brown-mid); --hue-text: var(--brown-text); }
 .hue-sky { --hue-1: var(--sky-1); --hue-2: var(--sky-2); --hue-3: var(--sky-3); --hue-4: var(--sky-4); --hue-5: var(--sky-5); --hue-mid: var(--sky-mid); --hue-text: var(--sky-text); }
 .hue-slate { --hue-1: var(--slate-1); --hue-2: var(--slate-2); --hue-3: var(--slate-3); --hue-4: var(--slate-4); --hue-5: var(--slate-5); --hue-mid: var(--slate-mid); --hue-text: var(--slate-text); }
+/* Company brand hues: a badge's fill, mid and text only (no level shades). */
+.hue-co-roche { --hue-1: var(--co-roche-1); --hue-mid: var(--co-roche-mid); --hue-text: var(--co-roche-text); }
+.hue-co-novartis { --hue-1: var(--co-novartis-1); --hue-mid: var(--co-novartis-mid); --hue-text: var(--co-novartis-text); }
+.hue-co-pfizer { --hue-1: var(--co-pfizer-1); --hue-mid: var(--co-pfizer-mid); --hue-text: var(--co-pfizer-text); }
+.hue-co-astrazeneca { --hue-1: var(--co-astrazeneca-1); --hue-mid: var(--co-astrazeneca-mid); --hue-text: var(--co-astrazeneca-text); }
+.hue-co-sanofi { --hue-1: var(--co-sanofi-1); --hue-mid: var(--co-sanofi-mid); --hue-text: var(--co-sanofi-text); }
+.hue-co-gsk { --hue-1: var(--co-gsk-1); --hue-mid: var(--co-gsk-mid); --hue-text: var(--co-gsk-text); }
+.hue-co-msd { --hue-1: var(--co-msd-1); --hue-mid: var(--co-msd-mid); --hue-text: var(--co-msd-text); }
+.hue-co-novo-nordisk { --hue-1: var(--co-novo-nordisk-1); --hue-mid: var(--co-novo-nordisk-mid); --hue-text: var(--co-novo-nordisk-text); }
+.hue-co-lilly { --hue-1: var(--co-lilly-1); --hue-mid: var(--co-lilly-mid); --hue-text: var(--co-lilly-text); }
+.hue-co-bms { --hue-1: var(--co-bms-1); --hue-mid: var(--co-bms-mid); --hue-text: var(--co-bms-text); }
+.hue-co-jnj { --hue-1: var(--co-jnj-1); --hue-mid: var(--co-jnj-mid); --hue-text: var(--co-jnj-text); }
+.hue-co-abbvie { --hue-1: var(--co-abbvie-1); --hue-mid: var(--co-abbvie-mid); --hue-text: var(--co-abbvie-text); }
+.hue-co-bayer { --hue-1: var(--co-bayer-1); --hue-mid: var(--co-bayer-mid); --hue-text: var(--co-bayer-text); }
+.hue-co-boehringer { --hue-1: var(--co-boehringer-1); --hue-mid: var(--co-boehringer-mid); --hue-text: var(--co-boehringer-text); }
+.hue-co-takeda { --hue-1: var(--co-takeda-1); --hue-mid: var(--co-takeda-mid); --hue-text: var(--co-takeda-text); }
+.hue-co-gilead { --hue-1: var(--co-gilead-1); --hue-mid: var(--co-gilead-mid); --hue-text: var(--co-gilead-text); }
+.hue-co-amgen { --hue-1: var(--co-amgen-1); --hue-mid: var(--co-amgen-mid); --hue-text: var(--co-amgen-text); }
+.hue-co-teva { --hue-1: var(--co-teva-1); --hue-mid: var(--co-teva-mid); --hue-text: var(--co-teva-text); }
+.hue-co-sandoz { --hue-1: var(--co-sandoz-1); --hue-mid: var(--co-sandoz-mid); --hue-text: var(--co-sandoz-text); }
+.hue-co-viatris { --hue-1: var(--co-viatris-1); --hue-mid: var(--co-viatris-mid); --hue-text: var(--co-viatris-text); }
+.hue-co-krka { --hue-1: var(--co-krka-1); --hue-mid: var(--co-krka-mid); --hue-text: var(--co-krka-text); }
+.hue-co-csl { --hue-1: var(--co-csl-1); --hue-mid: var(--co-csl-mid); --hue-text: var(--co-csl-text); }
+.hue-co-gedeon-richter { --hue-1: var(--co-gedeon-richter-1); --hue-mid: var(--co-gedeon-richter-mid); --hue-text: var(--co-gedeon-richter-text); }
 
 * {
   box-sizing: border-box;
@@ -1350,6 +1423,11 @@ input::placeholder {
   color: var(--muted);
 }
 
+/* On a checked row's accent wash --muted falls under 4.5:1 (palette.test.js). */
+.facet-row:has(input:checked) .no-name {
+  color: var(--ink-secondary);
+}
+
 .atc-note {
   font-size: 0.8125rem;
 }
@@ -1610,6 +1688,14 @@ input::placeholder {
   font-weight: 600;
 }
 
+/* The narrowest phones (320px): the four "Stack by" segments fit in the card. */
+@media (max-width: 359px) {
+  .segmented button {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+}
+
 /* A card's secondary controls (Sort, Column order, Stack by): a visible label, then a segmented
    control; the smaller one sits under the card head. */
 .card-tools {
@@ -1695,6 +1781,158 @@ button.bar-row:hover {
   width: auto;
   min-width: 22px;
   padding: 0 6px;
+}
+
+/* Company monogram badge (companies part 2; holders.js companyBadge()): 1 to 4 characters of a
+   company group (4 for a full ticker, "ABBV"; the badge grows with them) on its hue's fill (a brand hue or one of the damped hues); a joint venture's is
+   outlined with a dashed line. */
+.company-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--hue-1);
+  color: var(--hue-text);
+  font: 600 0.6875rem/1 var(--font-mono);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.company-badge.jv {
+  border: 1px dashed var(--hue-text);
+}
+
+/* In lists (tree rows, breakdown bars, activity rows, the per-year legend) and in the tables'
+   Company · Holder columns (the medicines table, result tables) every badge is as wide as a
+   4-character monogram (padding and a joint venture's border included), so the names after the
+   badges line up. */
+.atc-tree .company-badge,
+.bar-label .company-badge,
+.activity-row-head .company-badge,
+.legend-series .company-badge,
+td.holder-cell .holder-main .company-badge,
+td.result-holder .holder-main .company-badge {
+  width: calc(4ch + 0.08em + 10px);
+}
+
+/* A medicine's company group and holder (holders.js holderDisplay()): the badge and the group (a
+   link to its company page), then the holder name EMA publishes, smaller. */
+.holder {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Inline, so a narrow column wraps the name under the badge instead of widening. */
+.holder-main {
+  display: block;
+  min-width: 0;
+}
+
+.holder-main .company-badge {
+  margin-right: 2px;
+  vertical-align: 1px;
+}
+
+.holder-ema {
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+/* The medicine card's Company fact under the holder display (lookup.js companyFact()): why the
+   medicine sits under its group, a sponsor's evidence and the as-of date, small so a long note
+   stays compact on phones. */
+.company-evidence,
+.company-as-of {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+/* On phones a long note sits behind a disclosure (lookup.js noteLine()): its summary a 44px
+   target in the link colour, then the note. */
+.company-note > summary {
+  padding: 12px 0;
+  color: var(--link);
+  font-size: 0.8125rem;
+  line-height: 20px;
+}
+
+.company-note > .company-evidence {
+  margin-top: 0;
+}
+
+/* A one-word "Source" link keeps its new-tab icon on its line. */
+.company-evidence a.external,
+.company-ownership a.external {
+  white-space: nowrap;
+}
+
+/* The company tree (company-tree.js): the badge, then name and count beside it (a word longer
+   than the row breaks). */
+.company-tree .atc-text {
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.company-tree .atc-text .facet-name {
+  overflow-wrap: anywhere;
+}
+
+/* The company page (lookup.js companyPage()): its companies with their EMA holder names, and the
+   ATC and condition mixes (as the most common conditions: link, bar, count). */
+.company-names > li + li {
+  margin-top: 6px;
+}
+
+.company-names .company-holders {
+  margin: 2px 0 0 16px;
+  font-size: 0.875rem;
+}
+
+.condition-list.company-mix li {
+  grid-template-columns: minmax(8rem, 45%) 1fr 4rem;
+}
+
+@media (max-width: 600px) {
+  .condition-list.company-mix li {
+    grid-template-columns: 1fr 4rem;
+  }
+}
+
+.company-mix .mix-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.company-page h2 .company-badge {
+  height: 24px;
+  font-size: 0.8125rem;
+  vertical-align: 3px;
+}
+
+/* The company page's Sources: its Ownership part (the curated notes and the medicines moved to
+   their current owner, each with its evidence link). */
+.card h4.sources-part {
+  margin: 12px 0 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.company-ownership {
+  font-size: 0.875rem;
+}
+
+.company-ownership > li + li {
+  margin-top: 4px;
 }
 
 /* Above the drilled-down ATC bars: "Up one level" and the path. */
@@ -2126,6 +2364,15 @@ td.breakable {
   overflow-wrap: anywhere;
 }
 
+/* The medicines table's Company · Holder column: wide enough that a group and its holder name wrap
+   to a few lines, not one word a line (phones stack the row: the container rule above wins). 9.25rem,
+   with the status and area floors, keeps the first page's table within 1024px (1440px screen,
+   320px sidebar), so the Indication column needs no sideways scroll, and fits a group name of up
+   to about 80px ("AstraZeneca") beside its 4-character-wide badge. */
+td.holder-cell {
+  min-width: 9.25rem;
+}
+
 .medicine-name {
   font-weight: 600;
 }
@@ -2262,8 +2509,9 @@ td .doc-links {
   font-variant-numeric: tabular-nums;
 }
 
+/* 9rem wraps no status or date line more than 10rem did (see td.holder-cell). */
 td.status-cell {
-  min-width: 10rem;
+  min-width: 9rem;
 }
 
 .badges {
@@ -2491,9 +2739,11 @@ td.atc .code + .code {
   margin-top: 4px;
 }
 
-/* MeSH terms wrap at spaces only; long single words widen the column instead of breaking. */
+/* MeSH terms wrap at spaces, and hyphenate where the browser can (lang="en"); long single words
+   otherwise widen the column instead of breaking ("Adrenoleukodystrophy"). */
 td.area {
-  min-width: 20ch;
+  min-width: 10rem;
+  hyphens: auto;
 }
 
 .term {
@@ -2626,6 +2876,24 @@ table.activity {
   flex: none;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+/* A company row (companies part 2): its filter button (badge, name, total), then its company page
+   link. */
+.activity-row-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.activity-row-head > button {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-row-head .activity-holder {
+  flex: 1;
+  min-width: 0;
 }
 
 .activity-head {
@@ -3645,8 +3913,23 @@ mark {
     font-size: 0.9375rem;
   }
 
-  .condition-list a {
+  .condition-list a,
+  .condition-list.company-mix .mix-link {
     min-height: 44px;
+  }
+
+  /* Companies: the company page's names, and the company links of holder displays (tables, answer
+     strip; the negative margin keeps the row's layout, as the medicine names'). */
+  .company-names a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  a.company-link {
+    display: inline-block;
+    margin: -13px 0;
+    padding: 13px 0;
   }
 
   .token-pill .token {
