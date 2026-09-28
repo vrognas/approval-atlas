@@ -1,14 +1,15 @@
 {
   "source_url": "https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json",
-  "source_timestamp": "2026-09-26T06:02:29Z",
+  "source_timestamp": "2026-09-28T06:02:55Z",
   "row_counts": {
     "ema_medicines": 2351,
     "ema_medicine_therapeutic_areas": 3967,
     "ema_medicine_active_substances": 2722,
-    "ema_medicine_atc_codes": 2216,
+    "ema_medicine_atc_codes": 2237,
     "ema_medicine_substances": 2528,
-    "atc_classes": 6772,
+    "atc_classes": 6892,
     "ema_therapeutic_area_branches": 1183,
+    "ema_therapeutic_area_subtree": 3107,
     "ema_authorized_series": 381,
     "ema_medicine_documents": 13063,
     "mesh_entry_terms": 8453,
@@ -16,16 +17,17 @@
     "ema_search_index": 2351,
     "ema_medicine_protection": 1985,
     "ema_medicine_orphan_exclusivity": 358,
-    "ema_medicine_register_status": 1932
+    "ema_medicine_register_status": 1932,
+    "ema_medicine_smpc_atc": 186
   },
   "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
-  "snapshot_date": "2026-09-26",
+  "snapshot_date": "2026-09-28",
   "sources": [
     {
       "name": "European Medicines Agency (EMA) medicines data",
       "url": "https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json",
-      "version": "2026-09-26T06:02:29Z",
-      "retrieved": "2026-09-26",
+      "version": "2026-09-28T06:02:55Z",
+      "retrieved": "2026-09-28",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA."
     },
@@ -49,30 +51,83 @@
     {
       "name": "European Medicines Agency (EMA) EPAR documents index",
       "url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
-      "version": "2026-09-26T05:49:47Z",
-      "retrieved": "2026-09-26",
+      "version": "2026-09-28T05:49:41Z",
+      "retrieved": "2026-09-28",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
-      "last_modified": "Sat, 26 Sep 2026 03:52:41 GMT"
+      "last_modified": "Mon, 28 Sep 2026 03:52:21 GMT"
     },
     {
       "name": "European Medicines Agency (EMA) orphan designations",
       "url": "https://www.ema.europa.eu/en/documents/report/medicines-output-orphan_designations-json-report_en.json",
-      "version": "2026-09-26T18:10:39Z",
-      "retrieved": "2026-09-26",
+      "version": "2026-09-28T06:05:36Z",
+      "retrieved": "2026-09-28",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
-      "last_modified": "Sat, 26 Sep 2026 16:10:39 GMT"
+      "last_modified": "Mon, 28 Sep 2026 04:05:37 GMT"
     },
     {
       "name": "Union Register of medicinal products (European Commission)",
       "url": "https://ec.europa.eu/health/documents/community-register/ods/ods_products.json",
-      "version": "Fri, 25 Sep 2026 15:36:55 GMT",
-      "retrieved": "2026-09-26",
+      "version": "Mon, 28 Sep 2026 07:15:04 GMT",
+      "retrieved": "2026-09-28",
       "licence": "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
       "attribution": "© European Union, Union Register of medicinal products, CC BY 4.0; changes made",
-      "last_modified": "Fri, 25 Sep 2026 15:36:55 GMT"
+      "last_modified": "Mon, 28 Sep 2026 07:15:04 GMT"
+    },
+    {
+      "name": "WHOCC new ATC codes and alterations (ATC/DDD Index 2026)",
+      "url": "https://atcddd.fhi.no/filearchive/documents/atc_ddd_new_and_alterations_2026_final.xlsx",
+      "version": "ATC/DDD Index 2026",
+      "retrieved": "2026-09-28",
+      "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
+      "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
+      "last_modified": "Mon, 19 Jan 2026 09:36:19 GMT"
+    },
+    {
+      "name": "WHOCC new ATC codes and alterations (ATC/DDD Index 2025)",
+      "url": "https://atcddd.fhi.no/filearchive/documents/atc_ddd_new_and_alterations_2025_final.xlsx",
+      "version": "ATC/DDD Index 2025",
+      "retrieved": "2026-09-28",
+      "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
+      "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
+      "last_modified": "Mon, 15 Dec 2025 10:36:19 GMT"
+    },
+    {
+      "name": "WHOCC temporary ATC codes (next ATC/DDD Index)",
+      "url": "https://atcddd.fhi.no/filearchive/documents/temporary_atc_and_ddd.xlsx",
+      "version": "Mon, 17 Aug 2026 07:56:13 GMT",
+      "retrieved": "2026-09-28",
+      "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
+      "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
+      "last_modified": "Mon, 17 Aug 2026 07:56:13 GMT"
+    },
+    {
+      "name": "WHOCC cumulative ATC alterations",
+      "url": "https://atcddd.fhi.no/atc_ddd_alterations__cumulative/atc_alterations/",
+      "version": "ATC alterations to 2026",
+      "retrieved": "2026-09-28",
+      "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
+      "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
+      "last_modified": "Sep 28 2026 10:41:56"
+    },
+    {
+      "name": "WHOCC ATC/DDD Index (single pages; archived copies)",
+      "url": "https://atcddd.fhi.no/atc_ddd_index/",
+      "version": "2026-01-20",
+      "retrieved": "2026-09-28",
+      "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
+      "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC. Names of the retired level-4 codes L01XC and L01XE from archived copies of the ATC/DDD Index 2020 (Internet Archive). 13 level names where ChEMBL differs copied from the ATC/DDD Index 2026-01-20.",
+      "pages": 6
+    },
+    {
+      "name": "European Medicines Agency (EMA) product information (SmPC section 5.1, ATC code)",
+      "url": "https://www.ema.europa.eu/en/medicines",
+      "version": "186 product information documents checked",
+      "retrieved": "2026-09-28",
+      "licence": "© European Medicines Agency; reuse with acknowledgement",
+      "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA."
     }
   ],
-  "licence": "Data files: compilation licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); ChEMBL-derived values adapted from ChEMBL (CC BY-SA 3.0) and modified (selected and mapped). Values from other sources keep their own terms: EMA content © European Medicines Agency (reuse with acknowledgement); Union Register values © European Union, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/), changes made; MeSH® courtesy of the U.S. National Library of Medicine; ATC classification codes from ChEMBL and ATC level names © WHO Collaborating Centre for Drug Statistics Methodology, reproduced verbatim and excluded from this licence."
+  "licence": "Data files: compilation licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); ChEMBL-derived values adapted from ChEMBL (CC BY-SA 3.0) and modified (selected and mapped). Values from other sources keep their own terms: EMA content © European Medicines Agency (reuse with acknowledgement), including ATC codes taken from EMA product information (SmPC section 5.1); Union Register values © European Union, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/), changes made; MeSH® courtesy of the U.S. National Library of Medicine; ATC codes and level names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo (via ChEMBL, the ATC/DDD Index at https://atcddd.fhi.no and archived copies of it), reproduced verbatim, not for commercial distribution and excluded from this licence."
 }
