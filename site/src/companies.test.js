@@ -23,13 +23,13 @@ const company = (key, name, groupKey, fields = {}) => ({
   member_holders: [name], original_holders: [], sources: ["ema"], as_of: "2026-09-27", ...fields,
 });
 const group = (key, name, monogram, fields = {}) => ({
-  ...company(key, name, null), kind: "group", monogram, sources: ["ema", "curated"], as_of: "2026-09-28", ...fields,
+  ...company(key, name, null), kind: "group", monogram, monogram_source: "curated", sources: ["ema", "curated"], as_of: "2026-09-28", ...fields,
 });
 const companyRows = [
   group("g.roche", "Roche", "RO", { member_holders: ["Roche Registration GmbH", "Roche Registration Ltd."] }),
   company("c.roche", "Roche Registration GmbH", "g.roche", { member_holders: ["Roche Registration GmbH", "Roche Registration Ltd."] }),
   // The Union Register moved one medicine EMA lists under Roche Registration Ltd. to Galenus.
-  group("g.galenus", "Galenus Mannheim GmbH", "GM", { sources: ["ema"], as_of: "2026-09-27" }),
+  group("g.galenus", "Galenus Mannheim GmbH", "GAM", { monogram_source: "derived", sources: ["ema"], as_of: "2026-09-27" }),
   company("c.galenus", "Galenus Mannheim GmbH", "g.galenus", { original_holders: ["Roche Registration Ltd."] }),
   // Ownership notes (provenance; older data files have none): the holders of one note together.
   group("g.sanofi", "Sanofi", "SNY", {
@@ -45,7 +45,7 @@ const companyRows = [
   group("g.krka", "Krka", "KRK"),
   company("c.krka", "Krka", "g.krka", { member_holders: ["Krka", "KRKA, d.d., Novo mesto"] }),
   // The same name at every level: one row.
-  group("g.4sc", "4SC AG", "4SC", { sources: ["ema"], as_of: "2026-09-27" }),
+  group("g.4sc", "4SC AG", "4SC", { monogram_source: "derived", sources: ["ema"], as_of: "2026-09-27" }),
   company("c.4sc", "4SC AG", "g.4sc"),
   // Another name, one holder name of its own: group › company.
   group("g.almirall", "Almirall", "ALM"),
@@ -375,13 +375,26 @@ test("company suggestions: name, monogram, then the names that lead to a group, 
   assert.deepEqual(found("genzyme"), [["g.sanofi", "Genzyme Europe B.V.", 2]]);
   assert.deepEqual(found("roche registration ltd"), [["g.roche", "Roche Registration Ltd.", 2], ["g.galenus", "Roche Registration Ltd.", 0]]);
   assert.deepEqual(found("r"), []);
-  assert.deepEqual(suggestCompanies(companies, "krka")[0], { key: "g.krka", name: "Krka", monogram: "KRK", synonym: null, named: true, count: 2, authorized: 1 });
+  assert.deepEqual(suggestCompanies(companies, "krka")[0], { key: "g.krka", name: "Krka", monogram: "KRK", synonym: null, named: true, weak: false, count: 2, authorized: 1 });
   // named: the query is the group's name, monogram or another name exactly (Enter opens it).
   const named = (query) => suggestCompanies(companies, query).map((row) => [row.key, row.named]);
   assert.deepEqual(named("sny"), [["g.sanofi", true]]);
   assert.deepEqual(named("genzyme europe bv"), [["g.sanofi", true]]);
   assert.deepEqual(named("genzyme"), [["g.sanofi", false]]);
   assert.deepEqual(named("sano"), [["g.sanofi", false]]);
+});
+
+// Step 2 (#4): derived monograms (initials, e.g. "ALL", "CAR", "TB") read as clinical abbreviations
+// and opened companies on Enter. Only a curated monogram names its group; a derived one still
+// finds it, last and weak (Enter never opens it as the only suggestion). Rows without
+// monogram_source (older data files) count as derived.
+test("company suggestions: only a curated monogram names its group; a derived one is a weak match", () => {
+  const rows = (query) => suggestCompanies(companies, query).map((row) => [row.key, row.named, row.weak]);
+  assert.deepEqual(rows("sny"), [["g.sanofi", true, false]]);
+  assert.deepEqual(rows("gam"), [["g.galenus", false, true]]);
+  assert.deepEqual(rows("4sc"), [["g.4sc", false, false]]); // its name's start ("4SC AG"), not its monogram
+  const older = buildCompanies(companyRows.map(({ monogram_source: _source, ...row }) => row), medicineRows, { isAuthorized: () => false });
+  assert.deepEqual(suggestCompanies(older, "sny").map((row) => [row.key, row.named, row.weak]), [["g.sanofi", false, true]]);
 });
 
 test("companies provenance: why a medicine sits under its group, a sponsor's evidence, a group's ownership notes", () => {

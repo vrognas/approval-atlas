@@ -50,6 +50,27 @@ function xTickValues(years, plotWidth) {
 // A low-key series (Other: stroke) is drawn as an outline on its fill; swatches and keys too.
 const outline = (item) => (item.stroke ? `inset 0 0 0 1px ${item.stroke}` : null);
 
+// A hatched series (the medicines a mode cannot place: hatch) is told apart from Other by diagonal
+// --field-border lines on its fill: an SVG pattern in the chart, a gradient in swatches and keys.
+const HATCH_ID = "stack-hatch";
+const HATCH_STEP = 4;
+const swatchOf = (item) => (item.hatch
+  ? `repeating-linear-gradient(135deg, ${item.stroke} 0 1px, ${item.color} 1px ${HATCH_STEP}px)`
+  : item.color);
+const fillOf = (item) => (item.hatch ? `url(#${HATCH_ID})` : item.color);
+
+function appendHatch(svg, item) {
+  const pattern = svg.append("defs").append("pattern")
+    .attr("id", HATCH_ID)
+    .attr("patternUnits", "userSpaceOnUse")
+    .attr("width", HATCH_STEP)
+    .attr("height", HATCH_STEP)
+    .attr("patternTransform", "rotate(45)");
+  pattern.append("rect").attr("width", HATCH_STEP).attr("height", HATCH_STEP).style("fill", item.color);
+  pattern.append("line").attr("x1", HATCH_STEP / 2).attr("y1", 0).attr("x2", HATCH_STEP / 2).attr("y2", HATCH_STEP)
+    .style("stroke", item.stroke).style("stroke-width", "1.5px");
+}
+
 // One tooltip per chart container: the value leads, the series name follows, keyed by a short line.
 export function showTooltip(container, [left, top], title, items) {
   const tooltip = d3.select(container).selectAll(".tooltip").data([null]).join("div").attr("class", "tooltip").attr("hidden", null);
@@ -88,13 +109,14 @@ export function renderStackLegend(list, series) {
   root.append("li").attr("class", "legend-lead").text(UI.years.legendLead);
   const items = root.selectAll("li.legend-series").data(series).join("li").attr("class", "legend-series");
   items.filter((item) => item.tip).attr("data-tip", (item) => item.tip).attr("tabindex", "-1");
-  items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", (item) => item.color).style("box-shadow", outline);
+  items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", swatchOf).style("box-shadow", outline);
   items.filter((item) => item.badge).append((item) => companyBadge(item.badge));
   items.append("span").text((item) => item.label);
 }
 
 // rows: yearStacks() output, every year of the data (zeros included) so the brush's year grid stays
-// fixed. series: [{ key, label, color, stroke: an outline for a low-key series }] bottom to top.
+// fixed. series: [{ key, label, color, stroke: an outline for a low-key series, hatch: its fill
+// hatched with the stroke colour }] bottom to top.
 // by: what the columns are stacked by, for the summary (UI.years.by). The chart ignores the
 // approval-year filter itself: years outside the range are greyed.
 export function renderChart(container, { rows, series, by }, { from, to }, onRange, onReadout) {
@@ -120,6 +142,8 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
     .attr("viewBox", [0, 0, width, HEIGHT])
     .attr("role", "img")
     .attr("aria-label", summaryText(rows, by));
+  const hatched = series.find((item) => item.hatch);
+  if (hatched) appendHatch(svg, hatched);
 
   svg.append("g")
     .attr("class", "axis y-axis")
@@ -165,7 +189,7 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
   columns.selectAll("path")
     .data((row) => stackSegments(row, series).map((segment) => ({ ...segment, row })))
     .join("path")
-    .style("fill", (segment) => (inRange(segment.row.year) ? segment.item.color : "var(--out-of-range)"))
+    .style("fill", (segment) => (inRange(segment.row.year) ? fillOf(segment.item) : "var(--out-of-range)"))
     .style("stroke", (segment) => (inRange(segment.row.year) && segment.item.stroke ? segment.item.stroke : null))
     .style("stroke-width", (segment) => (segment.item.stroke ? "1px" : null))
     .attr("d", (segment) => {
@@ -188,7 +212,8 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
     // Listed top to bottom, as stacked; the series without medicines that year are left out.
     const items = [...series].reverse()
       .filter((item) => row.counts.get(item.key) > 0)
-      .map((item) => ({ value: row.counts.get(item.key), label: item.label, color: item.color, stroke: item.stroke }));
+      // A 2px key's outline would cover its hatch: the hatched one reads as a dashed line instead.
+      .map((item) => ({ value: row.counts.get(item.key), label: item.label, color: swatchOf(item), stroke: item.hatch ? null : item.stroke }));
     showTooltip(container, [pointerX, pointerY], UI.years.tooltipTitle(row.year, row.total), items);
   });
   svg.on("pointerleave", () => {

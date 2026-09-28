@@ -65,13 +65,113 @@ export function foldWithMap(text) {
   return { text: out.chars.join(""), starts: out.starts, ends: out.ends };
 }
 
-export function searchWords(text) {
-  return foldSearchText(text).split(NON_WORD).filter(Boolean);
+// Letters and digits apart ("glp1" -> "glp 1", "177Lu" -> "177 lu"), in names and queries alike.
+const LETTER_DIGIT = /(?<=\p{L})(?=\p{N})|(?<=\p{N})(?=\p{L})/gu;
+const splitLetterDigits = (folded) => folded.replace(LETTER_DIGIT, " ");
+const STARTS_WITH_DIGIT = /^\p{N}/u;
+
+// A query's words, each as its letter and digit parts ("h1n1" -> ["h", "1", "n", "1"]), kept
+// together so they match consecutive words (matchesWords()).
+export function queryWords(text) {
+  return foldSearchText(text).split(NON_WORD).filter(Boolean).map((word) => splitLetterDigits(word).split(" "));
 }
 
-// Every query word starts some word of the term (whole-word match for short words when asked).
+// A name's words, its letters split from digits.
+export function searchWords(text) {
+  return queryWords(text).flat();
+}
+
+// Every query word (queryWords()) matches where its parts are consecutive words of the term: the
+// parts before the last whole words ("h1n1" is not "H5N1", "b12" not "hepatitis B" + "C127I"), the
+// last a prefix, or a whole word when it is short and the next query word is a number ("il 17": not
+// "Illuzyce" + "177") or, with shortWhole (conditions), always ("hep b" and "hum" as Humira is typed
+// stay prefixes).
 export function matchesWords(tokens, words, shortWhole) {
-  return words.every((word) => tokens.some((token) => (shortWhole && word.length < SHORT_WORD ? token === word : token.startsWith(word))));
+  return words.every((parts, position) => {
+    const next = words[position + 1]?.[0] ?? "";
+    const lastWhole = parts.at(-1).length < SHORT_WORD && (shortWhole || STARTS_WITH_DIGIT.test(next));
+    return tokens.some((_, start) => parts.every((part, offset) => {
+      const token = tokens[start + offset] ?? "";
+      return offset < parts.length - 1 || lastWhole ? token === part : token.startsWith(part);
+    }));
+  });
+}
+
+// Step 2 (#19): other names of a substance (BAN, USAN, common names) -> the name EMA uses (the
+// INN), each checked against the data (a substance key or an indication text).
+export const SPELLING_VARIANTS = {
+  adrenaline: "epinephrine",
+  aspirin: "acetylsalicylic acid",
+  beclomethasone: "beclometasone",
+  busulphan: "busulfan",
+  cholecalciferol: "colecalciferol",
+  cyclosporin: "ciclosporin",
+  cyclosporine: "ciclosporin",
+  cysteamine: "mercaptamine",
+  frusemide: "furosemide",
+  glyburide: "glibenclamide",
+  hydroxyurea: "hydroxycarbamide",
+  lignocaine: "lidocaine",
+};
+
+// The query with another name of a substance replaced by EMA's: { alias, target, query } (query:
+// the words joined), or null.
+export function spellingVariant(query) {
+  const words = searchWords(query);
+  const at = words.findIndex((word) => Object.hasOwn(SPELLING_VARIANTS, word));
+  if (at < 0) return null;
+  const alias = words[at];
+  const target = SPELLING_VARIANTS[alias];
+  return { alias, target, query: [...words.slice(0, at), target, ...words.slice(at + 1)].join(" ") };
+}
+
+// Step 2 (#3): words a pack or a news line adds to a name. Units go anywhere, with the numbers
+// right before them ("1 mg", "2.4mg"); forms and qualifiers anywhere; "anti" when it leads
+// ("anti-TNF": the target's name follows).
+const UNITS = new Set(["mg", "ml", "mcg", "µg", "μg"]);
+const QUALIFIERS = new Set([
+  "pen", "pens", "tablet", "tablets", "injection", "injections", "solution", "vaccine", "vaccines",
+  "biosimilar", "biosimilars", "generic", "generics", "drug", "drugs", "pill", "pills",
+]);
+const NUMBER = /^\d+$/;
+// Shorter than this, a query left by dropping its last word means little ("il", "car").
+const MIN_SHORTENED = 4;
+
+// The query's words without dose, form and qualifier words (the words themselves when none).
+function coreWords(words) {
+  const drop = words.map((word) => UNITS.has(word) || QUALIFIERS.has(word));
+  for (let at = words.length - 1; at >= 0; at--) {
+    if (!UNITS.has(words[at])) continue;
+    for (let before = at - 1; before >= 0 && NUMBER.test(words[before]); before--) drop[before] = true;
+  }
+  const kept = words.filter((_, position) => !drop[position]);
+  return kept[0] === "anti" && kept.length > 1 ? kept.slice(1) : kept;
+}
+
+// Queries to try, in order, when the typed one finds nothing: without dose, form and qualifier
+// words, then also without the last word ("Keytruda melanoma", "adalimumab-atto").
+export function relaxedQueries(query) {
+  const words = searchWords(query);
+  const core = coreWords(words);
+  const queries = [];
+  if (core.length && core.join(" ") !== words.join(" ")) queries.push(core.join(" "));
+  const shorter = core.slice(0, -1).join(" ");
+  if (core.length > 1 && shorter.length >= MIN_SHORTENED) queries.push(shorter);
+  return queries;
+}
+
+const hasOptions = (groups) => groups.some((group) => group.options.length > 0);
+
+// run(query) -> suggestion groups ([{ key, options }]). The typed query's groups, or else those of
+// the first relaxed query that finds something (shownFor: that query, which the list names).
+export function searchWithFallback(query, run) {
+  const groups = run(query);
+  if (hasOptions(groups)) return { groups, shownFor: null };
+  for (const relaxed of relaxedQueries(query)) {
+    const found = run(relaxed);
+    if (hasOptions(found)) return { groups: found, shownFor: relaxed };
+  }
+  return { groups, shownFor: null };
 }
 
 const sameWordSet = (a, b) => {
@@ -155,19 +255,32 @@ function suggestMedicines(index, folded, words) {
     .map(({ medicine }) => medicine.row);
 }
 
-function suggestSubstances(index, folded, words) {
+function matchingSubstances(index, folded, words) {
   const rank = (substance) => (substance.key === folded ? 0 : substance.key.startsWith(folded) ? 1 : 2);
   return [...index.substances.values()]
     .filter((substance) => matchesWords(substance.tokens, words, false))
-    .sort((a, b) => rank(a) - rank(b) || b.products.length - a.products.length || byName(a.name, b.name))
-    .slice(0, MAX_SUGGESTIONS);
+    .sort((a, b) => rank(a) - rank(b) || b.products.length - a.products.length || byName(a.name, b.name));
+}
+
+// Then the substances another name leads to (#19), each saying which name matched (synonym) and
+// named when the query is exactly that other name.
+function suggestSubstances(index, folded, words, query) {
+  const found = matchingSubstances(index, folded, words);
+  const variant = spellingVariant(query);
+  if (variant) {
+    const seen = new Set(found.map((substance) => substance.key));
+    for (const substance of matchingSubstances(index, variant.query, queryWords(variant.query))) {
+      if (!seen.has(substance.key)) found.push({ ...substance, synonym: variant.alias, named: substance.key === variant.query });
+    }
+  }
+  return found.slice(0, MAX_SUGGESTIONS);
 }
 
 function suggestConditions(index, conditions, words) {
   const matches = new Map();
   for (const entry of index.entryTerms) {
     if (!matchesWords(entry.tokens, words, true) || !conditions.descriptors.has(entry.ui)) continue;
-    const exact = sameWordSet(entry.tokens, words);
+    const exact = sameWordSet(entry.tokens, words.flat());
     const best = matches.get(entry.ui);
     if (!best || (exact && !best.exact) || (exact === best.exact && entry.term.length < best.term.length)) matches.set(entry.ui, { term: entry.term, exact });
   }
@@ -179,7 +292,7 @@ function suggestConditions(index, conditions, words) {
         ui,
         name: descriptor.name,
         synonym: nameMatch ? null : best.term,
-        exact: best.exact || sameWordSet(descriptor.nameTokens, words),
+        exact: best.exact || sameWordSet(descriptor.nameTokens, words.flat()),
         nameMatch,
         authorized: descriptor.authorized,
       };
@@ -191,25 +304,127 @@ function suggestConditions(index, conditions, words) {
 // Grouped suggestions; conditions stay empty until their background data (conditions) has loaded.
 export function suggest(index, conditions, query) {
   const folded = foldSearchText(query);
-  const words = searchWords(query);
+  const words = queryWords(query);
   if (folded.length < MIN_QUERY || words.length === 0) return { medicines: [], substances: [], conditions: [] };
   return {
     medicines: suggestMedicines(index, folded, words),
-    substances: suggestSubstances(index, folded, words),
+    substances: suggestSubstances(index, folded, words, query),
     conditions: conditions ? suggestConditions(index, conditions, words) : [],
   };
 }
 
+// Groups Enter never opens: "did you mean" (a guess) and the indication-text search (#14), which
+// Enter runs anyway when nothing else opens.
+const CLICK_ONLY = new Set(["fuzzy", "text"]);
+
 // Enter without a picked option: the suggestion the query names (folded label, an ATC class's
-// code, or an option marked named: a company group's monogram or other name), first in group
-// order, else the only suggestion, else null (a text search). groups: the search box's
-// [{ key, options: [{ label, value, named }] }].
+// code, or an option marked named: a company group's curated monogram or other name, a condition's
+// exact entry term, a substance's other name), first in group order, else the only suggestion
+// unless it is weak (found only through a derived monogram), else null (a text search). groups:
+// the search box's [{ key, options: [{ label, value, named, weak }] }].
 export function submitChoice(groups, query) {
   const folded = foldSearchText(query);
-  const options = groups.flatMap((group) => group.options.map((option) => ({ group: group.key, option })));
+  const options = groups.filter((group) => !CLICK_ONLY.has(group.key)).flatMap((group) => group.options.map((option) => ({ group: group.key, option })));
   const named = options.find(({ group, option }) => option.named || foldSearchText(option.label) === folded || (group === "classes" && foldSearchText(option.value) === folded));
-  const choice = named ?? (options.length === 1 ? options[0] : null);
+  const choice = named ?? (options.length === 1 && !options[0].option.weak ? options[0] : null);
   return choice ? { group: choice.group, value: choice.option.value } : null;
+}
+
+// Step 2 (#5): Damerau-Levenshtein distance (optimal string alignment: an adjacent swap is one
+// edit), or max + 1 as soon as it must exceed max. Every row holds a cell no larger than any swap
+// in the next, so a row's minimum bounds the result.
+export function editDistance(a, b, max = Infinity) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let before = null;
+  let previous = Array.from({ length: b.length + 1 }, (_, position) => position);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      let value = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) value = Math.min(value, before[j - 2] + 1);
+      current.push(value);
+    }
+    if (Math.min(...current) > max) return max + 1;
+    [before, previous] = [previous, current];
+  }
+  return Math.min(previous[b.length], max + 1);
+}
+
+// Edits allowed for a query of this length: none under 4 characters, 1 up to 6, else 2.
+const fuzzyLimit = (length) => (length < 4 ? -1 : length <= 6 ? 1 : 2);
+const MAX_FUZZY = 3;
+const KIND_ORDER = { substance: 0, medicine: 1, who: 2 };
+
+// Per lookup index: its folded substance keys, and the texts a misspelling is compared with (the
+// first word and the whole name of each medicine, each substance key).
+const fuzzyIndexes = new WeakMap();
+function fuzzyIndex(index) {
+  if (!fuzzyIndexes.has(index)) {
+    const candidates = [];
+    for (const substance of index.substances.values()) {
+      candidates.push({ text: foldSearchText(substance.key), kind: "substance", value: substance.key, label: substance.name, substance, authorized: substance.products.some(isAuthorised) });
+    }
+    for (const medicine of index.medicines) {
+      const entry = { kind: "medicine", value: medicine.row.ema_product_number, label: medicine.row.name_of_medicine, row: medicine.row, authorized: isAuthorised(medicine.row), first: medicine.tokens[0] };
+      for (const text of new Set([medicine.tokens[0], medicine.folded])) if (text) candidates.push({ ...entry, text });
+    }
+    fuzzyIndexes.set(index, { candidates, keys: new Set([...index.substances.keys()].map(foldSearchText)) });
+  }
+  return fuzzyIndexes.get(index);
+}
+
+// Per atc_classes array: folded WHO level-5 name -> { code, name } (the first code by code order).
+const whoNameMaps = new WeakMap();
+function whoNames(atcClasses) {
+  if (!whoNameMaps.has(atcClasses)) {
+    const names = new Map();
+    for (const row of [...atcClasses].sort((a, b) => a.atc_code.localeCompare(b.atc_code))) {
+      if (row.level === 5 && row.name && !names.has(foldSearchText(row.name))) names.set(foldSearchText(row.name), { code: row.atc_code, name: row.name });
+    }
+    whoNameMaps.set(atcClasses, names);
+  }
+  return whoNameMaps.get(atcClasses);
+}
+
+function isAuthorised(row) {
+  return row.medicine_status === "Authorised";
+}
+
+// Step 2 (#2): the WHO level-5 substance the query names ({ code, name }), when no medicine in the
+// data has it as an active substance (paracetamol), else null.
+export function knownSubstance(index, query, atcClasses) {
+  const folded = foldSearchText(query);
+  if (fuzzyIndex(index).keys.has(folded)) return null;
+  return whoNames(atcClasses).get(folded) ?? null;
+}
+
+// Step 2 (#5): "did you mean" for a name heard in a talk: medicines (first word or whole name),
+// substances and WHO level-5 names of substances with no medicine in the data, within 1 edit of the
+// query (without dose and form words) for 4-6 characters or 2 when longer; at most 3, closest
+// first, then authorized, substances before medicines, then name. A medicine named after a
+// substance found (Abiraterone Accord) leaves the substance to stand for it; a WHO name the query
+// is exactly is knownSubstance()'s. [{ kind: "medicine" | "substance" | "who", value, label,
+// distance, authorized, row | substance | code }]
+export function didYouMean(index, query, atcClasses = []) {
+  const text = coreWords(searchWords(query)).join(" ");
+  const limit = fuzzyLimit(text.length);
+  if (limit < 0) return [];
+  const { candidates, keys } = fuzzyIndex(index);
+  const who = [...whoNames(atcClasses)].filter(([name]) => !keys.has(name))
+    .map(([name, row]) => ({ text: name, kind: "who", value: row.name, label: row.name, code: row.code, authorized: false }));
+  const best = new Map();
+  for (const candidate of [...candidates, ...who]) {
+    const distance = editDistance(text, candidate.text, limit);
+    if (distance > limit || (candidate.kind === "who" && distance === 0)) continue;
+    const id = `${candidate.kind}:${candidate.value}`;
+    if (!best.has(id) || distance < best.get(id).distance) best.set(id, { ...candidate, distance });
+  }
+  const substances = new Set([...best.values()].filter((entry) => entry.kind === "substance").map((entry) => entry.text));
+  return [...best.values()]
+    .filter((entry) => !(entry.kind === "medicine" && substances.has(entry.first)))
+    .sort((a, b) => a.distance - b.distance || b.authorized - a.authorized || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || byName(a.label, b.label))
+    .slice(0, MAX_FUZZY)
+    .map(({ text: _text, first: _first, ...entry }) => entry);
 }
 
 // Per atc_classes array: code -> name, and per row its folded name and words (computed once).
@@ -230,7 +445,7 @@ function classEntry(row) {
 // (level-5 names are substances, suggested as such). Ranked exact > prefix > contains, then count.
 export function suggestAtcClasses(query, atcClasses, counts) {
   const folded = foldSearchText(query);
-  const words = searchWords(query);
+  const words = queryWords(query);
   if (folded.length < MIN_QUERY || words.length === 0) return [];
   const code = query.trim().toUpperCase();
   if (ATC_CODE.test(code)) {
@@ -299,6 +514,16 @@ export function conditionPhrases(descriptor) {
     if (parts.length > 1) phrases.add(parts.reverse().join(" "));
   }
   return [...phrases];
+}
+
+// A free-text query's phrases (textMatches()): the folded text, then its letters split from digits
+// ("glp1" also as "glp 1", as indications write GLP-1), then with another name of a substance
+// replaced by EMA's (#19: "aspirin" also as "acetylsalicylic acid"; variant: that name, else null).
+export function textPhrases(query) {
+  const folded = foldSearchText(query);
+  const variant = spellingVariant(query);
+  const phrases = [...new Set([folded, splitLetterDigits(folded), variant?.query].filter(Boolean))];
+  return { phrases, variant: variant?.query ?? null };
 }
 
 // Folded indications are cached per product row (they never change after load).

@@ -7,9 +7,13 @@ import { submitChoice } from "./search.js";
 const DEBOUNCE_MS = 120;
 const COPY = UI.lookup;
 
-// suggestionsFor(query) -> [{ key, label, options: [{ label, meta, value }] }]; empty = closed.
-// onPick(groupKey, value) for a chosen option (or, on Enter without one, the suggestion the text
-// names or the only one: submitChoice()); onSubmit(text) for Enter otherwise.
+// suggestionsFor(query) -> { groups: [{ key, label, name, options: [{ label, meta, value, pick }] }],
+// note, query }: a group without a label (the indication-text search) is named by name and has no
+// heading; an option's pick names the group it opens as (a "did you mean" medicine: "medicines");
+// note: a line above the options (a retried query, or no matches), announced with the count; query:
+// the query the groups are for (the retried one), which Enter compares labels with. No options and
+// no note: closed. onPick(groupKey, value) for a chosen option (or, on Enter without one, the
+// suggestion the text names or the only one: submitChoice()); onSubmit(text) for Enter otherwise.
 export function createSearchBox(input, listbox, status, { suggestionsFor, onPick, onSubmit }) {
   let options = [];
   let active = -1;
@@ -29,27 +33,43 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
 
   function renderList() {
     requested = true;
-    const groups = suggestionsFor(input.value).filter((group) => group.options.length > 0);
+    const result = suggestionsFor(input.value);
+    const groups = result.groups.filter((group) => group.options.length > 0);
     options = [];
-    listbox.replaceChildren(...groups.map((group) => {
+    // The note is announced through the status element, so it is hidden from the listbox's tree
+    // (a listbox holds only options and groups).
+    const note = result.note ? document.createElement("div") : null;
+    if (note) {
+      note.className = "listbox-note";
+      note.setAttribute("aria-hidden", "true");
+      note.textContent = result.note;
+    }
+    listbox.replaceChildren(...[note].filter(Boolean), ...groups.map((group) => {
       const list = document.createElement("ul");
       list.setAttribute("role", "group");
-      list.setAttribute("aria-labelledby", `lookup-group-${group.key}`);
-      const heading = list.appendChild(document.createElement("li"));
-      heading.setAttribute("role", "presentation");
-      heading.id = `lookup-group-${group.key}`;
-      heading.className = "group-label";
-      heading.textContent = group.label;
+      if (group.label) {
+        list.setAttribute("aria-labelledby", `lookup-group-${group.key}`);
+        const heading = list.appendChild(document.createElement("li"));
+        heading.setAttribute("role", "presentation");
+        heading.id = `lookup-group-${group.key}`;
+        heading.className = "group-label";
+        heading.textContent = group.label;
+      } else {
+        list.setAttribute("aria-label", group.name);
+        list.className = `group-${group.key}`;
+      }
       for (const option of group.options) {
-        const index = options.push({ group: group.key, ...option }) - 1;
+        const index = options.push({ ...option, group: option.pick ?? group.key, counted: group.key !== "text" }) - 1;
         const item = list.appendChild(document.createElement("li"));
         item.id = `lookup-opt-${index}`;
         item.setAttribute("role", "option");
         item.setAttribute("aria-selected", "false");
         item.appendChild(document.createElement("span")).textContent = option.label;
-        const meta = item.appendChild(document.createElement("span"));
-        meta.className = "option-meta";
-        meta.textContent = option.meta;
+        if (option.meta) {
+          const meta = item.appendChild(document.createElement("span"));
+          meta.className = "option-meta";
+          meta.textContent = option.meta;
+        }
         item.addEventListener("pointerdown", (event) => event.preventDefault()); // keep focus on the input
         item.addEventListener("click", () => pick(index));
       }
@@ -57,10 +77,11 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     }));
     active = -1;
     input.removeAttribute("aria-activedescendant");
-    const open = options.length > 0;
+    const open = options.length > 0 || note !== null;
     listbox.hidden = !open;
     input.setAttribute("aria-expanded", String(open));
-    status.textContent = input.value.trim().length < 2 ? "" : open ? COPY.matches(options.length) : COPY.noMatches;
+    const count = options.filter((option) => option.counted).length;
+    status.textContent = input.value.trim().length < 2 ? "" : COPY.status(result.note, count) || COPY.noMatches;
   }
 
   function setActive(index) {
@@ -94,7 +115,9 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
       if (isOpen && active >= 0) pick(active);
       else if (input.value.trim().length >= 2) {
         // The suggestion the text names (or the only one) opens as if picked; else a text search.
-        const choice = submitChoice(suggestionsFor(input.value), input.value);
+        // A retried query ("Ozempic 1 mg" shown for "ozempic") is the one labels are compared with.
+        const result = suggestionsFor(input.value);
+        const choice = submitChoice(result.groups, result.query);
         close();
         if (choice) onPick(choice.group, choice.value);
         else onSubmit(input.value.trim());

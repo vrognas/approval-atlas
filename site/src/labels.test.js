@@ -175,7 +175,12 @@ test("the Union Register chip and note use U.S. labels", () => {
   assert.equal(labels.UI.register.notAuthorized(1), "1 of the medicines EMA lists as currently authorized is no longer authorized according to the EU Union Register.");
 });
 
-test("the About disclosure states intended use and privacy", () => {
+test("the About disclosure states scope, intended use and privacy", () => {
+  // Step 2 (#1, #16): central only; where an authorization is valid; availability is national.
+  assert.equal(
+    labels.UI.about.scope,
+    "Only human medicines that went through the European Medicines Agency's (EMA) central procedure are included, whatever their status. Many older or common medicines are authorized country by country and are not here; check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not in the UK or Switzerland; whether a medicine is sold or reimbursed in a country is decided nationally.",
+  );
   assert.equal(labels.UI.about.intendedUse, "Informational only: not medical or legal advice; not a medical device. Data can lag EMA.");
   assert.equal(
     labels.UI.about.privacy,
@@ -193,7 +198,8 @@ test("dates display as day, abbreviated month and year; missing dates stay missi
 });
 
 test("the header shows the data date in display form", () => {
-  assert.equal(labels.UI.dataDate("2026-09-26"), "EMA human medicines · data as of 26 Sep 2026");
+  // Step 2 (#1): the header names the scope, EMA's central procedure, not "EU medicines".
+  assert.equal(labels.UI.dataDate("2026-09-26"), "Human medicines, EMA central procedure · data as of 26 Sep 2026");
   assert.equal(labels.UI.offline("2026-09-26"), "Offline: data as of 26 Sep 2026");
 });
 
@@ -235,7 +241,22 @@ test("a medicine that is not authorized gets a status sentence built from EMA's 
   assert.equal(labels.statusSentence("Opinion", "2026-09-17", "Positive"), "Positive opinion on 17 Sep 2026; not yet authorized.");
   assert.equal(labels.statusSentence("Opinion", "2025-05-22", "Negative"), "Negative opinion on 22 May 2025.");
   assert.equal(labels.statusSentence("Opinion", null, null), "Opinion adopted; not yet authorized.");
-  assert.equal(labels.statusSentence("Opinion under re-examination", "2026-06-25", "Negative"), "Opinion under re-examination; not yet authorized.");
+  // Step 2 (#11): a negative opinion under re-examination says it was negative (the headline says "not").
+  assert.equal(labels.statusSentence("Opinion under re-examination", "2026-06-25", "Negative"), "Negative opinion on 25 Jun 2026; under re-examination at the company's request.");
+  assert.equal(labels.statusSentence("Opinion under re-examination", null, "Positive"), "Opinion under re-examination; not yet authorized.");
+  assert.equal(labels.statusSentence("Opinion under re-examination", null, null), "Opinion under re-examination; not yet authorized.");
+});
+
+// Step 2 (#11): a negative opinion is not "pending" in the search's meta line or the answer strip.
+test("a negative opinion is labeled as such; other statuses keep their label", () => {
+  assert.equal(labels.statusOpinionLabel("Opinion", "Negative"), "Opinion (negative)");
+  assert.equal(labels.statusOpinionLabel("Opinion", "Positive"), "Opinion");
+  assert.equal(labels.statusOpinionLabel("Opinion", null), "Opinion");
+  assert.equal(labels.statusOpinionLabel("Authorised", null), "Authorized");
+  // An opinion has no approval year.
+  assert.equal(labels.UI.lookup.medicineMeta("Opinion", undefined, "Negative"), "Opinion (negative)");
+  assert.equal(labels.UI.lookup.medicineMeta("Opinion", undefined, null), "Opinion");
+  assert.equal(labels.UI.lookup.medicineMeta("Authorised", "2018"), "Authorized · 2018");
 });
 
 test("the medicines table merges approval date and status into one column", () => {
@@ -355,10 +376,20 @@ test("lookup headlines answer whether it is authorized; 'not' and counts are ton
   // Opinion adopted, no decision yet: "not yet", in the pending tone.
   assert.equal(plain(headline.medicine("Vyloy", "pending")), "Vyloy is not yet authorized in the EU.");
   assert.deepEqual(toned(headline.medicine("Vyloy", "pending")), [["not yet", "pending"]]);
-  assert.equal(plain(headline.substance("semaglutide", 5)), "Semaglutide is authorized in the EU in 5 medicines.");
+  assert.deepEqual(toned(headline.medicine("Vyloy", "pending", "Positive")), [["not yet", "pending"]]);
+  // Step 2 (#11): a negative opinion (Kinselby; Yartemlea under re-examination) is "not", in the negative tone.
+  assert.equal(plain(headline.medicine("Kinselby", "pending", "Negative")), "Kinselby is not authorized in the EU.");
+  assert.deepEqual(toned(headline.medicine("Kinselby", "pending", "Negative")), [["not", "negative"]]);
+  // Step 2 (#1): a substance's answer names EMA (national authorizations are not in the data).
+  assert.equal(plain(headline.substance("semaglutide", 5)), "Semaglutide is authorized EU-wide through EMA in 5 medicines.");
   assert.deepEqual(toned(headline.substance("semaglutide", 5)), [["5", "number"]]);
-  assert.equal(plain(headline.substance("rimonabant", 0)), "Rimonabant is not authorized in the EU.");
-  assert.equal(plain(headline.substance("insulin human", 1)), "Insulin human is authorized in the EU in 1 medicine.");
+  assert.equal(
+    plain(headline.substance("celecoxib", 0)),
+    "Celecoxib: no medicine is currently authorized through EMA (national authorizations are not included).",
+  );
+  // The qualifier closes the headline in smaller type (tone "aside"), so the answer stays short on a phone.
+  assert.deepEqual(toned(headline.substance("celecoxib", 0)), [["no medicine", "negative"], ["(national authorizations are not included).", "aside"]]);
+  assert.equal(plain(headline.substance("insulin human", 1)), "Insulin human is authorized EU-wide through EMA in 1 medicine.");
   // Phase 4c review: EMA's therapeutic-area tags, not indications; narrower terms count too.
   assert.equal(plain(headline.condition("Psoriasis", 52, true)), "52 authorized medicines are tagged by EMA with Psoriasis or a narrower condition.");
   assert.equal(plain(headline.condition("Psoriasis", 1, false)), "1 authorized medicine is tagged by EMA with Psoriasis.");
@@ -508,7 +539,8 @@ const searchIndexFile = new URL("../public/data/ema_search_index.json", import.m
 test("each EMA status has an explanation of at most 10 words", () => {
   const { statusTips } = labels.UI;
   assert.deepEqual(statusTips, {
-    Authorised: "Can be marketed in the EU.",
+    // Step 2 (#16): authorized is not available or reimbursed everywhere.
+    Authorised: "Can be marketed EU-wide; availability and reimbursement vary by country.",
     Opinion: "EMA has given its opinion; EU decision pending.",
     "Opinion under re-examination": "EMA is re-examining its opinion at the company's request.",
     Refused: "The EU refused authorization.",
@@ -525,6 +557,25 @@ test("each EMA status has an explanation of at most 10 words", () => {
     assert.ok(tip.split(" ").length <= 10, tip);
     assert.ok(!tip.includes("—"), tip);
   }
+});
+
+// User decision 2026-09-28: a negative opinion (Kinselby) is not "EU decision pending" in the usual
+// sense; its dots and pills (answer strip, result tables, medicines table) say it was negative.
+test("a negative opinion has its own explanation; a positive one keeps the Opinion tip", () => {
+  const { UI, statusTipText } = labels;
+  assert.equal(UI.negativeOpinionTip, "EMA recommended refusal; no EU decision published yet.");
+  assert.ok(UI.negativeOpinionTip.split(" ").length <= 10);
+  assert.ok(!UI.negativeOpinionTip.includes("—"));
+  assert.equal(statusTipText("Opinion", "Negative"), UI.negativeOpinionTip);
+  assert.equal(statusTipText("Opinion", "Positive"), UI.statusTips.Opinion);
+  // EMA's opinions not loaded yet: the Opinion tip.
+  assert.equal(statusTipText("Opinion", null), UI.statusTips.Opinion);
+  assert.equal(statusTipText("Opinion"), UI.statusTips.Opinion);
+  // Other statuses keep theirs, whatever the opinion was.
+  assert.equal(statusTipText("Opinion under re-examination", "Negative"), UI.statusTips["Opinion under re-examination"]);
+  assert.equal(statusTipText("Refused", "Negative"), UI.statusTips.Refused);
+  assert.equal(statusTipText("Authorised", "Positive"), UI.statusTips.Authorised);
+  assert.equal(statusTipText("Something new", "Negative"), null);
 });
 
 test(
@@ -744,7 +795,114 @@ test("drug classes are a lookup suggestion group with an authorized count", () =
   assert.equal(labels.UI.lookup.classMeta(1234), "1,234 authorized");
   assert.equal(labels.UI.lookup.classMeta(20, true), "no WHO name yet · 20 authorized");
   // A drug class example opens the class alone (url.js classState()).
-  assert.deepEqual(labels.UI.lookup.examples.at(-1), { label: "L04AC", atc: "L04AC" });
+  assert.deepEqual(labels.UI.lookup.examples.at(-1), { label: "L04AC", kind: "drug class", atc: "L04AC" });
+});
+
+// Landing (user-approved design, 2026-09-28): a first-time visitor sees what the site is for.
+test("the search says what to type, and each Try example says what kind of thing it is", () => {
+  const { lookup } = labels.UI;
+  assert.equal(lookup.placeholder, "Drug name, active ingredient or condition");
+  // ATC codes still work: the field's name says so.
+  assert.equal(lookup.label, "Search by drug name, active ingredient, condition or ATC code");
+  assert.deepEqual(lookup.examples.map((example) => `${example.label} ${lookup.exampleKind(example.kind)}`), [
+    "Keytruda (brand)",
+    "semaglutide (active ingredient)",
+    "psoriasis (condition)",
+    "L04AC (drug class)",
+  ]);
+});
+
+// Step 2 (#2, #3, #5, #14, #19): the search list says what it shows; an empty search says why.
+test("search copy: retried and empty lists, did you mean, the indication-text option, another name", () => {
+  const { lookup, condition } = labels.UI;
+  assert.equal(lookup.showingFor("ozempic"), "Showing results for “ozempic”");
+  assert.equal(lookup.searchText("NSCLC"), "Search indication texts for “NSCLC”");
+  assert.equal(lookup.groups.fuzzy, "Did you mean");
+  assert.equal(lookup.substanceMeta(2, "adrenaline"), "matches “adrenaline” · 2 medicines");
+  assert.equal(lookup.substanceMeta(1), "1 medicine");
+  assert.equal(lookup.whoMeta("N02BE01"), "ATC N02BE01 · not in EMA's central procedure");
+  assert.equal(lookup.status("Showing results for “ozempic”", 1), "Showing results for “ozempic”. 1 suggestion");
+  assert.equal(lookup.status(lookup.noMatches, 0), "No matches");
+  assert.equal(lookup.status(null, 3), "3 suggestions");
+  const { empty } = lookup;
+  assert.equal(empty.nothing("paracetamol"), "Nothing in the EMA data matches “paracetamol”.");
+  // Step 2 review: the data holds EMA's central procedure only; a substance outside it may still be
+  // authorized nationally. A note that ends a sentence is joined to the count with one period.
+  assert.equal(
+    empty.known("Paracetamol", "N02BE01"),
+    "Paracetamol (ATC N02BE01) is a known active substance, but no medicine with it went through EMA's central procedure; it may be authorized nationally.",
+  );
+  assert.equal(
+    lookup.status(empty.known("Omeprazole", "A02BC01"), 1),
+    "Omeprazole (ATC A02BC01) is a known active substance, but no medicine with it went through EMA's central procedure; it may be authorized nationally. 1 suggestion",
+  );
+  assert.equal(lookup.status(empty.known("Omeprazole", "A02BC01"), 0), empty.known("Omeprazole", "A02BC01"));
+  assert.equal(empty.noText("Humira"), "No indication text mentions “Humira”.");
+  assert.equal(empty.otherStatuses(1), "No currently authorized medicine mentions it in its indication; 1 medicine of another status does (Show all statuses).");
+  assert.equal(empty.otherStatuses(3), "No currently authorized medicine mentions it in its indication; 3 medicines of another status do (Show all statuses).");
+  assert.equal(empty.searchable, "You can search by brand name, active ingredient (INN), condition or ATC code.");
+  assert.equal(empty.notYet, "Not searchable yet: development codes (such as MK-3475) and brand names used outside the EU.");
+  assert.equal(
+    `${empty.notInData}${empty.registers}${empty.registersAfter}`,
+    "Not in the data: medicines authorized only nationally, country by country. Look them up in the national registers of authorized medicines (EMA's list). The pack of a medicine authorized through EMA carries an EU number (EU/1/…).",
+  );
+  assert.equal(condition.alsoSearched("acetylsalicylic acid"), "Also searching for “acetylsalicylic acid”, the name EMA uses.");
+});
+
+test("the header's tagline and the intro card say what the site is for and what it covers", () => {
+  const { UI } = labels;
+  assert.equal(UI.tagline, "Heard of a drug at a talk, a poster or anywhere? Look it up in seconds: EU approval, what it's for, who owns it, how long it's protected.");
+  assert.equal(UI.intro.link, "What is this?");
+  assert.equal(UI.intro.lookupLead, "Look up a drug or active ingredient to see:");
+  assert.deepEqual(UI.intro.lookup, [
+    "whether it's approved in the EU and since when",
+    "what it's approved for",
+    "which company owns it",
+    "how long its market protection runs (an estimate, not patents)",
+    "its official product information and EMA assessment report",
+  ]);
+  // User decision 2026-09-28: "EMA medicines", as the scope is EMA's central procedure.
+  assert.equal(UI.intro.exploreLead, "Or explore all EMA medicines:");
+  assert.deepEqual(UI.intro.explore, [
+    "which companies have which kinds of drugs",
+    "which conditions have the most, or the fewest, approved treatments",
+    "how approvals changed over the years, by drug class, condition or company",
+  ]);
+  assert.equal(
+    UI.intro.scope,
+    "Only medicines authorized EU-wide through the European Medicines Agency (EMA) are included. Many older or common medicines, such as paracetamol, are authorized country by country and are not here.",
+  );
+  assert.equal(
+    UI.intro.authorized,
+    "Authorized means it may be marketed in the EU, Iceland, Liechtenstein and Norway; whether it is sold or reimbursed in your country is decided nationally.",
+  );
+  assert.equal(UI.intro.smallPrint, "Data from EMA, updated daily. For information only, not medical advice.");
+});
+
+// Step 2 (#1): 284 of 1,278 substances have no centrally authorized medicine (celecoxib, testosterone),
+// and "first EU approval" overstated metformin's. Every answer about a substance or a condition, and the
+// scope lines, say they cover EMA's central procedure only.
+test("substance and condition answers name EMA or the central procedure", () => {
+  const { UI } = labels;
+  const texts = [
+    plain(UI.headline.substance("semaglutide", 5)),
+    plain(UI.headline.substance("celecoxib", 0)),
+    plain(UI.headline.condition("Psoriasis", 52, true)),
+    plain(UI.headline.condition("Kuru", 0, false)),
+    UI.substance.firstApproval("2003-02-11", "Avandamet"),
+    UI.substance.firstApproval(null, null),
+    UI.protection.countedFrom("pembrolizumab", "Keytruda", "2015-07-17"),
+    UI.condition.counts(6, 5, false),
+    UI.condition.taggedOwn("Psoriasis", 43),
+    UI.lookup.empty.known("Paracetamol", "N02BE01"),
+    UI.lookup.whoMeta("N02BE01"),
+    UI.dataDate("2026-09-26"),
+    UI.intro.scope,
+    UI.about.scope,
+  ];
+  for (const text of texts) assert.match(text, /\bEMA\b|\bcentral/, text);
+  assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11 Feb 2003 (Avandamet)");
+  assert.equal(UI.substance.firstApproval(null, null), "No central EU approval date");
 });
 
 test("breakdown notes say how many medicines have no value", () => {
@@ -820,8 +978,10 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   );
   assert.equal(years.note(years.counting.mah(1, false)), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
   assert.deepEqual(years.other, { atc: "Other classes", mah: "Other companies" });
-  assert.equal(years.onlyCoded(3, "L04AC"), "3 medicines coded only as L04AC are not shown.");
-  assert.equal(years.onlyCoded(1, "L04AC"), "1 medicine coded only as L04AC is not shown.");
+  // The segment on top for the medicines a mode cannot place (user decision 2026-09-28).
+  assert.equal(years.unplaced.atc, "No ATC code");
+  assert.equal(years.unplaced.atcIn("L04AC"), "Coded only as L04AC");
+  assert.equal(years.unplaced.mah, "No company");
 });
 
 // Phase 4c review: the code shown can differ from EMA's (retired, completed from the product

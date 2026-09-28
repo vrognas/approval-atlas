@@ -505,7 +505,8 @@ build_company_rows <- function(assigned, aliases, representatives) {
       .by = c("company_match", "name")
     ) |>
     dplyr::mutate(
-      is_alias = company_match_key(.data$name) != .data$company_match
+      is_alias = company_match_key(.data$name) != .data$company_match |
+        company_base_name(.data$name) %in% company_base_name(aliases$holder)
     ) |>
     dplyr::arrange(
       .data$company_match,
@@ -610,10 +611,11 @@ check_curated_companies <- function(curated) {
   if (length(unknown_groups) > 0) {
     abort_curated_companies("members of unknown groups", unknown_groups)
   }
-  chained <- intersect(
-    company_match_key(curated$aliases$holder),
-    company_match_key(curated$aliases$company_holder)
-  )
+  # An alias whose target has the same key only fixes a spelling (EMA's
+  # "Umited"): it moves no name, so it is no link of a chain.
+  alias_keys <- company_match_key(curated$aliases$holder)
+  target_keys <- company_match_key(curated$aliases$company_holder)
+  chained <- intersect(alias_keys[alias_keys != target_keys], target_keys)
   if (length(chained) > 0) {
     abort_curated_companies("aliases point to aliases", chained)
   }
@@ -1043,6 +1045,7 @@ company_output_rows <- function(companies, snapshot_date) {
       .data$name,
       .data$group_key,
       monogram = NA_character_,
+      monogram_source = NA_character_,
       joint_venture = FALSE,
       partners = list(character()),
       other_partners = list(character()),
@@ -1189,6 +1192,7 @@ build_group_rows <- function(companies, assigned, curated, snapshot_date) {
   curated_rows <- curated$groups |>
     dplyr::inner_join(members, by = "group_key", relationship = "one-to-one") |>
     dplyr::mutate(
+      monogram_source = "curated",
       partners = split_partners(.data$partners),
       other_partners = split_partners(.data$other_partners),
       as_of = curated$as_of
@@ -1210,6 +1214,7 @@ build_group_rows <- function(companies, assigned, curated, snapshot_date) {
         .data$name,
         c(curated$groups$monogram, reserved_monograms(curated$groups$name))
       ),
+      monogram_source = "derived",
       joint_venture = FALSE,
       partners = list(character()),
       other_partners = list(character()),
@@ -1249,6 +1254,7 @@ build_group_rows <- function(companies, assigned, curated, snapshot_date) {
       .data$name,
       group_key = NA_character_,
       .data$monogram,
+      .data$monogram_source,
       .data$joint_venture,
       .data$partners,
       .data$other_partners,

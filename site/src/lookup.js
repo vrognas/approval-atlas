@@ -20,12 +20,14 @@ import {
   statusDateLine,
   statusKind,
   statusLabel,
+  statusOpinionLabel,
   statusSentence,
+  statusTipText,
   statusesByFrequency,
 } from "./labels.js";
 import { markExternal } from "./links.js";
 import { espacenetUrl, protectionSummary } from "./protection.js";
-import { buildConditions, conditionPhrases, foldSearchText, suggest, textMatches } from "./search.js";
+import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView } from "./url.js";
 
@@ -54,6 +56,8 @@ function groupBy(rows, key) {
 }
 
 const PDF_URL = /\.pdf(-\d+)?$/i;
+// EMA's list of the EU/EEA countries' registers of nationally authorized medicines (checked 2026-09-28).
+const NATIONAL_REGISTERS_URL = "https://www.ema.europa.eu/en/medicines/national-registers-authorised-medicines";
 
 // Third-party URLs: https only, new tab, no opener or referrer; marked as leaving the site.
 function externalLink(text, url) {
@@ -81,10 +85,12 @@ const kicker = (kind) => el("p", { class: "kicker" }, UI.kicker[kind]);
 
 // Dot and label in the status's hue; pill: on its light fill (answer strip). It explains the
 // status on hover and on a tap (UI.statusTips; tabindex -1: focusable, no tab stop), as the type
-// badges do; label: the text shown instead of the status's (a substance's "3 authorized").
-function statusBadge(status, pill = false, label = statusLabel(status)) {
+// badges do; label: the text shown instead of the status's (a substance's "3 authorized"); opinion:
+// EMA's opinion (a negative one has its own tip, statusTipText()).
+function statusBadge(status, pill = false, label = statusLabel(status), opinion = null) {
   const badge = el("span", { class: `status hue-${statusHue(status)}${pill ? " pill" : ""}` }, label);
-  return UI.statusTips[status] ? el("span", { class: "status-tip", "data-tip": UI.statusTips[status], tabindex: "-1" }, badge) : badge;
+  const tip = statusTipText(status, opinion);
+  return tip ? el("span", { class: "status-tip", "data-tip": tip, tabindex: "-1" }, badge) : badge;
 }
 
 // Each badge explains its type on hover and on a tap (tabindex -1: focusable, no tab stop).
@@ -432,12 +438,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         internalLink(UI.card.namesake.documentsLink(later.name_of_medicine), { med: later.ema_product_number }), ".")
       : null;
     const sentence = medicine ? statusSentence(row.medicine_status, statusDate(medicine), medicine.opinion_status) : null;
+    // A negative opinion reads "not" authorized, not "not yet" (step 2, #11), once EMA's rows have loaded.
+    const opinion = medicine?.opinion_status ?? null;
     // Order for a talk or poster: the answer (with any namesake), holder, since when and status in
     // the strip, what for (the therapeutic areas) right under it, and the SmPC / EPAR buttons on the
     // first phone screen; then the indication's lead above the documents list.
     return el("article", { class: "card" },
       kicker("medicine"),
-      title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status)))),
+      title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status), opinion))),
       sentence ? el("p", { class: "dek" }, sentence) : null,
       namesakeNotes(namesakes),
       strip([
@@ -446,7 +454,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         authorized || row.marketing_authorisation_date
           ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(row.marketing_authorisation_date) ?? NOT_STATED]
           : null,
-        [UI.card.strip.status, statusBadge(row.medicine_status, true)],
+        [UI.card.strip.status, statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion)],
       ]),
       el("dl", { class: "areas-line" }, el("dt", null, UI.card.areas), el("dd", null, areaLinks(number, areas, conditions))),
       registerDiffers
@@ -530,7 +538,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
             ? cell("result-areas", ready(areaRows) ? termLinks((areaRows.get(row.ema_product_number) ?? []).map((item) => item.therapeutic_area_mesh), conditions) : null)
             : null,
           cell("result-atc", atcCodes(row.ema_product_number, atc)),
-          cell("status-cell", statusBadge(row.medicine_status), dates ? el("span", { class: "status-date" }, dates) : null),
+          cell("status-cell", statusBadge(row.medicine_status, false, undefined, medicine?.opinion_status ?? null), dates ? el("span", { class: "status-date" }, dates) : null),
           cell("type-cell", typeBadgeList(row)),
           cell("result-holder", holderOf(row.ema_product_number, medicines))),
         snippet
@@ -611,6 +619,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       }
     }
     const [atc, atcCounts] = [need("atc"), need("atcCounts")];
+    // A status pill's opinion: negative when each of its medicines had a negative opinion (Kinselby's).
+    const opinionOf = (status) => (ready(medicines) && rows.filter((row) => row.medicine_status === status)
+      .every((row) => medicines.get(row.ema_product_number)?.opinion_status === "Negative") ? "Negative" : null);
     return el("article", { class: "card" },
       kicker("substance"),
       title(headlineNodes(UI.headline.substance(substance.name, authorized))),
@@ -621,7 +632,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         // None authorized now: the statuses themselves (e.g. Withdrawn), which say more than "0 authorized".
         [UI.card.strip.status, authorized > 0
           ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
-          : el("span", { class: "badges" }, statusesByFrequency(rows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true)))],
+          : el("span", { class: "badges" }, statusesByFrequency(rows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))))],
       ]),
       timelineBlock(rows, medicines),
       el("h3", { id: "results-substance" }, UI.substance.products(rows.length)),
@@ -647,12 +658,55 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       ".");
   }
 
+  // Step 2 (#2): an indication-text search with nothing to show (among the statuses shown) says
+  // why, in place of "None.": what it found instead (medicines of another status, a matching or
+  // close name, a WHO substance with no medicine through EMA and, when its class has medicines
+  // authorized now, that class), then, when no name matched, what can be searched, what cannot yet
+  // and what is not in the data. hidden: matches of another status.
+  function emptyState(query, hidden) {
+    const [atc, atcCounts, conditions] = [need("atc"), need("atcCounts"), need("conditions")];
+    const copy = UI.lookup.empty;
+    const known = knownSubstance(index, query, ready(atc) ? atc.classes : []);
+    const level4 = known?.code.slice(0, 5) ?? null;
+    const classCount = level4 && ready(atcCounts) ? atcCounts.get(level4) ?? 0 : 0;
+    // Names matching the query (a text search can be asked for anyway), else close ones.
+    const { groups } = searchWithFallback(query, (text) => {
+      const found = suggest(index, ready(conditions) ? conditions : null, text);
+      return [
+        { key: "medicines", options: found.medicines.map((row) => ({ label: row.name_of_medicine, patch: { med: row.ema_product_number } })) },
+        { key: "substances", options: found.substances.map((substance) => ({ label: substance.name, patch: { sub: substance.key } })) },
+      ];
+    });
+    const names = groups.flatMap((group) => group.options).slice(0, 3);
+    const fuzzy = names.length ? [] : didYouMean(index, query, ready(atc) ? atc.classes : []).map((entry) => ({
+      label: entry.kind === "who" ? atcName(entry.label) : entry.label,
+      patch: entry.kind === "medicine" ? { med: entry.value } : entry.kind === "substance" ? { sub: entry.value } : { q: entry.value },
+    }));
+    const links = (items) => items.map((item, position) => [position ? ", " : "", internalLink(item.label, item.patch)]);
+    const lead = hidden ? copy.otherStatuses(hidden)
+      : names.length ? copy.noText(query)
+        : known ? copy.known(atcName(known.name), known.code)
+          : copy.nothing(query);
+    return el("div", { class: "empty-state" },
+      el("p", { class: "empty-lead" }, lead),
+      known && classCount
+        ? el("p", null, copy.sameClass, internalLink(atcClassLabel(level4, atc.names.get(level4) ?? null), classState(level4)), ` (${UI.lookup.classMeta(classCount)})`)
+        : null,
+      names.length ? el("p", null, copy.names, links(names)) : null,
+      fuzzy.length ? el("p", null, copy.didYouMean, links(fuzzy)) : null,
+      hidden || names.length ? null : el("ul", { class: "empty-list" },
+        el("li", null, copy.searchable),
+        el("li", null, copy.notYet),
+        el("li", null, copy.notInData, externalLink(copy.registers, NATIONAL_REGISTERS_URL), copy.registersAfter)));
+  }
+
   function conditionResults(ui, query) {
     const conditions = need("conditions");
     const medicines = need("medicines");
     let heading;
     let descriptor = null;
     let phrases;
+    let variant = null;
     let related = [];
     if (ui) {
       if (!ready(conditions)) return el("article", { class: "card" }, pending(conditions));
@@ -665,7 +719,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       phrases = conditionPhrases(descriptor);
     } else {
       heading = UI.condition.textHeading(query);
-      phrases = [foldSearchText(query)];
+      ({ phrases, variant } = textPhrases(query));
       if (ready(conditions)) related = suggest(index, conditions, query).conditions;
     }
     const shown = (row) => showAll || row.medicine_status === "Authorised";
@@ -675,13 +729,15 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const own = taggedShown.filter((row) => descriptor.ownProducts.has(row.ema_product_number));
     const narrower = taggedShown.filter((row) => !descriptor.ownProducts.has(row.ema_product_number))
       .map((row) => ({ row, terms: descriptor.narrowerByProduct.get(row.ema_product_number) ?? [] }));
-    const mentioned = ready(medicines)
+    const matches = ready(medicines)
       ? textMatches([...medicines.values()], phrases, new Set(tagged.map((row) => row.ema_product_number)))
         // On a condition page each row says which words of its indication matched (phase 4f).
         .map(({ product, snippet }) => ({ row: index.byNumber.get(product.ema_product_number), snippet, mentions: descriptor ? snippet?.match ?? null : null }))
-        .filter(({ row }) => row && shown(row))
-        .sort((a, b) => byDate(-1)(a.row, b.row))
+        .filter(({ row }) => row)
       : null;
+    const mentioned = matches ? matches.filter(({ row }) => shown(row)).sort((a, b) => byDate(-1)(a.row, b.row)) : null;
+    // A text search with nothing to show says why (step 2, #2), once its related conditions are known.
+    const empty = !descriptor && mentioned?.length === 0 && related.length === 0 && conditions !== undefined;
     const toggle = el("label", { class: "toggle-all" },
       el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
         showAll = event.currentTarget.checked;
@@ -693,6 +749,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       kicker(ui ? "condition" : "text"),
       title(heading),
       descriptor ? narrowerDek(descriptor) : null,
+      // Step 2 (#19): "aspirin" also searches for "acetylsalicylic acid".
+      variant ? el("p", { class: "dek" }, UI.condition.alsoSearched(variant)) : null,
       // Both counts of the lists below (phase 4f): tagged by EMA, and only mentioned in the indication.
       descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll)) : null,
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
@@ -708,7 +766,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       el("h3", { id: "results-mentioned" }, mentioned
         ? `${descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned} (${mentioned.length})`
         : descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned),
-      mentioned ? resultTable(mentioned, medicines, "results-mentioned") : pending(medicines));
+      mentioned ? (empty ? emptyState(query, matches.length) : resultTable(mentioned, medicines, "results-mentioned")) : pending(medicines));
   }
 
   // "a, b and c" of nodes (or node lists).
@@ -943,6 +1001,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     conditions: () => (ready(values.get("conditions")) ? values.get("conditions") : null),
     // Company groups (the "Companies" suggestions): null until need("companies") has loaded them.
     companies: () => (ready(values.get("companies")) ? values.get("companies") : null),
+    // ema_medicines rows by product (EMA's opinion in the suggestions): null until need("medicines").
+    medicines: () => (ready(values.get("medicines")) ? values.get("medicines") : null),
     // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
     documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.

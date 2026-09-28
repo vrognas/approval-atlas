@@ -62,10 +62,27 @@ export function topWithOther(products, keysOf, n) {
   };
 }
 
+// The stack key of the dated products a mode cannot place (withUnplaced()).
+export const UNPLACED_KEY = "__unplaced__";
+
+// Every dated product in the stacks (user decision 2026-09-28: every mode gives the same yearly
+// totals): a product without a key (no ATC code, coded only as the class shown, no company) gets
+// UNPLACED_KEY. any: whether a dated product has none, so the segment shows only when needed.
+export function withUnplaced(products, keysOf) {
+  return {
+    any: products.some((product) => product.year !== null && keysOf(product).length === 0),
+    keysOf: (product) => {
+      const keys = keysOf(product);
+      return keys.length ? keys : [UNPLACED_KEY];
+    },
+  };
+}
+
 // "Approvals per year": the products with an approval date per year of [first, last] (zeros
 // included), each counted once in every stack key it has (keysOf(product): its keys, e.g. its
-// medicine type, ATC classes or holder) and not at all without one. Rows: { year (a string, the
-// chart's band domain), total: the products counted, counts: key -> products }.
+// medicine type, ATC classes or holder) and not at all without one (withUnplaced() gives them one).
+// Rows: { year (a string, the chart's band domain), total: the products counted, counts: key ->
+// products }.
 export function yearStacks(products, keysOf, [first, last]) {
   const byYear = new Map();
   for (const product of products) {

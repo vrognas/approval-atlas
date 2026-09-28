@@ -22,6 +22,8 @@ import {
   topKeys,
   topWithOther,
   typeSplit,
+  UNPLACED_KEY,
+  withUnplaced,
   yearHistogram,
   yearStacks,
 } from "./facets.js";
@@ -402,6 +404,54 @@ test("year stacks by holder: the top n holders, the rest as Other on top", () =>
   // Every key within the top n: no Other.
   assert.deepEqual(topWithOther(dated, (row) => [row.mah], 8).keys, ["Pfizer Europe MA EEIG", "Zentiva k.s.", "Accord Healthcare S.L.U."]);
   assert.deepEqual(topWithOther([], (row) => [row.mah], 8).keys, []);
+});
+
+// User decision 2026-09-28: every stack mode gives the same yearly totals; the medicines a mode
+// cannot place (no ATC code, coded only as the class shown, no company) are a segment of their own.
+test("year stacks: an unplaced segment only when needed, so every mode gives the same yearly totals", () => {
+  const range = [2015, 2017];
+  const totals = (rows) => rows.map((row) => [row.year, row.total]);
+  const unplaced = (rows) => rows.map((row) => row.counts.get(UNPLACED_KEY) ?? 0);
+  const expected = totals(yearStacks(dated, (row) => [row.medicine_type], range));
+  assert.deepEqual(expected, [["2015", 2], ["2016", 0], ["2017", 2]]);
+  assert.deepEqual(totals(yearStacks(dated, (row) => [row.medicine_status], range)), expected);
+  // ATC groups: D4 has no code; D1 and D2, in two groups each, still count once in the total.
+  const atc = withUnplaced(dated, (row) => atcClassesAt(row, null));
+  assert.equal(atc.any, true);
+  const atcRows = yearStacks(dated, atc.keysOf, range);
+  assert.deepEqual(totals(atcRows), expected);
+  assert.deepEqual(unplaced(atcRows), [0, 0, 1]);
+  // After topWithOther(): Other and the unplaced segment stay apart.
+  const topAtc = withUnplaced(dated, topWithOther(dated, (row) => atcClassesAt(row, null), 1).keysOf);
+  assert.deepEqual(stacked(yearStacks(dated, topAtc.keysOf, range))[2], ["2017", 2, { L: 1, [UNPLACED_KEY]: 1 }]);
+  // One class selected (its medicines only): D3 is coded only as L04AC, so it has no child class.
+  const inClass = (code) => dated.filter((row) => row.atc.some((atcRow) => atcRow.atc_code_human.startsWith(code)));
+  const drill = withUnplaced(inClass("L04A"), (row) => atcClassesAt(row, "L04A"));
+  const drillRows = yearStacks(inClass("L04A"), drill.keysOf, range);
+  assert.equal(drill.any, false);
+  assert.deepEqual(totals(drillRows), totals(yearStacks(inClass("L04A"), (row) => [row.medicine_type], range)));
+  assert.deepEqual(unplaced(drillRows), [0, 0, 0]);
+  const exact = withUnplaced(inClass("L04AC"), (row) => atcClassesAt(row, "L04AC"));
+  assert.equal(exact.any, true);
+  assert.deepEqual(stacked(yearStacks(inClass("L04AC"), exact.keysOf, range)), [
+    ["2015", 1, { L04AC05: 1 }],
+    ["2016", 0, {}],
+    ["2017", 1, { [UNPLACED_KEY]: 1 }],
+  ]);
+  // Companies: a dated medicine without a holder.
+  const withHolderless = [...dated, product("D6", { year: 2016, mah: null })];
+  const companyOf = (row) => (row.mah ? [row.mah] : []);
+  const company = withUnplaced(withHolderless, topWithOther(withHolderless, companyOf, 1).keysOf);
+  assert.equal(company.any, true);
+  const companyRows = yearStacks(withHolderless, company.keysOf, range);
+  assert.deepEqual(totals(companyRows), totals(yearStacks(withHolderless, (row) => [row.medicine_type], range)));
+  assert.deepEqual(unplaced(companyRows), [0, 1, 0]);
+  // Every medicine placed: no segment.
+  const placed = withUnplaced(dated, companyOf);
+  assert.equal(placed.any, false);
+  assert.deepEqual(unplaced(yearStacks(dated, placed.keysOf, range)), [0, 0, 0]);
+  // Undated medicines stay out of every mode.
+  assert.equal(withUnplaced([product("U1", { year: null, authorized_from: null })], companyOf).any, false);
 });
 
 test("holder activity: the top holders by medicines, each with its medicines per key", () => {

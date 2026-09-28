@@ -2,7 +2,7 @@ import * as d3 from "d3";
 import { atcCode, atcOrigin, atcPrefixes, atcRowIncomplete } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
-import { UI, atcClassLabel, atcOriginFlag, atcOriginText, statusDateLine, statusLabel } from "./labels.js";
+import { UI, atcClassLabel, atcOriginFlag, atcOriginText, statusDateLine, statusLabel, statusTipText } from "./labels.js";
 import { documentLinks } from "./lookup.js";
 
 const PAGE_SIZE = 100;
@@ -111,11 +111,12 @@ function renderTypeCell(cell, product) {
 }
 
 // Merged "Approved · Status": dot and status label (explained on hover and on a tap, as the type
-// badges: UI.statusTips), then the date line. Union Register disagreement: a visible marker, the
-// full text as tooltip and for screen readers.
+// badges: UI.statusTips; a negative opinion its own, statusTipText()), then the date line. Union
+// Register disagreement: a visible marker, the full text as tooltip and for screen readers.
 function renderStatusCell(cell, product, register) {
   const status = product.medicine_status;
-  const carrier = UI.statusTips[status] ? cell.append("span").attr("class", "status-tip").attr("data-tip", UI.statusTips[status]).attr("tabindex", "-1") : cell;
+  const tip = statusTipText(status, product.opinion_status);
+  const carrier = tip ? cell.append("span").attr("class", "status-tip").attr("data-tip", tip).attr("tabindex", "-1") : cell;
   carrier.append("span").attr("class", `status hue-${statusHue(status)}`).text(statusLabel(status));
   const dates = statusDateLine(product.medicine_status, product.authorized_from, product.authorized_until);
   if (dates) cell.append("span").attr("class", "status-date").text(dates);

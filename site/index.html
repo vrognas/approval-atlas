@@ -26,7 +26,10 @@
         <path d="M17 51 L32 13 L47 51" fill="none" stroke="#F3F3EE" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M21 37 L28 43 L44 27" fill="none" stroke="#D8B45A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>Approval Atlas</a></h1>
-      <p id="data-date" class="meta">EMA human medicines</p>
+      <!-- What the site is for (UI.tagline) and the scope line; "What is this?" shows the intro card
+           (intro.js). Filled by main.js before any data loads. -->
+      <p id="tagline" class="tagline"></p>
+      <p class="meta"><span id="data-date"></span> · <button id="intro-link" class="inline-button" type="button"></button></p>
       <p id="offline-note" class="note" role="status" hidden></p>
     </header>
 
@@ -34,7 +37,7 @@
       <p id="message" hidden></p>
 
       <section id="lookup" class="lookup" hidden>
-        <label id="lookup-label" for="lookup-input" class="visually-hidden">Search medicine, substance, condition or ATC code</label>
+        <label id="lookup-label" for="lookup-input" class="visually-hidden"></label>
         <div class="lookup-box">
           <input
             id="lookup-input"
@@ -46,7 +49,6 @@
             autocomplete="off"
             spellcheck="false"
             enterkeyhint="search"
-            placeholder="Medicine, substance, condition or ATC code"
             disabled
           />
           <div id="lookup-listbox" role="listbox" aria-labelledby="lookup-label" hidden></div>
@@ -55,6 +57,10 @@
       </section>
       <!-- Outside the search section, which stays at the top on phones (sticky): the field only. -->
       <p id="lookup-try" class="try" hidden></p>
+
+      <!-- The landing intro (intro.js): on the untouched overview until closed; "What is this?" in
+           the header brings it back. -->
+      <section id="intro" class="intro" hidden></section>
 
       <section id="result" class="result" aria-label="Lookup result" hidden></section>
 
@@ -171,7 +177,6 @@
           </div>
           <div id="chart" class="chart"></div>
           <p id="undated-note" class="muted"></p>
-          <p id="unstacked-note" class="muted"></p>
         </section>
 
         <section class="chart-card" aria-labelledby="over-time-title">
@@ -278,6 +283,7 @@
     <footer>
       <details class="about">
         <summary id="about-summary"></summary>
+        <p id="about-scope"></p>
         <p id="about-use"></p>
         <p id="about-privacy"></p>
         <p><a id="about-security" href="https://github.com/vrognas/approval-atlas/blob/main/SECURITY.md" rel="noopener noreferrer" target="_blank"></a></p>
