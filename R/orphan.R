@@ -28,10 +28,14 @@ union_register_fields <- c(
   "EMALink",
   "AuthorisationDate",
   "LastDecisionDate",
-  "AssociatedOrphanDesignations"
+  "AssociatedOrphanDesignations",
+  "MAH"
 )
 
 union_register_link_fields <- c("URI", "LinkDate", "ExtensionLength", "EndDate")
+
+# The holder of a Human product; its address is read only for the country.
+union_register_holder_fields <- c("Name", "Address")
 
 orphan_exclusivity_months <- 120L
 
@@ -100,7 +104,13 @@ check_union_register_fields <- function(rows) {
   missing_link_fields <- unique(unlist(purrr::map(links, function(link) {
     setdiff(union_register_link_fields, names(link))
   })))
-  missing <- c(missing_fields, missing_link_fields)
+  holders <- purrr::compact(purrr::map(rows, function(row) {
+    if (identical(row$Type, "Human")) row$MAH
+  }))
+  missing_holder_fields <- unique(unlist(purrr::map(holders, function(holder) {
+    setdiff(union_register_holder_fields, names(holder))
+  })))
+  missing <- c(missing_fields, missing_link_fields, missing_holder_fields)
   if (length(missing) > 0) {
     abort_register_format("missing fields", missing)
   }
@@ -161,6 +171,69 @@ register_months <- function(x) {
   as.integer(x)
 }
 
+# Country names as the register's holder addresses end (local language,
+# English, and the spellings seen), lower case.
+register_country_codes <- c(
+  "österreich" = "AT", "austria" = "AT",
+  "belgië" = "BE", "belgie" = "BE", "belgique" = "BE",
+  "belgique/belgië" = "BE", "belgium" = "BE",
+  "българия" = "BG", "bulgaria" = "BG",
+  "schweiz" = "CH", "suisse" = "CH", "switzerland" = "CH",
+  "κύπρος" = "CY", "cyprus" = "CY",
+  "česká republika" = "CZ", "czech republic" = "CZ", "czechia" = "CZ",
+  "deutschland" = "DE", "germany" = "DE",
+  "danmark" = "DK", "denmark" = "DK",
+  "eesti" = "EE", "estonia" = "EE",
+  "españa" = "ES", "espaňa" = "ES", "spain" = "ES",
+  "suomi" = "FI", "finland" = "FI",
+  "france" = "FR",
+  "united kingdom" = "GB", "united kindom" = "GB",
+  "ελλάδα" = "GR", "greece" = "GR",
+  "hrvatska" = "HR", "croatia" = "HR",
+  "magyarország" = "HU", "hungary" = "HU",
+  "ireland" = "IE",
+  "ísland" = "IS", "íceland" = "IS", "iceland" = "IS",
+  "italia" = "IT", "italy" = "IT",
+  "liechtenstein" = "LI",
+  "lietuva" = "LT", "lithuania" = "LT",
+  "luxembourg" = "LU",
+  "latvija" = "LV", "latvia" = "LV",
+  "malta" = "MT",
+  "nederland" = "NL", "netherlands" = "NL",
+  "norge" = "NO", "norway" = "NO",
+  "polska" = "PL", "poland" = "PL",
+  "portugal" = "PT",
+  "românia" = "RO", "romania" = "RO",
+  "sverige" = "SE", "sweden" = "SE",
+  "slovenija" = "SI", "slovenia" = "SI",
+  "slovensko" = "SK", "slovakia" = "SK"
+)
+
+# The ISO code of the country an address ends with ("..., Nederland",
+# "... Cambridge CB21 6GT United Kingdom"); NA when the last part names no
+# known country.
+register_country <- function(address) {
+  last_part <- address |>
+    stringr::str_extract("[^,]*$") |>
+    stringr::str_remove("\\.$") |>
+    stringr::str_squish() |>
+    stringr::str_to_lower()
+  names_longest_first <- names(register_country_codes)[
+    order(-nchar(names(register_country_codes)))
+  ]
+  purrr::map_chr(last_part, function(part) {
+    if (is.na(part)) {
+      return(NA_character_)
+    }
+    ends_with_name <- part == names_longest_first |
+      endsWith(part, paste0(" ", names_longest_first))
+    if (!any(ends_with_name)) {
+      return(NA_character_)
+    }
+    unname(register_country_codes[names_longest_first[ends_with_name][1]])
+  })
+}
+
 rows_field <- function(rows, field) {
   purrr::map(rows, function(row) row[[field]])
 }
@@ -212,6 +285,14 @@ read_union_register <- function(path) {
       last_decision_date = register_date(register_text(
         rows_field(products, "LastDecisionDate"),
         "LastDecisionDate"
+      )),
+      holder_name = stringr::str_squish(register_text(
+        purrr::map(products, function(product) product$MAH$Name),
+        "MAH Name"
+      )),
+      holder_country = register_country(register_text(
+        purrr::map(products, function(product) product$MAH$Address),
+        "MAH Address"
       ))
     ),
     designations = dplyr::tibble(

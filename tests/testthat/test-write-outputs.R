@@ -164,12 +164,13 @@ test_that("build_meta adds the snapshot date, sources and data licence", {
       "© European Medicines Agency (reuse with acknowledgement), including",
       "ATC codes taken from EMA product information (SmPC section 5.1);",
       "Union Register values © European Union, CC BY 4.0",
-      "(https://creativecommons.org/licenses/by/4.0/), changes made; MeSH®",
-      "courtesy of the U.S. National Library of Medicine; ATC codes and level",
-      "names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo",
-      "(via ChEMBL, the ATC/DDD Index at https://atcddd.fhi.no and archived",
-      "copies of it), reproduced verbatim, not for commercial distribution",
-      "and excluded from this licence."
+      "(https://creativecommons.org/licenses/by/4.0/), changes made; GLEIF",
+      "LEI data CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/);",
+      "MeSH® courtesy of the U.S. National Library of Medicine; ATC codes",
+      "and level names © WHO Collaborating Centre for Drug Statistics",
+      "Methodology, Oslo (via ChEMBL, the ATC/DDD Index at",
+      "https://atcddd.fhi.no and archived copies of it), reproduced verbatim,",
+      "not for commercial distribution and excluded from this licence."
     )
   )
 })

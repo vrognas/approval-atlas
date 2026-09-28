@@ -26,6 +26,22 @@ fixture_union_register_path <- function() {
   testthat::test_path("fixtures", "ods-products-sample.json")
 }
 
+fixture_register <- function() {
+  read_union_register(fixture_union_register_path())
+}
+
+fixture_gleif_records_path <- function() {
+  testthat::test_path("fixtures", "gleif-lei-records-sample.json")
+}
+
+fixture_gleif_parents_path <- function() {
+  testthat::test_path("fixtures", "gleif-parents-sample.json")
+}
+
+fixture_gleif_matches_path <- function() {
+  testthat::test_path("fixtures", "gleif-holder-matches-sample.json")
+}
+
 fixture_whocc_updates_path <- function(year = 2026) {
   testthat::test_path(
     "fixtures",

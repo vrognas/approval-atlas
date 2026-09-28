@@ -15,6 +15,7 @@ Imports:
     pdftools,
     purrr,
     readxl,
+    stringi,
     stringr,
     tidyr,
     xml2

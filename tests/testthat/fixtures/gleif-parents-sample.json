@@ -1,0 +1,136 @@
+{
+  "meta": {
+    "goldenCopy": {
+      "publishDate": "2026-09-28T00:00:00Z"
+    },
+    "pagination": {
+      "currentPage": 1,
+      "perPage": 200,
+      "from": 1,
+      "to": 19,
+      "total": 19,
+      "lastPage": 1
+    }
+  },
+  "data": [
+    {
+      "type": "lei-records",
+      "id": "549300E9PC51EN656011",
+      "attributes": {
+        "lei": "549300E9PC51EN656011",
+        "entity": {
+          "legalName": {
+            "name": "SANOFI",
+            "language": "fr"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "FR"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "reporting-exceptions",
+            "id": "549300E9PC51EN656011|3|c1d0592862286cfe08c0b191762831d79bc7a45babb74b0e40da33b536c0b4e2|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "4YV9Y5M8S0BRK1RP0397",
+      "attributes": {
+        "lei": "4YV9Y5M8S0BRK1RP0397",
+        "entity": {
+          "legalName": {
+            "name": "MERCK & CO., INC.",
+            "language": "en"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "US"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "reporting-exceptions",
+            "id": "4YV9Y5M8S0BRK1RP0397|8|99ccf9560c48134876570d01e289908e19f938b7823804c9e59c6916ca749092|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "PY6ZZQWO2IZFZC3IOL08",
+      "attributes": {
+        "lei": "PY6ZZQWO2IZFZC3IOL08",
+        "entity": {
+          "legalName": {
+            "name": "ASTRAZENECA PLC",
+            "language": "en"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "GB"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "reporting-exceptions",
+            "id": "PY6ZZQWO2IZFZC3IOL08|6|94786a8a3d86d1aeb8af7e970b475fc09e840e60d9e4e79ab09b926668ea5e4b|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|"
+          }
+        }
+      }
+    }
+  ],
+  "included": [
+    {
+      "type": "reporting-exceptions",
+      "id": "549300E9PC51EN656011|3|c1d0592862286cfe08c0b191762831d79bc7a45babb74b0e40da33b536c0b4e2|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|",
+      "attributes": {
+        "lei": "549300E9PC51EN656011",
+        "reason": "NO_KNOWN_PERSON",
+        "category": "ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT"
+      }
+    },
+    {
+      "type": "reporting-exceptions",
+      "id": "4YV9Y5M8S0BRK1RP0397|8|99ccf9560c48134876570d01e289908e19f938b7823804c9e59c6916ca749092|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|",
+      "attributes": {
+        "lei": "4YV9Y5M8S0BRK1RP0397",
+        "reason": "NON_CONSOLIDATING",
+        "category": "ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT"
+      }
+    },
+    {
+      "type": "reporting-exceptions",
+      "id": "PY6ZZQWO2IZFZC3IOL08|6|94786a8a3d86d1aeb8af7e970b475fc09e840e60d9e4e79ab09b926668ea5e4b|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|",
+      "attributes": {
+        "lei": "PY6ZZQWO2IZFZC3IOL08",
+        "reason": "NON_CONSOLIDATING",
+        "category": "ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT"
+      }
+    }
+  ]
+}

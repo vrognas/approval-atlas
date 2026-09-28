@@ -1,0 +1,249 @@
+{
+  "meta": {
+    "goldenCopy": {
+      "publishDate": "2026-09-28T00:00:00Z"
+    },
+    "pagination": {
+      "currentPage": 1,
+      "perPage": 200,
+      "from": 1,
+      "to": 6,
+      "total": 6,
+      "lastPage": 1
+    }
+  },
+  "data": [
+    {
+      "type": "lei-records",
+      "id": "549300YUY8VFXLXSSB43",
+      "attributes": {
+        "lei": "549300YUY8VFXLXSSB43",
+        "entity": {
+          "legalName": {
+            "name": "MERCK SHARP & DOHME B.V.",
+            "language": "nl"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "NL"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "lei-records",
+            "id": "4YV9Y5M8S0BRK1RP0397"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "549300IXIBIGWEEWNK29",
+      "attributes": {
+        "lei": "549300IXIBIGWEEWNK29",
+        "entity": {
+          "legalName": {
+            "name": "SANOFI B.V.",
+            "language": "en"
+          },
+          "otherNames": [
+            {
+              "name": "GENZYME B.V.",
+              "language": "nl",
+              "type": "PREVIOUS_LEGAL_NAME"
+            },
+            {
+              "name": "GENZYME EUROPE B.V.",
+              "language": "nl",
+              "type": "PREVIOUS_LEGAL_NAME"
+            },
+            {
+              "name": "GENZYME NEDERLAND",
+              "language": "nl",
+              "type": "PREVIOUS_LEGAL_NAME"
+            }
+          ],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "NL"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "lei-records",
+            "id": "549300E9PC51EN656011"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "529900KYQPVVZTT2RC96",
+      "attributes": {
+        "lei": "529900KYQPVVZTT2RC96",
+        "entity": {
+          "legalName": {
+            "name": "Sandoz GmbH",
+            "language": "de-AT"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "AT"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "LAPSED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "lei-records",
+            "id": "5493007HIVTX6SY6XD66"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "549300124Y3MQI87PT35",
+      "attributes": {
+        "lei": "549300124Y3MQI87PT35",
+        "entity": {
+          "legalName": {
+            "name": "Swedish Orphan Biovitrum AB (publ)",
+            "language": "sv"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "SE"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "reporting-exceptions",
+            "id": "549300124Y3MQI87PT35|3|5b72b13f700b9f49cbfe01a0c30e545d29937c6d1d50c77c45dd33b5e47e6354|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "636700ITSLXVAJVLAY33",
+      "attributes": {
+        "lei": "636700ITSLXVAJVLAY33",
+        "entity": {
+          "legalName": {
+            "name": "AstraZeneca AB",
+            "language": "sv"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "SE"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "ISSUED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "lei-records",
+            "id": "PY6ZZQWO2IZFZC3IOL08"
+          }
+        }
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "213800XB2OO2YNTA6K21",
+      "attributes": {
+        "lei": "213800XB2OO2YNTA6K21",
+        "entity": {
+          "legalName": {
+            "name": "ASTRAZENECA AB PENSIONSSTIFTELSE II",
+            "language": "en"
+          },
+          "otherNames": [],
+          "transliteratedOtherNames": [],
+          "legalAddress": {
+            "country": "SE"
+          },
+          "status": "ACTIVE"
+        },
+        "registration": {
+          "status": "LAPSED"
+        }
+      },
+      "relationships": {
+        "ultimate-parent": {
+          "data": {
+            "type": "reporting-exceptions",
+            "id": "213800XB2OO2YNTA6K21|0|5851284799ee5ae9a746b3378ed91733936dba19027e69b7952b9a0a1042c3c9|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|"
+          }
+        }
+      }
+    }
+  ],
+  "included": [
+    {
+      "type": "reporting-exceptions",
+      "id": "213800XB2OO2YNTA6K21|0|5851284799ee5ae9a746b3378ed91733936dba19027e69b7952b9a0a1042c3c9|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|",
+      "attributes": {
+        "lei": "213800XB2OO2YNTA6K21",
+        "reason": "NO_KNOWN_PERSON",
+        "category": "ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT"
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "4YV9Y5M8S0BRK1RP0397"
+    },
+    {
+      "type": "reporting-exceptions",
+      "id": "549300124Y3MQI87PT35|3|5b72b13f700b9f49cbfe01a0c30e545d29937c6d1d50c77c45dd33b5e47e6354|ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT|",
+      "attributes": {
+        "lei": "549300124Y3MQI87PT35",
+        "reason": "NON_CONSOLIDATING",
+        "category": "ULTIMATE_ACCOUNTING_CONSOLIDATION_PARENT"
+      }
+    },
+    {
+      "type": "lei-records",
+      "id": "5493007HIVTX6SY6XD66"
+    },
+    {
+      "type": "lei-records",
+      "id": "549300E9PC51EN656011"
+    },
+    {
+      "type": "lei-records",
+      "id": "PY6ZZQWO2IZFZC3IOL08"
+    }
+  ]
+}

@@ -91,7 +91,8 @@ run_fixture_pipeline <- function(output_directory,
     output_directory = output_directory,
     cache_path = cache_path,
     downloads_directory = downloads_directory,
-    smpc_budget = smpc_budget
+    smpc_budget = smpc_budget,
+    gleif_path = fixture_gleif_matches_path()
   )
 }
 
@@ -112,7 +113,9 @@ output_stems <- c(
   "ema_medicine_protection",
   "ema_medicine_orphan_exclusivity",
   "ema_medicine_register_status",
-  "ema_medicine_smpc_atc"
+  "ema_medicine_smpc_atc",
+  "ema_medicine_companies",
+  "companies"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -441,14 +444,64 @@ test_that("run_ema_pipeline writes its outputs while WHOCC is unreachable", {
     c("whocc_updates", "whocc_alterations") %in% tables$atc_classes$source
   ))
   meta <- jsonlite::fromJSON(file.path(output_directory, "meta.json"))
-  expect_identical(nrow(meta$sources), 8L)
+  expect_identical(nrow(meta$sources), 11L)
   expect_identical(
-    meta$sources$url[7:8],
+    meta$sources$url[7:9],
     c(
       "https://atcddd.fhi.no/atc_ddd_index/",
-      "https://www.ema.europa.eu/en/medicines"
+      "https://www.ema.europa.eu/en/medicines",
+      union_register_url
     )
   )
+})
+
+test_that("run_ema_pipeline builds the company tables and credits them", {
+  forbid_network()
+  output_directory <- file.path(tempfile(), "data")
+  messages <- testthat::capture_messages(
+    tables <- run_fixture_pipeline(output_directory)
+  )
+  medicines <- tables$ema_medicine_companies
+  expect_identical(nrow(medicines), 19L)
+  medicine <- function(product_number) {
+    medicines[medicines$ema_product_number == product_number, ]
+  }
+  # Fintepla: UCB, linked to the register (holder in Belgium).
+  expect_identical(medicine("EMEA/H/C/003933")$group_key, "g.ucb")
+  expect_identical(medicine("EMEA/H/C/003933")$country, "BE")
+  # Fingolimod Mylan: the register names Mylan Pharmaceuticals Limited.
+  fingolimod <- medicine("EMEA/H/C/005282")
+  expect_identical(fingolimod$holder_ema, "Mylan Ireland Limited")
+  expect_identical(fingolimod$holder_used, "Mylan Pharmaceuticals Limited")
+  expect_identical(fingolimod$holder_basis, "register")
+  expect_identical(fingolimod$group_key, "g.viatris")
+  expect_identical(medicine("EMEA/H/C/005752")$group_key, "g.sandoz")
+  companies <- tables$companies
+  msd <- companies[companies$key == "c.merck-sharp-dohme", ]
+  expect_identical(msd$lei, "549300YUY8VFXLXSSB43")
+  # Sandoz GmbH's LEI names Novartis AG: not applied.
+  expect_identical(
+    companies$lei[companies$key == "c.sandoz"],
+    NA_character_
+  )
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  expect_identical(
+    vapply(meta$sources[13:15], function(source) source$name, character(1)),
+    c(
+      paste(
+        "Union Register of medicinal products (European Commission):",
+        "marketing authorisation holders"
+      ),
+      "GLEIF Legal Entity Identifier (LEI) records",
+      "Company groups (curated by approval-atlas)"
+    )
+  )
+  expect_identical(meta$sources[[14]]$retrieved, "2026-09-28")
+  expect_match(messages, "Companies: [0-9]+ companies in", all = FALSE)
+  expect_match(messages, "GLEIF: [0-9]+ matches applied", all = FALSE)
 })
 
 test_that("run_ema_pipeline adds the authorization and substance columns", {
