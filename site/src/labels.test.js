@@ -526,7 +526,8 @@ test("each type badge has an explanation of at most 12 words", () => {
   const { typeTips } = labels.UI;
   // Phase 4c review: Other, the largest type, is explained too.
   assert.deepEqual(Object.keys(typeTips).sort(), ["Advanced therapy", "Biosimilar", "Generic", "Orphan", "Other"]);
-  assert.equal(typeTips.Other, "Not a generic, biosimilar or advanced therapy (e.g. a new active substance).");
+  // Step 3 (#7): Wegovy, Rybelsus and Kyinsu are "Other" but not new active substances.
+  assert.equal(typeTips.Other, "Not a generic, biosimilar or advanced therapy.");
   assert.equal(typeTips.Orphan, "For rare diseases (at most 5 in 10,000 people in the EU).");
   assert.equal(typeTips.Biosimilar, "Highly similar to a biological medicine already approved in the EU.");
   assert.equal(typeTips.Generic, "Same active substance as an already approved reference medicine.");
@@ -903,6 +904,70 @@ test("substance and condition answers name EMA or the central procedure", () => 
   for (const text of texts) assert.match(text, /\bEMA\b|\bcentral/, text);
   assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11 Feb 2003 (Avandamet)");
   assert.equal(UI.substance.firstApproval(null, null), "No central EU approval date");
+});
+
+// Parts ({ text, link } for links) as the text they read.
+const partsText = (parts) => parts.map((part) => (typeof part === "string" ? part : part.text)).join("");
+
+// Step 3 (#7): the medicine card's copies lines, counted by substance set, not by EMA's reference.
+test("copies lines: generics and biosimilars of the same substance, or none yet", () => {
+  const { copies } = labels.UI;
+  assert.equal(copies.none, "No generic or biosimilar authorized yet.");
+  const humira = copies.line([{ type: "Biosimilar", count: 10, companies: 8, first: { name: "Amgevita", date: "2017-03-21" } }]);
+  assert.equal(partsText(humira), "10 biosimilars from 8 companies, first Amgevita 21 Mar 2017.");
+  assert.deepEqual(humira.filter((part) => typeof part !== "string"), [{ text: "Amgevita", link: 0 }]);
+  assert.equal(
+    partsText(copies.line([
+      { type: "Generic", count: 1, companies: 1, first: { name: "Dasatinib Accord Healthcare", date: "2024-07-26" } },
+      { type: "Biosimilar", count: 2, companies: null, first: { name: "B", date: null } },
+    ])),
+    "1 generic from 1 company, first Dasatinib Accord Healthcare 26 Jul 2024; 2 biosimilars, first B.",
+  );
+  // Step 3 review: on a medicine that is not its substance's first (Opzelura, after Jakavi), the
+  // copies are named as the substance's, not this medicine's.
+  const opzelura = copies.line([{ type: "Generic", count: 1, companies: 1, first: { name: "Ruxolitinib Viatris", date: "2026-09-18" } }], "ruxolitinib");
+  assert.equal(partsText(opzelura), "1 generic of ruxolitinib from 1 company, first Ruxolitinib Viatris 18 Sep 2026.");
+  assert.deepEqual(opzelura.filter((part) => typeof part !== "string"), [{ text: "Ruxolitinib Viatris", link: 0 }]);
+  assert.equal(
+    partsText(copies.line([{ type: "Biosimilar", count: 2, companies: null, first: { name: "B", date: null } }], "denosumab")),
+    "2 biosimilars of denosumab, first B.",
+  );
+});
+
+test("copies lines: a copy's card names the other medicines of its substance and its first central approval", () => {
+  const { copies } = labels.UI;
+  const hyrimoz = copies.same(10, "adalimumab", 1, { name: "Trudexa", date: "2003-09-01" });
+  assert.equal(partsText(hyrimoz), "10 other authorized medicines have the same active substance (adalimumab); first central approval 1 Sep 2003 (Trudexa).");
+  assert.deepEqual(hyrimoz.filter((part) => typeof part !== "string"), [{ text: "adalimumab", link: "substance" }, { text: "Trudexa", link: "first" }]);
+  assert.equal(partsText(copies.same(1, "sitagliptin + metformin hydrochloride", 2, null)), "1 other authorized medicine has the same active substances (sitagliptin + metformin hydrochloride).");
+  assert.equal(partsText(copies.same(0, "x", 1, null)), "No other authorized medicine has the same active substance (x).");
+});
+
+// Step 3 (#8): salt spellings of one substance on the substance card.
+test("substance card: another spelling of the same substance, with its medicines and first approval", () => {
+  const { substance } = labels.UI;
+  const line = substance.sibling("dasatinib (anhydrous)", 3, { name: "Sprycel", date: "2006-11-20" });
+  assert.equal(partsText(line), "Also listed as dasatinib (anhydrous): 3 medicines, first central approval 20 Nov 2006 (Sprycel).");
+  assert.deepEqual(line.filter((part) => typeof part !== "string"), [{ text: "dasatinib (anhydrous)", link: "sibling" }]);
+  assert.equal(partsText(substance.sibling("x", 1, null)), "Also listed as x: 1 medicine.");
+  // Step 3 review: with other spellings, the headline and strip count them all, the list this one's.
+  assert.equal(substance.productsListed(1, "dasatinib"), "1 medicine listed as dasatinib");
+  assert.equal(substance.productsListed(3, "dasatinib (anhydrous)"), "3 medicines listed as dasatinib (anhydrous)");
+});
+
+// Step 3 (#6, #7): the strip's short form, the estimate's basis next to the chip, and why a medicine
+// counted from another company's is unclear. Estimates, never "patent".
+test("protection copy: strip cell, basis note and the other-company reason", () => {
+  const { protection, card } = labels.UI;
+  assert.equal(card.strip.protection, "Protection (est.)");
+  assert.equal(protection.glance.until(2031, 2032), "Until 2031–2032");
+  assert.equal(protection.glance.until(2031, 2031), "Until 2031");
+  assert.equal(protection.glance.orphan(2033), "Orphan exclusivity until 2033");
+  assert.equal(protection.basisNote, "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.");
+  assert.ok(!protection.caveats.includes("Based only on EU central authorization dates."));
+  for (const text of [card.strip.protection, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {
+    assert.doesNotMatch(text, /patent/i);
+  }
 });
 
 test("breakdown notes say how many medicines have no value", () => {

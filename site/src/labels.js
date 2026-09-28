@@ -426,7 +426,8 @@ export const UI = {
     Biosimilar: "Highly similar to a biological medicine already approved in the EU.",
     Generic: "Same active substance as an already approved reference medicine.",
     "Advanced therapy": "Gene therapy, cell therapy or tissue-engineered medicine.",
-    Other: "Not a generic, biosimilar or advanced therapy (e.g. a new active substance).",
+    // Step 3 (#7, d): not "a new active substance", which Wegovy, Rybelsus and Kyinsu are not.
+    Other: "Not a generic, biosimilar or advanced therapy.",
   },
   // The same for the EMA statuses (keys: raw EMA values), wherever a status dot or pill, facet row,
   // "Stack by Status" legend entry or the sentence's status token names one; at most 10 words.
@@ -982,7 +983,7 @@ export const UI = {
     kinds: { medicine: "medicine", substance: "substance", condition: "condition", company: "company" },
     // Answer strip under a lookup headline: "Since" while authorized, "Approved" otherwise.
     // "Company": it leads with the company group, as the table's "Company · Holder" column.
-    strip: { label: "Answer summary", company: "Company", since: "Since", approved: "Approved", status: "Status" },
+    strip: { label: "Answer summary", company: "Company", since: "Since", approved: "Approved", status: "Status", protection: "Protection (est.)" },
     documentMeta: (isPdf, date) => [isPdf ? UI.card.pdf : null, UI.card.updated(date)].filter(Boolean).join(" · "),
     substances: "Active substance(s)",
     // The medicine's company group and holder (companies part 2), with the groups' as-of date.
@@ -1036,10 +1037,28 @@ export const UI = {
     dataExclusivity: (date, ended) => `Data exclusivity ${ended ? "ended" : "ends"} (est.) ${formatDate(date)}`,
     marketProtection: (min, max, ended) => `Market protection ${ended ? "ended" : "ends"} (est.) ${formatDate(min)} – ${formatDate(max)}`,
     // Step 2 (#1): earlier national authorizations are not in the data.
-    countedFrom: (substance, name, date) => `Counted from the first central EU approval of ${substance}: ${name}, ${formatDate(date)}`,
+    // name: a medicine approved that day (step 3 review: never the reference with another's date),
+    // null when none is known.
+    countedFrom: (substance, name, date) => `Counted from the first central EU approval of ${substance}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
     thisSubstance: "this active substance",
     follows: (name) => `No protection of its own; follows ${name}`,
     referenceNotFound: "No protection of its own; reference product not found in EU central authorizations",
+    // Step 3 (#6): counted from another company group's earlier medicine of the same substance set
+    // (basis other_company_reference; own: the medicine's own group's first approval date, or
+    // null). The status is unclear where the two estimates' statuses differ, else protected (step 3
+    // review), so the line does not say which.
+    otherCompany: (substance, name, date, own) =>
+      `The first central EU approval of ${substance} was another company's medicine (${name ? `${name}, ` : ""}${formatDate(date)}); counted from this company's own first approval${own ? ` (${formatDate(own)})` : ""}, protection would end later, so the market protection range covers both.`,
+    // Step 3 (#7, e): the estimate's basis, next to the chip (it used to sit in the collapsed caveats).
+    basisNote: "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.",
+    // The answer strip's "Protection (est.)" cell (protectionGlance()): the market protection
+    // range's years while protected, else the status; then orphan exclusivity still running.
+    // link: after the value, for screen readers (the cell jumps to the section).
+    glance: {
+      until: (from, to) => (from === to ? `Until ${from}` : `Until ${from}–${to}`),
+      orphan: (year) => `Orphan exclusivity until ${year}`,
+      link: ", see the estimate below",
+    },
     orphan: (condition, date, source, ended) =>
       `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)} ${source === "register" ? "(register)" : "(estimate)"}`,
     orphanNoEnd: (condition, designationStatus) =>
@@ -1049,7 +1068,6 @@ export const UI = {
     caveatsTitle: "Caveats",
     caveats: [
       "Not legal advice.",
-      "Based only on EU central authorization dates.",
       "Ignores earlier national authorizations, the possible extra year (shown as a range), pediatric rewards, orphan exclusivity reductions and derogations.",
       "The legal basis is inferred from EMA flags.",
       "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
@@ -1060,8 +1078,45 @@ export const UI = {
     // Step 2 (#1): central only (metformin's first EU approval was not Avandamet's).
     firstApproval: (date, name) => (date ? `First central EU approval: ${formatDate(date)} (${name})` : "No central EU approval date"),
     products: (count) => plural(count, "medicine", "medicines"),
+    // Step 3 review: with other spellings (the headline and strip count them all), the list's heading.
+    productsListed: (count, name) => `${plural(count, "medicine", "medicines")} listed as ${name}`,
     companies: (count) => plural(count, "company", "companies"),
     authorized: (count) => `${formatCount(count)} authorized`,
+    // Step 3 (#8): another spelling of the same substance in EMA's data (copies.js
+    // siblingSubstances()), as parts: { text, link } is the sibling's name, a link to its card.
+    // first: { name, date } or null.
+    sibling: (name, count, first) => [
+      "Also listed as ", { text: name, link: "sibling" }, `: ${plural(count, "medicine", "medicines")}`,
+      first ? `, first central approval ${formatDate(first.date)} (${first.name})` : "", ".",
+    ],
+  },
+
+  // Step 3 (#7): the medicine card's lines under the answer strip (copies.js copiesSummary()), as
+  // parts: strings, and { text, link } for a link (link: the entry's position, "substance" or
+  // "first"). Counted by the same substance set (equivalent spellings joined), not by EMA's
+  // reference product, so Humira's biosimilars (whose reference is Trudexa) count.
+  copies: {
+    none: "No generic or biosimilar authorized yet.",
+    // entries: [{ type ("Generic" | "Biosimilar"), count, companies (null: unknown), first: { name, date } }].
+    // substance: named on a medicine that is not its substance's first (step 3 review: Opzelura's
+    // generic is Jakavi's, "1 generic of ruxolitinib …"); null on the first's (Humira, Sprycel).
+    line: (entries, substance = null) => [...entries.flatMap((entry, position) => [
+      position ? "; " : "",
+      `${entry.type === "Generic" ? plural(entry.count, "generic", "generics") : plural(entry.count, "biosimilar", "biosimilars")}${substance ? ` of ${substance}` : ""}${entry.companies === null
+        ? ""
+        : ` from ${plural(entry.companies, "company", "companies")}`}, first `,
+      { text: entry.first.name, link: position },
+      entry.first.date ? ` ${formatDate(entry.first.date)}` : "",
+    ]), "."],
+    // A copy's card, or a medicine whose set was approved before it (Wegovy: Ozempic): the set's
+    // other authorized medicines (count), its name (substances: how many it has) and its first
+    // central approval ({ name, date }, or null when it is this medicine).
+    same: (count, substance, substances, first) => [
+      `${count === 0 ? "No other authorized medicine has" : `${plural(count, "other authorized medicine", "other authorized medicines")} ${count === 1 ? "has" : "have"}`} the same active ${substances === 1 ? "substance" : "substances"} (`,
+      { text: substance, link: "substance" }, ")",
+      first ? [`; first central approval ${formatDate(first.date)} (`, { text: first.name, link: "first" }, ")"] : [],
+      ".",
+    ].flat(),
   },
 
   condition: {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { espacenetUrl, protectionSummary } from "./protection.js";
+import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
 
 const own = {
   ema_product_number: "EMEA/H/C/003820",
@@ -79,6 +79,64 @@ test("an inactive designation without an end date says so instead of showing a d
 
 test("no protection row, no summary", () => {
   assert.equal(protectionSummary(undefined, [], "x", "2026-09-26"), null);
+});
+
+// Step 3 (#6): counted from another company group's earlier medicine of the same substance set,
+// while the company's own first approval came later (Opzelura, Incyte, after Novartis's Jakavi;
+// real row 2026-09-28): the market protection range covers both estimates, and the status is
+// unclear where their statuses differ, protected where both are (step 3 review: Qdenga).
+test("protection counted from another company's medicine says so before the dates", () => {
+  const other = {
+    ...own, ema_product_number: "EMEA/H/C/005843", basis: "other_company_reference", reference_product_number: "EMEA/H/C/002464",
+    reference_name: "Jakavi", counted_from: "2012-08-23", own_reference_product_number: "EMEA/H/C/005843", own_counted_from: "2023-04-19",
+    data_exclusivity_end: "2020-08-23", market_protection_end_min: "2022-08-23", market_protection_end_max: "2034-04-19", status: "unclear",
+  };
+  const summary = protectionSummary(other, [], "ruxolitinib", "2026-09-28", "Jakavi");
+  assert.equal(summary.status, "Data/market protection: Unclear");
+  assert.deepEqual(summary.lines, [
+    "The first central EU approval of ruxolitinib was another company's medicine (Jakavi, 23 Aug 2012); counted from this company's own first approval (19 Apr 2023), protection would end later, so the market protection range covers both.",
+    "Data exclusivity ended (est.) 23 Aug 2020",
+    "Market protection ends (est.) 23 Aug 2022 – 19 Apr 2034",
+    "Counted from the first central EU approval of ruxolitinib: Jakavi, 23 Aug 2012",
+  ]);
+  const both = protectionSummary({ ...other, status: "protected", own_counted_from: null }, [], "x", "2026-09-28", null);
+  assert.equal(both.status, "Data/market protection: Protected");
+  assert.equal(both.lines[0], "The first central EU approval of x was another company's medicine (23 Aug 2012); counted from this company's own first approval, protection would end later, so the market protection range covers both.");
+});
+
+// Step 3 review: counted_from is the set's first approval date, not always the reference's own
+// (Iscover 14 Jul 1998, whose reference Plavix came a day later): the line names a medicine
+// approved that day (copies.js countedFromName()), or the date alone.
+test("the counted-from line names the medicine approved that day, or the date alone", () => {
+  const iscover = {
+    ...own, ema_product_number: "EMEA/H/C/000175", reference_product_number: "EMEA/H/C/000174", reference_name: "Plavix", counted_from: "1998-07-14",
+    data_exclusivity_end: "2006-07-14", market_protection_end_min: "2008-07-14", market_protection_end_max: "2009-07-14", status: "ended",
+  };
+  assert.equal(protectionSummary(iscover, [], "clopidogrel", "2026-09-28", "Iscover").lines.at(-1), "Counted from the first central EU approval of clopidogrel: Iscover, 14 Jul 1998");
+  assert.equal(protectionSummary(iscover, [], "clopidogrel", "2026-09-28", null).lines.at(-1), "Counted from the first central EU approval of clopidogrel: 14 Jul 1998");
+  // Without a name passed: the reference's.
+  assert.equal(protectionSummary(iscover, [], "clopidogrel", "2026-09-28").lines.at(-1), "Counted from the first central EU approval of clopidogrel: Plavix, 14 Jul 1998");
+});
+
+test("protectionGlance: the answer strip's short form of the estimate", () => {
+  const protectedRow = { ...own, market_protection_end_min: "2031-01-06", market_protection_end_max: "2032-01-06", status: "protected" };
+  assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Until 2031–2032", orphan: null });
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, [], "2026-09-28"), { value: "Ended", orphan: null });
+  assert.deepEqual(protectionGlance(own, [], "2026-09-28"), { value: "Unclear", orphan: null });
+  assert.deepEqual(protectionGlance({ ...own, basis: "other_company_reference", status: "unclear" }, [], "2026-09-28").value, "Unclear");
+  assert.deepEqual(protectionGlance({ ...own, basis: "reference_not_found", status: null }, [], "2026-09-28").value, "Unclear");
+  assert.equal(protectionGlance(undefined, [], "2026-09-28"), null);
+});
+
+test("protectionGlance: orphan market exclusivity still running is named with its latest end year", () => {
+  const orphan = [
+    { condition: "A", exclusivity_end: "2024-06-20", end_source: "register" },
+    { condition: "B", exclusivity_end: "2033-05-30", end_source: "register" },
+    { condition: "C", exclusivity_end: "2031-01-01", end_source: "computed" },
+    { condition: "D", exclusivity_end: null, end_source: null, designation_status: "Withdrawn" },
+  ];
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Ended", orphan: "Orphan exclusivity until 2033" });
+  assert.equal(protectionGlance({ ...own, status: "ended" }, orphan.slice(0, 1), "2026-09-28").orphan, null);
 });
 
 test("the Espacenet link searches the first INN", () => {
