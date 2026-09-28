@@ -81,11 +81,15 @@ run_fixture_pipeline <- function(output_directory,
                                  cache_path = copy_fixture_to_cache(),
                                  downloads_directory =
                                    seed_downloads_directory(),
-                                 smpc_budget = 0L) {
+                                 smpc_budget = 0L,
+                                 equivalents = no_equivalents()) {
+  # Read before curated_substance_equivalents() is mocked to return it.
+  force(equivalents)
   testthat::local_mocked_bindings(
     fetch_whocc_index_page = function(page) {
       read_fixture_bytes(fixture_whocc_index_path("L04AC28"))
-    }
+    },
+    curated_substance_equivalents = function() equivalents
   )
   run_ema_pipeline(
     output_directory = output_directory,
@@ -94,6 +98,11 @@ run_fixture_pipeline <- function(output_directory,
     smpc_budget = smpc_budget,
     gleif_path = fixture_gleif_matches_path()
   )
+}
+
+# The curated pairs' keys are not in the fixture EMA data.
+no_equivalents <- function() {
+  curated_substance_equivalents()[0, ]
 }
 
 output_stems <- c(
@@ -110,12 +119,13 @@ output_stems <- c(
   "mesh_entry_terms",
   "mesh_descriptor_areas",
   "ema_search_index",
-  "ema_medicine_protection",
   "ema_medicine_orphan_exclusivity",
   "ema_medicine_register_status",
   "ema_medicine_smpc_atc",
   "ema_medicine_companies",
-  "companies"
+  "companies",
+  "ema_medicine_protection",
+  "ema_substance_equivalents"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -640,4 +650,69 @@ test_that("run_ema_pipeline aborts before writing if tile and series differ", {
     "EMEA/H/C/005752 Tyruko"
   )
   expect_false(dir.exists(output_directory))
+})
+
+test_that("run_ema_pipeline writes the substance equivalents it uses", {
+  forbid_network()
+  # Two fixture keys stand in for a curated pair of salt spellings.
+  equivalents <- dplyr::tibble(
+    substance_key = "natalizumab",
+    equivalent_key = "tirzepatide",
+    evidence_url = "https://www.ema.europa.eu/en/medicines/human/EPAR/tyruko",
+    checked_date = as.Date("2026-09-28"),
+    note = "Stand-in pair"
+  )
+  output_directory <- file.path(tempfile(), "data")
+  tables <- suppressMessages(
+    run_fixture_pipeline(output_directory, equivalents = equivalents)
+  )
+  written <- jsonlite::fromJSON(
+    file.path(output_directory, "ema_substance_equivalents.json")
+  )
+  expect_identical(written$substance_key, c("natalizumab", "tirzepatide"))
+  expect_identical(written$equivalent_key, c("tirzepatide", "natalizumab"))
+  expect_identical(unique(written$checked_date), "2026-09-28")
+  expect_identical(unique(written$basis), "curated")
+  tyruko <- tables$ema_medicine_protection[
+    tables$ema_medicine_protection$ema_product_number == "EMEA/H/C/005752",
+  ]
+  expect_identical(tyruko$basis, "follows_reference")
+  expect_identical(tyruko$reference_name, "Mounjaro")
+})
+
+test_that("run_ema_pipeline reports protection status changes", {
+  forbid_network()
+  output_directory <- file.path(tempfile(), "data")
+  first_run <- testthat::capture_messages(
+    run_fixture_pipeline(output_directory)
+  )
+  expect_no_match(first_run, "before this run")
+  expect_match(
+    first_run,
+    paste(
+      "Protection estimates: 6 protected, 4 ended, 4 unclear \\(0 follow a",
+      "reference, 4 reference not found, 0 counted from another company"
+    ),
+    all = FALSE
+  )
+  path <- file.path(output_directory, "ema_medicine_protection.json")
+  previous <- jsonlite::fromJSON(path)
+  previous$status[previous$ema_product_number == "EMEA/H/C/005620"] <- "ended"
+  write_json_table(previous, path)
+  second_run <- testthat::capture_messages(
+    run_fixture_pipeline(output_directory)
+  )
+  expect_match(
+    second_run,
+    paste(
+      "Protection status: 5 protected, 5 ended, 4 unclear before this run,",
+      "6 protected, 4 ended, 4 unclear now; 1 changed"
+    ),
+    all = FALSE
+  )
+  expect_match(
+    second_run,
+    "Mounjaro \\(EMEA/H/C/005620\\): ended -> protected \\(own\\)",
+    all = FALSE
+  )
 })

@@ -3558,6 +3558,78 @@ table.activity {
   }
 }
 
+/* A medicine's strip with its protection cell (step 3): its frame is a size container, as the
+   resizable sidebar, not the viewport, sets the card's width. Company, then Since | Status, then
+   Protection across; four columns from 840px, where a small column holds the status pill (123px)
+   and "Until 2028–2033" (137px). The selectors outweigh the three-cell strip's rules. */
+.strip-frame {
+  container-type: inline-size;
+  margin: 16px 0;
+}
+
+.strip.strip-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.strip.strip-4 > .strip-wide {
+  grid-column: 1 / -1;
+  border-right: 0;
+  border-bottom: 1px solid var(--grid);
+}
+
+.strip.strip-4 > div:not(.strip-wide):nth-last-child(2) {
+  border-right: 0;
+}
+
+.strip.strip-4 > div:last-child {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--grid);
+}
+
+@container (min-width: 840px) {
+  .strip.strip-4 {
+    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  }
+
+  .strip.strip-4 > .strip-wide {
+    grid-column: auto;
+    border-right: 1px solid var(--grid);
+    border-bottom: 0;
+  }
+
+  .strip.strip-4 > div:not(.strip-wide):nth-last-child(2) {
+    border-right: 1px solid var(--grid);
+  }
+
+  .strip.strip-4 > div:last-child {
+    grid-column: auto;
+    border-top: 0;
+  }
+}
+
+/* The protection cell: a link to the estimate below, then orphan exclusivity still running. */
+.strip-note {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+/* Copies of the medicine's substance and its first central approval, under the strip. */
+.card .copies {
+  margin: 8px 0 0;
+}
+
+.card .copies + .areas-line {
+  margin-top: 12px;
+}
+
+.card .protection-basis {
+  margin: 4px 0 8px;
+  font-size: 0.875rem;
+}
+
 /* The SmPC and EPAR as full-width secondary buttons. */
 .doc-buttons {
   display: grid;
@@ -4196,6 +4268,14 @@ mark {
     display: inline-block;
     margin: -13px 0;
     padding: 13px 0;
+  }
+
+  /* The answer strip's "Protection (est.)" link (step 3). */
+  a.strip-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: -10px 0;
   }
 
   .token-pill .token {

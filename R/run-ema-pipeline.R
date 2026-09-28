@@ -63,6 +63,10 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
     snapshot_date
   )
   tables <- c(tables, company_run$tables)
+  tables <- c(tables, build_protection_tables(tables, snapshot_date))
+  previous_protection <- read_previous_protection(
+    file.path(output_directory, "ema_medicine_protection.json")
+  )
 
   meta <- build_meta(
     ema_medicines_url,
@@ -88,6 +92,11 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   report_pipeline_summary(tables, snapshot_date)
   report_atc_summary(tables, atc_sources)
   report_company_summary(company_run, tables$ema_medicines)
+  report_protection_changes(
+    previous_protection,
+    tables$ema_medicine_protection,
+    tables$ema_medicines
+  )
   invisible(tables)
 }
 
@@ -150,7 +159,6 @@ build_ema_tables <- function(clean_medicines,
       substances,
       active_substances
     ),
-    ema_medicine_protection = build_protection_table(medicines, snapshot_date),
     ema_medicine_orphan_exclusivity = build_orphan_exclusivity_table(
       medicines,
       orphan_designations,
@@ -183,19 +191,77 @@ write_ema_outputs <- function(tables, meta, output_directory) {
   )
 }
 
+protection_status_counts <- function(protection) {
+  count_of <- function(status) sum(protection$status == status)
+  sprintf(
+    "%d protected, %d ended, %d unclear",
+    count_of("protected"),
+    count_of("ended"),
+    count_of("unclear")
+  )
+}
+
 report_protection_summary <- function(protection) {
-  count_of <- function(column, value) sum(protection[[column]] == value)
+  count_of <- function(basis) sum(protection$basis == basis)
   cli::cli_alert_info(sprintf(
     paste(
-      "Protection estimates: %d protected, %d ended, %d unclear",
-      "(%d follow a reference, %d reference not found)."
+      "Protection estimates: %s (%d follow a reference, %d reference not",
+      "found, %d counted from another company's medicine)."
     ),
-    count_of("status", "protected"),
-    count_of("status", "ended"),
-    count_of("status", "unclear"),
-    count_of("basis", "follows_reference"),
-    count_of("basis", "reference_not_found")
+    protection_status_counts(protection),
+    count_of("follows_reference"),
+    count_of("reference_not_found"),
+    count_of("other_company_reference")
   ))
+}
+
+read_previous_protection <- function(path) {
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+  jsonlite::fromJSON(path)
+}
+
+# The medicines whose status differs from the file the last run wrote.
+report_protection_changes <- function(previous, protection, medicines) {
+  if (is.null(previous)) {
+    return(invisible())
+  }
+  changed <- protection |>
+    dplyr::select("ema_product_number", status_now = "status", "basis") |>
+    dplyr::inner_join(
+      dplyr::select(previous, "ema_product_number", status_before = "status"),
+      by = "ema_product_number",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::filter(.data$status_now != .data$status_before) |>
+    dplyr::left_join(
+      dplyr::select(medicines, "ema_product_number", "name_of_medicine"),
+      by = "ema_product_number",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::arrange(
+      .data$status_before,
+      .data$status_now,
+      .data$name_of_medicine
+    )
+  cli::cli_alert_info(sprintf(
+    "Protection status: %s before this run, %s now; %d changed.",
+    protection_status_counts(previous),
+    protection_status_counts(protection),
+    nrow(changed)
+  ))
+  if (nrow(changed) > 0) {
+    cli::cli_verbatim(sprintf(
+      "  %s (%s): %s -> %s (%s)",
+      changed$name_of_medicine,
+      changed$ema_product_number,
+      changed$status_before,
+      changed$status_now,
+      changed$basis
+    ))
+  }
+  invisible()
 }
 
 report_pipeline_summary <- function(tables, snapshot_date) {

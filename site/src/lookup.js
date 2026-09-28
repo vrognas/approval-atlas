@@ -6,6 +6,7 @@ import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
 import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
+import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import {
@@ -26,7 +27,7 @@ import {
   statusesByFrequency,
 } from "./labels.js";
 import { markExternal } from "./links.js";
-import { espacenetUrl, protectionSummary } from "./protection.js";
+import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView } from "./url.js";
@@ -114,10 +115,14 @@ function atcBadge(code) {
     atcSegments(code).map((segment) => el("span", { class: segment.level ? `atc-seg level-${segment.level}` : "atc-seg" }, segment.text)));
 }
 
-// Answer strip: [label, value, wide] items (null items are left out); the wide one spans a row on phones.
+// Answer strip: [label, value, wide] items (null items are left out); the wide one spans a row on
+// phones. Four items (a medicine's protection cell, step 3): in a size container, as its columns
+// follow the strip's own width (the resizable sidebar sets it), not the viewport's.
 function strip(items) {
-  return el("dl", { class: "strip", "aria-label": UI.card.strip.label }, items.filter(Boolean).map(([label, value, wide]) =>
+  const shown = items.filter(Boolean);
+  const list = el("dl", { class: shown.length === 4 ? "strip strip-4" : "strip", "aria-label": UI.card.strip.label }, shown.map(([label, value, wide]) =>
     el("div", { class: wide ? "strip-wide" : null }, el("dt", null, label), el("dd", null, value))));
+  return shown.length === 4 ? el("div", { class: "strip-frame" }, list) : list;
 }
 
 // SmPC / EPAR as a full-width secondary button: document name (with the external-link icon), then
@@ -163,6 +168,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       orphan: groupBy(orphanRows, "ema_product_number"),
     })],
     register: [["ema_medicine_register_status.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
+    // Step 3 (#7, #8): substance spellings checked by hand as one substance (copies.js).
+    equivalents: [["ema_substance_equivalents.json"], substanceEquivalents],
     // Companies part 2: holders by company group (the dashboard loads the same files); the search
     // counts a group's medicines with status Authorised, as the other suggestion groups.
     companies: [["companies.json", "ema_medicine_companies.json"], (rows, medicineRows) => buildCompanies(rows, medicineRows, {
@@ -196,6 +203,19 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   const ready = (value) => value !== undefined && value !== FAILED;
   const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
+  // The substance equivalents (step 3): none when the file is missing (older data), undefined while
+  // it loads. setsOf(): the search index's medicines by substance set, kept for one equivalents value.
+  const NO_EQUIVALENTS = new Map();
+  function equivalentsNow() {
+    const equivalents = need("equivalents");
+    return equivalents === FAILED ? NO_EQUIVALENTS : equivalents;
+  }
+  let sets = null;
+  function setsOf(equivalents) {
+    if (sets?.equivalents !== equivalents) sets = { equivalents, groups: setGroups([...index.byNumber.values()], equivalents) };
+    return sets.groups;
+  }
+
   // patch: lookup keys (a card or result), or filters (a drug class on the dashboard: classState()).
   // label: an accessible name replacing the text's.
   function internalLink(text, patch, className = null, label = null) {
@@ -211,6 +231,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       },
     }, text);
   }
+
+  // Label parts (strings, and { text, link } for links: labels.js UI.copies) -> nodes; patchOf(link):
+  // the link's lookup patch, or null for plain text.
+  const partNodes = (parts, patchOf) => parts.map((part) => {
+    if (typeof part === "string") return part;
+    const patch = patchOf(part.link);
+    return patch ? internalLink(part.text, patch) : part.text;
+  });
 
   const fact = (label, content) => (content === null || (Array.isArray(content) && content.length === 0) ? null : [el("dt", null, label), el("dd", null, content)]);
 
@@ -382,26 +410,108 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     ]);
   }
 
+  // The section's heading is the target of the strip's "Protection (est.)" cell (focusable, kept
+  // focused across re-renders); the estimate's basis stands next to its chip (step 3, #7).
   function protectionSection(row) {
     const protection = need("protection");
-    const heading = (status) => el("h3", null, UI.protection.title, status ? [" ", el("span", { class: "chip" }, status)] : null);
+    const heading = (status) => el("h3", { id: "protection", tabindex: "-1", "data-focus-key": "protection" },
+      UI.protection.title, status ? [" ", el("span", { class: "chip" }, status)] : null);
     if (!ready(protection)) return el("section", { class: "card-section" }, heading(null), pending(protection));
     const names = row.substances ? row.substances.split("; ") : [];
+    const protectionRow = protection.byProduct.get(row.ema_product_number);
     const summary = protectionSummary(
-      protection.byProduct.get(row.ema_product_number),
+      protectionRow,
       protection.orphan.get(row.ema_product_number) ?? [],
       names.length ? names.join(" + ") : UI.protection.thisSubstance,
       snapshotDate,
+      countedFromName(row, firstOfSet(row, protectionRow), protectionRow, referenceDate(protectionRow)),
     );
     if (!summary) return null;
     return el("section", { class: "card-section protection" },
       heading(summary.status),
+      el("p", { class: "muted protection-basis" }, UI.protection.basisNote),
       summary.lines.map((line) => el("p", null, line)),
       summary.orphan.map((line) => el("p", null, line)),
       el("p", null, UI.protection.patents, " ", externalLink(UI.protection.espacenet, espacenetUrl(names[0] ?? row.name_of_medicine))),
       el("details", { "data-key": "caveats" },
         el("summary", null, UI.protection.caveatsTitle),
         el("ul", null, UI.protection.caveats.map((caveat) => el("li", null, caveat)))));
+  }
+
+  // A link within the card: focus and show the protection section's heading (not a hash change,
+  // which the page's URL state would keep). Data arriving later (the 5 MB documents index) renders
+  // above the section and would push it off screen: render() shows it again while the jump is
+  // pending, until the next view or the user scrolls or types.
+  let pendingJump = false;
+  const showProtection = () => panel.querySelector("#protection")?.closest("section")?.scrollIntoView({ block: "start" });
+  for (const type of ["wheel", "touchstart", "keydown"]) {
+    window.addEventListener(type, () => {
+      pendingJump = false;
+    }, { passive: true });
+  }
+  function jumpToProtection(event) {
+    const heading = panel.querySelector("#protection");
+    if (!heading) return;
+    event.preventDefault();
+    heading.focus({ preventScroll: true });
+    showProtection();
+    pendingJump = true;
+  }
+
+  // The strip's "Protection (est.)" cell (step 3, #7): the estimate's short form, a link to the
+  // section, then orphan exclusivity still running. Medicines never approved have no estimate.
+  function protectionCell(row) {
+    if (!row.marketing_authorisation_date) return null;
+    const protection = need("protection");
+    if (!ready(protection)) return [UI.card.strip.protection, pending(protection)];
+    const glance = protectionGlance(protection.byProduct.get(row.ema_product_number), protection.orphan.get(row.ema_product_number) ?? [], snapshotDate);
+    if (!glance) return null;
+    return [UI.card.strip.protection, [
+      el("a", { href: "#protection", class: "strip-link", onclick: jumpToProtection }, glance.value, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
+      glance.orphan ? el("span", { class: "strip-note" }, glance.orphan) : null,
+    ]];
+  }
+
+  // The medicines of a medicine's substance set (setGroups(); equivalents: none while they load).
+  const setRowsOf = (row, equivalents) => setsOf(equivalents).get(equivalentSetKey(row.substance_keys, equivalents)) ?? [row];
+  const referenceDate = (protectionRow) => index.byNumber.get(protectionRow?.reference_product_number)?.marketing_authorisation_date ?? null;
+  // The set's first central approval before this medicine (firstApprovalShown()), for the
+  // protection section's lines.
+  const firstOfSet = (row, protectionRow) => firstApprovalShown(row, copiesSummary(row, setRowsOf(row, equivalentsNow() ?? NO_EQUIVALENTS), null),
+    protectionRow, referenceDate(protectionRow));
+
+  // Under the strip (step 3, #7): the authorized generics and biosimilars of the medicine's
+  // substance set (medicines approved but not copies themselves; named as the substance's when this
+  // medicine is not its first), then, on a copy's card or when the set was first approved as
+  // another medicine more than 30 days before (Wegovy: Ozempic; copiesLinePlan()), the set's other authorized medicines
+  // and that approval, so "Since 2024" does not read as a new substance. Counted by substance set
+  // with equivalent spellings joined, company groups once the companies have loaded.
+  function copiesLines(row) {
+    const [equivalents, companies, protection] = [equivalentsNow(), need("companies"), need("protection")];
+    if (equivalents === undefined || companies === undefined || protection === undefined || !row.substance_keys?.length) return null;
+    const keys = [...new Set(row.substance_keys)];
+    const substanceLabel = (row.substances ? row.substances.split("; ") : keys).join(" + ");
+    const groupOf = ready(companies) ? (number) => companies.entry(number)?.group?.key ?? null : null;
+    const summary = copiesSummary(row, setRowsOf(row, equivalents), groupOf);
+    // The set's first approval, named as the protection estimate names it where it can be.
+    const protectionRow = ready(protection) ? protection.byProduct.get(row.ema_product_number) : undefined;
+    // A twin's first approval (Humira's Trudexa) is not named: the copies line covers it.
+    const { copies, first, same } = copiesLinePlan(row, summary, firstApprovalShown(row, summary, protectionRow, referenceDate(protectionRow)));
+    const lines = [];
+    if (copies) {
+      // Named as the substance's copies when this medicine is not its first (Opzelura: Jakavi's).
+      lines.push(copies === "list"
+        ? partNodes(UI.copies.line(summary.copies.map((entry) => ({
+          ...entry, first: { name: entry.first.name_of_medicine, date: entry.first.marketing_authorisation_date },
+        })), first ? substanceLabel : null), (position) => ({ med: summary.copies[position].first.ema_product_number }))
+        : UI.copies.none);
+    }
+    if (same) {
+      lines.push(partNodes(UI.copies.same(summary.others, substanceLabel, keys.length, first), (link) => (link === "first"
+        ? { med: first.number }
+        : keys.length === 1 ? { sub: keys[0] } : null)));
+    }
+    return lines.map((line) => el("p", { class: "copies" }, line));
   }
 
   function notFound(kind, value) {
@@ -455,7 +565,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
           ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(row.marketing_authorisation_date) ?? NOT_STATED]
           : null,
         [UI.card.strip.status, statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion)],
+        protectionCell(row),
       ]),
+      copiesLines(row),
       el("dl", { class: "areas-line" }, el("dt", null, UI.card.areas), el("dd", null, areaLinks(number, areas, conditions))),
       registerDiffers
         ? el("p", null, el("span", { class: "chip warning" },
@@ -600,15 +712,22 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     if (!substance) return notFound("substance", key);
     const medicines = need("medicines");
     const rows = [...substance.products].sort(byDate(1));
-    const first = rows[0]?.marketing_authorisation_date ? rows[0] : null;
-    const authorizedRows = rows.filter((row) => statusKind(row.medicine_status) === "authorized");
+    // Step 3 (#8): the same substance under another spelling in EMA's data (dasatinib: Sprycel is
+    // "dasatinib (anhydrous)"), each a link to its card. The answer (headline, dek, strip) is the
+    // substance's under all its spellings (substanceGroup()), so its dates and counts agree; the
+    // timeline and the list stay this spelling's.
+    const siblings = siblingSubstances(key, index.substances, equivalentsNow() ?? NO_EQUIVALENTS);
+    const group = substanceGroup(rows, siblings);
+    const groupRows = [...group.rows].sort(byDate(1));
+    const { first } = group;
+    const authorizedRows = [...group.authorized].sort(byDate(1));
     const authorized = authorizedRows.length;
     // Holders of the medicines authorized now; of all its medicines when none is: one company group
     // shows as the medicine card's (EMA's names joined), several are counted (companies part 2).
     const companies = need("companies");
     let holders = null;
     if (ready(companies)) {
-      const entries = (authorized ? authorizedRows : rows).map((row) => companies.entry(row.ema_product_number)).filter(Boolean);
+      const entries = (authorized ? authorizedRows : groupRows).map((row) => companies.entry(row.ema_product_number)).filter(Boolean);
       const groups = new Set(entries.map((entry) => entry.group?.key ?? entry.holder));
       if (groups.size === 1 && entries[0].group) {
         // EMA's names (none for a medicine EMA names no holder for).
@@ -619,23 +738,26 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       }
     }
     const [atc, atcCounts] = [need("atc"), need("atcCounts")];
+    const siblingLines = siblings.map((sibling) => el("p", { class: "namesake" }, partNodes(UI.substance.sibling(sibling.substance.name, sibling.count,
+      sibling.first ? { name: sibling.first.name_of_medicine, date: sibling.first.marketing_authorisation_date } : null), () => ({ sub: sibling.substance.key }))));
     // A status pill's opinion: negative when each of its medicines had a negative opinion (Kinselby's).
-    const opinionOf = (status) => (ready(medicines) && rows.filter((row) => row.medicine_status === status)
+    const opinionOf = (status) => (ready(medicines) && groupRows.filter((row) => row.medicine_status === status)
       .every((row) => medicines.get(row.ema_product_number)?.opinion_status === "Negative") ? "Negative" : null);
     return el("article", { class: "card" },
       kicker("substance"),
       title(headlineNodes(UI.headline.substance(substance.name, authorized))),
       el("p", { class: "dek" }, UI.substance.firstApproval(first?.marketing_authorisation_date, first?.name_of_medicine)),
+      siblingLines,
       strip([
         [UI.card.strip.company, holders ?? pending(companies), true],
         first ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(first.marketing_authorisation_date)] : null,
         // None authorized now: the statuses themselves (e.g. Withdrawn), which say more than "0 authorized".
         [UI.card.strip.status, authorized > 0
           ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
-          : el("span", { class: "badges" }, statusesByFrequency(rows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))))],
+          : el("span", { class: "badges" }, statusesByFrequency(groupRows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))))],
       ]),
       timelineBlock(rows, medicines),
-      el("h3", { id: "results-substance" }, UI.substance.products(rows.length)),
+      el("h3", { id: "results-substance" }, siblings.length ? UI.substance.productsListed(rows.length, substance.name) : UI.substance.products(rows.length)),
       // What each medicine is for (its therapeutic areas); the substance line only where it differs.
       resultTable(rows.map((row) => ({ row })), medicines, "results-substance", {
         areas: true,
@@ -949,6 +1071,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     // Same view re-rendered: keep open disclosures and the focused control.
     const open = new Set(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []);
     const focusKey = sameView && panel.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
+    if (!sameView) pendingJump = false;
     timeline = null;
     resizeObserver.disconnect();
     panel.hidden = view.kind === null;
@@ -981,6 +1104,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       heading?.scrollIntoView({ block: "nearest" });
     } else if (focusKey) {
       panel.querySelector(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
+      if (focusKey === "protection" && pendingJump) showProtection();
     }
   }
 
