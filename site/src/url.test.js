@@ -26,22 +26,33 @@ test("a filter patch is set when each of its keys holds exactly its values, in a
   assert.equal(patchIsSet(state, { atc: ["L"] }), false);
   assert.equal(patchIsSet(state, { mah: ["Novartis Europharm Limited"], atc: ["L"] }), false);
   assert.equal(patchIsSet(state, { mah: ["Novartis Europharm Limited"], type: ["Generic"] }), true);
-  assert.equal(patchIsSet(state, { branch: ["C04"] }), false);
+  assert.equal(patchIsSet(state, { area: ["C04"] }), false);
 });
 
 test("toggling a filter patch: set it, or clear its keys when it is already exactly set", () => {
-  const state = { ...structuredClone(DEFAULT_STATE), mah: ["Novartis Europharm Limited"], branch: ["C04"], type: ["Generic"] };
+  const state = { ...structuredClone(DEFAULT_STATE), mah: ["Novartis Europharm Limited"], area: ["C04"], type: ["Generic"] };
   assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"] }), { mah: [] });
-  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"], branch: ["C04"] }), { mah: [], branch: [] });
+  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"], area: ["C04"] }), { mah: [], area: [] });
   assert.deepEqual(togglePatch(state, { mah: ["Pfizer Europe MA EEIG"] }), { mah: ["Pfizer Europe MA EEIG"] });
   // Partly set: the whole patch is set (the other filters stay).
-  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"], branch: ["C14"] }), { mah: ["Novartis Europharm Limited"], branch: ["C14"] });
+  assert.deepEqual(togglePatch(state, { mah: ["Novartis Europharm Limited"], area: ["C14"] }), { mah: ["Novartis Europharm Limited"], area: ["C14"] });
 });
 
+// Therapeutic areas (phase 4f): branch codes, tree numbers and EMA's terms in one list.
+const ABOVE = new Map([
+  ["C04.588", new Set(["C04"])],
+  ["C04.588.180", new Set(["C04", "C04.588"])],
+  ["C17.800", new Set(["C17"])],
+  ["Psoriasis", new Set(["C17", "C17.800"])],
+  ["Arthritis, Rheumatoid", new Set(["C05", "C17", "C20"])],
+]);
+// EMA's terms that are a tree node or branch themselves (buildAreaTree().canonical()).
+const CANONICAL = new Map([["Breast Neoplasms", ["C04.588.180"]], ["Cancer", ["C04"]]]);
 const domain = {
   mahs: new Set(["Merck Sharp & Dohme B.V.", "Sanofi Pasteur MSD, SNC", "Pfizer Europe MA EEIG", "Not stated"]),
-  branches: new Set(["C04", "C14"]),
-  areas: new Set(["Arthritis, Rheumatoid", "Psoriasis"]),
+  areas: new Set(["C04", "C04.588", "C04.588.180", "C05", "C14", "C17", "C17.800", "C20", "Arthritis, Rheumatoid", "Breast Neoplasms", "Cancer", "Psoriasis"]),
+  areaAncestors: (key) => ABOVE.get(key) ?? new Set(),
+  areaCanonical: (key) => CANONICAL.get(key) ?? [key],
   types: new Set(["Advanced therapy", "Biosimilar", "Generic", "Other"]),
   statuses: new Set(["Authorised", "Withdrawn"]),
   years: [1995, 2026],
@@ -57,8 +68,7 @@ test("default state encodes to an empty query string and back", () => {
 test("names with commas, ampersands and slashes round-trip via repeated keys", () => {
   const query = encode({
     mah: ["Sanofi Pasteur MSD, SNC", "Merck Sharp & Dohme B.V.", "Not stated"],
-    area: ["Arthritis, Rheumatoid"],
-    branch: ["C14", "C04"],
+    area: ["Arthritis, Rheumatoid", "C14", "C04"],
     from: 2010,
     to: 2015,
     atc: ["L01", "H03"],
@@ -69,25 +79,45 @@ test("names with commas, ampersands and slashes round-trip via repeated keys", (
   const { state, dropped } = decode(query);
   assert.deepEqual(dropped, []);
   assert.deepEqual(state.mah, ["Merck Sharp & Dohme B.V.", "Not stated", "Sanofi Pasteur MSD, SNC"]);
-  assert.deepEqual(state.branch, ["C04", "C14"]);
+  assert.deepEqual(state.area, ["Arthritis, Rheumatoid", "C04", "C14"]);
   assert.deepEqual(state.status, ["Authorised", "Withdrawn"]);
   assert.deepEqual(state.atc, ["H03", "L01"]);
   assert.equal(encodeState(state).toString(), query);
 });
 
 test("keys are written in one canonical order with sorted, distinct list values", () => {
-  const query = encode({ by: "area", status: ["Withdrawn"], type: ["Other"], atc: ["H03", "C", "C"], area: ["Psoriasis"], branch: ["C04", "C04"], to: 2020, from: 2000, mah: ["b", "a"] });
-  assert.equal(query, "mah=a&mah=b&from=2000&to=2020&branch=C04&area=Psoriasis&atc=C&atc=H03&type=Other&status=Withdrawn&by=area");
+  const query = encode({ by: "area", status: ["Withdrawn"], type: ["Other"], atc: ["H03", "C", "C"], area: ["Psoriasis", "C04", "C04"], to: 2020, from: 2000, mah: ["b", "a"] });
+  assert.equal(query, "mah=a&mah=b&from=2000&to=2020&area=C04&area=Psoriasis&atc=C&atc=H03&type=Other&status=Withdrawn&by=area");
 });
 
 test("unknown values are dropped and reported, never thrown", () => {
   const long = "x".repeat(ATC_QUERY_MAX + 1);
-  const { state, dropped } = decode(`by=modality&mah=Nobody&mah=Pfizer+Europe+MA+EEIG&from=19x5&branch=Z99&type=Vaccine&status=Authorized&atc=${long}&atc=L04&med=1`);
+  const { state, dropped } = decode(`by=modality&mah=Nobody&mah=Pfizer+Europe+MA+EEIG&from=19x5&branch=Z99&area=Kuru&type=Vaccine&status=Authorized&atc=${long}&atc=L04&med=1`);
   assert.equal(state.by, "atc");
   assert.deepEqual(state.mah, ["Pfizer Europe MA EEIG"]);
   assert.equal(state.from, null);
-  assert.deepEqual([state.branch, state.type, state.status, state.atc], [[], [], [], ["L04"]]);
-  assert.deepEqual(dropped.map((item) => item.key).sort(), ["atc", "branch", "by", "from", "mah", "status", "type"]);
+  assert.deepEqual([state.area, state.type, state.status, state.atc], [[], [], [], ["L04"]]);
+  assert.deepEqual(dropped.map((item) => item.key).sort(), ["area", "atc", "branch", "by", "from", "mah", "status", "type"]);
+});
+
+// Phase 4f: one therapeutic area tree; links from before carry branch codes under "branch".
+test("therapeutic areas: old branch links load into the area list, and no selected area covers another", () => {
+  assert.deepEqual(decode("branch=C17&area=Psoriasis").state.area, ["C17"]);
+  assert.deepEqual(decode("branch=C04&area=Psoriasis").state.area, ["C04", "Psoriasis"]);
+  assert.deepEqual(decode("area=C17.800&area=Psoriasis&area=C05").state.area, ["C05", "C17.800"]);
+  assert.equal("branch" in DEFAULT_STATE, false);
+  assert.equal(encodeState(decode("branch=C04&branch=C14").state).toString(), "area=C04&area=C14");
+});
+
+// Links from before phase 4f name EMA's terms; a term that is a tree node (or branch) loads as it,
+// so the tree shows one checked row for it.
+test("therapeutic areas: a linked term that is a node or branch loads as that node", () => {
+  assert.deepEqual(decode("area=Breast+Neoplasms").state.area, ["C04.588.180"]);
+  assert.deepEqual(decode("area=Cancer&area=C04.588.180&area=Psoriasis").state.area, ["C04", "Psoriasis"]);
+  assert.equal(encodeState(decode("area=Breast+Neoplasms").state).toString(), "area=C04.588.180");
+  // Without the tree (areaCanonical left out) terms stay as they are.
+  const plain = { ...domain, areaCanonical: undefined };
+  assert.deepEqual(decodeState(new URLSearchParams("area=Breast+Neoplasms"), plain).state.area, ["Breast Neoplasms"]);
 });
 
 // The "Authorized now" / "Approvals per year" tabs (view=years) are gone: one dashboard (phase 4a).

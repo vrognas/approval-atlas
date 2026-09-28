@@ -115,6 +115,26 @@ test("buildProducts joins holder, year, MeSH terms, branches and ATC rows", () =
   assert.equal(second.year, null);
   assert.deepEqual(second.atc.map((row) => row.atc_code_human), ["L01XE"]);
   assert.deepEqual([second.areas, second.branches], [[], []]);
+  // Phase 4f: the therapeutic area tree keys (terms and every branch and node above them) and the
+  // nodes a term is itself; no subtree rows here, so each term is matched at its branch roots: it
+  // is those branches.
+  assert.deepEqual([...first.areaKeys].sort(), ["C04", "C15", "C20", "Leukemia", "Lymphoma", "Unmatched term"]);
+  assert.deepEqual([...first.areaExact].sort(), ["C04", "C15", "C20"]);
+  assert.deepEqual([second.areaKeys, second.areaExact], [[], []]);
+});
+
+test("buildProducts: tree keys from the subtree rows, and the nodes a product's terms are", () => {
+  const [product] = buildProducts([medicine("P1")], {
+    areaRows: [{ ema_product_number: "P1", therapeutic_area_mesh: "Breast Neoplasms" }],
+    branchRows: [{ therapeutic_area_mesh: "Breast Neoplasms", mesh_descriptor_name: "Breast Neoplasms", branch: "C04", branch_name: "Neoplasms" }],
+    subtreeRows: [
+      { therapeutic_area_mesh: "Breast Neoplasms", branch: "C04", node: "C04.588", level: 2, parent: "C04", node_name: "Neoplasms by Site" },
+      { therapeutic_area_mesh: "Breast Neoplasms", branch: "C04", node: "C04.588.180", level: 3, parent: "C04.588", node_name: "Breast Neoplasms" },
+    ],
+    atcRows: [],
+  });
+  assert.deepEqual([...product.areaKeys].sort(), ["Breast Neoplasms", "C04", "C04.588", "C04.588.180"]);
+  assert.deepEqual(product.areaExact, ["C04.588.180"]);
 });
 
 test("statusDate picks the EMA date of the event behind the current status", () => {
@@ -269,4 +289,11 @@ test("sortBreakdownRows: count keeps the rows; key sorts ATC classes by code, th
   assert.deepEqual(sortBreakdownRows(atc, "key", "atc").map((row) => row.key), ["L04AA", "L04AB", "L04AC", "L04A"]);
   // A copy: the input keeps its order.
   assert.equal(atc[0].key, "L04AC");
+  // Phase 4f: a second click reverses the order: fewest first (ties keep their order), Z-A; Other
+  // and the incomplete-code row still last.
+  assert.deepEqual(sortBreakdownRows(atc, "count", "atc", "asc").map((row) => row.key), ["L04AB", "L04AC", "L04AA", "L04A"]);
+  assert.deepEqual(sortBreakdownRows(holders, "count", "mah", "asc").map((row) => row.label), ["alpha", "Beta", "Zeta", "Other"]);
+  assert.deepEqual(sortBreakdownRows(holders, "key", "mah", "desc").map((row) => row.label), ["Zeta", "Beta", "alpha", "Other"]);
+  assert.deepEqual(sortBreakdownRows(atc, "key", "atc", "desc").map((row) => row.key), ["L04AC", "L04AB", "L04AA", "L04A"]);
+  assert.equal(sortBreakdownRows(holders, "count", "mah", "desc"), holders);
 });

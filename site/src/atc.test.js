@@ -7,11 +7,13 @@ import {
   atcCode,
   atcExactCounts,
   atcIncomplete,
+  atcIncompleteAt,
   atcLadder,
   atcLevel,
   atcOrigin,
   atcPrefixCounts,
   atcPrefixes,
+  atcRowIncomplete,
   atcTreeChildren,
   atcTreeCodes,
   atcTreeSearch,
@@ -260,4 +262,38 @@ test("a code is incomplete unless it is a valid level-5 code", () => {
   assert.equal(atcIncomplete("L04AC05"), false);
   assert.equal(atcIncomplete("L04AC"), true);
   assert.equal(atcIncomplete("LX1XX02"), true);
+});
+
+// Phase 4e: curated codes (checked by hand) name their evidence, found from the evidence URL.
+test("atcOrigin: a curated code, with where it was checked", () => {
+  const index = "https://atcddd.fhi.no/atc_ddd_index/?code=N06DX&showdescription=no";
+  const temporary = "https://atcddd.fhi.no/filearchive/documents/temporary_atc_and_ddd.xlsx";
+  const curated = (human, code, url, extra = {}) => row(human, code, { atc_code_source: "curated", atc_code_document_url: url, ...extra });
+  assert.deepEqual(atcOrigin(curated("N07", "N06DX03", index, { atc_code_conflict: true })),
+    { kind: "curated", published: "N07", conflict: true, evidence: "whocc_index", url: index });
+  assert.deepEqual(atcOrigin(curated("C10AX", "C10AX21", temporary)),
+    { kind: "curated", published: "C10AX", conflict: false, evidence: "whocc_temporary", url: temporary });
+  const pdf = "https://www.ema.europa.eu/en/documents/product-information/x-epar-product-information_en.pdf";
+  assert.equal(atcOrigin(curated(null, "L04AG05", pdf)).evidence, "ema_smpc_text");
+  assert.equal(atcOrigin(curated("B03", "B03AC", "https://example.org/")).evidence, null);
+  // A retired code is said as such first.
+  assert.equal(atcOrigin(curated("L01XC", "L01XC", index, { current_atc_code: "L01F" })).kind, "retired");
+});
+
+// Phase 4e: atc_final_level says whether a code is complete (B03AC, which WHO does not subdivide).
+test("a row's code is incomplete by the data's atc_final_level, else (older files) by its level", () => {
+  assert.equal(atcRowIncomplete(row("B03", "B03AC", { atc_final_level: true })), false);
+  assert.equal(atcRowIncomplete(row("L01XE", "L01XE", { atc_final_level: false })), true);
+  assert.equal(atcRowIncomplete(row("J07BX03", "J07BX03", { current_atc_code: "J07BN", atc_final_level: true })), false);
+  assert.equal(atcRowIncomplete(row("L04AC")), true);
+  assert.equal(atcRowIncomplete(row("L04AC05")), false);
+});
+
+test("atcIncompleteAt: the classes some medicine is coded at with an incomplete code", () => {
+  const products = [
+    { atc: [row("B03", "B03AC", { atc_final_level: true })] },
+    { atc: [row("L01XE", "L01XE", { atc_final_level: false })] },
+    { atc: [row("J07BX03", "J07BX03", { current_atc_code: "J07BN", atc_final_level: true }), row("L01XE", "L01XE", { atc_final_level: false })] },
+  ];
+  assert.deepEqual([...atcIncompleteAt(products)], ["L01XE"]);
 });

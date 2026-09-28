@@ -76,13 +76,16 @@ export function renderLegend(list, types) {
 }
 
 // The per-year chart's legend: "Bottom to top:", then the stack series in stack order (position
-// tells the segments apart, not only colour). series: [{ key, label, color }].
+// tells the segments apart, not only colour). series: [{ key, label, color, tip }]; an entry with a
+// tip (the statuses) explains itself on hover and on a tap (tabindex -1: focusable, no tab stop), as
+// the type and status badges do.
 export function renderStackLegend(list, series) {
   const root = d3.select(list);
   root.selectChildren().remove();
   if (series.length === 0) return;
-  root.append("li").attr("class", "legend-lead").text(UI.yearStrip.legendLead);
+  root.append("li").attr("class", "legend-lead").text(UI.years.legendLead);
   const items = root.selectAll("li.legend-series").data(series).join("li").attr("class", "legend-series");
+  items.filter((item) => item.tip).attr("data-tip", (item) => item.tip).attr("tabindex", "-1");
   items.append("span").attr("class", "swatch").attr("aria-hidden", "true").style("background", (item) => item.color).style("box-shadow", outline);
   items.append("span").text((item) => item.label);
 }

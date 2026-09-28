@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import { atcCode, atcIncomplete, atcOrigin, atcPrefixes } from "./atc.js";
+import { atcCode, atcOrigin, atcPrefixes, atcRowIncomplete } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
 import { UI, atcClassLabel, atcOriginFlag, atcOriginText, statusDateLine, statusLabel } from "./labels.js";
@@ -32,7 +32,7 @@ function atcLevelNames(row, atcNames) {
 // Tooltip: the level names one per line, how the code differs from EMA's, then the source.
 function atcTitle(row, atcNames, retiredYears) {
   const lines = atcLevelNames(row, atcNames);
-  if (atcIncomplete(atcCode(row))) lines.push(UI.table.incompleteTitle);
+  if (atcRowIncomplete(row)) lines.push(UI.table.incompleteTitle);
   const origin = atcOriginText(atcOrigin(row), atcNames, retiredYears);
   if (origin) lines.push(origin);
   return [...lines, UI.table.source(row.atc_code_source ?? row.source)].join("\n");
@@ -75,7 +75,8 @@ function appendAtcBadge(parent, code, atcNames) {
   return badge;
 }
 
-// One badge per code to use (atcCode(); rows without one are skipped), flagged when incomplete or
+// One badge per code to use (atcCode(); rows without one are skipped), flagged when incomplete
+// (atcRowIncomplete(): atc_final_level, so B03AC is not; phase 4e) or
 // when it differs from EMA's published code (atcOrigin(): a short flag, the sentence as tooltip and
 // for screen readers).
 function renderAtcCell(cell, product, atcNames, retiredYears) {
@@ -87,7 +88,7 @@ function renderAtcCell(cell, product, atcNames, retiredYears) {
     // The tooltip is out of reach for keyboard, touch and screen-reader users.
     const names = atcLevelNames(row, atcNames);
     if (names.length) code.append("span").attr("class", "visually-hidden").text(` (${names.join("; ")})`);
-    if (atcIncomplete(atcCode(row))) code.append("span").attr("class", "flag").text(UI.table.incomplete);
+    if (atcRowIncomplete(row)) code.append("span").attr("class", "flag").text(UI.table.incomplete);
     const origin = atcOrigin(row);
     if (!origin) return;
     code.append("span").attr("class", "flag").attr("aria-hidden", "true").text(atcOriginFlag(origin));
@@ -109,10 +110,13 @@ function renderTypeCell(cell, product) {
     .text((badge) => badge.label);
 }
 
-// Merged "Approved · Status": dot and status label, then the date line. Union Register
-// disagreement: a visible marker, the full text as tooltip and for screen readers.
+// Merged "Approved · Status": dot and status label (explained on hover and on a tap, as the type
+// badges: UI.statusTips), then the date line. Union Register disagreement: a visible marker, the
+// full text as tooltip and for screen readers.
 function renderStatusCell(cell, product, register) {
-  cell.append("span").attr("class", `status hue-${statusHue(product.medicine_status)}`).text(statusLabel(product.medicine_status));
+  const status = product.medicine_status;
+  const carrier = UI.statusTips[status] ? cell.append("span").attr("class", "status-tip").attr("data-tip", UI.statusTips[status]).attr("tabindex", "-1") : cell;
+  carrier.append("span").attr("class", `status hue-${statusHue(status)}`).text(statusLabel(status));
   const dates = statusDateLine(product.medicine_status, product.authorized_from, product.authorized_until);
   if (dates) cell.append("span").attr("class", "status-date").text(dates);
   const row = register?.get(product.ema_product_number);

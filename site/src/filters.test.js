@@ -9,6 +9,7 @@ const product = (id, fields) => ({
   year: 2015,
   branches: [],
   areas: [],
+  areaKeys: [],
   atc: [],
   medicine_type: "Other",
   medicine_status: "Authorised",
@@ -17,9 +18,10 @@ const product = (id, fields) => ({
 const atcRows = (...codes) => codes.map((code) => ({ atc_code_human: code }));
 
 const products = [
-  product("P1", { mah: "Not stated", year: 2001, branches: ["C04"], areas: ["Lymphoma"], atc: atcRows("L01FA01") }),
-  product("P2", { year: 2010, branches: ["C04", "C14"], areas: ["Breast Neoplasms"], atc: atcRows("L01XE"), medicine_type: "Generic" }),
-  product("P3", { year: null, branches: ["C18"], areas: ["Diabetes Mellitus, Type 2"], atc: atcRows("A10BA02", "A10BH01"), medicine_status: "Withdrawn" }),
+  // areaKeys: buildAreaTree().keysOf(areas), a product's terms and every branch and tree node above them.
+  product("P1", { mah: "Not stated", year: 2001, branches: ["C04"], areas: ["Lymphoma"], areaKeys: ["Lymphoma", "C04", "C04.557", "C15"], atc: atcRows("L01FA01") }),
+  product("P2", { year: 2010, branches: ["C04", "C14"], areas: ["Breast Neoplasms"], areaKeys: ["Breast Neoplasms", "C04", "C04.588", "C04.588.180", "C17"], atc: atcRows("L01XE"), medicine_type: "Generic" }),
+  product("P3", { year: null, branches: ["C18"], areas: ["Diabetes Mellitus, Type 2"], areaKeys: ["Diabetes Mellitus, Type 2", "C18", "C19"], atc: atcRows("A10BA02", "A10BH01"), medicine_status: "Withdrawn" }),
   product("P4", { mah: "Sanofi Pasteur MSD, SNC", year: 2020, atc: [], medicine_type: "Biosimilar" }),
 ];
 const atcClasses = [
@@ -51,9 +53,12 @@ test("the approval-year range is inclusive, open-ended and drops undated product
   assert.ok(run({}).includes("P3"));
 });
 
-test("branch and area match a product with any selected value", () => {
-  assert.deepEqual(run({ branch: ["C14", "C18"] }), ["P2", "P3"]);
+// Phase 4f: one therapeutic area filter holding branch codes, tree numbers and EMA's terms.
+test("the area filter matches a product with any selected branch, tree node or term", () => {
+  assert.deepEqual(run({ area: ["C17", "C18"] }), ["P2", "P3"]);
+  assert.deepEqual(run({ area: ["C04.588"] }), ["P2"]);
   assert.deepEqual(run({ area: ["Lymphoma", "Breast Neoplasms"] }), ["P1", "P2"]);
+  assert.deepEqual(makePredicates({ ...structuredClone(DEFAULT_STATE), area: [] }, atcClasses), {});
 });
 
 test("an ATC code is a case-insensitive prefix of any of the product's codes", () => {
@@ -110,8 +115,8 @@ test("type and status match the selected raw values", () => {
 });
 
 test("filters combine, and except skips one dimension", () => {
-  assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], branch: ["C04"] }), ["P2"]);
-  assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], branch: ["C04"] }, "mah"), ["P1", "P2"]);
+  assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], area: ["C04"] }), ["P2"]);
+  assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], area: ["C04"] }, "mah"), ["P1", "P2"]);
   assert.deepEqual(run({ from: 2018, atc: ["L"] }, "date"), ["P1", "P2"]);
 });
 

@@ -3,7 +3,7 @@
 // while any filter is active. Rebuilt on every render; focus goes back to the same control, else
 // to a token opening the same sheet, else to the first token.
 import * as d3 from "d3";
-import { typeTipId } from "./badges.js";
+import { statusTip, typeTip } from "./badges.js";
 import { UI } from "./labels.js";
 
 // sheetOf(key): the filter a token opens (tokens opening the same one share it; none for the year
@@ -32,9 +32,10 @@ export function renderSentence(container, parts, { anyActive, sheetOf, popup, on
     if (typeof part === "string") {
       parent.node().append(part);
     } else if (part.active) {
-      // A type's explanation (part.tip) on hover and focus, and as the token's description.
-      const pill = parent.append("span").attr("class", "token-pill").attr("data-tip", part.tip ? UI.typeTips[part.tip] : null);
-      tokenButton(pill, part).attr("aria-describedby", part.tip ? typeTipId(part.tip) : null);
+      // A type's or status's explanation (part.tip) on hover and focus, and as the token's description.
+      const tip = part.tip ? (part.key === "status" ? statusTip : typeTip)(part.tip) : null;
+      const pill = parent.append("span").attr("class", "token-pill").attr("data-tip", tip?.text ?? null);
+      tokenButton(pill, part).attr("aria-describedby", tip?.id ?? null);
       pill.append("button")
         .attr("type", "button")
         .attr("class", "token-remove")

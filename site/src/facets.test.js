@@ -7,10 +7,12 @@ import {
   FACET_VALUES,
   OTHER_KEY,
   TYPE_ORDER,
+  defaultSortDirection,
   facetCounts,
   facetRows,
   holderActivity,
   keyCounts,
+  nextSort,
   orderActivityColumns,
   sentenceParts,
   sortActivityRows,
@@ -31,6 +33,7 @@ const product = (id, fields) => ({
   authorized_from: "2015-03-01",
   branches: [],
   areas: [],
+  areaKeys: [],
   atc: [],
   medicine_type: "Other",
   medicine_status: "Authorised",
@@ -38,11 +41,12 @@ const product = (id, fields) => ({
 });
 
 const products = [
-  product("P1", { medicine_type: "Biosimilar", branches: ["C17"], areas: ["Psoriasis"], year: 2020, authorized_from: "2020-01-01" }),
-  product("P2", { medicine_type: "Biosimilar", branches: ["C17", "C05"], areas: ["Psoriasis", "Arthritis, Psoriatic"] }),
-  product("P3", { medicine_type: "Generic", mah: "Accord Healthcare S.L.U.", areas: ["Psoriasis"] }),
+  // areaKeys: the therapeutic area tree keys (areas.js keysOf()); P3's term matched no branch.
+  product("P1", { medicine_type: "Biosimilar", branches: ["C17"], areas: ["Psoriasis"], areaKeys: ["Psoriasis", "C17", "C17.800"], year: 2020, authorized_from: "2020-01-01" }),
+  product("P2", { medicine_type: "Biosimilar", branches: ["C17", "C05"], areas: ["Psoriasis", "Arthritis, Psoriatic"], areaKeys: ["Psoriasis", "C17", "C17.800", "Arthritis, Psoriatic", "C05"] }),
+  product("P3", { medicine_type: "Generic", mah: "Accord Healthcare S.L.U.", areas: ["Psoriasis"], areaKeys: ["Psoriasis"] }),
   // Withdrawn: counted like any other status (one dashboard, every status).
-  product("P4", { medicine_status: "Withdrawn", branches: ["C17"], areas: ["Psoriasis"] }),
+  product("P4", { medicine_status: "Withdrawn", branches: ["C17"], areas: ["Psoriasis"], areaKeys: ["Psoriasis", "C17", "C17.800"] }),
   // Authorised without an approval date: counted, but not in the approval years.
   product("P5", { year: null, authorized_from: null, medicine_type: "Generic" }),
   // Refused: never dated.
@@ -68,8 +72,9 @@ test("a facet's counts ignore its own filter and apply every other one", () => {
 });
 
 test("a product counts once for each of its values", () => {
-  assert.deepEqual(counted({}, "branch"), { C17: 3, C05: 1 });
-  assert.deepEqual(counted({}, "area"), { Psoriasis: 4, "Arthritis, Psoriatic": 1 });
+  // Phase 4f: the therapeutic area tree counts every key a medicine touches.
+  assert.deepEqual(counted({}, "area"), { Psoriasis: 4, C17: 3, "C17.800": 3, "Arthritis, Psoriatic": 1, C05: 1 });
+  assert.equal("branch" in FACET_VALUES, false);
 });
 
 test("approval years count per year and ignore the year filter itself", () => {
@@ -79,37 +84,25 @@ test("approval years count per year and ignore the year filter itself", () => {
 
 const histogram = (patch, rows = products) => yearHistogram(rows, predicatesOf(patch), [2014, 2021]);
 const nonZero = (rows) => Object.fromEntries(rows.filter((row) => row.count > 0).map((row) => [row.year, row.count]));
-const stacks = (rows) => Object.fromEntries(rows.filter((row) => row.count > 0).map((row) => [row.year, row.statuses.map(({ status, count }) => `${count} ${status}`)]));
 
 test("year histogram: one row per year of the data range, zeros included", () => {
   const rows = histogram({});
   assert.deepEqual(rows.map((row) => row.year), [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]);
-  assert.deepEqual(rows[0], { year: 2014, count: 0, statuses: [] });
+  assert.deepEqual(rows[0], { year: 2014, count: 0 });
 });
 
-test("year histogram: every medicine with an approval date, stacked by its current status", () => {
-  // The undated P5 and P6 are left out.
+// Phase 4f: the strip is a slim one-colour year filter; the status stacks moved to the per-year
+// chart ("Stack by" Status, yearStacks()).
+test("year histogram: every medicine with an approval date, one count per year", () => {
+  // The undated P5 and P6 are left out; the withdrawn P4 counts like any other status.
   assert.deepEqual(nonZero(histogram({})), { 2015: 3, 2020: 1 });
-  assert.deepEqual(stacks(histogram({})), { 2015: ["2 Authorised", "1 Withdrawn"], 2020: ["1 Authorised"] });
-});
-
-test("year histogram: statuses stack Authorized first, then the ended ones, then any others", () => {
-  const more = [
-    product("P7", { medicine_status: "Something new" }),
-    product("P8", { medicine_status: "Lapsed" }),
-    product("P9", { medicine_status: "Revoked" }),
-    product("P10", { medicine_status: "Expired" }),
-    product("P11", { medicine_status: "Suspended" }),
-  ];
-  assert.deepEqual(stacks(histogram({}, [...products, ...more]))[2015], [
-    "2 Authorised", "1 Withdrawn", "1 Expired", "1 Lapsed", "1 Suspended", "1 Revoked", "1 Something new",
-  ]);
+  assert.deepEqual(histogram({})[1], { year: 2015, count: 3 });
 });
 
 test("year histogram: ignores the year filter and applies every other one", () => {
   assert.deepEqual(nonZero(histogram({ from: 2018 })), { 2015: 3, 2020: 1 });
   assert.deepEqual(nonZero(histogram({ from: 2018, to: 2019, type: ["Biosimilar"] })), { 2015: 1, 2020: 1 });
-  assert.deepEqual(stacks(histogram({ status: ["Withdrawn"] })), { 2015: ["1 Withdrawn"] });
+  assert.deepEqual(nonZero(histogram({ status: ["Withdrawn"] })), { 2015: 1 });
 });
 
 test("status breakdown: statuses by count, ties in stack order", () => {
@@ -166,7 +159,7 @@ test("medicine types show in stack order", () => {
 
 const lookups = {
   years: [1995, 2026],
-  branchNames: new Map([["C17", "Skin and Connective Tissue Diseases"]]),
+  areaNames: new Map([["C17", "Skin and Connective Tissue Diseases"], ["C17.800", "Skin Diseases"], ["Psoriasis", "Psoriasis"]]),
   atcNames: new Map([["L04AC", "Interleukin inhibitors"], ["L", "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS"], ["C", "CARDIOVASCULAR SYSTEM"]]),
 };
 const stateOf = (patch) => ({ ...structuredClone(DEFAULT_STATE), ...patch });
@@ -174,8 +167,8 @@ const stateOf = (patch) => ({ ...structuredClone(DEFAULT_STATE), ...patch });
 test("sentence tokens read as defaults without filters", () => {
   const label = (dimension) => tokenLabel(dimension, stateOf({}), lookups);
   assert.deepEqual(
-    ["type", "atc", "mah", "branch", "area", "from", "to", "status"].map(label),
-    ["all medicine types", "all ATC classes", "all holders", "all therapeutic area groups", "all therapeutic areas", "1995", "2026", "any status"],
+    ["type", "atc", "mah", "area", "from", "to", "status"].map(label),
+    ["all medicine types", "all ATC classes", "all holders", "all therapeutic areas", "1995", "2026", "any status"],
   );
 });
 
@@ -184,8 +177,9 @@ test("sentence tokens name one selection, or count several", () => {
   assert.equal(tokenLabel("type", stateOf({ type: ["Biosimilar", "Generic"] }), lookups), "2 medicine types");
   assert.equal(tokenLabel("mah", stateOf({ mah: ["Novo Nordisk A/S"] }), lookups), "Novo Nordisk A/S");
   assert.equal(tokenLabel("mah", stateOf({ mah: ["A", "B", "C"] }), lookups), "3 holders");
-  assert.equal(tokenLabel("branch", stateOf({ branch: ["C17"] }), lookups), "Skin and Connective Tissue Diseases");
-  assert.equal(tokenLabel("branch", stateOf({ branch: ["C17", "C05"] }), lookups), "2 therapeutic area groups");
+  // Phase 4f: one therapeutic area list: a branch, tree node or term by its name.
+  assert.equal(tokenLabel("area", stateOf({ area: ["C17"] }), lookups), "Skin and Connective Tissue Diseases");
+  assert.equal(tokenLabel("area", stateOf({ area: ["C17.800"] }), lookups), "Skin Diseases");
   assert.equal(tokenLabel("area", stateOf({ area: ["Psoriasis"] }), lookups), "Psoriasis");
   assert.equal(tokenLabel("area", stateOf({ area: ["Psoriasis", "Asthma"] }), lookups), "2 therapeutic areas");
   assert.equal(tokenLabel("status", stateOf({ status: ["Authorised"] }), lookups), "status Authorized");
@@ -205,13 +199,13 @@ test("the ATC token names one class, quotes a name filter, reads two as codes an
 
 const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `[${part.text}]`)).join("");
 
-test("the filter sentence: one areas token until an area filter is set", () => {
+test("the filter sentence: defaults, one therapeutic area token", () => {
   assert.equal(
     text(sentenceParts(stateOf({}), lookups)),
     "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic areas], approved in [any year], with [any status].",
   );
-  const [areas] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "areas");
-  assert.deepEqual(areas, { key: "areas", text: "all therapeutic areas", active: false, clears: ["branch", "area"] });
+  const [areas] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "area");
+  assert.deepEqual(areas, { key: "area", text: "all therapeutic areas", active: false, clears: ["area"] });
   // Phase 4c review: without a year filter the count includes medicines never approved, so the
   // sentence does not name a year range; one token focuses the slider.
   const [years] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "years");
@@ -219,14 +213,14 @@ test("the filter sentence: one areas token until an area filter is set", () => {
 });
 
 test("the filter sentence: active tokens, each clearing its own filter", () => {
-  const parts = sentenceParts(stateOf({ type: ["Biosimilar"], atc: ["L04AC"], branch: ["C17"], area: ["Psoriasis"], from: 2015, status: ["Authorised"] }), lookups);
+  const parts = sentenceParts(stateOf({ type: ["Biosimilar"], atc: ["L04AC"], area: ["C17"], from: 2015, status: ["Authorised"] }), lookups);
   assert.equal(
     text(parts),
-    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all holders] in [Skin and Connective Tissue Diseases] and [Psoriasis], approved [2015]–[2026] (medicines without an approval date left out), with [status Authorized].",
+    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all holders] in [Skin and Connective Tissue Diseases], approved [2015]–[2026] (medicines without an approval date left out), with [status Authorized].",
   );
   const tokens = parts.filter((part) => typeof part !== "string");
   assert.deepEqual(tokens.filter((part) => part.active).map((part) => [part.key, part.clears]), [
-    ["type", ["type"]], ["atc", ["atc"]], ["branch", ["branch"]], ["area", ["area"]], ["from", ["from"]], ["status", ["status"]],
+    ["type", ["type"]], ["atc", ["atc"]], ["area", ["area"]], ["from", ["from"]], ["status", ["status"]],
   ]);
   assert.deepEqual(tokens.filter((part) => !part.active).map((part) => part.key), ["mah", "to"]);
 });
@@ -262,6 +256,16 @@ test("the filter sentence: a type token naming one type with an explanation carr
   assert.equal(typeToken([]).tip, null);
 });
 
+// Phase 4f: statuses explain themselves as the types do (UI.statusTips).
+test("the filter sentence: a status token naming one status with an explanation carries it", () => {
+  const statusToken = (status) => sentenceParts(stateOf({ status }), lookups).find((part) => part.key === "status");
+  assert.equal(statusToken(["Lapsed"]).tip, "Lapsed");
+  assert.equal(statusToken(["Authorised"]).tip, "Authorised");
+  assert.equal(statusToken(["Something new"]).tip, null);
+  assert.equal(statusToken(["Refused", "Withdrawn"]).tip, null);
+  assert.equal(statusToken([]).tip, null);
+});
+
 test("the most common conditions: areas by products, with the MeSH descriptor when known", () => {
   const descriptorOf = new Map([["Psoriasis", "D011565"]]);
   assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf), [
@@ -273,6 +277,8 @@ test("the most common conditions: areas by products, with the MeSH descriptor wh
   assert.deepEqual(topAreas(products.slice(0, 4), descriptorOf)[0], { term: "Psoriasis", count: 4, authorized: 3, descriptorUi: "D011565" });
   assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf, 1).map((row) => row.term), ["Psoriasis"]);
   assert.deepEqual(topAreas([], descriptorOf), []);
+  // Phase 4f: with a therapeutic area filter, only the terms within it (within(term)).
+  assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf, 8, (term) => term !== "Psoriasis").map((row) => row.term), ["Arthritis, Psoriatic"]);
 });
 
 test("type split: products per key and medicine type, each product once per key", () => {
@@ -309,6 +315,31 @@ test("holder rows sort by total (ties by name), by name, or by a column's count 
   assert.equal(activityRows[0].mah, "Pfizer Europe MA EEIG");
 });
 
+// Phase 4f: every sort reverses on a second click; ties keep their order (total, then name).
+test("holder rows sort in either direction: counts fewest first, names Z-A; ties by total, then name", () => {
+  const order = (sort, direction) => sortActivityRows(activityRows, sort, direction).map((row) => row.mah);
+  assert.deepEqual(order("total", "asc"), ["Accord Healthcare S.L.U.", "Amgen Europe B.V.", "Zentiva k.s.", "Pfizer Europe MA EEIG"]);
+  assert.deepEqual(order("total", "desc"), order("total"));
+  assert.deepEqual(order("name", "desc"), ["Zentiva k.s.", "Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Accord Healthcare S.L.U."]);
+  assert.deepEqual(order("name", "asc"), order("name"));
+  assert.deepEqual(order("C05", "asc"), ["Accord Healthcare S.L.U.", "Pfizer Europe MA EEIG", "Amgen Europe B.V.", "Zentiva k.s."]);
+  assert.deepEqual(order("C17", "asc"), ["Amgen Europe B.V.", "Zentiva k.s.", "Accord Healthcare S.L.U.", "Pfizer Europe MA EEIG"]);
+});
+
+test("sorts start most first (counts) or A-Z (names, codes); the sort in force reverses on a second click", () => {
+  assert.equal(defaultSortDirection("total"), "desc");
+  assert.equal(defaultSortDirection("count"), "desc");
+  assert.equal(defaultSortDirection("C05"), "desc");
+  assert.equal(defaultSortDirection("name"), "asc");
+  assert.equal(defaultSortDirection("key"), "asc");
+  assert.deepEqual(nextSort({ key: "total", direction: "desc" }, "total"), { key: "total", direction: "asc" });
+  assert.deepEqual(nextSort({ key: "total", direction: "asc" }, "total"), { key: "total", direction: "desc" });
+  assert.deepEqual(nextSort({ key: "total", direction: "asc" }, "name"), { key: "name", direction: "asc" });
+  assert.deepEqual(nextSort({ key: "name", direction: "asc" }, "name"), { key: "name", direction: "desc" });
+  assert.deepEqual(nextSort({ key: "name", direction: "desc" }, "C05"), { key: "C05", direction: "desc" });
+  assert.deepEqual(nextSort({ key: "count", direction: "desc" }, "key"), { key: "key", direction: "asc" });
+});
+
 test("activity columns: ATC groups by code, areas by name, or most medicines first; Other stays last", () => {
   const counts = new Map([["L", 9], ["A", 3], ["C", 9], ["C04", 7], ["C14", 12], ["__other__", 30]]);
   const atc = [{ key: "L", label: "L Antineoplastic" }, { key: "A", label: "A Alimentary" }, { key: "C", label: "C Cardiovascular" }];
@@ -317,6 +348,11 @@ test("activity columns: ATC groups by code, areas by name, or most medicines fir
   const areas = [{ key: "C04", label: "Neoplasms" }, { key: "C14", label: "Cardiovascular Diseases" }, { key: "__other__", label: "Other", other: true }];
   assert.deepEqual(orderActivityColumns(areas, counts, "key", "area").map((column) => column.key), ["C14", "C04", "__other__"]);
   assert.deepEqual(orderActivityColumns(areas, counts, "count", "area").map((column) => column.key), ["C14", "C04", "__other__"]);
+  // Phase 4f: reversed on a second click (ties by key, A-Z either way); Other stays last.
+  assert.deepEqual(orderActivityColumns(atc, counts, "key", "atc", "desc").map((column) => column.key), ["L", "C", "A"]);
+  assert.deepEqual(orderActivityColumns(atc, counts, "count", "atc", "asc").map((column) => column.key), ["A", "C", "L"]);
+  assert.deepEqual(orderActivityColumns(areas, counts, "key", "area", "desc").map((column) => column.key), ["C04", "C14", "__other__"]);
+  assert.deepEqual(orderActivityColumns(areas, counts, "count", "area", "asc").map((column) => column.key), ["C04", "C14", "__other__"]);
 });
 
 // Approvals per year, stacked by medicine type, ATC class or holder (the top n and Other).

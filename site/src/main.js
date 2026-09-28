@@ -6,16 +6,19 @@ import {
   breakdownExcluded,
   buildProducts,
   buildSubstanceIndex,
+  byStatusOrder,
   countTiles,
   isAuthorizedNow,
   newestFirst,
   sortBreakdownRows,
 } from "./approvals.js";
-import { renderActivity } from "./activity.js";
-import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
+import { appendSortIcon, renderActivity } from "./activity.js";
+import { createAreaTree, renderAreaPath } from "./area-tree.js";
+import { areaBreakdownRows, buildAreaTree, inAreas, toggleArea } from "./areas.js";
+import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
-import { atcHue, typeTipId } from "./badges.js";
+import { atcHue, statusColor, statusTipId, typeTipId } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart.js";
 import { createFacetPanel } from "./facet-panel.js";
@@ -23,9 +26,11 @@ import {
   FACET_VALUES,
   OTHER_KEY,
   TYPE_ORDER,
+  defaultSortDirection,
   facetCounts,
   holderActivity,
   keyCounts,
+  nextSort,
   orderActivityColumns,
   sentenceParts,
   sortActivityRows,
@@ -39,7 +44,7 @@ import {
 } from "./facets.js";
 import { renderSentence } from "./filter-sentence.js";
 import { filterProducts, makePredicates, splitAtcValues } from "./filters.js";
-import { UI, atcClassLabel, atcName } from "./labels.js";
+import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
@@ -74,12 +79,13 @@ const DASHBOARD_FILES = [
   "atc_classes.json",
   "ema_therapeutic_area_branches.json",
   "ema_authorized_series.json",
+  "ema_therapeutic_area_subtree.json",
 ];
 // Loaded after the dashboard's first render; shared with the medicine card (same loadFile promise),
 // as is the documents index (lookup.need("documents")).
 const REGISTER_FILE = "ema_medicine_register_status.json";
 // The filter each breakdown ignores and toggles.
-const BREAKDOWN_FILTER = { atc: "atc", area: "branch", mah: "mah" };
+const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah" };
 // The facet sidebar from this width; below it, the sentence's tokens open bottom sheets.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
 // Facet sections (index.html #facet-{key}) each sheet shows, the sheet each sentence token
@@ -89,26 +95,24 @@ const SHEET_SECTIONS = {
   type: ["type"],
   atc: ["atc"],
   mah: ["mah"],
-  areas: ["branch", "area"],
+  area: ["area"],
   status: ["status"],
-  all: ["type", "atc", "branch", "area", "mah", "status"],
+  all: ["type", "atc", "area", "mah", "status"],
 };
-const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", branch: "areas", area: "areas", areas: "areas", status: "status" };
-const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], branch: ["branch"], area: ["area"], status: ["status"] };
+const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", area: "area", status: "status" };
+const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"] };
 const YEAR_THUMBS = { from: "start", to: "end", year: "start", years: "start" };
-// Desktop: the control each token focuses, the first one of its own section (ATC: the tree's
-// first checked class, else its search: atc-tree.js focusTarget()).
+// Desktop: the control each token focuses, the first one of its own section (the ATC and
+// therapeutic area trees: their first checked row, else their search: facet-tree.js focusTarget()).
 const TOKEN_TARGETS = {
   type: "#facet-type input",
   mah: "#facet-mah .facet-search",
-  areas: "#facet-branch input",
-  branch: "#facet-branch input",
-  area: "#facet-area .facet-search",
   status: "#facet-status input",
 };
-const FACETS = ["type", "status", "branch", "area", "mah"];
-// "Who is active where": holders (rows), therapeutic area group columns, and the column key of the
-// area groups beyond them.
+// The checklist sections (facet-panel.js); the ATC classes and therapeutic areas are trees.
+const FACETS = ["type", "status", "mah"];
+// "Who is active where": holders (rows), therapeutic area columns, and the column key of the areas
+// beyond them.
 const ACTIVITY_HOLDERS = 15;
 const ACTIVITY_AREAS = 12;
 const ACTIVITY_OTHER = "__other__";
@@ -259,18 +263,21 @@ function renderFooter(meta) {
   d3.select("#credit-union-register").text(UI.footer.unionRegister);
 }
 
-// The type explanations as hidden elements, which describe the focusable carriers (facet rows, the
-// sentence's type token) through aria-describedby (a hidden element still gives its text).
+// The type and status explanations as hidden elements, which describe the focusable carriers (facet
+// rows, the sentence's type and status tokens) through aria-describedby (a hidden element still
+// gives its text).
 function renderTypeTips() {
   const container = d3.select("body").append("div").attr("hidden", "");
   for (const [label, tip] of Object.entries(UI.typeTips)) container.append("p").attr("id", typeTipId(label)).text(tip);
+  for (const [status, tip] of Object.entries(UI.statusTips)) container.append("p").attr("id", statusTipId(status)).text(tip);
 }
 
-// The type tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides them (and
-// does nothing else, so the sidebar's Escape waits for the next press) until the pointer reaches
-// another carrier or focus moves; a pointer click on a tip only hides it, as it lies over other
-// controls. A carrier whose tip is anchored to its row (static: lookup rows, the sentence) puts
-// the tip under its own line (--tip-top, CSSOM).
+// The type and status tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides
+// them (and does nothing else, so the sidebar's Escape waits for the next press) until the pointer
+// reaches another carrier or focus moves; a pointer click on a tip only hides it, as it lies over
+// other controls. A carrier whose tip is anchored to its row (static: lookup rows, the sentence)
+// puts the tip under its own line (--tip-top, CSSOM); a tip starting at its carrier that would
+// cross the viewport's right edge (a status near the right of a phone) moves left (--tip-left).
 function setupTips() {
   const root = document.documentElement;
   let hiddenOn = null; // the carrier under the pointer when the tips were hidden
@@ -284,7 +291,18 @@ function setupTips() {
   function show(carrier) {
     hiddenOn = null;
     root.classList.remove("tips-hidden");
-    if (carrier && getComputedStyle(carrier).position === "static") carrier.style.setProperty("--tip-top", `${carrier.offsetTop + carrier.offsetHeight}px`);
+    if (!carrier) return;
+    if (getComputedStyle(carrier).position === "static") {
+      carrier.style.setProperty("--tip-top", `${carrier.offsetTop + carrier.offsetHeight}px`);
+      return;
+    }
+    carrier.style.removeProperty("--tip-left");
+    // Its width once shown (a tip spanning its carrier, as on tiles and facet rows, never moves),
+    // else the widest it can be (style.css max-width).
+    const measured = parseFloat(getComputedStyle(carrier, "::after").width);
+    const width = Number.isFinite(measured) ? measured : Math.min(16 * parseFloat(getComputedStyle(root).fontSize), root.clientWidth - 32);
+    const overflow = carrier.getBoundingClientRect().left + width - (root.clientWidth - 16);
+    if (overflow > 0) carrier.style.setProperty("--tip-left", `${-Math.ceil(overflow)}px`);
   }
   document.addEventListener("pointerover", (event) => {
     const carrier = carrierOf(event.target);
@@ -436,13 +454,14 @@ function startLookup([meta, searchRows, entryTermRows]) {
   Promise.all(DASHBOARD_FILES.map(loadFile)).then((rows) => startDashboard(meta, rows), showMissingData);
 }
 
-function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows]) {
-  const products = buildProducts(medicines, { areaRows, branchRows, atcRows });
+function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows]) {
+  // The therapeutic area tree (phase 4f): MeSH branch › level 2 › level 3 › EMA's terms.
+  const meshTree = buildAreaTree(branchRows, subtreeRows);
+  const products = buildProducts(medicines, { areaRows, branchRows, atcRows, areaTree: meshTree });
   const seriesDates = seriesRows.map((row) => row.date);
   const approvalYears = d3.extent(products, (product) => product.year);
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
   const atcRetiredYears = new Map(atcClasses.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null]));
-  const branchNames = new Map(branchRows.filter((row) => row.branch !== null).map((row) => [row.branch, row.branch_name]));
   const branchNamesByTerm = d3.rollup(
     branchRows.filter((row) => row.branch !== null),
     (rows) => rows.map((row) => row.branch_name),
@@ -462,33 +481,35 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   };
   const domain = {
     mahs: new Set(products.map((product) => product.mah)),
-    branches: new Set(branchNames.keys()),
-    areas: new Set(areaRows.map((row) => row.therapeutic_area_mesh)),
+    // Every tree key (branch codes, tree numbers, terms), and terms without a branch.
+    areas: new Set([...meshTree.names.keys(), ...areaRows.map((row) => row.therapeutic_area_mesh)]),
+    areaAncestors: meshTree.ancestors,
+    areaCanonical: meshTree.canonical,
     types: new Set(MEDICINE_TYPES),
     statuses: new Set(products.map((product) => product.medicine_status)),
     years: approvalYears,
   };
-  const branchName = (branch) => branchNames.get(branch) ?? branch;
-  const breakdownLabel = {
-    area: branchName,
-    mah: (mah) => mah,
-  };
+  const breakdownLabel = { mah: (mah) => mah };
 
   renderOverTimeLegend($("#over-time-legend"));
 
   // Every filter key reset to its default (the sentence's remove buttons, Clear, Reset).
   const cleared = (keys) => Object.fromEntries(keys.map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
-  // Area rows link to their condition page; followed from a sheet, the sheet closes (the page's
+  // A therapeutic area's condition page: a term's descriptor, else (branches and tree nodes) the
+  // descriptor of that name, known once the lookup's conditions data has loaded; null otherwise.
+  const areaDescriptor = (key) => (meshTree.isTerm(key) ? descriptorOf.get(key) : lookup.conditions()?.uiByName.get(meshTree.name(key))) ?? null;
+  // Tree rows link to their condition page; followed from a sheet, the sheet closes (the page's
   // heading takes focus, not the token that opened the sheet).
-  const areaRowLink = (term) => {
-    if (!descriptorOf.get(term)) return null;
-    const link = conditionIconLink(descriptorOf.get(term), term);
+  const areaRowLink = (key) => {
+    const ui = areaDescriptor(key);
+    if (!ui) return null;
+    const link = conditionIconLink(ui, meshTree.name(key));
     link.addEventListener("click", (event) => {
       if (event.defaultPrevented) sheet.close({ restoreFocus: false }); // a plain click: opened here
     });
     return link;
   };
-  const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch), labelOf: { branch: branchName }, linkOf: { area: areaRowLink } });
+  const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch) });
   $("#reset-all").addEventListener("click", () => {
     setState(cleared(FILTER_KEYS));
     $("#facets-title").focus(); // the button is disabled now
@@ -514,6 +535,14 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   const toggleAtc = (code) => setState({ atc: toggleAtcCode(state.atc, code) });
   const openAtc = (code) => setState({ atc: code === null ? [] : [code] });
   const atcTree = createAtcTree($("#facet-atc"), { onToggle: toggleAtc });
+  // Therapeutic areas (phase 4f): the tree adds or removes one area (toggleArea()); drill-downs,
+  // paths and "Up one level" show one area alone (none: all). A term that is a node is that node
+  // (canonical()), wherever it is picked.
+  const toggleAreaKey = (key) => setState({ area: toggleArea(meshTree, state.area, key) });
+  const openArea = (key) => setState({ area: key === null ? [] : meshTree.canonical(key) });
+  // Exactly one area selected: the area the breakdown drills into and the activity card splits.
+  const drillArea = () => (state.area.length === 1 && meshTree.has(state.area[0]) ? state.area[0] : null);
+  const areaFacet = createAreaTree($("#facet-area"), { tree: meshTree, onToggle: toggleAreaKey, linkOf: areaRowLink });
   // The token whose sidebar section has focus (desktop): Escape goes back to it.
   let opener = null;
   // A sentence token (its key) or All filters ("all"): on desktop, the token's own section and
@@ -526,7 +555,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const sheetKey = TOKEN_SHEETS[key] ?? key;
     const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
     if (DESKTOP.matches) {
-      const target = (key === "atc" ? atcTree.focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
+      const target = (key === "atc" ? atcTree.focusTarget() : key === "area" ? areaFacet.focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
       target.closest(".facet").scrollIntoView({ block: "start" });
       target.focus({ preventScroll: true });
       opener = key;
@@ -559,25 +588,28 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   };
 
   d3.selectAll("#breakdown-by button").on("click", (event) => setState({ by: event.currentTarget.dataset.by }));
-  // The breakdown's bar order: most first, or by code (ATC) or name (UI state, not in the URL).
-  let breakdownSort = "count";
+  // Sort controls ({ key, direction }: nextSort()): a click on the one in force reverses it, another
+  // starts most first (count) or A-Z (key). The breakdown's bar order: most first, or by code (ATC)
+  // or name (UI state, not in the URL).
+  let breakdownSort = { key: "count", direction: "desc" };
   d3.select("#breakdown-sort-label").text(UI.breakdown.sort.label);
   d3.selectAll("#breakdown-sort button").on("click", (event) => {
-    breakdownSort = event.currentTarget.dataset.sort;
+    breakdownSort = nextSort(breakdownSort, event.currentTarget.dataset.sort);
     scheduleRender();
   });
   // The activity card's columns: ATC groups or therapeutic area groups; their order (ATC groups by
   // code and areas by count at first); the holder rows' sort: "total", "name" or a column key (UI
   // state, not in the URL).
   let activityMode = "atc";
-  const activityOrder = { atc: "key", area: "count" };
-  let activitySort = "total";
+  const activityOrder = { atc: { key: "key", direction: "asc" }, area: { key: "count", direction: "desc" } };
+  const TOTAL_SORT = { key: "total", direction: "desc" };
+  let activitySort = TOTAL_SORT;
   d3.selectAll("#activity-by button")
     .text(function label() {
       return UI.activity.modes[this.dataset.mode];
     })
     .on("click", (event) => {
-      if (activityMode !== event.currentTarget.dataset.mode) activitySort = "total"; // the columns change
+      if (activityMode !== event.currentTarget.dataset.mode) activitySort = TOTAL_SORT; // the columns change
       activityMode = event.currentTarget.dataset.mode;
       scheduleRender();
     });
@@ -586,10 +618,22 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   d3.select("#activity-note").text(UI.activity.note);
   d3.select("#activity-order-label").text(UI.activity.order.label);
   d3.selectAll("#activity-order button").on("click", (event) => {
-    activityOrder[activityMode] = event.currentTarget.dataset.order;
+    activityOrder[activityMode] = nextSort(activityOrder[activityMode], event.currentTarget.dataset.order);
     scheduleRender();
   });
-  // "Approvals per year": stacked by medicine type, ATC class or holder (UI state, not in the URL).
+  // A segmented sort button (key: its data-sort / data-order value; current: the sort in force):
+  // its text, then an arrow for the order in force, else for the order it starts in; pressed, its
+  // name says that order.
+  function renderSortButton(button, text, key, current) {
+    const pressed = current.key === key;
+    const direction = pressed ? current.direction : defaultSortDirection(key);
+    const node = d3.select(button)
+      .text(text)
+      .attr("aria-pressed", String(pressed))
+      .attr("aria-label", pressed ? UI.sortOrder.name(text, key, direction) : null);
+    appendSortIcon(node, direction === "asc");
+  }
+  // "Approvals per year": stacked by medicine type, ATC class, holder or status (UI state, not in the URL).
   let stackMode = "type";
   d3.select("#chart-stack-label").text(UI.years.stack.label);
   d3.selectAll("#chart-stack button")
@@ -614,7 +658,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     focusFallback: focusAtcFilter,
   });
 
-  // Area and holder rows toggle their filter value; ATC rows drill down (atcBreakdown()).
+  // Holder rows toggle their filter value; ATC and area rows drill down (atcBreakdown(), areaBreakdown()).
   function isBreakdownSelected(key) {
     return state[BREAKDOWN_FILTER[state.by]].includes(key);
   }
@@ -625,11 +669,12 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     setState({ [filter]: values.includes(key) ? values.filter((value) => value !== key) : [...values, key] });
   }
 
-  // After a therapeutic area group's bar: its condition page (the group's root descriptor, found by
-  // name once the lookup's conditions data has loaded; the card re-renders then).
-  function branchLink(row) {
-    const ui = lookup.conditions()?.uiByName.get(branchName(row.key));
-    return ui ? conditionIconLink(ui, branchName(row.key)) : null;
+  // After a therapeutic area's bar: its condition page (areaDescriptor(): for a branch or tree node
+  // found by name once the lookup's conditions data has loaded; the card re-renders then). None
+  // after the "not more specific" row.
+  function areaLink(row) {
+    const ui = row.incomplete ? null : areaDescriptor(row.key);
+    return ui ? conditionIconLink(ui, meshTree.name(row.key)) : null;
   }
 
   // Union Register rows by product; null until the file has loaded (or if it failed).
@@ -673,7 +718,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   // (toggles: a marked group removes its codes, another is added). counts, exact:
   // atcPrefixCounts(), atcExactCounts() of the breakdown's population; types: that population
   // split by medicine type (typeSplit()) per prefix and per exact code, for the stacked bars.
-  function atcBreakdown(counts, exact, types) {
+  function atcBreakdown(counts, exact, types, incompleteAt) {
     const current = drillCode();
     const { codes } = atcSelection();
     const stack = (row) => {
@@ -681,10 +726,12 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       const segments = TYPE_ORDER.filter((type) => split?.get(type)).map((type) => ({ type, count: split.get(type) }));
       return { segments, split: UI.breakdown.typeSplit(segments.map((segment) => [segment.type, segment.count])) };
     };
+    // The products coded only down to the class: "code incomplete", unless their codes are complete
+    // there (atc_final_level: J07BX03 moved up to J07BN; phase 4e).
     const toRow = (row) => {
       const { segments, split } = stack(row);
       return row.incomplete
-        ? { key: row.code, label: UI.atc.incomplete, count: row.count, static: true, incomplete: true, segments, split }
+        ? { key: row.code, label: incompleteAt.has(row.code) ? UI.atc.incomplete : UI.atc.codedHere, count: row.count, static: true, incomplete: true, segments, split }
         : { key: row.code, label: atcName(row.name), count: row.count, segments, split, ariaLabel: `${UI.atc.classCount(row.code, row.name, row.count)}: ${split}` };
     };
     const children = atcChildren(current, counts, atcNames, exact);
@@ -708,8 +755,36 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     return { current, title: UI.breakdown.atc.titleLeaf(label), rows: count ? [{ ...toRow(self), static: true }] : [], isSelected: null, onToggle: openAtc };
   }
 
-  // Above the drilled-down ATC bars: "Up one level" and the path of level badges.
-  function renderBreakdownPath(current) {
+  // Therapeutic area breakdown (phase 4f, as the ATC one): with exactly one area selected
+  // (drillArea()), the areas one level below it, then the medicines tagged with it itself (a static
+  // row); an area without children shows only itself. Otherwise the MeSH branches; with several
+  // areas selected, the branches holding one are marked (toggles: a marked branch removes its
+  // areas, another is added). population: every filter but the area one.
+  function areaBreakdown(population) {
+    const current = drillArea();
+    const rows = areaBreakdownRows(meshTree, current, population);
+    if (current === null) {
+      const selected = state.area;
+      const under = (branch) => selected.filter((value) => value === branch || meshTree.ancestors(value).has(branch));
+      const marked = selected.length > 0;
+      return {
+        current,
+        title: UI.breakdown.area.title,
+        rows,
+        isSelected: marked ? (branch) => under(branch).length > 0 : null,
+        onToggle: marked
+          ? (branch) => (under(branch).length ? setState({ area: selected.filter((value) => !under(branch).includes(value)) }) : toggleAreaKey(branch))
+          : openArea,
+      };
+    }
+    const name = meshTree.name(current);
+    if (rows.length) return { current, title: UI.breakdown.area.titleIn(name), rows, isSelected: null, onToggle: openArea };
+    const count = population.filter((product) => product.areaKeys.includes(current)).length;
+    return { current, title: UI.breakdown.area.titleLeaf(name), rows: count ? [{ key: current, label: name, count, static: true }] : [], isSelected: null, onToggle: openArea };
+  }
+
+  // Above the drilled-down ATC or area bars: "Up one level" and the path of levels (by: the mode).
+  function renderBreakdownPath(by, current) {
     const container = $("#breakdown-path");
     const focused = container.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
     container.replaceChildren();
@@ -720,19 +795,23 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       .attr("class", "up-level")
       .attr("data-focus-key", "up")
       .text(UI.atc.up)
-      .on("click", () => openAtc(atcPrefixes(current).at(-2) ?? null));
-    renderAtcPath(container.appendChild(document.createElement("div")), { current, names: atcNames, onSelect: openAtc, label: UI.atc.path });
-    if (focused !== undefined) container.querySelector(`[data-focus-key="${focused}"]`)?.focus();
+      .on("click", () => (by === "area" ? openArea(meshTree.parent(current)) : openAtc(atcPrefixes(current).at(-2) ?? null)));
+    const path = container.appendChild(document.createElement("div"));
+    if (by === "area") renderAreaPath(path, { tree: meshTree, current, onSelect: openArea });
+    else renderAtcPath(path, { current, names: atcNames, onSelect: openAtc, label: UI.atc.path });
+    if (focused !== undefined) container.querySelector(`[data-focus-key="${CSS.escape(focused)}"]`)?.focus();
   }
 
   // Always shown (phase 4c; it used to show only with a filter): the therapeutic areas of the
   // medicines shown, as links to their condition page where the MeSH descriptor is known, with a
-  // hint that the pages exist; a line instead when none of the medicines has one. Rebuilt on every
-  // render: a focused link keeps its focus.
+  // hint that the pages exist; a line instead when none of the medicines has one. With a therapeutic
+  // area filter, only the terms within it (phase 4f). Rebuilt on every render: a focused link keeps
+  // its focus.
   function renderConditions(filtered, anyFilter) {
-    const rows = topAreas(filtered, descriptorOf);
+    const within = state.area.length ? (term) => inAreas(meshTree, state.area, term) : null;
+    const rows = topAreas(filtered, descriptorOf, 8, within);
     d3.select("#conditions-title").text(UI.conditions.title);
-    d3.select("#conditions-subtitle").text(UI.conditions.subtitle(filtered.length, anyFilter));
+    d3.select("#conditions-subtitle").text(UI.conditions.subtitle(filtered.length, anyFilter, within !== null));
     d3.select("#conditions-hint").text(rows.some((row) => row.descriptorUi) ? UI.conditions.hint : "");
     d3.select("#conditions-empty").text(rows.length ? "" : UI.conditions.empty(filtered.length));
     const list = d3.select("#conditions-list").attr("hidden", rows.length ? null : "");
@@ -752,17 +831,14 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   }
 
   // The breakdown card over every matching medicine: ATC (stacked by type), areas or holders.
-  function renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact) {
+  function renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete) {
     d3.selectAll("#breakdown-by button").attr("aria-pressed", function pressed() {
       return String(this.dataset.by === state.by);
     });
-    d3.selectAll("#breakdown-sort button")
-      .text(function label() {
-        return this.dataset.sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[state.by];
-      })
-      .attr("aria-pressed", function pressed() {
-        return String(this.dataset.sort === breakdownSort);
-      });
+    d3.selectAll("#breakdown-sort button").each(function sortButton() {
+      const { sort } = this.dataset;
+      renderSortButton(this, sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[state.by], sort, breakdownSort);
+    });
     const card = $("#breakdown").closest(".chart-card");
     const hadFocus = card.contains(document.activeElement);
     const atcTypes = state.by === "atc"
@@ -771,22 +847,25 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
         exact: typeSplit(withoutAtcFilter, (product) => product.atc.map(atcCode).filter(atcLevel)),
       }
       : null;
-    const atc = atcTypes ? atcBreakdown(atcCounts, atcExact, atcTypes) : null;
-    d3.select("#breakdown-title").text(atc?.title ?? UI.breakdown[state.by].title);
+    const atc = atcTypes ? atcBreakdown(atcCounts, atcExact, atcTypes, atcIncomplete) : null;
+    const population = filterProducts(products, predicates, BREAKDOWN_FILTER[state.by]);
+    // The ATC and area modes drill down (a tree each); holders are one level.
+    const tree = atc ?? (state.by === "area" ? areaBreakdown(population) : null);
+    d3.select("#breakdown-title").text(tree?.title ?? UI.breakdown[state.by].title);
     d3.select("#breakdown-note").text(UI.breakdown[state.by].note).attr("hidden", UI.breakdown[state.by].note ? null : "");
     // One legend per card: the medicine types the stacked ATC bars show.
     const legendTypes = TYPE_ORDER.filter((type) => atc?.rows.some((row) => row.segments.some((segment) => segment.type === type)));
     renderLegend($("#breakdown-legend"), legendTypes);
     $("#breakdown-legend").hidden = legendTypes.length === 0;
-    renderBreakdownPath(atc?.current ?? null);
-    const population = filterProducts(products, predicates, BREAKDOWN_FILTER[state.by]);
-    const rows = sortBreakdownRows(atc ? atc.rows : breakdownCounts(population, state.by, breakdownLabel[state.by]), breakdownSort, state.by);
-    renderBreakdown($("#breakdown"), rows, atc
-      ? { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) }
-      : { isSelected: isBreakdownSelected, onToggle: toggleBreakdown, linkOf: state.by === "area" ? branchLink : undefined });
+    renderBreakdownPath(state.by, tree?.current ?? null);
+    const rows = sortBreakdownRows(tree ? tree.rows : breakdownCounts(population, state.by, breakdownLabel[state.by]), breakdownSort.key, state.by, breakdownSort.direction);
+    let options = { isSelected: isBreakdownSelected, onToggle: toggleBreakdown };
+    if (atc) options = { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) };
+    else if (tree) options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink };
+    renderBreakdown($("#breakdown"), rows, options);
     const { excluded } = UI.breakdown[state.by];
-    // Products without any ATC code matter at level 1 only.
-    showCount("#breakdown-excluded", excluded && !atc?.current ? breakdownExcluded(population, state.by) : 0, excluded);
+    // Products without any ATC code or therapeutic area matter at the top level only.
+    showCount("#breakdown-excluded", excluded && !tree?.current ? breakdownExcluded(population, state.by) : 0, excluded);
     // Drilling down or going up rebuilds the controls: keep focus in the card.
     if (hadFocus && !card.contains(document.activeElement)) (card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"))?.focus();
   }
@@ -799,13 +878,10 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     d3.selectAll("#activity-by button").attr("aria-pressed", function pressed() {
       return String(this.dataset.mode === activityMode);
     });
-    d3.selectAll("#activity-order button")
-      .text(function label() {
-        return this.dataset.order === "count" ? UI.activity.order.count : UI.activity.order.key[activityMode];
-      })
-      .attr("aria-pressed", function pressed() {
-        return String(this.dataset.order === activityOrder[activityMode]);
-      });
+    d3.selectAll("#activity-order button").each(function orderButton() {
+      const { order } = this.dataset;
+      renderSortButton(this, order === "count" ? UI.activity.order.count : UI.activity.order.key[activityMode], order, activityOrder[activityMode]);
+    });
     let keysOf;
     let columns;
     let parentClass = null;
@@ -822,19 +898,30 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
         key: code, badge: code, label: atcClassLabel(code, atcNames.get(code)), title: atcClassLabel(code, atcNames.get(code)), filter: { atc: [code] },
       }));
     } else {
-      const top = topKeys(keyCounts(filtered, (product) => product.branches), ACTIVITY_AREAS);
+      // The MeSH branches, or with one area selected (drillArea()) the areas one level below it, a
+      // leaf itself; that area is a toggle above the table (phase 4f, as the ATC classes).
+      const parent = drillArea();
+      if (parent !== null) {
+        const name = meshTree.name(parent);
+        parentClass = { key: parent, badge: null, label: name, name, lead: UI.activity.parentLeadArea, filter: { area: [parent] } };
+      }
+      const children = parent === null ? meshTree.roots : meshTree.children(parent);
+      const level = new Set(children.length ? children : [parent]);
+      const inLevel = (product) => product.areaKeys.filter((key) => level.has(key));
+      const top = topKeys(keyCounts(filtered, inLevel), ACTIVITY_AREAS);
       const shown = new Set(top);
-      keysOf = (product) => product.branches.map((branch) => (shown.has(branch) ? branch : ACTIVITY_OTHER));
-      const other = filtered.some((product) => product.branches.some((branch) => !shown.has(branch)));
+      keysOf = (product) => inLevel(product).map((key) => (shown.has(key) ? key : ACTIVITY_OTHER));
+      const other = filtered.some((product) => inLevel(product).some((key) => !shown.has(key)));
       columns = [
-        ...top.map((branch) => ({ key: branch, label: branchName(branch), filter: { branch: [branch] } })),
+        ...top.map((key) => ({ key, label: meshTree.name(key), filter: { area: meshTree.canonical(key) } })),
         ...(other ? [{ key: ACTIVITY_OTHER, label: UI.activity.other, title: UI.activity.otherTitle, filter: null, other: true }] : []),
       ];
     }
-    columns = orderActivityColumns(columns, keyCounts(filtered, keysOf), activityOrder[activityMode], activityMode);
+    const order = activityOrder[activityMode];
+    columns = orderActivityColumns(columns, keyCounts(filtered, keysOf), order.key, activityMode, order.direction);
     // A column sort whose column is gone (other filters) falls back to the total.
-    const sort = ["total", "name"].includes(activitySort) || columns.some((column) => column.key === activitySort) ? activitySort : "total";
-    const rows = sortActivityRows(holderActivity(filtered, keysOf, ACTIVITY_HOLDERS), sort);
+    const sort = ["total", "name"].includes(activitySort.key) || columns.some((column) => column.key === activitySort.key) ? activitySort : TOTAL_SORT;
+    const rows = sortActivityRows(holderActivity(filtered, keysOf, ACTIVITY_HOLDERS), sort.key, sort.direction);
     d3.select("#activity-subtitle").text(rows.length ? UI.activity.subtitle(rows.length) : "");
     // Touch screens show no tooltips: the ATC columns' names under the table.
     d3.select("#activity-legend").text(columns.filter((column) => column.badge).map((column) => column.label).join(" · "));
@@ -846,17 +933,18 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       labelledBy: "activity-title",
       describedBy: "activity-subtitle",
       onFilter: (patch) => setState(togglePatch(state, patch)),
-      onSort: (next) => {
-        activitySort = next;
+      onSort: (key) => {
+        activitySort = nextSort(sort, key);
         scheduleRender();
       },
       isSet: (patch) => patchIsSet(state, patch),
     });
   }
 
-  // The per-year chart's stacks for its mode: keysOf(product), series ([{ key, label, color }] bottom
-  // to top), by (the summary's phrase), counting (the note's) and unstacked (the dated medicines no
-  // stack holds: without an ATC class at the level shown; "" when none). dated: the medicines shown.
+  // The per-year chart's stacks for its mode: keysOf(product), series ([{ key, label, color, tip:
+  // the legend entry's explanation }] bottom to top), by (the summary's phrase), counting (the
+  // note's) and unstacked (the dated medicines no stack holds: without an ATC class at the level
+  // shown; "" when none). dated: the medicines shown.
   function yearStackSpec(dated) {
     if (stackMode === "type") {
       return {
@@ -864,6 +952,18 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
         series: MEDICINE_TYPES.map((type) => ({ key: type, label: type, color: typeColor(type) })),
         by: UI.years.by.type,
         counting: UI.years.counting.type,
+        unstacked: "",
+      };
+    }
+    // The statuses present in STATUS_ORDER, Authorized at the bottom (the approval-years strip's
+    // stacks until phase 4f), each explained in the legend.
+    if (stackMode === "status") {
+      return {
+        keysOf: (product) => [product.medicine_status],
+        series: [...new Set(dated.map((product) => product.medicine_status))].sort(byStatusOrder)
+          .map((status) => ({ key: status, label: statusLabel(status), color: statusColor(status), tip: UI.statusTips[status] ?? null })),
+        by: UI.years.by.status,
+        counting: UI.years.counting.status,
         unstacked: "",
       };
     }
@@ -916,7 +1016,11 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     }, ({ from, to }) => showReadout(from, to));
     renderStackLegend($("#legend"), stack.series);
     d3.select("#chart-note").text(UI.years.note(stack.counting));
-    d3.select("#undated-note").text(UI.years.undated(withoutDateFilter.length - dated.length));
+    // By status, the note names the statuses the chart cannot show.
+    const undated = withoutDateFilter.length - dated.length;
+    d3.select("#undated-note").text(stackMode === "status"
+      ? (undated ? UI.years.undatedStatuses(undated, state.from !== null || state.to !== null) : "")
+      : UI.years.undated(undated));
     d3.select("#unstacked-note").text(stack.unstacked);
   }
 
@@ -947,13 +1051,8 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     // The per-year chart, the strip and the over-time line ignore the approval-year filter and
     // mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
-    safely($("#year-strip"), () => yearStrip.render({
-      rows: yearHistogram(products, predicates, approvalYears),
-      from: state.from,
-      to: state.to,
-      undated: withoutDateFilter.filter((product) => product.year === null).length,
-    }));
-    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, branchNames, atcNames }), {
+    safely($("#year-strip"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
+    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, areaNames: meshTree.names, atcNames }), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
       popup: !DESKTOP.matches,
@@ -967,7 +1066,16 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const withoutAtcFilter = filterProducts(products, predicates, "atc");
     const atcCounts = atcPrefixCounts(withoutAtcFilter);
     const atcExact = atcExactCounts(withoutAtcFilter);
-    safely($("#facet-atc"), () => atcTree.render({ ...atcSelection(), counts: atcCounts, exact: atcExact, classNames: atcNames }));
+    const atcIncomplete = atcIncompleteAt(withoutAtcFilter);
+    const { codes: atcCodes, names: atcQueries } = atcSelection();
+    safely($("#facet-atc"), () => atcTree.render({ selected: atcCodes, names: atcQueries, counts: atcCounts, exact: atcExact, incompleteAt: atcIncomplete, classNames: atcNames }));
+    // Therapeutic areas: medicines per tree key, and tagged at each node itself, matching every other filter.
+    const withoutAreaFilter = filterProducts(products, predicates, "area");
+    safely($("#facet-area"), () => areaFacet.render({
+      selected: state.area,
+      counts: keyCounts(withoutAreaFilter, (product) => product.areaKeys),
+      exact: keyCounts(withoutAreaFilter, (product) => product.areaExact),
+    }));
 
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
     const authorizedNow = filtered.filter(isAuthorizedNow);
@@ -977,7 +1085,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     safely($(".tiles-frame"), () => renderTiles($("#tiles"), { ...countTiles(filtered), authorized: authorizedNow.length }, activeCount > 0));
     showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
     showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
-    safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact));
+    safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete));
     safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
     safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
     safely(cardOf("#conditions-list"), () => renderConditions(filtered, activeCount > 0));

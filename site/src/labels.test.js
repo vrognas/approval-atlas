@@ -377,6 +377,59 @@ test("a condition page names its narrower conditions and splits the tagged medic
   assert.equal(condition.rowTagged, "Tagged with ");
 });
 
+// Phase 4f: medicines found only through the indication text are marked and counted apart.
+test("a condition page marks the medicines only mentioned in the indication, and counts both", () => {
+  const { condition } = labels.UI;
+  assert.equal(condition.rowMentions("neuropathic pain"), "Indication mentions “neuropathic pain”");
+  assert.equal(condition.counts(5, 1, false), "Authorized: 5 medicines tagged by EMA and 1 more mentioned in the indication text.");
+  assert.equal(condition.counts(1, 12, true), "Every status: 1 medicine tagged by EMA and 12 more mentioned in the indication text.");
+  assert.equal(condition.counts(0, 3, false), "Authorized: 0 medicines tagged by EMA and 3 mentioned in the indication text.");
+  // The indication texts still loading.
+  assert.equal(condition.counts(5, null, false), "Authorized: 5 medicines tagged by EMA.");
+});
+
+// Phase 4f: one therapeutic area tree (MeSH branch › level 2 › level 3 › EMA's terms).
+test("the therapeutic area tree: search, rows, included areas, the static row and the path", () => {
+  const { areas } = labels.UI;
+  assert.equal(areas.find, "Find a therapeutic area");
+  assert.equal(areas.tree, "Therapeutic areas");
+  assert.equal(areas.expand("Neoplasms"), "Areas in Neoplasms");
+  assert.equal(areas.count("Breast Neoplasms", 55), "Breast Neoplasms, 55 medicines");
+  assert.equal(areas.count("Psoriasis", 1), "Psoriasis, 1 medicine");
+  assert.equal(areas.included("Psoriasis", 43, "Skin Diseases"), "Psoriasis, 43 medicines, included in Skin Diseases");
+  assert.equal(areas.noMatches, "No matching therapeutic areas");
+  assert.equal(areas.notMoreSpecific, "not more specific");
+  assert.equal(areas.all, "All therapeutic areas");
+  assert.equal(labels.UI.breakdown.area.titleIn("Neoplasms"), "Medicines in Neoplasms by therapeutic area");
+  assert.equal(labels.UI.breakdown.area.titleLeaf("Psoriasis"), "Medicines in Psoriasis");
+  assert.equal(labels.UI.activity.parentLeadArea, "Columns: areas in");
+  assert.equal(labels.UI.activity.otherTitle, "Other therapeutic areas");
+  assert.equal(
+    labels.UI.conditions.subtitle(33, true, true),
+    "Therapeutic areas of the 33 medicines matching the filters, within the selected areas: medicines of every status, then those authorized",
+  );
+});
+
+// Phase 4e: curated codes say where they were checked; the card links the evidence.
+test("a curated ATC code says where it was checked", () => {
+  const { atcOriginText, atcOriginFlag } = labels;
+  const none = new Map();
+  const curated = (published, conflict, evidence) => ({ kind: "curated", published, conflict, evidence, url: null });
+  assert.equal(atcOriginText(curated("N02AC", false, "whocc_index"), none, none), "EMA publishes N02AC; the full code was added from the WHO ATC index.");
+  assert.equal(atcOriginText(curated("N07", true, "whocc_index"), none, none), "EMA publishes N07; this code was added from the WHO ATC index.");
+  assert.equal(
+    atcOriginText(curated("C10AX", false, "whocc_temporary"), none, none),
+    "EMA publishes C10AX; the full code was added from WHO's temporary list (it can still change).",
+  );
+  assert.equal(atcOriginText(curated(null, false, "ema_smpc_text"), none, none), "EMA publishes no ATC code; this one was added from the SmPC text.");
+  assert.equal(atcOriginText(curated("B03", false, null), none, none), "EMA publishes B03; the full code was added from a source checked by hand.");
+  assert.equal(atcOriginFlag(curated("N02AC", false, "whocc_index")), "EMA: N02AC");
+  assert.equal(atcOriginFlag(curated(null, false, "whocc_temporary")), "WHO temporary");
+  assert.equal(labels.UI.atc.evidenceLink.whocc_index, "WHO ATC index page");
+  assert.equal(labels.UI.table.source("curated"), "Source: checked by hand (WHO ATC index, WHO temporary list or SmPC text)");
+  assert.equal(labels.UI.external.destinations["atcddd.fhi.no"], "WHOCC website");
+});
+
 test("an ATC class without a WHO name reads as its code alone", () => {
   assert.equal(labels.atcClassLabel("L04AL", null), "L04AL");
   assert.equal(labels.atcClassLabel("L04AL", undefined), "L04AL");
@@ -439,6 +492,51 @@ test("each type badge has an explanation of at most 12 words", () => {
   for (const tip of Object.values(typeTips)) assert.ok(tip.split(" ").length <= 12, tip);
 });
 
+// Phase 4f: hover, focus and tap explanations of the EMA statuses, keyed by the raw status.
+const searchIndexFile = new URL("../public/data/ema_search_index.json", import.meta.url);
+test("each EMA status has an explanation of at most 10 words", () => {
+  const { statusTips } = labels.UI;
+  assert.deepEqual(statusTips, {
+    Authorised: "Can be marketed in the EU.",
+    Opinion: "EMA has given its opinion; EU decision pending.",
+    "Opinion under re-examination": "EMA is re-examining its opinion at the company's request.",
+    Refused: "The EU refused authorization.",
+    "Application withdrawn": "The company withdrew its application before a decision.",
+    "Withdrawn from rolling review": "The company stopped the early (rolling) review.",
+    Withdrawn: "Authorization withdrawn, usually at the company's request.",
+    Expired: "Authorization not renewed.",
+    Lapsed: "Authorization ended: not marketed for 3 years.",
+    Suspended: "Authorization temporarily suspended.",
+    // U.S. spelling (the user's wording had "cancelled").
+    Revoked: "Authorization canceled by the EU.",
+  });
+  for (const tip of Object.values(statusTips)) {
+    assert.ok(tip.split(" ").length <= 10, tip);
+    assert.ok(!tip.includes("—"), tip);
+  }
+});
+
+test(
+  "every status in the data has an explanation",
+  { skip: existsSync(searchIndexFile) ? false : "site/public/data/ema_search_index.json not found" },
+  () => {
+    const statuses = new Set(JSON.parse(readFileSync(searchIndexFile, "utf8")).map((row) => row.medicine_status));
+    assert.ok(statuses.size >= 5);
+    assert.deepEqual([...statuses].filter((status) => !labels.UI.statusTips[status]), []);
+  },
+);
+
+// Phase 4f: every sort control reverses on a second click; its name says the order in force.
+test("sort controls name the order in force: most or fewest first, A to Z or Z to A", () => {
+  const { sortOrder } = labels.UI;
+  assert.equal(sortOrder.name("Count", "count", "desc"), "Count, most first");
+  assert.equal(sortOrder.name("Count", "count", "asc"), "Count, fewest first");
+  assert.equal(sortOrder.name("Name", "key", "asc"), "Name, A to Z");
+  assert.equal(sortOrder.name("Code", "key", "desc"), "Code, Z to A");
+  // Not in force: the text alone.
+  assert.equal(sortOrder.name("Count", "count", null), "Count");
+});
+
 // Visible text first in the accessible name, so speech input can use it (WCAG 2.5.3).
 test("quick document links: PI and EPAR, named with the medicine", () => {
   const { documentLinks } = labels.UI;
@@ -454,21 +552,23 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(sentence.tokenName("type", "all medicine types"), "all medicine types, medicine type filter");
   assert.equal(sentence.tokenName("from", "1995"), "1995, start year filter");
   assert.equal(sentence.tokenName("to", "2026"), "2026, end year filter");
-  assert.equal(sentence.tokenName("areas", "all therapeutic areas"), "all therapeutic areas, therapeutic area filter");
+  assert.equal(sentence.tokenName("area", "all therapeutic areas"), "all therapeutic areas, therapeutic area filter");
   assert.equal(sentence.remove("type", "Biosimilar"), "Remove medicine type filter: Biosimilar");
   assert.equal(sentence.remove("from", "2010"), "Remove start year filter: 2010");
   // One approval year: one token for both ends.
   assert.equal(sentence.words.approvedIn, ", approved in ");
   assert.equal(sentence.tokenName("year", "2024"), "2024, approval year filter");
   assert.equal(sentence.remove("year", "2024"), "Remove approval year filter: 2024");
-  for (const key of ["type", "atc", "mah", "areas", "branch", "area", "from", "to", "year", "status"]) assert.ok(sentence.dimensions[key], key);
+  for (const key of ["type", "atc", "mah", "area", "from", "to", "year", "status"]) assert.ok(sentence.dimensions[key], key);
+  // Phase 4f: one therapeutic area tree, no separate group filter.
+  assert.equal(sentence.dimensions.branch, undefined);
+  assert.equal(sentence.defaults.branch, undefined);
   assert.equal(sentence.reset, "Reset");
   assert.equal(sentence.allFilters, "All filters");
   assert.equal(facets.active(0), null);
   assert.equal(facets.active(2), "2 active");
   assert.equal(facets.counts, "Counts: medicines matching the other filters.");
   assert.equal(facets.search(659, "areas"), "Filter 659 areas");
-  assert.equal(facets.showAll(41), "Show all 41");
   assert.equal(facets.showMore(20), "Show 20 more");
   assert.equal(facets.matches(0), "No matches");
   assert.equal(facets.matches(1), "1 match");
@@ -479,28 +579,34 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(sheet.close, "Close filters");
 });
 
-test("approval-years strip copy: slider names, the summary and tooltips of the stacked bars, the undated note", () => {
+// Phase 4f: the strip is a slim one-colour year filter; its status stacks, legend and undated note
+// moved to "Approvals per year" (Stack by Status).
+test("approval-years strip copy: slider names and the summary of its bars", () => {
   const { yearStrip } = labels.UI;
-  const statuses = [{ status: "Authorised", count: 1567 }, { status: "Withdrawn", count: 362 }];
   assert.equal(yearStrip.start, "Start year");
   assert.equal(yearStrip.end, "End year");
   assert.equal(
-    yearStrip.summary(1995, 2026, 1985, 2021, 95, statuses),
-    "Column chart of approvals per year, 1995 to 2026, stacked by current status, of the medicines matching the other filters: " +
-      "1,985 in total (1,567 Authorized, 362 Withdrawn), most in 2021 (95).",
+    yearStrip.summary(1995, 2026, 1985, 2021, 95),
+    "Column chart of approvals per year, 1995 to 2026, of the medicines matching the other filters: 1,985 in total, most in 2021 (95).",
   );
-  assert.equal(yearStrip.summary(1995, 2026, 0, 1995, 0, []), "No medicines with an approval date match the other filters.");
-  assert.equal(yearStrip.tooltip(2015, 71, [{ status: "Authorised", count: 65 }, { status: "Withdrawn", count: 6 }]), "2015: 71 approvals\n65 Authorized\n6 Withdrawn");
-  assert.equal(yearStrip.tooltip(1996, 0, []), "1996: 0 approvals");
-  assert.equal(yearStrip.undated(366), "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart.");
-  assert.equal(yearStrip.undated(1), "1 medicine without an approval date (refused, application withdrawn, pending…) is not in this chart.");
+  assert.equal(yearStrip.summary(1995, 2026, 0, 1995, 0), "No medicines with an approval date match the other filters.");
+  assert.equal(labels.UI.years.tooltipTitle(1996, 0), "1996: 0 approvals");
+});
+
+test("approvals per year by status: the mode, its summary phrase, counting note, legend lead and undated note", () => {
+  const { years } = labels.UI;
+  assert.equal(years.stack.modes.status, "Status");
+  assert.equal(years.by.status, "current status");
+  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.");
+  // The legend states the stack order, so position identifies a segment, not only its colour.
+  assert.equal(years.legendLead, "Bottom to top:");
+  assert.equal(years.undatedStatuses(366), "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart.");
+  assert.equal(years.undatedStatuses(1), "1 medicine without an approval date (refused, application withdrawn, pending…) is not in this chart.");
   // Phase 4c review: a year filter also leaves them out of every count.
   assert.equal(
-    yearStrip.undated(366, true),
+    years.undatedStatuses(366, true),
     "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart, and the year filter leaves them out of every count.",
   );
-  // The legend states the stack order, so position identifies a segment, not only its colour.
-  assert.equal(yearStrip.legendLead, "Bottom to top:");
 });
 
 // Shown with and without filters (phase 4c), with a hint that leads to the condition pages.
@@ -537,7 +643,8 @@ test("condition and substance results are tables with the medicines table's colu
 test("the results timeline explains its dots and lines", () => {
   const { timeline } = labels.UI;
   assert.equal(timeline.caption, "One dot per medicine; lines join medicines with the same active substances (reference, generics, biosimilars). Tap or point at a dot for its name.");
-  assert.equal(timeline.hollow, "Hollow dots: only mentioned in the indication text.");
+  // Phase 4f: condition pages name both kinds of dot in a legend.
+  assert.deepEqual(timeline.legend, { tagged: "Tagged by EMA", mentioned: "Mentioned in the indication" });
   assert.equal(timeline.mentioned, "Only mentioned in the indication text");
 });
 
@@ -594,8 +701,10 @@ test("the ATC breakdown copy counts medicines of every status", () => {
   assert.equal(labels.UI.breakdown.mah.title, "Medicines by marketing authorization holder");
   assert.equal(labels.UI.breakdown.empty, "No medicines match the current filters.");
   // Phase 4c review: retired and incomplete codes are mapped (atcCode()), so the note says how.
-  assert.equal(atc.note, "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one.");
+  // Phase 4e: curated codes (checked by hand) complete the rest.
+  assert.equal(atc.note, "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.");
   assert.equal(atc.incomplete, "code incomplete");
+  assert.equal(atc.codedHere, "coded at this level");
 });
 
 test("a substance card names the medicines classed under another code", () => {
@@ -660,7 +769,7 @@ test("the holder activity card: sort buttons, column order and row names with th
 test("approvals per year: stack modes, the summary and the counting note per mode", () => {
   const { years } = labels.UI;
   assert.equal(years.stack.label, "Stack by");
-  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Holder" });
+  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Holder", status: "Status" });
   assert.equal(
     years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
     "Stacked column chart of EMA approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",

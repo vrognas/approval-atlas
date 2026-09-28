@@ -71,6 +71,25 @@ export function statusHue(status) {
   return STATUS_HUES[status] ?? "slate";
 }
 
+// A status in "Approvals per year" (Stack by Status): its hue's mid; Authorized, the bottom
+// segment of every column, the darker --status-authorized, so it differs in lightness from every
+// status stacked on it (palette.test.js).
+export function statusColor(status) {
+  return status === "Authorised" ? "var(--status-authorized)" : `var(--${statusHue(status)}-mid)`;
+}
+
 // The element holding a type's explanation (UI.typeTips), which focusable carriers reference with
 // aria-describedby: "Advanced therapy" -> "type-tip-advanced-therapy".
 export const typeTipId = (label) => `type-tip-${label.toLowerCase().replaceAll(" ", "-")}`;
+// The same for a status's (UI.statusTips): "Application withdrawn" -> "status-tip-application-withdrawn".
+export const statusTipId = (status) => `status-tip-${status.toLowerCase().replaceAll(" ", "-")}`;
+
+// A medicine type's or status's explanation and the id of its hidden copy (the description of a
+// focusable carrier), or null when it has none.
+export function typeTip(label) {
+  return UI.typeTips[label] ? { text: UI.typeTips[label], id: typeTipId(label) } : null;
+}
+
+export function statusTip(status) {
+  return UI.statusTips[status] ? { text: UI.statusTips[status], id: statusTipId(status) } : null;
+}

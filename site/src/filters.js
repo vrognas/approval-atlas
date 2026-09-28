@@ -50,13 +50,11 @@ export function makePredicates(state, atcClasses) {
     const to = state.to ?? Infinity;
     predicates.date = (product) => product.year !== null && product.year >= from && product.year <= to;
   }
-  if (state.branch.length) {
-    const selected = inSet(state.branch);
-    predicates.branch = (product) => product.branches.some((branch) => selected.has(branch));
-  }
+  // Therapeutic areas (phase 4f): branch codes, tree numbers and EMA's terms, each matching the
+  // products tagged with it or with a term under it (product.areaKeys: areas.js keysOf()).
   if (state.area.length) {
     const selected = inSet(state.area);
-    predicates.area = (product) => product.areas.some((area) => selected.has(area));
+    predicates.area = (product) => product.areaKeys.some((key) => selected.has(key));
   }
   const atc = atcPredicate(state.atc, atcClasses);
   if (atc) predicates.atc = atc;

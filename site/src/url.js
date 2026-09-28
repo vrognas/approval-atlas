@@ -9,7 +9,8 @@ export const DEFAULT_STATE = Object.freeze({
   mah: [],
   from: null, // whole years, inclusive; null = open end
   to: null,
-  branch: [],
+  // Therapeutic areas (phase 4f): MeSH branch codes ("C04"), tree numbers ("C04.588.180") and EMA's
+  // terms ("Psoriasis") in one list, combined with OR; none covers another.
   area: [],
   atc: [], // ATC codes at any level, or class-name queries (older links), combined with OR
   type: [],
@@ -21,8 +22,9 @@ export const DEFAULT_STATE = Object.freeze({
 // year" tabs, replaced by one dashboard in phase 4a).
 const IGNORED_KEYS = ["view"];
 
-// Repeated keys, because MAH names and MeSH terms contain commas. Value = domain set name.
-const LIST_KEYS = { mah: "mahs", branch: "branches", area: "areas", type: "types", status: "statuses" };
+// Repeated keys, because MAH names and MeSH terms contain commas. Value = domain set name. The
+// therapeutic areas (area, and branch from before phase 4f) are decoded on their own.
+const LIST_KEYS = { mah: "mahs", type: "types", status: "statuses" };
 
 const sortedDistinct = (values) => [...new Set(values)].sort();
 
@@ -42,7 +44,6 @@ export function encodeState(state) {
   appendAll("mah");
   if (state.from !== null) params.set("from", String(state.from));
   if (state.to !== null) params.set("to", String(state.to));
-  appendAll("branch");
   appendAll("area");
   appendAll("atc", atcValues(state.atc));
   appendAll("type");
@@ -59,7 +60,9 @@ export function normalizeYearRange(from, to, [minYear, maxYear]) {
   return { from: lower === minYear ? null : lower, to: upper === maxYear ? null : upper };
 }
 
-// domain: { mahs, branches, areas, types, statuses: Set, years: [min, max] }.
+// domain: { mahs, areas (every therapeutic area tree key), types, statuses: Set, years: [min, max],
+// areaAncestors(key): the branches and nodes above a tree key (a Set; optional), areaCanonical(key):
+// the keys a value is selected as (a term that is a branch or node: that key; optional) }.
 // Invalid values are dropped and returned so the page can say how many were ignored.
 export function decodeState(params, domain) {
   const state = structuredClone(DEFAULT_STATE);
@@ -87,6 +90,20 @@ export function decodeState(params, domain) {
     return null;
   };
   Object.assign(state, normalizeYearRange(year("from"), year("to"), domain.years));
+
+  // Therapeutic areas: one list since phase 4f; links from before carry branch codes under "branch"
+  // and EMA's terms under "area" (a term that is a branch or tree node loads as it, so the tree
+  // shows one checked row). A value under another selected one is dropped, as toggleArea().
+  const above = domain.areaAncestors ?? (() => new Set());
+  const canonical = domain.areaCanonical ?? ((value) => [value]);
+  const areas = [];
+  for (const key of ["area", "branch"]) {
+    for (const value of sortedDistinct(params.getAll(key))) {
+      if (domain.areas.has(value)) areas.push(...canonical(value));
+      else dropped.push({ key, value });
+    }
+  }
+  state.area = sortedDistinct(areas).filter((value) => !areas.some((other) => above(value).has(other)));
 
   // One value (links from before phase 4a) or several; a value too long for a class name is dropped.
   const atc = params.getAll("atc");
