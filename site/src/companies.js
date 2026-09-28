@@ -12,7 +12,7 @@
 // EMA holder names (older links carry those), and, for a row whose value also shows elsewhere, the
 // row's path, so a row selects exactly the medicines it counts; combined with OR. No DOM.
 import { NOT_STATED, UI } from "./labels.js";
-import { MAX_SUGGESTIONS, MIN_QUERY, foldSearchText, matchesWords, searchWords } from "./search.js";
+import { MAX_SUGGESTIONS, MIN_QUERY, foldSearchText, matchesWords, queryWords, searchWords } from "./search.js";
 
 // Group and company keys are id-safe slugs ("g.<slug>", "c.<slug>"), so "/" only separates a
 // row path; an EMA holder name, last, may contain it.
@@ -253,6 +253,9 @@ export function buildCompanies(companyRows, medicineRows, { isAuthorized = () =>
       folded: foldSearchText(name(group)),
       tokens: searchWords(name(group)),
       monogram: rows.get(group)?.monogram ?? null,
+      // Step 2 (#4): only a curated monogram names its group (derived ones read as abbreviations:
+      // "ALL", "CAR", "TB"); rows without monogram_source (older data files) count as derived.
+      monogramCurated: rows.get(group)?.monogram_source === "curated",
       others: [...others].sort().map((other) => ({ name: other, folded: foldSearchText(other), tokens: searchWords(other) })),
       count: numbersOf.get(group)?.length ?? 0,
       authorized: authorizedOf(group),
@@ -475,7 +478,7 @@ const SEARCH_MIN = 3;
 export function companyTreeSearch(companies, visible, query) {
   const needle = foldSearchText(query);
   if (!needle) return null;
-  const words = searchWords(query);
+  const words = queryWords(query);
   const named = (key) => needle.length >= SEARCH_MIN && words.length > 0 && companies.searchTokens(key).some((tokens) => matchesWords(tokens, words, false));
   const hit = (key) => named(key) || companies.monogram(companies.rowShows(key)) === needle;
   const nodes = [...visible].filter((key) => !companies.isLeafRow(key));
@@ -545,27 +548,31 @@ export function companyBreakdownRows(companies, current, products, n = 20) {
 }
 
 // "Companies" search suggestions: groups whose name, monogram or other names (their companies,
-// spellings and EMA holder names) match the query by word start; ranked name exact > monogram >
-// name prefix > name words > another name (named as synonym), then authorized medicines. named:
-// the query names the group (its name, monogram or another name exactly), so Enter opens it.
+// spellings and EMA holder names) match the query by word start; ranked name exact > curated
+// monogram > name prefix > name words > another name (named as synonym) > derived monogram, then
+// authorized medicines. named: the query names the group (its name, curated monogram or another
+// name exactly), so Enter opens it. weak: found only through a derived monogram, which Enter never
+// opens as the only suggestion (submitChoice()).
 export function suggestCompanies(companies, query) {
   const folded = foldSearchText(query);
-  const words = searchWords(query);
+  const words = queryWords(query);
   if (folded.length < MIN_QUERY || words.length === 0) return [];
   const found = [];
   for (const entry of companies.searchEntries) {
     let rank = null;
     let synonym = null;
+    const monogram = entry.monogram && foldSearchText(entry.monogram) === folded;
     if (entry.folded === folded) rank = 0;
-    else if (entry.monogram && foldSearchText(entry.monogram) === folded) rank = 1;
+    else if (monogram && entry.monogramCurated) rank = 1;
     else if (entry.folded.startsWith(folded)) rank = 2;
     else if (matchesWords(entry.tokens, words, false)) rank = 3;
     else {
       const other = entry.others.find((item) => item.folded === folded) ?? entry.others.find((item) => matchesWords(item.tokens, words, false));
       if (other) [rank, synonym] = [other.folded === folded ? 4 : 5, other.name];
+      else if (monogram) rank = 6;
     }
     if (rank !== null) {
-      found.push({ key: entry.key, name: entry.name, monogram: entry.monogram, synonym, named: [0, 1, 4].includes(rank), rank, count: entry.count, authorized: entry.authorized });
+      found.push({ key: entry.key, name: entry.name, monogram: entry.monogram, synonym, named: [0, 1, 4].includes(rank), weak: rank === 6, rank, count: entry.count, authorized: entry.authorized });
     }
   }
   return found

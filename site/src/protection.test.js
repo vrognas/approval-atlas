@@ -21,7 +21,7 @@ test("own protection: status chip, estimated ends and what they are counted from
     lines: [
       "Data exclusivity ended (est.) 17 Jul 2023",
       "Market protection ended (est.) 17 Jul 2025 – 17 Jul 2026",
-      "Counted from the first EU approval of pembrolizumab: Keytruda, 17 Jul 2015",
+      "Counted from the first central EU approval of pembrolizumab: Keytruda, 17 Jul 2015",
     ],
     orphan: [],
   });

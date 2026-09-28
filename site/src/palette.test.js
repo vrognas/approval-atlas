@@ -57,6 +57,8 @@ const TEXT_PAIRS = [
   ["--ink", "--accent-wash"],
   ["--ink-secondary", "--accent-wash"],
   ["--ink", "--mark"],
+  // The search list's last option, the indication-text search (step 2), in link colour when active.
+  ["--link", "--option-active"],
   // Headline tones: the "not" of "not authorized" and the "not yet" of a pending opinion.
   ...["--status-ended-text", "--status-pending-text"].flatMap((text) => BACKGROUNDS.map((background) => [text, background])),
   ...STATUS_HUES.flatMap((hue) => BACKGROUNDS.map((background) => [`--${hue}-text`, background])),
@@ -68,7 +70,9 @@ const TEXT_PAIRS = [
 
 // The hue mids also stack "Approvals per year" by ATC group (each group's own hue) and by child
 // class (main.js STACK_HUES). Their Other segment is the --raised fill with a --field-border
-// outline (phase 4c review; NON_TEXT_PAIRS checks that outline on the card and on the fill).
+// outline (phase 4c review; NON_TEXT_PAIRS checks that outline on the card and on the fill); the
+// segment of the medicines a mode cannot place adds --field-border hatching on that fill (the same
+// pairs).
 // Company groups stack by their hue's mid, a second group of one hue family by its text shade
 // (badges.js companySeriesColors()).
 const MARK_PAIRS = [

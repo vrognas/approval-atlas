@@ -29,6 +29,20 @@ export function statusLabel(status) {
   return STATUS_LABELS[status] ?? status;
 }
 
+// A status with EMA's opinion when that opinion was negative (step 2, #11: not a pending one), for
+// the search's meta line and the medicine card's answer strip; opinion: ema_medicines
+// opinion_status, null until that file has loaded.
+export function statusOpinionLabel(status, opinion) {
+  return status === "Opinion" && opinion === "Negative" ? "Opinion (negative)" : statusLabel(status);
+}
+
+// One medicine's status explanation (UI.statusTips), its own for a negative opinion (user decision
+// 2026-09-28); opinion: as statusOpinionLabel(). Null for a status without one.
+export function statusTipText(status, opinion = null) {
+  if (status === "Opinion" && opinion === "Negative") return UI.negativeOpinionTip;
+  return UI.statusTips[status] ?? null;
+}
+
 // Raw EMA status -> the kind that picks its dot colour; unknown statuses count as ended.
 const STATUS_KINDS = {
   Authorised: "authorized",
@@ -56,7 +70,9 @@ export function statusDateLine(status, approved, ended) {
 export function statusSentence(status, date, opinion) {
   if (statusKind(status) === "authorized") return null;
   const on = date ? ` on ${formatDate(date)}` : "";
-  if (status === "Opinion under re-examination") return "Opinion under re-examination; not yet authorized.";
+  if (status === "Opinion under re-examination") {
+    return opinion === "Negative" ? `Negative opinion${on}; under re-examination at the company's request.` : "Opinion under re-examination; not yet authorized.";
+  }
   if (status === "Opinion") {
     if (opinion === "Negative") return `Negative opinion${on}.`;
     return `${opinion === "Positive" ? "Positive opinion" : "Opinion adopted"}${on}; not yet authorized.`;
@@ -173,7 +189,8 @@ export function atcOriginFlag(origin) {
 export const NOT_STATED = "Not stated";
 
 // Headline parts: plain strings, or { text, tone } for the words the page colors
-// (tone "number": counts in the accent; "negative": the "not" of "not authorized").
+// (tone "number": counts in the accent; "negative": the "not" of "not authorized"; "aside": a
+// closing qualifier on a line of its own in smaller type, so the answer stays short on a phone).
 const number = (count) => ({ text: formatCount(count), tone: "number" });
 const NOT = { text: "not", tone: "negative" };
 const NOT_YET = { text: "not yet", tone: "pending" };
@@ -204,7 +221,39 @@ const statusCount = ({ status, count }) => `${formatCount(count)} ${STATUS_PHRAS
 const DEK_STATUSES = 4;
 
 export const UI = {
-  dataDate: (date) => `EMA human medicines · data as of ${formatDate(date)}`,
+  // Under the wordmark, always shown (landing, user-approved design 2026-09-28): what the site is for.
+  tagline: "Heard of a drug at a talk, a poster or anywhere? Look it up in seconds: EU approval, what it's for, who owns it, how long it's protected.",
+  // The scope (step 2, #1): EMA's central procedure, every status; national authorizations are not in
+  // it. The header shows it alone until the data's date is known.
+  scopeLine: "Human medicines, EMA central procedure",
+  dataDate: (date) => `${UI.scopeLine} · data as of ${formatDate(date)}`,
+  // The landing intro card (intro.js): on the untouched overview (no lookup, no filter) until the
+  // viewer closes it; the header's link brings it back.
+  intro: {
+    link: "What is this?",
+    // The card's heading (visually hidden; the link's text, so the link and its target agree).
+    title: "What is this?",
+    close: "Close the introduction",
+    closeHint: "Close; “What is this?” at the top brings it back",
+    lookupLead: "Look up a drug or active ingredient to see:",
+    lookup: [
+      "whether it's approved in the EU and since when",
+      "what it's approved for",
+      "which company owns it",
+      "how long its market protection runs (an estimate, not patents)",
+      "its official product information and EMA assessment report",
+    ],
+    // Phones: the summary of a disclosure holding the list below (intro.js).
+    exploreLead: "Or explore all EMA medicines:",
+    explore: [
+      "which companies have which kinds of drugs",
+      "which conditions have the most, or the fewest, approved treatments",
+      "how approvals changed over the years, by drug class, condition or company",
+    ],
+    scope: "Only medicines authorized EU-wide through the European Medicines Agency (EMA) are included. Many older or common medicines, such as paracetamol, are authorized country by country and are not here.",
+    authorized: "Authorized means it may be marketed in the EU, Iceland, Liechtenstein and Norway; whether it is sold or reimbursed in your country is decided nationally.",
+    smallPrint: "Data from EMA, updated daily. For information only, not medical advice.",
+  },
   // The tab's title: the view's name (a medicine, substance, condition, search or drug class) first.
   pageTitle: (name) => (name ? `${name} · Approval Atlas` : "Approval Atlas"),
   textTitle: (query) => `“${query}”`,
@@ -334,15 +383,19 @@ export const UI = {
         ? [`No medicines in the EMA data are ${place}.`]
         : [number(total), ` ${total === 1 ? "medicine" : "medicines"} ${place}`, ...currentlyAuthorized(total, authorized)];
     },
-    // kind: statusKind(); an opinion without a decision yet is "not yet" authorized.
-    medicine: (name, kind) => {
+    // kind: statusKind(); an opinion without a decision yet is "not yet" authorized, unless it was
+    // negative (opinion: ema_medicines opinion_status; step 2, #11): then "not".
+    medicine: (name, kind, opinion = null) => {
       if (kind === "authorized") return [`${name} is authorized in the EU.`];
-      return [`${name} is `, kind === "pending" ? NOT_YET : NOT, " authorized in the EU."];
+      return [`${name} is `, kind === "pending" && opinion !== "Negative" ? NOT_YET : NOT, " authorized in the EU."];
     },
-    // Substance names stay as in the data (lower-case INN) except for the first letter.
+    // Substance names stay as in the data (lower-case INN) except for the first letter. Step 2 (#1):
+    // the data holds EMA's central procedure only, so a substance with no medicine there (celecoxib)
+    // can still be authorized nationally.
     substance: (name, count) => (count > 0
-      ? [`${capitalize(name)} is authorized in the EU in `, number(count), ` ${count === 1 ? "medicine" : "medicines"}.`]
-      : [`${capitalize(name)} is `, NOT, " authorized in the EU."]),
+      ? [`${capitalize(name)} is authorized EU-wide through EMA in `, number(count), ` ${count === 1 ? "medicine" : "medicines"}.`]
+      : [`${capitalize(name)}: `, { text: "no medicine", tone: "negative" }, " is currently authorized through EMA ",
+        { text: "(national authorizations are not included).", tone: "aside" }]),
     // EMA's therapeutic-area tags (not indications); narrower: the count includes medicines tagged
     // with a narrower condition (Psoriasis: Arthritis, Psoriatic).
     condition: (name, count, narrower) => {
@@ -378,7 +431,8 @@ export const UI = {
   // The same for the EMA statuses (keys: raw EMA values), wherever a status dot or pill, facet row,
   // "Stack by Status" legend entry or the sentence's status token names one; at most 10 words.
   statusTips: {
-    Authorised: "Can be marketed in the EU.",
+    // Step 2 (#16): authorized is not available or reimbursed everywhere.
+    Authorised: "Can be marketed EU-wide; availability and reimbursement vary by country.",
     Opinion: "EMA has given its opinion; EU decision pending.",
     "Opinion under re-examination": "EMA is re-examining its opinion at the company's request.",
     Refused: "The EU refused authorization.",
@@ -390,6 +444,9 @@ export const UI = {
     Suspended: "Authorization temporarily suspended.",
     Revoked: "Authorization canceled by the EU.",
   },
+  // A medicine's status Opinion when EMA's opinion was negative (statusTipText(); user decision
+  // 2026-09-28), on its dots and pills; at most 10 words.
+  negativeOpinionTip: "EMA recommended refusal; no EU decision published yet.",
   // Sort controls (breakdown, activity rows and columns): a second click on the one in force
   // reverses it; counts sort most first, names and codes A to Z. name(): a control's name, its
   // visible text then the order in force (direction null: not in force).
@@ -593,8 +650,9 @@ export const UI = {
       `Year of EU marketing authorization; ${counting}. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
     // The segment on top of the stacks beyond the top ones.
     other: { atc: "Other classes", mah: "Other companies" },
-    // One ATC class selected: its medicines coded only down to it have no child class to stack in.
-    onlyCoded: (count, code) => `${plural(count, "medicine", "medicines")} coded only as ${code} ${count === 1 ? "is" : "are"} not shown.`,
+    // The segment on top for the medicines a mode cannot place, so every mode gives the same yearly
+    // totals: no ATC code; with one ATC class selected, coded only down to it; no company.
+    unplaced: { atc: "No ATC code", atcIn: (code) => `Coded only as ${code}`, mah: "No company" },
   },
 
   overTime: {
@@ -855,9 +913,47 @@ export const UI = {
   },
 
   lookup: {
-    groups: { medicines: "Medicines", substances: "Substances", conditions: "Conditions", classes: "Drug classes", companies: "Companies" },
-    medicineMeta: (status, year) => [statusLabel(status), year].filter(Boolean).join(" · "),
-    substanceMeta: (count) => plural(count, "medicine", "medicines"),
+    // The search field (landing, 2026-09-28): plain words; ATC codes still work, so its name says so.
+    placeholder: "Drug name, active ingredient or condition",
+    label: "Search by drug name, active ingredient, condition or ATC code",
+    // fuzzy: close names when nothing matched (step 2, #5); text: the name of the last group, the
+    // indication-text search (#14), which has no visible heading.
+    groups: {
+      medicines: "Medicines", substances: "Substances", conditions: "Conditions", classes: "Drug classes", companies: "Companies",
+      fuzzy: "Did you mean", text: "Indication text search",
+    },
+    // opinion: EMA's opinion (statusOpinionLabel()), once ema_medicines.json has loaded.
+    medicineMeta: (status, year, opinion = null) => [statusOpinionLabel(status, opinion), year].filter(Boolean).join(" · "),
+    // synonym: another name of the substance that matched (#19: "adrenaline" for epinephrine).
+    substanceMeta: (count, synonym = null) => [synonym ? `matches “${synonym}”` : null, plural(count, "medicine", "medicines")].filter(Boolean).join(" · "),
+    // A WHO level-5 name with no medicine in the data, as a "did you mean" option (a text search).
+    whoMeta: (code) => `ATC ${code} · not in EMA's central procedure`,
+    // Step 2: the list's note (a retried query, #3, or no matches) and the option ending every list.
+    showingFor: (query) => `Showing results for “${query}”`,
+    searchText: (query) => `Search indication texts for “${query}”`,
+    // Announced after each keystroke: the note, then how many suggestions (the text search not counted);
+    // a note ending in a period is joined to the count without a second one.
+    status: (note, count) => {
+      const counted = count ? plural(count, "suggestion", "suggestions") : null;
+      return [counted ? note?.replace(/\.$/, "") : note, counted].filter(Boolean).join(". ");
+    },
+    // Step 2 (#2): an indication-text search that found nothing says why: first what was found (a
+    // WHO substance with no medicine through EMA, a name, medicines of another status, or nothing),
+    // then what can be searched, what cannot yet, and what is not in the data.
+    empty: {
+      nothing: (query) => `Nothing in the EMA data matches “${query}”.`,
+      known: (name, code) => `${name} (ATC ${code}) is a known active substance, but no medicine with it went through EMA's central procedure; it may be authorized nationally.`,
+      noText: (query) => `No indication text mentions “${query}”.`,
+      otherStatuses: (count) => `No currently authorized medicine mentions it in its indication; ${plural(count, "medicine", "medicines")} of another status ${count === 1 ? "does" : "do"} (Show all statuses).`,
+      sameClass: "Medicines in the same drug class: ",
+      names: "Matching names: ",
+      didYouMean: "Did you mean: ",
+      searchable: "You can search by brand name, active ingredient (INN), condition or ATC code.",
+      notYet: "Not searchable yet: development codes (such as MK-3475) and brand names used outside the EU.",
+      notInData: "Not in the data: medicines authorized only nationally, country by country. Look them up in the ",
+      registers: "national registers of authorized medicines",
+      registersAfter: " (EMA's list). The pack of a medicine authorized through EMA carries an EU number (EU/1/…).",
+    },
     conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     classMeta: (count, unnamed = false) => [unnamed ? NO_ATC_NAME : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     // synonym: the other name that matched (a company, spelling or EMA holder name of the group).
@@ -866,15 +962,17 @@ export const UI = {
     matches: (count) => plural(count, "suggestion", "suggestions"),
     loading: "Loading…",
     notAvailable: "Not available right now.",
-    // Home state only: example lookups (ids checked against the data 2026-09-26).
+    // Home state only: example lookups (ids checked against the data 2026-09-26), each followed by
+    // the kind of thing it is (landing, 2026-09-28).
     tryLead: "Try",
     examples: [
-      { label: "Keytruda", patch: { med: "EMEA/H/C/003820" } },
-      { label: "semaglutide", patch: { sub: "semaglutide" } },
-      { label: "psoriasis", patch: { cond: "D011565" } },
+      { label: "Keytruda", kind: "brand", patch: { med: "EMEA/H/C/003820" } },
+      { label: "semaglutide", kind: "active ingredient", patch: { sub: "semaglutide" } },
+      { label: "psoriasis", kind: "condition", patch: { cond: "D011565" } },
       // A drug class: the dashboard filtered to it alone (url.js classState()).
-      { label: "L04AC", atc: "L04AC" },
+      { label: "L04AC", kind: "drug class", atc: "L04AC" },
     ],
+    exampleKind: (kind) => `(${kind})`,
   },
 
   card: {
@@ -937,7 +1035,8 @@ export const UI = {
     // ended: the date (the range's later end) is before the data date.
     dataExclusivity: (date, ended) => `Data exclusivity ${ended ? "ended" : "ends"} (est.) ${formatDate(date)}`,
     marketProtection: (min, max, ended) => `Market protection ${ended ? "ended" : "ends"} (est.) ${formatDate(min)} – ${formatDate(max)}`,
-    countedFrom: (substance, name, date) => `Counted from the first EU approval of ${substance}: ${name}, ${formatDate(date)}`,
+    // Step 2 (#1): earlier national authorizations are not in the data.
+    countedFrom: (substance, name, date) => `Counted from the first central EU approval of ${substance}: ${name}, ${formatDate(date)}`,
     thisSubstance: "this active substance",
     follows: (name) => `No protection of its own; follows ${name}`,
     referenceNotFound: "No protection of its own; reference product not found in EU central authorizations",
@@ -958,7 +1057,8 @@ export const UI = {
   },
 
   substance: {
-    firstApproval: (date, name) => (date ? `First EU approval: ${formatDate(date)} (${name})` : "No EU approval date"),
+    // Step 2 (#1): central only (metformin's first EU approval was not Avandamet's).
+    firstApproval: (date, name) => (date ? `First central EU approval: ${formatDate(date)} (${name})` : "No central EU approval date"),
     products: (count) => plural(count, "medicine", "medicines"),
     companies: (count) => plural(count, "company", "companies"),
     authorized: (count) => `${formatCount(count)} authorized`,
@@ -969,6 +1069,8 @@ export const UI = {
     narrowerLead: (count) => `Includes the narrower ${count === 1 ? "condition" : "conditions"} `,
     narrowerMore: (count) => ` and ${formatCount(count)} more`,
     textHeading: (query) => `Mentioned in indication texts: “${query}”`,
+    // Step 2 (#19): the text search also looks for EMA's name of the substance typed.
+    alsoSearched: (name) => `Also searching for “${name}”, the name EMA uses.`,
     // The tagged medicines: those tagged with the condition itself, then those tagged only with a
     // narrower one (each row says which).
     taggedOwn: (name, count) => `Tagged by EMA with ${name} (${formatCount(count)})`,
@@ -1019,6 +1121,9 @@ export const UI = {
 
   about: {
     summary: "About this site",
+    // Step 2 (#1, #16): what is in the data, where a central authorization is valid, and that
+    // availability and reimbursement are national.
+    scope: "Only human medicines that went through the European Medicines Agency's (EMA) central procedure are included, whatever their status. Many older or common medicines are authorized country by country and are not here; check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not in the UK or Switzerland; whether a medicine is sold or reimbursed in a country is decided nationally.",
     intendedUse: "Informational only: not medical or legal advice; not a medical device. Data can lag EMA.",
     privacy:
       "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device.",

@@ -386,8 +386,8 @@ test_that("build_company_tables writes one row per medicine and company", {
   expect_named(
     run$tables$companies,
     c(
-      "key", "kind", "name", "group_key", "monogram", "joint_venture",
-      "partners", "other_partners", "representative", "lei",
+      "key", "kind", "name", "group_key", "monogram", "monogram_source",
+      "joint_venture", "partners", "other_partners", "representative", "lei",
       "gleif_legal_name", "gleif_ultimate_parent", "gleif_ultimate_parent_lei",
       "member_holders", "original_holders", "ownership", "sources", "as_of"
     )
@@ -519,6 +519,69 @@ test_that("a curated alias never names a company, its target does", {
   expect_identical(polpharma$member_holders[[1]], garbled)
 })
 
+test_that("an alias fixes a misspelling the rules already fold", {
+  # EMA's typo: "Umited" folds as a legal form, so the key is right, but the
+  # name would be the typo.
+  typo <- "Theravance Biopharma Ireland Umited"
+  fixed <- "Theravance Biopharma Ireland Limited"
+  holders <- dplyr::bind_rows(
+    test_holders(),
+    dplyr::tibble(
+      ema_product_number = "EMEA/H/C/001240",
+      holder_ema = typo,
+      holder_used = typo,
+      holder_basis = "ema",
+      country = "IE",
+      register_name_is_address = FALSE
+    )
+  )
+  curated <- test_curated()
+  curated$aliases <- dplyr::add_row(
+    curated$aliases,
+    holder = typo,
+    company_holder = fixed
+  )
+  run <- test_run(holders, curated = curated)
+  companies <- run$tables$companies
+  theravance <- company_row(companies, "c.theravance-biopharma")
+  expect_identical(theravance$name, fixed)
+  expect_identical(theravance$member_holders[[1]], typo)
+  expect_identical(company_row(companies, "g.theravance-biopharma")$name, fixed)
+  medicines <- run$tables$ema_medicine_companies
+  # EMA's name stays with the medicine.
+  expect_identical(
+    medicines$holder_ema[medicines$ema_product_number == "EMEA/H/C/001240"],
+    typo
+  )
+  # Without the alias the typo names the company.
+  companies <- test_run(holders)$tables$companies
+  expect_identical(
+    company_row(companies, "c.theravance-biopharma")$name,
+    typo
+  )
+  # A spelling fix whose target another alias moves is still a chain.
+  chained <- curated
+  chained$aliases <- dplyr::add_row(
+    chained$aliases,
+    holder = "Tour Hekla Umited",
+    company_holder = "Tour Hekla"
+  )
+  expect_error(
+    test_run(holders, curated = chained),
+    "aliases point to aliases"
+  )
+})
+
+test_that("the curated aliases fix EMA's typo in Theravance's name", {
+  aliases <- curated_company_aliases()
+  expect_identical(
+    aliases$company_holder[
+      aliases$holder == "Theravance Biopharma Ireland Umited"
+    ],
+    "Theravance Biopharma Ireland Limited"
+  )
+})
+
 test_that("groups are curated, joint ventures or the company's own", {
   companies <- test_run()$tables$companies
   groups <- companies[companies$kind == "group", ]
@@ -533,6 +596,7 @@ test_that("groups are curated, joint ventures or the company's own", {
   msd <- company_row(companies, "g.msd")
   expect_identical(msd$name, "MSD (Merck & Co.)")
   expect_identical(msd$monogram, "MSD")
+  expect_identical(msd$monogram_source, "curated")
   expect_identical(msd$lei, "4YV9Y5M8S0BRK1RP0397")
   expect_identical(msd$as_of, as.Date("2026-09-28"))
   expect_identical(msd$group_key, NA_character_)
@@ -546,6 +610,12 @@ test_that("groups are curated, joint ventures or the company's own", {
   expect_identical(own$name, "Swedish Orphan Biovitrum AB (publ)")
   # Not "SOB" (blocked).
   expect_identical(own$monogram, "SW")
+  # Only curated monograms name a group on purpose (search: "CAR" is no
+  # query for Carisma's derived monogram).
+  expect_identical(own$monogram_source, "derived")
+  expect_identical(joint_venture$monogram_source, "curated")
+  is_company <- companies$kind == "company"
+  expect_true(all(is.na(companies$monogram_source[is_company])))
   expect_identical(own$as_of, as.Date("2026-09-27"))
   expect_identical(anyDuplicated(groups$monogram), 0L)
   sandoz <- company_row(companies, "g.sandoz")

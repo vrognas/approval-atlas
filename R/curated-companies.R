@@ -644,6 +644,9 @@ curated_company_aliases <- function() {
     "Novartis Ophtalmics Europe Ltd", "Novartis Ophthalmics Europe Ltd.",
     "Misspelt in the Union Register",
     "Archie Samiel s.r.o.", "Archie Samuel s.r.o.", "Misspelt in EMA's data",
+    # "Umited" folds as a legal form, so only the name needs the alias.
+    "Theravance Biopharma Ireland Umited",
+    "Theravance Biopharma Ireland Limited", "Misspelt in EMA's data",
     "Laboratoires BIOGARAN", "Biogaran", "Long form of the name",
     "A.C.O.M. -ADVANCED CENTER ONCOLOGY MACERATA -S.R.L.",
     "A.C.O.M. - Advanced Center Oncology", "Long form of the name",

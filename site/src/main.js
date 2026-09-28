@@ -40,18 +40,21 @@ import {
   topKeys,
   topWithOther,
   typeSplit,
+  UNPLACED_KEY,
+  withUnplaced,
   yearHistogram,
   yearStacks,
 } from "./facets.js";
 import { renderSentence } from "./filter-sentence.js";
 import { filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { companyBadge, holderDisplay } from "./holders.js";
+import { createIntro } from "./intro.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { createSearchBox } from "./search-box.js";
-import { buildLookupIndex, suggest, suggestAtcClasses } from "./search.js";
+import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
 import { createSheet } from "./sheet.js";
 import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
@@ -127,17 +130,20 @@ const ACTIVITY_EXACT = "__exact__";
 // separate the segments too); company groups: their own colours (badges.js companySeriesColors()).
 // Level-1 ATC groups: the top six, each in its own group's hue. Other:
 // the raised fill with a --field-border outline (3:1, palette.test.js), so it does not outweigh
-// the named series.
+// the named series. The medicines a mode cannot place: the same, hatched (chart.js), on top.
 const STACK_TOP = 8;
 const STACK_ATC_GROUPS = 6;
 const STACK_HUES = ["blue", "gold", "teal", "red", "indigo", "olive", "pink", "sky"];
 const STACK_OTHER = { color: "var(--raised)", stroke: "var(--field-border)" };
+const STACK_UNPLACED = { ...STACK_OTHER, hatch: true };
 
 const $ = (selector) => document.querySelector(selector);
 
 // Desktop: the sidebar's width, the viewer's stored one set now, before the first render, so the
 // layout does not jump. The charts wait for a drag's end to follow the new width (resizeObserver).
 const sidebar = createSidebarResize($("#sidebar-resize"), { label: UI.sidebar.resize, hint: UI.sidebar.hint, onDragEnd: () => scheduleRender() });
+// The landing intro card: shown or hidden on every render (the untouched overview, until closed).
+const intro = createIntro($("#intro"), $("#intro-link"));
 
 const files = new Map();
 function loadFile(file) {
@@ -209,6 +215,8 @@ function render() {
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
   // Below a lookup result, the dashboard is the overview of every medicine, under its own heading.
   $("#explore").hidden = !lookupOpen;
+  // Before the dashboard's data has loaded, the URL's filters are still verbatim (pendingFilters).
+  intro.render(state, dashboard ? null : pendingFilters);
   dashboard?.render();
   updateTitle();
   if (scrollAnchor) {
@@ -334,10 +342,17 @@ function setupTips() {
   }, true);
 }
 
-// Filled before any data loads, so it shows even when the data files are missing. The footer's
-// links to other websites are marked as such (after their text is set).
+// Filled before any data loads, so it shows even when the data files are missing: the header's
+// tagline and scope line (the data's date follows with meta.json), the search field's name and
+// placeholder, and the About disclosure. The footer's links to other websites are marked as such
+// (after their text is set).
 function renderAbout() {
+  d3.select("#tagline").text(UI.tagline);
+  d3.select("#data-date").text(UI.scopeLine);
+  d3.select("#lookup-label").text(UI.lookup.label);
+  d3.select("#lookup-input").attr("placeholder", UI.lookup.placeholder);
   d3.select("#about-summary").text(UI.about.summary);
+  d3.select("#about-scope").text(UI.about.scope);
   d3.select("#about-use").text(UI.about.intendedUse);
   d3.select("#about-privacy").text(UI.about.privacy);
   d3.select("#about-security").text(UI.about.security);
@@ -387,12 +402,17 @@ function showOfflineNote(meta) {
 // result: suggest() output; classes: suggestAtcClasses() output; companies: suggestCompanies() output.
 // The Companies group comes first when the query names a group (its name, monogram or another name
 // exactly: "msd", "pfizer"), and Enter then opens its page (submitChoice(): named).
-function suggestionGroups(result, classes, companies) {
+// medicines: ema_medicines rows by product number (EMA's opinion: a negative one says so), null
+// until loaded.
+// Step 2: a condition's exact entry term names it ("ADHD", #4); a substance found through another
+// name says so and is named by it ("adrenaline", #19); a company found only through a derived
+// monogram is weak (#4: Enter never opens it as the only suggestion).
+function suggestionGroups(result, classes, companies, medicines) {
   const copy = UI.lookup;
   const companyGroup = {
     key: "companies",
     label: copy.groups.companies,
-    options: companies.map((row) => ({ label: row.name, meta: copy.companyMeta(row.synonym, row.authorized), value: row.key, named: row.named })),
+    options: companies.map((row) => ({ label: row.name, meta: copy.companyMeta(row.synonym, row.authorized), value: row.key, named: row.named, weak: row.weak })),
   };
   const named = companies.some((row) => row.named);
   return [
@@ -402,19 +422,23 @@ function suggestionGroups(result, classes, companies) {
       label: copy.groups.medicines,
       options: result.medicines.map((row) => ({
         label: row.name_of_medicine,
-        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4)),
+        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4), medicines?.get(row.ema_product_number)?.opinion_status),
         value: row.ema_product_number,
       })),
     },
     {
       key: "substances",
       label: copy.groups.substances,
-      options: result.substances.map((substance) => ({ label: substance.name, meta: copy.substanceMeta(substance.products.length), value: substance.key })),
+      options: result.substances.map((substance) => ({
+        label: substance.name, meta: copy.substanceMeta(substance.products.length, substance.synonym), value: substance.key, named: substance.named,
+      })),
     },
     {
       key: "conditions",
       label: copy.groups.conditions,
-      options: result.conditions.map((condition) => ({ label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui })),
+      options: result.conditions.map((condition) => ({
+        label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui, named: condition.exact,
+      })),
     },
     {
       key: "classes",
@@ -423,6 +447,40 @@ function suggestionGroups(result, classes, companies) {
     },
     ...(named ? [] : [companyGroup]),
   ];
+}
+
+// A "did you mean" entry (didYouMean()) as an option: a medicine or substance opens its card, a
+// WHO substance with no medicine through EMA runs the text search for its name (which says so).
+function fuzzyOption(entry) {
+  const copy = UI.lookup;
+  if (entry.kind === "medicine") {
+    return { label: entry.label, meta: copy.medicineMeta(entry.row.medicine_status, entry.row.marketing_authorisation_date?.slice(0, 4)), value: entry.value, pick: "medicines" };
+  }
+  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(entry.substance.products.length), value: entry.value, pick: "substances" };
+  return { label: atcName(entry.label), meta: copy.whoMeta(entry.code), value: entry.value, pick: "text" };
+}
+
+// The search list (step 2): the typed query's suggestions, or else those of a relaxed one (dose,
+// form and qualifier words dropped, then the last word; #3: "Showing results for …"); when nothing
+// matches, "No matches" (or that the WHO substance named has no medicine through EMA, #2) and up
+// to 3 close names (#5); always last, the indication-text search for the typed text (#14).
+// run(text): suggestionGroups() for a query. atcClasses: atc_classes.json rows, [] until loaded.
+function searchSuggestions(index, query, run, atcClasses) {
+  const text = query.trim();
+  if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text };
+  const copy = UI.lookup;
+  const { groups, shownFor } = searchWithFallback(text, run);
+  const found = groups.some((group) => group.options.length > 0);
+  let note = shownFor ? copy.showingFor(shownFor) : null;
+  const extra = [];
+  if (!found) {
+    const known = knownSubstance(index, text, atcClasses);
+    note = known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+    const fuzzy = didYouMean(index, text, atcClasses);
+    if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map(fuzzyOption) });
+  }
+  extra.push({ key: "text", label: null, name: copy.groups.text, options: [{ label: copy.searchText(text), value: text }] });
+  return { groups: [...groups, ...extra], note, query: shownFor ?? text };
 }
 
 // Search icon (decorative) inside the search bar.
@@ -436,13 +494,16 @@ function addSearchIcon() {
   icon.append("path").attr("d", "M12.75 12.75l4.5 4.5");
 }
 
-// "Try Keytruda · semaglutide · psoriasis": links that open those lookups.
+// "Try Keytruda (brand) · semaglutide (active ingredient) · …": links that open those lookups, each
+// followed by the kind of thing it is (kept on one line with its link).
 function renderTryLinks() {
   const line = d3.select("#lookup-try");
   line.append("span").text(UI.lookup.tryLead);
   for (const [position, example] of UI.lookup.examples.entries()) {
     if (position > 0) line.append("span").attr("aria-hidden", "true").text("·");
-    line.append(() => lookup.link(example.label, example.atc ? classState(example.atc) : example.patch));
+    const item = line.append("span").attr("class", "try-item");
+    item.append(() => lookup.link(example.label, example.atc ? classState(example.atc) : example.patch));
+    item.append("span").attr("class", "try-kind").text(` ${UI.lookup.exampleKind(example.kind)}`);
   }
 }
 
@@ -462,24 +523,28 @@ function startLookup([meta, searchRows, entryTermRows]) {
     conditions: (value) => ({ cond: value }),
     classes: classState, // the dashboard filtered to the class alone
     companies: (value) => ({ co: value }), // the company page
+    text: (value) => ({ q: value }), // the indication-text search
   };
   const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
     suggestionsFor: (query) => {
       const atc = lookup.atcClasses();
       const companies = lookup.companies();
-      return suggestionGroups(
-        suggest(index, lookup.conditions(), query),
-        atc ? suggestAtcClasses(query, atc.classes, atc.counts) : [],
-        companies ? suggestCompanies(companies, query) : [],
+      const run = (text) => suggestionGroups(
+        suggest(index, lookup.conditions(), text),
+        atc ? suggestAtcClasses(text, atc.classes, atc.counts) : [],
+        companies ? suggestCompanies(companies, text) : [],
+        lookup.medicines(),
       );
+      return searchSuggestions(index, query, run, atc?.classes ?? []);
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
   });
   // Conditions, drug classes and companies join the suggestions once their background data has
-  // loaded (and a condition or company page's title its name).
+  // loaded (and a condition or company page's title its name); so do EMA's opinions (a negative
+  // one is named in a medicine's meta line).
   lookup.onData((name) => {
-    if (["conditions", "atc", "atcCounts", "companies"].includes(name)) searchBox.refresh();
+    if (["conditions", "atc", "atcCounts", "companies", "medicines"].includes(name)) searchBox.refresh();
     if (name === "conditions" || name === "companies") updateTitle();
   });
   // The wordmark opens the overview: every lookup and filter cleared, one history entry.
@@ -491,7 +556,8 @@ function startLookup([meta, searchRows, entryTermRows]) {
   });
   d3.select("#explore-title").text(UI.explore.title);
   d3.select("#explore-note").text(UI.explore.note);
-  for (const name of ["conditions", "atc", "atcCounts", "companies"]) lookup.need(name);
+  // medicines: the dashboard loads the same file (one request, loadFile()).
+  for (const name of ["conditions", "atc", "atcCounts", "companies", "medicines"]) lookup.need(name);
 
   applyUrl();
   searchBox.setText(state.q);
@@ -1093,9 +1159,10 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   }
 
   // The per-year chart's stacks for its mode: keysOf(product), series ([{ key, label, color, tip:
-  // the legend entry's explanation }] bottom to top), by (the summary's phrase), counting (the
-  // note's) and unstacked (the dated medicines no stack holds: without an ATC class at the level
-  // shown; "" when none). dated: the medicines shown.
+  // the legend entry's explanation }] bottom to top), by (the summary's phrase) and counting (the
+  // note's). dated: the medicines shown. Every mode gives the same yearly totals (user decision
+  // 2026-09-28): the medicines a mode cannot place (no ATC code, coded only as the class shown, no
+  // company) are one low-key hatched segment on top, when there are any (withUnplaced()).
   function yearStackSpec(dated) {
     if (stackMode === "type") {
       return {
@@ -1103,7 +1170,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
         series: MEDICINE_TYPES.map((type) => ({ key: type, label: type, color: typeColor(type) })),
         by: UI.years.by.type,
         counting: UI.years.counting.type,
-        unstacked: "",
       };
     }
     // The statuses present in STATUS_ORDER, Authorized at the bottom (the approval-years strip's
@@ -1115,7 +1181,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
           .map((status) => ({ key: status, label: statusLabel(status), color: statusColor(status), tip: UI.statusTips[status] ?? null })),
         by: UI.years.by.status,
         counting: UI.years.counting.status,
-        unstacked: "",
       };
     }
     // The top holders (most at the bottom), or the top classes (in code order: level-1 groups in
@@ -1126,6 +1191,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       ? { key, label: other, ...STACK_OTHER }
       : { key, label: labelOf(key), color: colorOf(key, index) }));
     const counted = (keys) => [keys.filter((key) => key !== OTHER_KEY).length, keys.includes(OTHER_KEY)];
+    const unplacedSeries = (stack, label) => (stack.any ? [{ key: UNPLACED_KEY, label, ...STACK_UNPLACED }] : []);
     // Company groups (companies part 2): each in its group's colour, or, too near a colour already
     // in the chart in either mode, its text shade or the nearest other hue (companySeriesColors()),
     // with its badge and, as the legend's
@@ -1133,36 +1199,36 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     if (stackMode === "mah") {
       const groupOf = (product) => (product.group_key ? [product.group_key] : []);
       const top = topWithOther(dated, groupOf, STACK_TOP);
+      const stack = withUnplaced(dated, top.keysOf);
       const colors = companySeriesColors(top.keys.filter((key) => key !== OTHER_KEY), readPalette());
       const series = topSeries(top.keys, (key) => colors.get(key), companies.name, UI.years.other.mah).map((item) => {
         if (item.key === OTHER_KEY) return item;
         const names = namesBehind(item.label, dated.filter((product) => product.group_key === item.key));
         return { ...item, badge: companies.row(item.key), tip: names.length ? UI.companies.named(item.label, names) : null };
       });
-      const missing = dated.filter((product) => groupOf(product).length === 0).length;
       return {
-        keysOf: top.keysOf,
-        series,
+        keysOf: stack.keysOf,
+        series: [...series, ...unplacedSeries(stack, UI.years.unplaced.mah)],
         by: UI.years.by.mah,
         counting: UI.years.counting.mah(...counted(top.keys)),
-        unstacked: missing ? UI.breakdown.mah.excluded(missing) : "",
       };
     }
     const parent = drillCode();
     const classesOf = (product) => atcClassesAt(product, parent);
-    const missing = dated.filter((product) => classesOf(product).length === 0).length;
-    const unstacked = missing === 0 ? "" : parent === null ? UI.breakdown.atc.excluded(missing) : UI.years.onlyCoded(missing, parent);
     const label = (code) => atcClassLabel(code, atcNames.get(code));
     // Level-1 groups: the top STACK_ATC_GROUPS (14 neighbouring hues could not be told apart).
     const top = topWithOther(dated, classesOf, parent === null ? STACK_ATC_GROUPS : STACK_TOP);
+    const stack = withUnplaced(dated, top.keysOf);
     const keys = [...top.keys.filter((key) => key !== OTHER_KEY).sort(), ...top.keys.filter((key) => key === OTHER_KEY)];
     const colorOf = parent === null ? (code) => `var(--${atcHue(code)}-mid)` : (code, index) => `var(--${STACK_HUES[index]}-mid)`;
     return {
-      keysOf: top.keysOf,
-      series: topSeries(keys, colorOf, label, UI.years.other.atc),
+      keysOf: stack.keysOf,
+      series: [
+        ...topSeries(keys, colorOf, label, UI.years.other.atc),
+        ...unplacedSeries(stack, parent === null ? UI.years.unplaced.atc : UI.years.unplaced.atcIn(parent)),
+      ],
       by: parent === null ? UI.years.by.atc : UI.years.by.atcIn(label(parent)),
       counting: UI.years.counting.atc(...counted(keys)),
-      unstacked,
     };
   }
 
@@ -1184,7 +1250,6 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     d3.select("#undated-note").text(stackMode === "status"
       ? (undated ? UI.years.undatedStatuses(undated, state.from !== null || state.to !== null) : "")
       : UI.years.undated(undated));
-    d3.select("#unstacked-note").text(stack.unstacked);
   }
 
   // One part's failure (data it cannot handle) must not blank the parts after it: the error is

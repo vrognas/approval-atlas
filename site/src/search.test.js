@@ -2,18 +2,28 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
+  SPELLING_VARIANTS,
   buildConditions,
   buildLookupIndex,
   conditionPhrases,
+  didYouMean,
+  editDistance,
   findWholeWord,
   foldSearchText,
   foldWithMap,
+  knownSubstance,
   makeSnippet,
+  matchesWords,
+  queryWords,
+  relaxedQueries,
+  searchWithFallback,
   searchWords,
+  spellingVariant,
   submitChoice,
   suggest,
   suggestAtcClasses,
   textMatches,
+  textPhrases,
 } from "./search.js";
 
 // The R rule (fold_search_text in R/mesh.R): str_to_lower; str_replace_all("ae|oe", "e");
@@ -79,6 +89,49 @@ test("searchWords splits the folded text on anything that is not a letter or dig
   assert.deepEqual(searchWords("  "), []);
 });
 
+// Step 2 (#4): "glp1" is how people type GLP-1; names and queries split the same way.
+test("searchWords splits letters from digits", () => {
+  assert.deepEqual(searchWords("glp1"), ["glp", "1"]);
+  assert.deepEqual(searchWords("GLP-1"), ["glp", "1"]);
+  assert.deepEqual(searchWords("Lutetium (177Lu) chloride"), ["lutetium", "177", "lu", "chloride"]);
+  assert.deepEqual(searchWords("B12c"), ["b", "12", "c"]);
+});
+
+// A query keeps each typed word's parts together: "h1n1" is one word of four parts, not four words.
+test("queryWords: the query's words, each split into its letter and digit parts", () => {
+  assert.deepEqual(queryWords("glp1 H1N1-v"), [["glp", "1"], ["h", "1", "n", "1"], ["v"]]);
+  assert.deepEqual(queryWords("IL-17").flat(), searchWords("IL-17"));
+  assert.deepEqual(queryWords("  "), []);
+});
+
+// Step 2 (#4): "IL-17" opened Lutetium Billev (previously Illuzyce), its only suggestion: "il" started
+// "illuzyce" and "17" started "177". A short word before a number must be a whole word; otherwise a
+// word stays a prefix ("hum" finds Humira as it is typed, "hep b" hepatitis B). Step 2 review: the
+// parts of a glued word match consecutive words, the parts before the last whole ("h1n1" is not
+// "H5N1"; "b12" is not "hepatitis B" + "C127I"; "a1c" is not "Clopidogrel 1A").
+test("matchesWords: a glued word's parts match consecutive words; a short word before a number is whole", () => {
+  const matches = (name, query, shortWhole = false) => matchesWords(searchWords(name), queryWords(query), shortWhole);
+  assert.equal(matches("Humira", "hum"), true);
+  assert.equal(matches("Lutetium (177Lu) chloride Billev (previously Illuzyce)", "IL-17"), false);
+  assert.equal(matches("Lutetium (177Lu) chloride Billev (previously Illuzyce)", "il17"), false);
+  assert.equal(matches("Lutetium (177Lu) chloride", "177lu"), true);
+  assert.equal(matches("Glucagon-like peptide-1 (GLP-1) analogues", "glp1"), true);
+  assert.equal(matches("CAR T cells", "car t"), true);
+  assert.equal(matches("Carvykti", "car t"), false);
+  assert.equal(matches("insulin glargine", "insulin gla"), true);
+  assert.equal(matches("insulin glargine", "ins gla"), true);
+  assert.equal(matches("hepatitis B surface antigen", "hep b"), true);
+  assert.equal(matches("Pandemic influenza vaccine H5N1", "h1n1"), false);
+  assert.equal(matches("Pandemic influenza vaccine H5N1", "H5N1"), true);
+  assert.equal(matches("Pandemic influenza vaccine H5N1", "h5"), true);
+  assert.equal(matches("influenza vaccine H1N1v", "v1"), false);
+  assert.equal(matches("hepatitis B surface antigens [murine (C127I) cells]", "b12"), false);
+  assert.equal(matches("Clopidogrel 1A Pharma", "a1c"), false);
+  // Conditions keep their rule: every short word whole, the last one too.
+  assert.equal(matches("hivx", "hiv", true), false);
+  assert.equal(matches("HIV-1 infection", "hiv1", true), true);
+});
+
 test("findWholeWord needs word boundaries on both sides", () => {
   assert.equal(findWholeWord("small cell lung; sma type 1", "sma"), 17);
   assert.equal(findWholeWord("plasma small", "sma"), -1);
@@ -112,6 +165,9 @@ const searchRows = [
   { ema_product_number: "P4", name_of_medicine: "Adalimumab Test", substances: "Adalimumab", substance_keys: ["adalimumab"], medicine_status: "Authorised", marketing_authorisation_date: "2020-01-01", medicine_type: "Biosimilar" },
   { ema_product_number: "P5", name_of_medicine: "Truvada", substances: "emtricitabine; tenofovir disoproxil", substance_keys: ["emtricitabine", "tenofovir disoproxil"], medicine_status: "Authorised", marketing_authorisation_date: "2005-02-21", medicine_type: "Other" },
   { ema_product_number: "P6", name_of_medicine: "Hulk", substances: null, substance_keys: [], medicine_status: "Refused", marketing_authorisation_date: null, medicine_type: "Other" },
+  { ema_product_number: "P7", name_of_medicine: "Lutetium (177Lu) chloride Billev (previously Illuzyce)", substances: "lutetium (177Lu) chloride", substance_keys: ["lutetium (177lu) chloride"], medicine_status: "Authorised", marketing_authorisation_date: "2022-11-02", medicine_type: "Other" },
+  { ema_product_number: "P8", name_of_medicine: "Eurneffy", substances: "epinephrine", substance_keys: ["epinephrine"], medicine_status: "Authorised", marketing_authorisation_date: "2024-08-22", medicine_type: "Other" },
+  { ema_product_number: "P9", name_of_medicine: "Ozempic", substances: "semaglutide", substance_keys: ["semaglutide"], medicine_status: "Authorised", marketing_authorisation_date: "2018-02-08", medicine_type: "Other" },
 ];
 const entryTermRows = [
   { entry_term: "bipolar depression", mesh_descriptor_ui: "D1" },
@@ -230,6 +286,10 @@ const atcClasses = [
   { atc_code: "A10BJ06", level: 5, name: "semaglutide" },
   { atc_code: "C10", level: 2, name: "LIPID MODIFYING AGENTS" },
   { atc_code: "L04AC", level: 4, name: "Interleukin inhibitors" },
+  // WHO level-5 names without a medicine in the data (the empty search's hint, "did you mean").
+  { atc_code: "N02BE", level: 4, name: "Anilides" },
+  { atc_code: "N02BE01", level: 5, name: "paracetamol" },
+  { atc_code: "C10AA05", level: 5, name: "atorvastatin" },
 ];
 // Authorized-now products per prefix; C10 has none, L01XE and A10AE57 have no WHO name.
 const classCounts = new Map([
@@ -305,3 +365,197 @@ test("submitChoice: the suggestion whose label (or class code) the query is, els
   companies[0].options[0].named = false;
   assert.equal(submitChoice(companies, "msd"), null);
 });
+
+// Step 2 (#4): "ADHD" is an exact MeSH entry term of its condition, which the condition option marks
+// as named; "TB" found only Theravance Biopharma through its derived monogram (weak), which Enter
+// no longer opens on its own. The indication-text option (#14) and "did you mean" (#5) never open
+// by Enter, nor count as the only suggestion.
+test("submitChoice: a named condition opens; weak, text-search and fuzzy options never open by Enter", () => {
+  const adhd = [
+    { key: "conditions", options: [{ label: "Attention Deficit Disorder with Hyperactivity", value: "D001289", named: true }] },
+    { key: "classes", options: [{ label: "N06BA Centrally Acting Sympathomimetics", value: "N06BA" }] },
+  ];
+  assert.deepEqual(submitChoice(adhd, "ADHD"), { group: "conditions", value: "D001289" });
+  const tb = [{ key: "companies", options: [{ label: "Theravance Biopharma Ireland Limited", value: "g.theravance-biopharma", weak: true }] }];
+  assert.equal(submitChoice(tb, "TB"), null);
+  const text = { key: "text", options: [{ label: "Search indication texts for “keytr”", value: "keytr" }] };
+  assert.deepEqual(submitChoice([{ key: "medicines", options: [{ label: "Keytruda", value: "P1" }] }, text], "keytr"), { group: "medicines", value: "P1" });
+  assert.equal(submitChoice([text], "keytr"), null);
+  const fuzzy = { key: "fuzzy", options: [{ label: "Ozempic", value: "P9", pick: "medicines" }] };
+  assert.equal(submitChoice([fuzzy, text], "ozempic"), null);
+});
+
+test("submitChoice: 'ALL' and 'CAR' open no company through a derived monogram", () => {
+  const all = [
+    { key: "medicines", options: [{ label: "Alli", value: "M1" }, { label: "Allex", value: "M2" }] },
+    { key: "conditions", options: [{ label: "Precursor Cell Lymphoblastic Leukemia-Lymphoma", value: "D054198", named: false }] },
+    { key: "companies", options: [{ label: "Allos Therapeutics Ltd", value: "g.allos-therapeutics", named: false, weak: true }] },
+  ];
+  assert.equal(submitChoice(all, "ALL"), null);
+  const car = [{ key: "medicines", options: [{ label: "Carvykti", value: "M3" }] }, { key: "companies", options: [{ label: "Carisma Therapeutics", value: "g.carisma", weak: true }] }];
+  assert.equal(submitChoice(car, "CAR"), null);
+});
+
+test("suggest: 'IL-17' no longer finds Lutetium Billev (previously Illuzyce); 'glp1' reads as GLP-1", () => {
+  assert.deepEqual(suggest(index, null, "IL-17").medicines, []);
+  assert.deepEqual(suggest(index, null, "lutetium 177").medicines.map((row) => row.ema_product_number), ["P7"]);
+  assert.deepEqual(classCodes("glp1"), ["A10BJ"]);
+});
+
+// Step 2 review, on real records: splitting "h1n1" into four free words listed only H5N1 vaccines;
+// "b12" opened Hepacare ("hepatitis B" + "C127I") and "a1c" Clopidogrel 1A Pharma; "hep b", "ins gla"
+// and "hum ins" found nothing once a short word had to be whole.
+const moreRows = [
+  { ema_product_number: "EMEA/H/C/003963", name_of_medicine: "Pandemic influenza vaccine H5N1 AstraZeneca (previously Pandemic influenza vaccine H5N1 Medimmune)", substances: "pandemic influenza vaccine (H5N1) (live attenuated, nasal)", substance_keys: ["pandemic influenza vaccine (h5n1) (live attenuated, nasal)"], medicine_status: "Authorised", marketing_authorisation_date: "2016-05-20", medicine_type: "Other" },
+  { ema_product_number: "EMEA/H/C/000710", name_of_medicine: "Focetria", substances: "influenza vaccine H1N1v (surface antigen, inactivated, adjuvanted)", substance_keys: ["influenza vaccine h1n1v (surface antigen, inactivated, adjuvanted)"], medicine_status: "Expired", marketing_authorisation_date: "2007-05-02", medicine_type: "Other" },
+  { ema_product_number: "EMEA/H/C/000261", name_of_medicine: "Hepacare", substances: "hepatitis B surface antigens recombinant (S, pre-S1, pre-S2) adsorbed on aluminium hydroxide [produced on genetically engineered murine (C127I) cells]", substance_keys: ["hepatitis b surface antigens recombinant (s, pre-s1, pre-s2) adsorbed on aluminium hydroxide [produced on genetically engineered murine (c127i) cells]"], medicine_status: "Withdrawn", marketing_authorisation_date: "2000-08-04", medicine_type: "Other" },
+  { ema_product_number: "EMEA/H/C/005063", name_of_medicine: "Heplisav B", substances: "hepatitis B surface antigen", substance_keys: ["hepatitis b surface antigen"], medicine_status: "Authorised", marketing_authorisation_date: "2021-02-18", medicine_type: "Other" },
+  { ema_product_number: "EMEA/H/C/001054", name_of_medicine: "Clopidogrel 1A Pharma", substances: "clopidogrel", substance_keys: ["clopidogrel"], medicine_status: "Withdrawn", marketing_authorisation_date: "2009-07-28", medicine_type: "Generic" },
+  { ema_product_number: "EMEA/H/C/000284", name_of_medicine: "Lantus", substances: "insulin glargine", substance_keys: ["insulin glargine"], medicine_status: "Authorised", marketing_authorisation_date: "2000-06-09", medicine_type: "Other" },
+  { ema_product_number: "EMEA/H/C/000424", name_of_medicine: "Actrapid", substances: "human insulin (rDNA)", substance_keys: ["human insulin (rdna)"], medicine_status: "Authorised", marketing_authorisation_date: "2002-10-07", medicine_type: "Other" },
+];
+const moreIndex = buildLookupIndex([...searchRows, ...moreRows], []);
+const found = (query) => {
+  const { medicines, substances } = suggest(moreIndex, null, query);
+  return [...medicines.map((row) => row.name_of_medicine), ...substances.map((substance) => substance.key)];
+};
+
+test("suggest: 'H1N1' finds no H5N1 vaccine, 'b12', 'a1c' and 'v1' nothing", () => {
+  assert.deepEqual(found("H1N1"), ["influenza vaccine h1n1v (surface antigen, inactivated, adjuvanted)"]);
+  assert.deepEqual(found("H5N1"), [moreRows[0].name_of_medicine, moreRows[0].substance_keys[0]]);
+  assert.deepEqual(found("b12"), []);
+  assert.deepEqual(found("a1c"), []);
+  assert.deepEqual(found("v1"), []);
+});
+
+test("suggest: 'hep b', 'ins gla' and 'hum ins' find their substances; 'glp1', 'lutetium 177' and '177lu' still work", () => {
+  assert.deepEqual(found("hep b"), [
+    "Heplisav B",
+    "hepatitis b surface antigen",
+    "hepatitis b surface antigens recombinant (s, pre-s1, pre-s2) adsorbed on aluminium hydroxide [produced on genetically engineered murine (c127i) cells]",
+  ]);
+  assert.deepEqual(found("ins gla"), ["insulin glargine"]);
+  assert.deepEqual(found("hum ins"), ["human insulin (rdna)"]);
+  assert.deepEqual(found("IL-17"), []);
+  assert.deepEqual(found("lutetium 177").slice(0, 1), ["Lutetium (177Lu) chloride Billev (previously Illuzyce)"]);
+  assert.deepEqual(found("177lu").slice(0, 1), ["Lutetium (177Lu) chloride Billev (previously Illuzyce)"]);
+  assert.deepEqual(classCodes("glp1"), ["A10BJ"]);
+});
+
+// Step 2 (#3): text copied from a pack or the news ("Ozempic 1 mg", "Mounjaro pen", "weight loss
+// drug") names more than the medicine: the dose, form and qualifier words go, then the last word.
+test("relaxedQueries drops dose, form and qualifier words, a leading 'anti', then the last word", () => {
+  assert.deepEqual(relaxedQueries("Ozempic 1 mg"), ["ozempic"]);
+  assert.deepEqual(relaxedQueries("Wegovy 2.4mg"), ["wegovy"]);
+  assert.deepEqual(relaxedQueries("Keytruda 25 mg/ml"), ["keytruda"]);
+  assert.deepEqual(relaxedQueries("Mounjaro pen"), ["mounjaro"]);
+  assert.deepEqual(relaxedQueries("Wegovy tablets"), ["wegovy"]);
+  assert.deepEqual(relaxedQueries("Stelara biosimilar"), ["stelara"]);
+  assert.deepEqual(relaxedQueries("weight loss drug"), ["weight loss", "weight"]);
+  assert.deepEqual(relaxedQueries("HPV vaccine"), ["hpv"]);
+  assert.deepEqual(relaxedQueries("adalimumab-atto"), ["adalimumab"]);
+  assert.deepEqual(relaxedQueries("Keytruda melanoma"), ["keytruda"]);
+  assert.deepEqual(relaxedQueries("anti-TNF"), ["tnf"]);
+  assert.deepEqual(relaxedQueries("anti-CD20"), ["cd 20"]);
+  // A number without a unit stays (a strength without its unit reads as part of a name).
+  assert.deepEqual(relaxedQueries("Ozempic 2 pens"), ["ozempic 2", "ozempic"]);
+  // Nothing to drop, or what is left is too short to mean anything ("il", "car").
+  assert.deepEqual(relaxedQueries("ozempic"), []);
+  assert.deepEqual(relaxedQueries("IL-17"), []);
+  assert.deepEqual(relaxedQueries("car t"), []);
+  assert.deepEqual(relaxedQueries("anti"), []);
+  assert.deepEqual(relaxedQueries("mg"), []);
+});
+
+test("searchWithFallback: the typed query first, then each relaxed query until one finds something", () => {
+  const results = {
+    "ozempic": [{ key: "medicines", options: [{ label: "Ozempic", value: "P9" }] }],
+    "weight loss": [{ key: "conditions", options: [] }],
+    "weight": [{ key: "conditions", options: [{ label: "Body Weight", value: "D1" }] }],
+  };
+  const run = (query) => results[query] ?? [{ key: "medicines", options: [] }];
+  assert.deepEqual(searchWithFallback("Ozempic 1 mg", run), { groups: results.ozempic, shownFor: "ozempic" });
+  assert.deepEqual(searchWithFallback("ozempic", run), { groups: results.ozempic, shownFor: null });
+  assert.deepEqual(searchWithFallback("weight loss drug", run), { groups: results.weight, shownFor: "weight" });
+  assert.deepEqual(searchWithFallback("paracetamol", run), { groups: [{ key: "medicines", options: [] }], shownFor: null });
+});
+
+test("editDistance counts insertions, deletions, substitutions and adjacent swaps, stopping past a limit", () => {
+  assert.equal(editDistance("ozempik", "ozempic"), 1);
+  assert.equal(editDistance("semaglutde", "semaglutide"), 1);
+  assert.equal(editDistance("semaglutdie", "semaglutide"), 1); // a swap
+  assert.equal(editDistance("mounjaru", "mounjaro"), 1);
+  assert.equal(editDistance("abc", "abc"), 0);
+  assert.equal(editDistance("", "abc"), 3);
+  assert.equal(editDistance("kitten", "sitting"), 3);
+  assert.equal(editDistance("kitten", "sitting", 1), 2); // limit + 1 once it must exceed the limit
+  assert.equal(editDistance("a", "abcdef", 2), 3);
+});
+
+// Step 2 (#5): names heard in a talk ("Ozempik", "pembrolizumav"): only when nothing else matched.
+test("didYouMean: close names within 1 edit (4-6 characters) or 2 (longer), authorized first, at most 3", () => {
+  const names = (query) => didYouMean(index, query, atcClasses).map((entry) => [entry.kind, entry.label, entry.distance]);
+  assert.deepEqual(names("Ozempik"), [["medicine", "Ozempic", 1]]);
+  assert.deepEqual(names("adalimumav"), [["substance", "adalimumab", 1]]); // not also "Adalimumab Test"
+  assert.deepEqual(names("humra"), [["medicine", "Humira", 1]]);
+  assert.deepEqual(names("keytrda 1 mg"), [["medicine", "Keytruda", 1]]); // dose words dropped first
+  // Authorized first, then by name: Hulio (Withdrawn) and Hulk (Refused) at 1 edit from "huli".
+  assert.deepEqual(names("hulx"), [["medicine", "Hulk", 1]]);
+  assert.deepEqual(names("huli"), [["medicine", "Hulio", 1], ["medicine", "Hulk", 1]]);
+  // WHO level-5 names of substances with no medicine in the data; an exact one is knownSubstance()'s.
+  assert.deepEqual(names("paracetamoll"), [["who", "paracetamol", 1]]);
+  assert.deepEqual(names("paracetamol"), []);
+  // Short queries (under 4 characters) and far names: none.
+  assert.deepEqual(names("hum"), []);
+  assert.deepEqual(names("zzzzzzzz"), []);
+  assert.ok(didYouMean(index, "hul", atcClasses).length === 0);
+  const many = buildLookupIndex(["Abcde", "Abcdf", "Abcdg", "Abcdh"].map((name, position) => ({
+    ...searchRows[0], ema_product_number: `Q${position}`, name_of_medicine: name, substance_keys: [], medicine_status: position === 3 ? "Authorised" : "Withdrawn",
+  })), []);
+  assert.deepEqual(didYouMean(many, "abcdx", []).map((entry) => entry.label), ["Abcdh", "Abcde", "Abcdf"]);
+});
+
+// Step 2 (#2): paracetamol is a real substance with no medicine through EMA: the empty search says so.
+test("knownSubstance: a WHO level-5 name the query is, when no medicine in the data has it", () => {
+  assert.deepEqual(knownSubstance(index, " Paracetamol ", atcClasses), { code: "N02BE01", name: "paracetamol" });
+  assert.equal(knownSubstance(index, "semaglutide", atcClasses), null); // Ozempic has it
+  assert.equal(knownSubstance(index, "paracet", atcClasses), null);
+  assert.equal(knownSubstance(index, "paracetamol", []), null);
+});
+
+// Step 2 (#19): EMA uses the INN; people say adrenaline, cyclosporine or aspirin.
+test("spellingVariant: another name of a substance becomes the name EMA uses", () => {
+  assert.deepEqual(spellingVariant("Adrenaline"), { alias: "adrenaline", target: "epinephrine", query: "epinephrine" });
+  assert.deepEqual(spellingVariant("aspirin 100 mg"), { alias: "aspirin", target: "acetylsalicylic acid", query: "acetylsalicylic acid 100 mg" });
+  assert.equal(spellingVariant("epinephrine"), null);
+  assert.equal(spellingVariant("adrena"), null);
+  assert.ok(Object.keys(SPELLING_VARIANTS).length >= 10);
+});
+
+test("suggest: a substance found through another name says which name matched", () => {
+  const found = suggest(index, null, "adrenaline").substances;
+  assert.deepEqual(found.map((substance) => [substance.key, substance.synonym, substance.named]), [["epinephrine", "adrenaline", true]]);
+  // The literal name still comes first and carries no synonym.
+  assert.deepEqual(suggest(index, null, "epinephrine").substances.map((substance) => [substance.key, substance.synonym ?? null]), [["epinephrine", null]]);
+  assert.deepEqual(submitChoice([{ key: "substances", options: [{ label: "epinephrine", value: "epinephrine", named: true }] }], "adrenaline"), { group: "substances", value: "epinephrine" });
+});
+
+test("textPhrases: the typed text, its letters split from digits, and the name EMA uses", () => {
+  assert.deepEqual(textPhrases("aspirin"), { phrases: ["aspirin", "acetylsalicylic acid"], variant: "acetylsalicylic acid" });
+  assert.deepEqual(textPhrases("glp1"), { phrases: ["glp1", "glp 1"], variant: null });
+  assert.deepEqual(textPhrases("NSCLC"), { phrases: ["nsclc"], variant: null });
+  assert.deepEqual(textPhrases("Arthritis, Rheumatoid"), { phrases: ["arthritis, rheumatoid"], variant: null });
+});
+
+const searchIndexFile = new URL("ema_search_index.json", dataDir);
+test(
+  "every spelling variant leads to a substance or an indication text in the data",
+  { skip: existsSync(searchIndexFile) && existsSync(medicinesFile) ? false : "site/public/data files not found" },
+  () => {
+    const keys = new Set(JSON.parse(readFileSync(searchIndexFile, "utf8")).flatMap((row) => row.substance_keys ?? []));
+    const medicines = JSON.parse(readFileSync(medicinesFile, "utf8"));
+    const missing = Object.entries(SPELLING_VARIANTS).filter(([alias, target]) =>
+      keys.has(alias) || (!keys.has(target) && textMatches(medicines, [target]).length === 0));
+    assert.deepEqual(missing, []);
+  },
+);
