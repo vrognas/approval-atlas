@@ -35,7 +35,7 @@ import {
 import { markExternal } from "./links.js";
 import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
 import { buildModalityTree, modalityLines, modalitySource } from "./modalities.js";
-import { espacenetUrl, isCopy, protectionGlance, protectionSummary } from "./protection.js";
+import { espacenetUrl, glanceIsEstimate, protectionGlance, protectionSummary } from "./protection.js";
 import { endingByYear, protectionEnding } from "./protection-calendar.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
@@ -513,7 +513,17 @@ export function createLookup(panel, {
   function areaLinks(number, areas, conditions) {
     if (!ready(areas)) return pending(areas);
     const terms = (areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh);
-    return terms.length ? el("span", { class: "card-areas", id: "card-areas-all" }, termLinks(terms, conditions, { chips: true }).flat()) : null;
+    if (!terms.length) return null;
+    const nodes = termLinks(terms, conditions, { chips: true }).flat();
+    // The first area the Status block does not show: where its "and n more" lands (openMore()),
+    // kept focused across re-renders (its link, else the term itself).
+    const first = nodes.filter((node) => node.classList?.contains("term"))[CARD_AREAS];
+    if (first) {
+      const target = first.querySelector("a") ?? first;
+      if (target === first) target.tabIndex = -1;
+      target.dataset.focusKey = "areas-rest";
+    }
+    return el("span", { class: "card-areas", id: "card-areas-all" }, nodes);
   }
 
   // The Status block's therapeutic areas (F · Spacious, phase 4): the first CARD_AREAS as condition
@@ -529,7 +539,7 @@ export function createLookup(panel, {
     if (rest <= 0) return termLinks(terms, conditions);
     const more = UI.card.moreAreas(rest);
     return [termLinks(terms.slice(0, CARD_AREAS), conditions), " ",
-      el("button", { type: "button", class: "toggle areas-more", onclick: () => openMore(`#card-areas-all > .term:nth-of-type(${CARD_AREAS + 1})`) }, more.text, el("span", { class: "visually-hidden" }, more.hidden))];
+      el("button", { type: "button", class: "toggle areas-more", onclick: () => openMore("areas-rest") }, more.text, el("span", { class: "visually-hidden" }, more.hidden))];
   }
 
   // The documents list: in More details under the SmPC / EPAR buttons, or, for a medicine without
@@ -622,43 +632,39 @@ export function createLookup(panel, {
         el("ul", null, UI.protection.caveats.map((caveat) => el("li", null, caveat)))));
   }
 
-  // More details (F · Spacious, phase 4): open it and focus the element selector names (a link in
-  // it, else the element), for the Status block's "and n more" and the protection lead.
-  function openMore(selector) {
-    const details = panel.querySelector("details.more-details");
-    if (!details) return null;
-    details.open = true;
-    const target = panel.querySelector(selector);
-    const focusable = target?.matches("a, button, [tabindex]") ? target : target?.querySelector("a") ?? target;
-    if (focusable && !focusable.matches("a, button, [tabindex]")) focusable.tabIndex = -1;
-    focusable?.focus({ preventScroll: true });
-    focusable?.scrollIntoView({ block: "start" });
-    return focusable;
-  }
-
-  // A link within the card: open More details, focus and show the protection section's heading (not
-  // a hash change, which the page's URL state would keep). Data arriving later (the 5 MB documents
-  // index) renders above the section and would push it off screen: render() shows it again while
-  // the jump is pending, until the next view or the user scrolls or types.
-  let pendingJump = false;
-  const showProtection = () => panel.querySelector("#protection")?.closest("section")?.scrollIntoView({ block: "start" });
+  // Jumps into More details (F · Spacious, phase 4), by the focus key of their target: the protection
+  // lead to the estimate's heading, "and n more" to the first area the Status block does not show.
+  // Each shows its section or fact from its top (the "Therapeutic areas" label, not the target).
+  // Data arriving later (the 5 MB documents index) renders above them and would push them off
+  // screen: render() gives the target focus back and shows it again while the jump is pending,
+  // until the next view or the user scrolls or types (review of phase 4: "and n more" lost focus).
+  const JUMPS = {
+    protection: () => panel.querySelector("#protection")?.closest("section"),
+    "areas-rest": () => panel.querySelector("#card-areas-all")?.closest("dd")?.previousElementSibling,
+  };
+  let pendingJump = null;
+  const showJump = (key) => JUMPS[key]?.()?.scrollIntoView({ block: "start" });
   for (const type of ["wheel", "touchstart", "keydown"]) {
     window.addEventListener(type, () => {
-      pendingJump = false;
+      pendingJump = null;
     }, { passive: true });
   }
+  function openMore(key) {
+    const target = panel.querySelector(`[data-focus-key="${key}"]`);
+    const details = target?.closest("details.more-details");
+    if (!details) return false;
+    details.open = true;
+    target.focus({ preventScroll: true });
+    showJump(key);
+    pendingJump = key;
+    return true;
+  }
   function jumpToProtection(event) {
-    const heading = panel.querySelector("#protection");
-    if (!heading) return;
-    event.preventDefault();
-    heading.closest("details").open = true;
-    heading.focus({ preventScroll: true });
-    showProtection();
-    pendingJump = true;
+    if (openMore("protection")) event.preventDefault();
   }
 
   // The Protection and copies block's lead (F · Spacious, phase 4; the answer strip's "Protection
-  // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after the medicine's own,
+  // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after "Until …" (glanceIsEstimate()),
   // as a link to the estimate in More details, then, muted, a copy's reference's years and orphan
   // exclusivity still running. Medicines never approved have no estimate (null).
   function protectionLead(row) {
@@ -671,7 +677,7 @@ export function createLookup(panel, {
     return el("div", { class: "protection-lead" },
       el("p", { class: "answer-value" },
         el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection }, glance.value, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
-        isCopy(protectionRow) ? null : [" ", el("span", { class: "lead-estimate" }, UI.card.estimate)]),
+        glanceIsEstimate(protectionRow) ? [" ", el("span", { class: "lead-estimate" }, UI.card.estimate)] : null),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
       glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,
       glance.orphan ? el("p", { class: "lead-note" }, glance.orphan) : null);
@@ -794,13 +800,14 @@ export function createLookup(panel, {
     // before the buttons for each). The answer's parts (authorized or not, since, protected until)
     // are the card's strong type; its chips and badges are neutral.
     // The Status block's lead: the status pill, then since when (approved when, once it ended) in
-    // the answer's type, then its qualifiers; never-approved medicines have no date.
-    const dated = authorized || row.marketing_authorisation_date;
+    // the answer's type, then its qualifiers; never-approved medicines have no date, and an
+    // authorized one without a date says so (6 on 2026-09-29, e.g. Lyvdelzi; review of phase 4).
+    const approvalDate = formatDate(row.marketing_authorisation_date);
     const statusBlock = cardBlock("status",
       el("p", { class: "status-lead" },
         statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion),
-        dated ? [" ", el("span", { class: "status-since" }, authorized ? UI.card.since : UI.card.approvedOn, " ",
-          el("span", { class: "answer-value" }, formatDate(row.marketing_authorisation_date) ?? NOT_STATED))] : null,
+        approvalDate ? [" ", el("span", { class: "status-since" }, authorized ? UI.card.since : UI.card.approvedOn, " ", el("span", { class: "answer-value" }, approvalDate))]
+          : authorized ? [" ", el("span", { class: "status-since" }, UI.card.noDate)] : null,
         besideStatus.length ? [" ", el("span", { class: "status-flags" }, besideStatus.map(flagChip))] : null),
       sentence ? el("p", { class: "block-sentence" }, sentence) : null,
       el("dl", { class: "block-facts" },
@@ -818,7 +825,7 @@ export function createLookup(panel, {
       ? el("div", { class: "doc-buttons" }, primary.map(documentButton))
       : documentsList(documents, groups, rest, medicine, namesakeDocuments));
     const more = el("details", { class: "more-details", "data-key": "more-details" },
-      el("summary", null, el("span", { class: "more-title" }, UI.card.more.summary), " ", el("span", { class: "more-hint" }, UI.card.more.hint)),
+      el("summary", null, el("span", { class: "more-title" }, UI.card.more.summary), " ", el("span", { class: "more-hint" }, UI.card.more.hint(primary.length > 0))),
       el("section", { class: "card-section" },
         el("h2", null, UI.card.more.about),
         el("dl", { class: "facts" },
@@ -1037,14 +1044,15 @@ export function createLookup(panel, {
       el("p", { class: "dek" }, UI.substance.firstApproval(first?.marketing_authorisation_date, first?.name_of_medicine)),
       siblingLines,
       // Its Status block, as the medicine card's (F · Spacious, phase 4): the medicines authorized now
-      // (none: their statuses, which say more than "0 authorized") and since when, then its company
+      // (none: their statuses, which say more than "0 authorized") and when the first was approved
+      // (review of phase 4: "since" read as if all dated from then), then its company
       // and modality.
       el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, cardBlock("status",
         el("p", { class: "status-lead" },
           authorized > 0
             ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
             : statusesByFrequency(groupRows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))),
-          first ? [" ", el("span", { class: "status-since" }, authorized ? UI.card.since : UI.card.approvedOn, " ",
+          first ? [" ", el("span", { class: "status-since" }, UI.card.firstApproved, " ",
             el("span", { class: "answer-value" }, formatDate(first.marketing_authorisation_date)))] : null),
         el("dl", { class: "block-facts" },
           blockFact(UI.card.company, holders ?? pending(companies)),
@@ -1410,7 +1418,7 @@ export function createLookup(panel, {
     // Same view re-rendered: keep open disclosures and the focused control.
     const open = new Set(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []);
     const focusKey = sameView && panel.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
-    if (!sameView) pendingJump = false;
+    if (!sameView) pendingJump = null;
     timeline = null;
     resizeObserver.disconnect();
     panel.hidden = view.kind === null;
@@ -1443,7 +1451,7 @@ export function createLookup(panel, {
       heading?.scrollIntoView({ block: "nearest" });
     } else if (focusKey) {
       panel.querySelector(`[data-focus-key="${focusKey}"]`)?.focus({ preventScroll: true });
-      if (focusKey === "protection" && pendingJump) showProtection();
+      if (focusKey === pendingJump) showJump(focusKey);
     }
   }
 

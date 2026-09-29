@@ -80,10 +80,15 @@ const paediatricUse = (row, pumaRow) => withEvidence(COPY.paediatricUse(row.coun
 
 // A copy (a generic, biosimilar or hybrid, EMA-flagged or curated) has no protection of its own:
 // its row's status and dates are its reference's (follows_reference), or unknown (no central
-// reference). QA 2026-09-29 (#1): chip and strip never show them as the copy's own.
+// reference). QA 2026-09-29 (#1): chip and protection lead never show them as the copy's own.
 export const isCopy = (row) => row.basis === "follows_reference" || row.basis === "reference_not_found";
 
-// The answer strip's short form (step 3, #7): { value: "Until 2031–2032" | "Ended" | "Unclear"
+// The medicine card's protection lead says "(est.)" only after "Until …": a medicine's own
+// protection still running (review of F · Spacious, phase 4), not "Ended", "Unclear" or a copy's.
+export const glanceIsEstimate = (row) => Boolean(row) && !isCopy(row) && row.status === "protected";
+
+// The medicine card's protection lead (step 3, #7; the answer strip's cell before F · Spacious,
+// phase 4): { value: "Until 2031–2032" | "Ended" | "Unclear"
 // (the status; the years of the market protection range while protected), reference: null,
 // orphan: the latest orphan market exclusivity still running ("Orphan exclusivity until 2033") or
 // null }; null without a row. A copy: value "Follows Ibrance" (a reference by name, else "None of

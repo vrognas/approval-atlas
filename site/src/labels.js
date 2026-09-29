@@ -32,7 +32,7 @@ export function statusLabel(status) {
 }
 
 // A status with EMA's opinion when that opinion was negative (step 2, #11: not a pending one), for
-// the search's meta line and the medicine card's answer strip; opinion: ema_medicines
+// the search's meta line and the medicine card's Status block; opinion: ema_medicines
 // opinion_status, null until that file has loaded.
 export function statusOpinionLabel(status, opinion) {
   return status === "Opinion" && opinion === "Negative" ? "Opinion (negative)" : statusLabel(status);
@@ -108,7 +108,7 @@ export function indicationLead(text, max = 200) {
   return { lead: `${text.slice(0, cut > 0 ? cut : max).replace(/[\s,;:]+$/, "")}…`, more: true };
 }
 
-// Distinct raw statuses, most common first (ties alphabetical): a substance's answer strip shows
+// Distinct raw statuses, most common first (ties alphabetical): a substance's Status block shows
 // them when none of its medicines is authorized now.
 export function statusesByFrequency(statuses) {
   const counts = new Map();
@@ -1437,7 +1437,9 @@ export const UI = {
     blocks: { status: "Status", protection: "Protection and copies", documents: "Documents", indication: "Indication" },
     more: {
       summary: "More details",
-      hint: "All therapeutic areas, active substances, type, modality, ATC, company notes, the protection estimate and every document",
+      // Short, as it is the summary's name; documents: More details holds the documents list (a
+      // medicine with product information buttons; the others have it in the Documents block).
+      hint: (documents) => `All therapeutic areas, substances, type, modality, ATC, protection estimate${documents ? ", documents" : ""}`,
       about: "About this medicine",
       allDocuments: "All documents",
     },
@@ -1445,6 +1447,8 @@ export const UI = {
     // "approved 26 Jul 2016".
     since: "since",
     approvedOn: "approved",
+    // A substance's Status lead: the "2 authorized" pill, then "first approved 20 Nov 2006" (the first of them).
+    firstApproved: "first approved",
     // After the protection lead of a medicine's own estimate ("Until 2028–2029 (est.)").
     estimate: "(est.)",
     // Another medicine with the same name (the refused and the authorized Mylotarg): a link to its
@@ -1522,7 +1526,7 @@ export const UI = {
   protection: {
     title: "EU regulatory protection (estimate)",
     status: { protected: "Protected", ended: "Ended", unclear: "Unclear" },
-    // QA 2026-09-29 (#1): a copy's chip and strip cell (basis follows_reference or
+    // QA 2026-09-29 (#1): a copy's chip and protection lead (basis follows_reference or
     // reference_not_found): its status and dates are its reference's, never its own.
     noneOfItsOwn: "None of its own",
     // Names what the chip covers, so it is not read as covering orphan exclusivity too.
@@ -1569,7 +1573,8 @@ export const UI = {
       `The first central EU approval of ${substance} was another company's medicine (${name ? `${name}, ` : ""}${formatDate(date)}); counted from this company's own first approval${own ? ` (${formatDate(own)})` : ""}, protection would end later, so the market protection range covers both.`,
     // Step 3 (#7, e): the estimate's basis, next to the chip (it used to sit in the collapsed caveats).
     basisNote: "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.",
-    // The answer strip's "Protection (est.)" cell (protectionGlance()): the market protection
+    // The medicine card's protection lead (protectionGlance(); the answer strip's "Protection (est.)"
+    // cell before F · Spacious, phase 4): the market protection
     // range's years while protected, else the status; then orphan exclusivity still running.
     // link: after the value, for screen readers (the medicine card's protection lead opens the
     // estimate in More details; F · Spacious, phase 4).
@@ -1653,7 +1658,7 @@ export const UI = {
     // Step 2 (#1): central only (metformin's first EU approval was not Avandamet's).
     firstApproval: (date, name) => (date ? `First central EU approval: ${formatDate(date)} (${name})` : "No central EU approval date"),
     products: (count) => plural(count, "medicine", "medicines"),
-    // Step 3 review: with other spellings (the headline and strip count them all), the list's heading.
+    // Step 3 review: with other spellings (the headline and Status block count them all), the list's heading.
     productsListed: (count, name) => `${plural(count, "medicine", "medicines")} listed as ${name}`,
     companies: (count) => plural(count, "company", "companies"),
     authorized: (count) => `${formatCount(count)} authorized`,
@@ -1666,7 +1671,7 @@ export const UI = {
     ],
   },
 
-  // Step 3 (#7): the medicine card's lines under the answer strip (copies.js copiesSummary()), as
+  // Step 3 (#7): the medicine card's lines in its Protection and copies block (copies.js copiesSummary()), as
   // parts: strings, and { text, link } for a link (link: the entry's position, "substance" or
   // "first"). Counted by the same substance set (equivalent spellings joined), not by EMA's
   // reference product, so Humira's biosimilars (whose reference is Trudexa) count.
