@@ -10,7 +10,8 @@ const COMPACT_HUES = { orphan: "pink", biosimilar: "teal", generic: "gold", adva
 // A tile explains its type on hover and keyboard focus (tabindex 0: a tab stop, as there is no
 // other keyboard path to the Orphan explanation) and on a tap; screen readers read the explanation
 // after the label.
-export function renderTiles(container, counts) {
+// caption: what the shares are of (UI.tileShare(): the authorized, all or the matching medicines).
+export function renderTiles(container, counts, caption = "") {
   const root = d3.select(container);
   if (root.select(".tile").empty()) {
     const tiles = root.selectAll("div").data(UI.tiles).join("div")
@@ -24,8 +25,9 @@ export function renderTiles(container, counts) {
     figure.append("span").attr("class", "tile-value");
     figure.append("span").attr("class", "tile-share");
     tiles.append("div").attr("class", "meter").attr("aria-hidden", "true").append("div").attr("class", "meter-fill");
-    tiles.append("p").attr("class", "tile-caption").text((spec) => spec.caption);
+    tiles.append("p").attr("class", "tile-caption");
   }
+  root.selectAll(".tile-caption").text(caption);
   root.selectAll(".tile-value").text((spec) => d3.format(",")(counts[spec.key]));
   root.selectAll(".tile-share").text((spec) => formatShare(counts[spec.key], counts.products));
   root.selectAll(".meter-fill").style("width", (spec) => formatShare(counts[spec.key], counts.products));

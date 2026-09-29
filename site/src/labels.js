@@ -239,8 +239,11 @@ const DEK_STATUSES = 4;
 // Draft (loss-of-exclusivity calendar): the caveats of its captions (the medicine card's, shortened),
 // and "(est.)" after an orphan market exclusivity end the register does not publish (computed from
 // its link date, as the card's "(estimate)").
-const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance, or 11 with the possible extra year: each range spans both. Pediatric rewards other than a pediatric-use marketing authorization's own protection, and derogations, are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
+const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance (from its own approval for a pediatric-use marketing authorization), or 11 with the possible extra year; each range spans both. The estimates ignore derogations and pediatric rewards other than a pediatric-use marketing authorization's own protection; copies not yet checked by hand count as medicines of their own. Not legal advice.";
 const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
+// The per-year chart's how-to, after what it counts (copy review 2026-09-29; adapted: the year slider is
+// the Approval year chip's since F · Spacious phase 1, not "above").
+const YEARS_HOW_TO = "EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.";
 
 // A medicine card's modality source "EMA text naming …": the modality rules' text hints (the "text:…"
 // rule values of ema_medicine_modalities.json) in words; another rule "vaccine {kind}" reads "a {kind}
@@ -313,47 +316,67 @@ export const UI = {
   // A card's secondary controls (Sort, Stack by, Columns, Column order) behind one disclosure
   // (F · Spacious, phase 2; Hick's Law: each card opens in one view).
   viewOptions: "View options",
-  // A card's (i) button (F · Spacious, phase 3): its method description in a panel; the name says
-  // what it opens (the card's title describes it).
+  // A card's (i) button (F · Spacious, phase 3): its method description in a panel. Named "About"
+  // and the card's title (aria-labelledby; review of phase 3), its tooltip "About this card".
   cardInfo: "About this card",
+  cardInfoLead: "About",
   // Each dashboard card's one-sentence takeaway (F · Spacious, phase 3; takeaways.js), computed from
   // the data it shows. Estimates say so; never "patent".
   takeaways: {
-    // n: products authorized at the data's date; change: since a year before, or null.
-    overTime: (count, change) => {
-      const now = `${count === 0 ? "None" : formatCount(count)} authorized now`;
-      if (change === null) return `${now}.`;
-      if (change === 0) return `${now}, unchanged over the last 12 months.`;
-      return `${now}, ${change > 0 ? "up" : "down"} ${formatCount(Math.abs(change))} in the last 12 months.`;
+    // count: medicines authorized with an approval date at the data's date (the series; the headline
+    // also counts those without one: review of phase 3); change: since a year before, or null;
+    // ignored: { status, years }, the filters set that this history does not apply.
+    overTime: (count, change, { status = false, years = false } = {}) => {
+      const now = `${count === 0 ? "None" : formatCount(count)} authorized with an approval date`;
+      const trend = change === null ? `${now}.`
+        : change === 0 ? `${now}, unchanged over the last 12 months.`
+          : `${now}, ${change > 0 ? "up" : "down"} ${formatCount(Math.abs(change))} in the last 12 months.`;
+      if (!status && !years) return trend;
+      const which = status && years ? "The status and year filters do not" : `The ${status ? "status" : "year"} filter does not`;
+      return `${trend} ${which} apply to this history.`;
     },
-    // count: approvals in year (the last full year); biosimilars: how many of them.
-    years: (count, year, biosimilars) => {
-      if (count === 0) return `No approvals in ${year}.`;
-      const lead = `${plural(count, "approval", "approvals")} in ${year}`;
+    // count: the medicines shown approved in year; biosimilars: how many of them; partial: year is the
+    // data's own (so far). Worded by the medicines shown, not as EMA's yearly total (review of
+    // phase 3: by default they are the authorized ones).
+    years: (count, year, biosimilars, partial = false) => {
+      const when = `${year}${partial ? " so far" : ""}`;
+      if (count === 0) return `None of the medicines shown was approved in ${when}.`;
+      const lead = `Of the medicines shown, ${formatCount(count)} ${count === 1 ? "was" : "were"} approved in ${when}`;
       if (count === 1) return `${lead}, ${biosimilars ? "a biosimilar" : "not a biosimilar"}.`;
       if (biosimilars === 0) return `${lead}, none of them biosimilars.`;
       if (biosimilars === count) return `${lead}, all of them biosimilars.`;
       return `${lead}, ${formatCount(biosimilars)} of them ${biosimilars === 1 ? "a biosimilar" : "biosimilars"}.`;
     },
-    // names: the group(s), company(ies) tied for the most; count: their medicines each.
-    mostMedicines: (names, count) => {
+    // names: the group(s), company(ies) tied for the most (null: more tie than the bars show);
+    // count: their medicines each; noun: "groups" or "companies".
+    mostMedicines: (names, count, noun = "groups") => {
+      if (names === null) return `Several ${noun} have the most medicines (${formatCount(count)} each).`;
       if (names.length === 1) return `${names[0]} has the most medicines (${formatCount(count)}).`;
-      const who = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} groups`;
+      const who = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} ${noun}`;
       return `${who} have the most medicines (${formatCount(count)} each).`;
     },
     onlyGroup: (name, count) => `${name}: ${plural(count, "medicine", "medicines")}, the only group here.`,
     // company: the company with the most medicines (count); column: its largest column (inColumn
-    // of them there), or null.
-    activity: (company, count, column, inColumn) => {
-      const lead = `${company} has the most medicines (${formatCount(count)})`;
+    // of them there), or null; alone: the only company shown.
+    activity: (company, count, column, inColumn, alone = false) => {
+      const lead = alone ? `${company}: ${plural(count, "medicine", "medicines")}` : `${company} has the most medicines (${formatCount(count)})`;
       if (!column) return `${lead}.`;
       if (count === 1) return `${lead}, in ${column}.`;
       return `${lead}, ${inColumn === count ? "all" : formatCount(inColumn)} of them in ${column}.`;
     },
-    // ending: medicines whose market protection may end (est.) by the end of year, of running.
-    protection: (ending, running, year) => (ending
-      ? `${plural(ending, "medicine", "medicines")} may lose market protection (est.) by the end of ${year}.`
-      : `None of the ${plural(running, "medicine", "medicines")} with market protection running is estimated to lose it by the end of ${year}.`),
+    // ending: medicines whose market protection may end (est.) by the end of year, of running;
+    // orphan: how many of those have orphan market exclusivity running later (review of phase 3).
+    protection: (ending, running, year, orphan = 0) => {
+      if (!ending) {
+        return running === 1
+          ? `The 1 medicine with market protection running is not estimated to lose it by the end of ${year}.`
+          : `None of the ${plural(running, "medicine", "medicines")} with market protection running is estimated to lose it by the end of ${year}.`;
+      }
+      const lead = `${plural(ending, "medicine", "medicines")} may lose market protection (est.) by the end of ${year}`;
+      if (!orphan) return `${lead}.`;
+      if (ending === 1) return `${lead}, with orphan market exclusivity running later.`;
+      return `${lead}, ${orphan === ending ? "all" : formatCount(orphan)} of them with orphan market exclusivity running later.`;
+    },
     conditions: (names, count) => {
       if (names.length === 1) return `${names[0]} has the most treatments (${formatCount(count)}).`;
       const who = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} conditions`;
@@ -414,7 +437,7 @@ export const UI = {
         hue: "blue",
         icon: "chart",
         title: "Explore the landscape",
-        text: "Which conditions have the most medicines, which companies are active where, and how approvals change over time.",
+        text: "Which conditions have the most treatments, which companies are active where, and how approvals change over time.",
         action: "Explore cancer medicines",
         area: "C04",
       },
@@ -642,6 +665,10 @@ export const UI = {
     { key: "generic", label: "Generic", caption: "Generic medicines" },
     { key: "advancedTherapy", label: "Advanced therapy", caption: "Advanced therapy medicinal products" },
   ],
+  // What a tile's share is of (copy review 2026-09-29, adapted: one caption for the four tiles, by
+  // the medicines shown; the type's own description is its tip): scope "authorized" (the default
+  // status and no other filter), "all" (every status, no other filter) or "filtered".
+  tileShare: (scope) => ({ authorized: "Share of the authorized medicines", all: "Share of all medicines", filtered: "Share of the matching medicines" })[scope],
   undatedAuthorized: (count) =>
     `${plural(count, "authorized medicine", "authorized medicines")} without an approval date ${count === 1 ? "is" : "are"} left out of “Authorized over time” and of the currently authorized count.`,
   // Shown on hover and focus wherever a type badge, tile, facet row or sentence token names one
@@ -756,21 +783,21 @@ export const UI = {
     marker: "⚠ register differs",
     // Under the top row (over time, tiles): of the medicines currently authorized.
     notAuthorized: (count) =>
-      `${formatCount(count)} of the medicines EMA lists as currently authorized ${count === 1 ? "is" : "are"} no longer authorized according to the EU Union Register.`,
+      `${plural(count, "medicine", "medicines")} that EMA lists as currently authorized ${count === 1 ? "is" : "are"} no longer authorized according to the EU Union Register.`,
   },
 
   // Every matching medicine (by default the authorized ones).
   breakdown: {
     atc: {
-      title: "Medicines by ATC level 1",
+      title: "Medicines by ATC group",
       // Drilled into a class (label: atcClassLabel()); a leaf shows only itself.
       titleIn: (label) => `Medicines in ${label} by ATC class`,
       titleLeaf: (label) => `Medicines in ${label}`,
-      note: "A medicine with codes in several ATC groups appears in each.",
+      note: "A medicine with codes in several ATC classes appears in each.",
       excluded: (count) => `${plural(count, "medicine", "medicines")} without a valid ATC code ${count === 1 ? "is" : "are"} not shown.`,
     },
     area: {
-      title: "Medicines by therapeutic area group (MeSH branch)",
+      title: "Medicines by therapeutic area (MeSH branch)",
       // Drilled into an area (phase 4f, as the ATC breakdown); a leaf shows only itself.
       titleIn: (name) => `Medicines in ${name} by therapeutic area`,
       // tag: a tag matched at a branch root (UI.areas.tag()).
@@ -785,8 +812,8 @@ export const UI = {
       title: "Medicines by company",
       titleIn: (name, byHolder) => `Medicines of ${name} by ${byHolder ? "EMA holder name" : "company"}`,
       titleLeaf: (name) => `Medicines of ${name}`,
-      note: "Companies by current owner; each bar lists the holder names EMA publishes in its tooltip.",
-      excluded: (count) => `${plural(count, "medicine", "medicines")} without a holder ${count === 1 ? "is" : "are"} not shown.`,
+      note: "Companies grouped by current owner; each bar's tooltip lists the EMA holder names.",
+      excluded: (count) => `${plural(count, "medicine", "medicines")} without a company ${count === 1 ? "is" : "are"} not shown.`,
     },
     // Modality (M2 phase 2): the groups (the medicines not classified a static last row), a group's
     // modalities (its medicines no source names the modality of a static last row); a modality, or
@@ -877,14 +904,14 @@ export const UI = {
     // holder names EMA publishes for them (names: UI.companies.legalNames(); companies part 2).
     holderRow: (holder, count, names = null) => `${holder}, ${plural(count, "medicine", "medicines")}${names ? `: ${names}` : ""}`,
     // Rows are company groups (companies part 2); date: their curation date.
-    note: (date) => `Companies by current owner${date ? ` as of ${formatDate(date)}` : ""}; each row lists the holder names EMA publishes in its tooltip.`,
+    note: (date) => `Companies grouped by current owner${date ? ` as of ${formatDate(date)}` : ""}; each row's tooltip lists the EMA holder names.`,
     // Sort buttons (toggles) in their own header row: rows by holder name ("Name"), by total ("Total",
     // the default) or by a column's count (an arrow).
     sortBy: (column) => `Sort companies by ${column}`,
     sortByName: "Sort companies by name",
     sortName: "Name",
     sortTotal: "Total",
-    sortByTotal: "Sort companies by their total of matching medicines",
+    sortByTotal: "Sort companies by total matching medicines",
     // Row and column headers and cells filter the dashboard (tooltips say what a click does).
     filterBy: (label) => `Show only ${label}`,
     pressedTitle: "Shown alone: click again to clear",
@@ -907,10 +934,10 @@ export const UI = {
       `${plural(count, "medicine", "medicines")} without an approval date (refused, application withdrawn, pending…) ${count === 1 ? "is" : "are"} not in this chart${ranged ? ", and the year filter leaves them out of every count" : ""}.`,
     // Before the legend (in stack order): position tells the segments apart, not only colour.
     legendLead: "Bottom to top:",
-    empty: "No dated medicines match the current filters.",
+    empty: "No medicines with an approval date match the current filters.",
     // by: what the columns are stacked by (UI.years.by).
     summary: (first, last, total, peakYear, peakCount, by) =>
-      `Stacked column chart of EMA approvals per year by ${by}, ${first} to ${last}: ` +
+      `Stacked column chart of EU approvals per year by ${by}, ${first} to ${last}: ` +
       `${formatCount(total)} medicines in total, most in ${peakYear} (${formatCount(peakCount)}).`,
     tooltipTitle: (year, total) => `${year}: ${plural(total, "approval", "approvals")}`,
     stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status", mod: "Modality" } },
@@ -925,17 +952,23 @@ export const UI = {
     counting: {
       type: "each medicine counted once",
       atc: (count, other) => `a medicine with codes in several ATC classes is counted in each${other
-        ? `: the ${plural(count, "class", "classes")} with the most matching medicines, the rest as Other classes`
+        ? `: the top ${plural(count, "class", "classes")}, the rest as Other classes`
         : ""}`,
       mah: (count, other) => `each medicine counted once${other
-        ? `: the ${plural(count, "company", "companies")} with the most matching medicines, the rest as Other companies`
+        ? `: the top ${plural(count, "company", "companies")}, the rest as Other companies`
         : ""}`,
       status: "each medicine counted once, by its current status",
       mod: "a medicine whose substances have several modalities is counted in each",
     },
     // Step 4 (#17): EMA's annual reports count CHMP opinions (by the opinion's year), so their totals differ.
     note: (counting) =>
-      `Year of EU marketing authorization; ${counting}. EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
+      `Year of EU marketing authorization; ${counting}. ${YEARS_HOW_TO}`,
+    // Stacked by status (owner call 2026-09-30): the colors are each medicine's status today.
+    noteStatus: `Each medicine once, in the year it was first approved; colors show its status today. ${YEARS_HOW_TO}`,
+    // Stacked by status, before the legend's "Bottom to top:" (owner call 2026-09-30).
+    legendHeading: "Status today",
+    // The card's title (owner call 2026-09-30; was "Approvals per year").
+    title: "Medicines by year of approval",
     // The segment on top of the stacks beyond the top ones.
     other: { atc: "Other classes", mah: "Other companies" },
     // The segment on top for the medicines a mode cannot place, so every mode gives the same yearly
@@ -946,14 +979,14 @@ export const UI = {
   overTime: {
     // Owner decision 2026-09-29: authorization history, whatever a medicine's status now, so the status
     // filter does not apply (nor the year filter: the chart shades the range).
-    subtitle: "Authorized products and distinct active substances at each month end, those withdrawn since included. Every filter applies but the status and the approval years, which are shaded.",
-    products: "Authorized products",
-    substances: "Distinct active substances",
+    subtitle: "Authorized medicines and their active substances or combinations at each month end, those withdrawn since included. All filters apply except the status and the approval years, which are shaded.",
+    products: "Authorized medicines",
+    substances: "Active substances or combinations",
     excluded: (count) =>
       `${plural(count, "medicine", "medicines")} with an ended status but no end date ${count === 1 ? "is" : "are"} excluded.`,
     summary: (last, products, substances) =>
-      `Line chart of authorized products and distinct active substances over time; on ${last}: ` +
-      `${formatCount(products)} products and ${formatCount(substances)} substances.`,
+      `Line chart of authorized medicines and their active substances or combinations over time; on ${last}: ` +
+      `${formatCount(products)} medicines and ${formatCount(substances)} active substances or combinations.`,
     range: "Selected approval years",
   },
 
@@ -1708,17 +1741,17 @@ export const UI = {
   // Draft (loss-of-exclusivity calendar, 2026-09-29; protection-calendar.js): the dashboard card
   // "Estimated protection ending" and the company page's list. Estimates only, never "patent".
   protectionCalendar: {
-    title: "Estimated protection ending",
-    note: `Currently authorized medicines whose EU market protection is estimated to be still running, counted in the year it ends at the earliest. Select a year to list its medicines. ${CALENDAR_CAVEATS}`,
+    title: "Protection ending (est.)",
+    note: `Currently authorized medicines whose EU market protection (est.) still runs, by the earliest year it can end. Select a year to list them. ${CALENDAR_CAVEATS}`,
     loading: "Loading estimates…",
     summary: (running, authorized, filtered) =>
-      `${plural(running, "medicine", "medicines")} of the ${formatCount(authorized)} currently authorized${filtered ? " matching the filters" : ""} ${running === 1 ? "has" : "have"} estimated market protection running.`,
+      `${formatCount(running)} of ${formatCount(authorized)} currently authorized medicines${filtered ? " matching the filters" : ""} ${running === 1 ? "has" : "have"} market protection running (est.).`,
     none: (filtered) => `No currently authorized medicine${filtered ? " matching the filters" : ""} has estimated market protection running.`,
     // The two segments of a year's bar: what they differ in (both end that year at the earliest).
     legend: { protection: "No later orphan market exclusivity", orphan: "Orphan market exclusivity (est.) runs later" },
     bars: "Medicines by the year their estimated market protection ends at the earliest",
     // The later bar spans several years: drawn broken when longer than the widest single year's.
-    clamped: "Bars are to the scale of the busiest single year; the broken bar, which spans several years, is cut to fit.",
+    clamped: "Bars share the busiest single year's scale; the broken bar spans several years and is cut to fit.",
     yearLabel: (bucket) => (bucket.key === "later" ? `${bucket.year} or later` : String(bucket.year)),
     // A year button's name: its visible year and count first (WCAG 2.5.3).
     yearName: (label, count, orphan) =>
@@ -1750,7 +1783,7 @@ export const UI = {
     // the year their orphan market exclusivity ends); unclear ones as the dashboard's line.
     company: {
       title: "Protection ending (est.)",
-      note: `Its currently authorized medicines by the year their estimated EU market protection ends at the earliest, or their orphan market exclusivity where only that runs on. ${CALENDAR_CAVEATS}`,
+      note: `Its currently authorized medicines by the earliest year their EU market protection can end (est.); where only orphan market exclusivity still runs, by the year it ends. ${CALENDAR_CAVEATS}`,
       none: "None of its currently authorized medicines has estimated market protection or orphan market exclusivity running.",
       orphan: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} until ${orphanEnd.end.slice(0, 4)}`,
       orphanOnly: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} only`,

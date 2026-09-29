@@ -92,7 +92,7 @@ import {
   togglePatch,
   withoutLookup,
 } from "./url.js";
-import { activityTakeaway, breakdownTakeaway, conditionsTakeaway, overTimeTakeaway, protectionTakeaway, yearsTakeaway } from "./takeaways.js";
+import { activityTakeaway, breakdownTakeaway, conditionsTakeaway, overTimeTakeaway, protectionTakeaway, takeawayYear, yearsTakeaway } from "./takeaways.js";
 import { setupCardInfo, setupViewOptions } from "./view-options.js";
 import { createYearStrip } from "./year-slider.js";
 
@@ -1134,7 +1134,7 @@ function startDashboard(meta, [
   setupViewOptions($("#app"), UI.viewOptions);
   // (i): each card's method description behind one disclosure (F · Spacious, phase 3); under the
   // title the card leads with its takeaway (takeaways.js), empty (hidden) when it has none.
-  setupCardInfo($("#app"), UI.cardInfo);
+  setupCardInfo($("#app"), UI.cardInfo, UI.cardInfoLead);
   const setTakeaway = (selector, text) => {
     $(selector).textContent = text ?? "";
   };
@@ -1637,7 +1637,8 @@ function startDashboard(meta, [
   function renderConditions(filtered, anyFilter) {
     const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
     const conditions = lookup.need("conditions");
-    const ranked = conditionRanking(filtered, 3);
+    // Every condition ranked, so ties are counted beyond the rows shown (review of phase 3).
+    const ranked = conditionRanking(filtered, Infinity);
     setTakeaway("#conditions-takeaway", Array.isArray(ranked) ? conditionsTakeaway(ranked) : null);
     conditionsCard.render({
       products: filtered,
@@ -1681,7 +1682,9 @@ function startDashboard(meta, [
     const drill = { area: areaBreakdown, mah: companyBreakdown, mod: modalityBreakdown };
     const tree = atc ?? drill[by](population);
     // Its takeaway: the group with the most medicines among its bars (an ATC class with its code).
-    setTakeaway("#breakdown-takeaway", breakdownTakeaway(tree.rows, atc ? (row) => atcClassLabel(row.key, atcNames.get(row.key)) : undefined));
+    // None while several values are selected (review of phase 3): the bars are then every group, the
+    // selected ones marked, and the largest can be unrelated to the selection.
+    setTakeaway("#breakdown-takeaway", tree.isSelected ? null : breakdownTakeaway(tree.rows, atc ? (row) => atcClassLabel(row.key, atcNames.get(row.key)) : undefined));
     d3.select("#breakdown-title").text(tree.title);
     d3.select("#breakdown-note").text(UI.breakdown[by].note).attr("hidden", UI.breakdown[by].note ? null : "");
     // One legend per card: the medicine types the stacked ATC or modality bars show.
@@ -1794,7 +1797,8 @@ function startDashboard(meta, [
     });
     const rows = sortActivityRows(groups, sort.key, sort.direction);
     // Its takeaway: the company with the most medicines (whatever the rows' sort) and its largest column.
-    setTakeaway("#activity-takeaway", activityTakeaway(groups, columns));
+    // Over every company, not only the rows shown, so ties are counted beyond them (review of phase 3).
+    setTakeaway("#activity-takeaway", activityTakeaway(holderActivity(filtered, keysOf, Infinity, (product) => product.group_key, companies.name), columns));
     d3.select("#activity-subtitle").text(rows.length ? UI.activity.subtitle(rows.length) : "");
     // Touch screens show no tooltips: the ATC columns' names under the table.
     d3.select("#activity-legend").text(columns.filter((column) => column.badge).map((column) => column.label).join(" · "));
@@ -1927,14 +1931,19 @@ function startDashboard(meta, [
     const dated = withoutDateFilter.filter((product) => product.year !== null);
     const stack = yearStackSpec(dated);
     // Its takeaway: the last full year's approvals (the chart ignores the year filter, and so does it).
-    setTakeaway("#chart-takeaway", yearsTakeaway(dated, calendarFirstYear - 1));
+    // The year: the last full one inside the year filter (review of phase 3).
+    const takeaway = takeawayYear(calendarFirstYear, state.from, state.to);
+    setTakeaway("#chart-takeaway", yearsTakeaway(dated, takeaway.year, takeaway.partial));
     const rows = yearStacks(dated, stack.keysOf, approvalYears);
     renderChart($("#chart"), { rows, series: stack.series, by: stack.by }, state, (range) => {
       keepInPlace($("#chart"));
       setState(range);
     }, ({ from, to }) => showReadout(from, to));
-    renderStackLegend($("#legend"), stack.series);
-    d3.select("#chart-note").text(UI.years.note(stack.counting));
+    // Stacked by status (owner call 2026-09-30): the legend is headed "Status today", the note says
+    // the colors are each medicine's status today.
+    const byStatus = stackMode === "status";
+    renderStackLegend($("#legend"), stack.series, byStatus ? UI.years.legendHeading : null);
+    d3.select("#chart-note").text(byStatus ? UI.years.noteStatus : UI.years.note(stack.counting));
     // By status, the note names the statuses the chart cannot show.
     const undated = withoutDateFilter.length - dated.length;
     // By default (authorized) the undated ones are authorized ones: the plain note.
@@ -1960,7 +1969,8 @@ function startDashboard(meta, [
   function renderCalendarCard(authorizedNow, anyFilter) {
     d3.select("#pc-title").text(UI.protectionCalendar.title);
     d3.select("#pc-note").text(UI.protectionCalendar.note);
-    const protection = lookup.protection();
+    // Shown, it asks for its files (a direct link to the tab need not wait for the page to be idle).
+    const protection = lookup.need("protection");
     if (protection === undefined || protection === FAILED) {
       setTakeaway("#pc-takeaway", null);
       renderProtectionCalendar($("#pc-body"), { status: protection === FAILED ? "failed" : "loading" });
@@ -2164,11 +2174,16 @@ function startDashboard(meta, [
         const history = filterProducts(products, predicates, OVER_TIME_EXCEPT);
         const series = authorizedSeries(history, seriesDates);
         renderOverTime($("#over-time"), series, state);
-        setTakeaway("#over-time-takeaway", overTimeTakeaway(series));
+        setTakeaway("#over-time-takeaway", overTimeTakeaway(series, {
+          status: !isDefaultStatus(state.status), years: state.from !== null || state.to !== null,
+        }));
         const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
         d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
       });
-      safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered)));
+      // What the tiles' shares are of: the authorized medicines (the default), all of them (every
+      // status) or those matching the filters.
+      const tileScope = narrowed ? "filtered" : isDefaultStatus(state.status) ? "authorized" : "all";
+      safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered), UI.tileShare(tileScope)));
       showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
       showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
       renderPreviews(filtered, authorizedNow, narrowed);

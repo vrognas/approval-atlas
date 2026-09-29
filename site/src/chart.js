@@ -115,10 +115,13 @@ export function renderLegend(list, types) {
 // tip (the statuses; a company's EMA holder names) explains itself on hover and on a tap (tabindex
 // -1: focusable, no tab stop), as the type and status badges do; an entry with a badge (a company
 // group, companies part 2) shows its monogram before its name.
-export function renderStackLegend(list, series) {
+// heading: a heading before "Bottom to top:" (stacked by status: "Status today", owner call
+// 2026-09-30), or null.
+export function renderStackLegend(list, series, heading = null) {
   const root = d3.select(list);
   root.selectChildren().remove();
   if (series.length === 0) return;
+  if (heading) root.append("li").attr("class", "legend-heading").text(heading);
   root.append("li").attr("class", "legend-lead").text(UI.years.legendLead);
   const items = root.selectAll("li.legend-series").data(series).join("li").attr("class", "legend-series");
   items.filter((item) => item.tip).attr("data-tip", (item) => item.tip).attr("tabindex", "-1");
