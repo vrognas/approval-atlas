@@ -3207,7 +3207,7 @@ a.mesh-tip[data-tip] {
   content: none !important;
 }
 
-/* Tiles, facet rows and the modality tree's static rows: the tooltip spans the carrier. */
+/* Tiles, facet rows and the modality and ATC trees' static rows: the tooltip spans the carrier. */
 .tile[data-tip]::after,
 .facet-row[data-tip]::after,
 .atc-static[data-tip]::after {
@@ -3225,19 +3225,28 @@ a.mesh-tip[data-tip] {
   max-width: min(22rem, calc(100vw - 32px));
 }
 
+/* Tips of several lines (owner feedback 2026-09-29, once native titles: an ATC badge's level names,
+   origin and source; the EMA holder names behind a company): each line kept, and as wide as the
+   MeSH explainers. */
+.tip-lines[data-tip]::after {
+  max-width: min(22rem, calc(100vw - 32px));
+  white-space: pre-line;
+}
+
 /* Area tree rows (the whole row: expand button, checkbox and condition page link, so the tip's
    bridge below never covers the link) are narrow: in a sheet the tip spans the tree's section,
    under the row (--tip-top, set by setupTips()), as in the filter sentence. The modality tree's
-   rows (M2 phase 2) place their explainers the same way. */
-:is(#facet-area, #facet-modality) {
+   rows (M2 phase 2) and the ATC tree's (owner feedback 2026-09-29) place their explainers the same
+   way. */
+:is(#facet-atc, #facet-area, #facet-modality) {
   position: relative;
 }
 
-:is(#facet-area, #facet-modality) .atc-row.mesh-tip[data-tip] {
+:is(#facet-atc, #facet-area, #facet-modality) .atc-row.mesh-tip[data-tip] {
   position: static;
 }
 
-:is(#facet-area, #facet-modality) .atc-row.mesh-tip[data-tip]::after {
+:is(#facet-atc, #facet-area, #facet-modality) .atc-row.mesh-tip[data-tip]::after {
   right: 0;
   width: auto;
   max-width: none;
@@ -3255,7 +3264,7 @@ a.mesh-tip[data-tip] {
     z-index: 5;
   }
 
-  .facets :is(#facet-area, #facet-modality) .atc-row.mesh-tip[data-tip]::after {
+  .facets :is(#facet-atc, #facet-area, #facet-modality) .atc-row.mesh-tip[data-tip]::after {
     position: fixed;
     top: var(--tip-y, auto);
     right: auto;
@@ -3350,7 +3359,7 @@ a.mesh-tip[data-tip] {
   max-width: min(16rem, calc(100vw - 32px)) !important;
 }
 
-.tip-at-pointer.mesh-tip[data-tip]:is(:hover, .tip-hold)::after {
+.tip-at-pointer:is(.mesh-tip, .tip-lines)[data-tip]:is(:hover, .tip-hold)::after {
   max-width: min(22rem, calc(100vw - 32px)) !important;
 }
 
@@ -3575,6 +3584,12 @@ table.activity {
   max-width: 14rem;
   padding-right: 8px;
   font-weight: 400;
+}
+
+/* A row header's tooltip (its filter button's data-tip) shows over the sticky row headers below it,
+   each a stacking context of its own. */
+.activity th[scope="row"]:has([data-tip]:is(:hover, :focus-within, .tip-hold)) {
+  z-index: 2;
 }
 
 .activity th button {

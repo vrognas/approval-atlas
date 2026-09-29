@@ -1,6 +1,7 @@
 // MeSH scope notes (mesh_descriptor_notes.json) as explainers of the therapeutic areas (owner
 // request 2026-09-28): a tooltip wherever a term or tree node shows, the full note on its condition
-// page. NLM's text verbatim; the tooltip only shortens it. Pure but meshTip() (DOM).
+// page. NLM's text verbatim; the tooltip only shortens it. Pure but describedTip() and meshTip()
+// (DOM).
 import { UI } from "./labels.js";
 
 // rows (null: the file is missing) -> { rows, byUi: descriptor UI -> row, byTreeNumber: tree number
@@ -48,18 +49,17 @@ export function meshTipText(note) {
   return UI.mesh.tip(note.mesh_descriptor_name, note.tree_numbers ?? [], scopeNoteLead(note.scope_note));
 }
 
-// DOM: { text: meshTipText(), id } for a carrier's data-tip, or null. The text also sits in a
-// hidden element (one per descriptor, created on first use) that describes focusable carriers
-// through aria-describedby, as the type tips' (main.js renderTypeTips()).
-export function meshTip(note) {
-  const text = meshTipText(note);
+// DOM: { text, id } for a carrier's data-tip, or null without text. The text also sits in a hidden
+// element (id, created on first use in the hidden container containerId) that describes focusable
+// carriers through aria-describedby, as the type tips' (main.js renderTypeTips()). Also the ATC
+// tree's and the MeSH categories' explainers (owner feedback 2026-09-29).
+export function describedTip(id, text, containerId = "mesh-tips") {
   if (!text) return null;
-  const id = `mesh-tip-${note.mesh_descriptor_ui ?? note.tree_numbers?.[0]}`;
   if (!document.getElementById(id)) {
-    let container = document.getElementById("mesh-tips");
+    let container = document.getElementById(containerId);
     if (!container) {
       container = document.body.appendChild(document.createElement("div"));
-      container.id = "mesh-tips";
+      container.id = containerId;
       container.hidden = true;
     }
     const description = container.appendChild(document.createElement("p"));
@@ -67,6 +67,13 @@ export function meshTip(note) {
     description.textContent = text;
   }
   return { text, id };
+}
+
+// DOM: { text: meshTipText(), id } for a carrier's data-tip, or null (describedTip(): one hidden
+// description per descriptor).
+export function meshTip(note) {
+  const text = meshTipText(note);
+  return text ? describedTip(`mesh-tip-${note.mesh_descriptor_ui ?? note.tree_numbers?.[0]}`, text) : null;
 }
 
 // DOM: puts a note's tooltip on carrier (nothing without a scope note) and its description on

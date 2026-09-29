@@ -3,7 +3,7 @@
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
-import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
+import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusFlags, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
 import {
@@ -458,7 +458,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
         : null;
       return [
         atcLadderList(atcCode(row), atc.names, ready(counts) ? counts : null),
-        atcRowIncomplete(row) ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", title: UI.table.incompleteTitle }, UI.table.incomplete)) : null,
+        atcRowIncomplete(row)
+          ? el("p", { class: "ladder-flag" }, el("span", { class: "chip", "data-tip": UI.table.incompleteTitle, tabindex: "-1" }, UI.table.incomplete))
+          : null,
         origin ? el("p", { class: "muted ladder-origin" }, origin, evidence) : null,
       ];
     });
@@ -768,20 +770,21 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       protectionSection(row));
   }
 
-  // A result row's ATC codes (atcCode()): display-only badges with the level names as tooltip and
-  // for screen readers (as in the medicines table), incomplete codes and codes that differ from EMA's
-  // flagged. Nothing while loading.
+  // A result row's ATC codes (atcCode()): display-only badges with the medicines table's tooltip
+  // (atcBadgeTip(): level names, origin, source; a data-tip as the type badges', shown on a tap too;
+  // owner feedback 2026-09-29: it was a native title) and the level names for screen readers,
+  // incomplete codes and codes that differ from EMA's flagged. Nothing while loading.
   function atcCodes(number, atc) {
     if (!ready(atc)) return null;
     return (atc.byProduct.get(number) ?? []).map((row) => {
       const code = atcCode(row);
-      const names = atcPrefixes(code).filter((prefix) => atc.names.has(prefix)).map((prefix) => atcClassLabel(prefix, atc.names.get(prefix)));
+      const names = atcLevelNames(code, atc.names);
       const originRow = atcOrigin(row);
       const origin = atcOriginText(originRow, atc.names, atc.retiredYears);
-      return el("span", { class: "code", title: [...names, ...(origin ? [origin] : [])].join("\n") || null },
+      return el("span", { class: "code tip-lines", "data-tip": atcBadgeTip(row, atc.names, atc.retiredYears), tabindex: "-1" },
         atcBadge(code),
         names.length ? el("span", { class: "visually-hidden" }, ` (${names.join("; ")})`) : null,
-        atcRowIncomplete(row) ? el("span", { class: "flag", title: UI.table.incompleteTitle }, UI.table.incomplete) : null,
+        atcRowIncomplete(row) ? el("span", { class: "flag" }, UI.table.incomplete) : null,
         origin ? [el("span", { class: "flag", "aria-hidden": "true" }, atcOriginFlag(originRow)), el("span", { class: "visually-hidden" }, ` ${origin}`)] : null);
     });
   }

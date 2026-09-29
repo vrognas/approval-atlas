@@ -942,6 +942,35 @@ test("the ATC breakdown copy counts medicines of every status", () => {
   assert.equal(atc.codedHere, "coded at this level");
 });
 
+// Owner feedback 2026-09-29: the ATC tree's rows explain their class (atc.js atcClassTip()), its
+// static rows what they count; the five levels as WHOCC's structure and principles page defines them
+// (review of PR #15: level 2 "pharmacological or therapeutic", levels 3 and 4 "chemical,
+// pharmacological or therapeutic"; the metformin example alone gave level 2 "therapeutic").
+test("the ATC tree's explainers: WHO's level meanings, at most 25 words of copy, U.S. spelling, no em-dashes", () => {
+  const { atc } = labels.UI;
+  assert.deepEqual(atc.levels, {
+    1: "anatomical main group",
+    2: "pharmacological or therapeutic subgroup",
+    3: "chemical, pharmacological or therapeutic subgroup",
+    4: "chemical, pharmacological or therapeutic subgroup",
+    5: "chemical substance",
+  });
+  const tips = [
+    atc.classTip("L04AC", 4, "L04A"),
+    `${atc.classTip("L01XC", 4, "L01X")} ${atc.retired(2022, "L01F")}`,
+    `${atc.classTip("J07BX99", 5, "J07BX")} ${atc.retired(2023, null)}`,
+    `${atc.classTip("C10AX21", 5, "C10AX")} ${atc.temporary}`,
+    atc.incompleteTip,
+    atc.codedHereTip,
+  ];
+  for (const tip of tips) {
+    assert.ok(tip.split(" ").length <= 25, tip);
+    assert.ok(!/—|authoris/i.test(tip), tip);
+  }
+  assert.equal(atc.incompleteTip, "Medicines coded only down to this class: their ATC code has no more specific level.");
+  assert.equal(atc.codedHereTip, "Medicines whose complete ATC code is this class itself.");
+});
+
 test("a substance card names the medicines classed under another code", () => {
   assert.equal(labels.UI.atc.classed(["Kyinsu"], "A10AE57"), "Kyinsu is classed A10AE57.");
   assert.equal(labels.UI.atc.classed(["MabThera", "Truxima", "Ruxience"], "L01XC02"), "MabThera, Truxima and Ruxience are classed L01XC02.");

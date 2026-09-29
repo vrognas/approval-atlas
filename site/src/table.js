@@ -1,8 +1,8 @@
 import * as d3 from "d3";
-import { atcCode, atcOrigin, atcPrefixes, atcRowIncomplete } from "./atc.js";
+import { atcBadgeTip, atcCode, atcLevelNames, atcOrigin, atcRowIncomplete } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
-import { UI, atcClassLabel, atcOriginFlag, atcOriginText, statusDateLine, statusLabel, statusTipText } from "./labels.js";
+import { UI, atcOriginFlag, atcOriginText, statusDateLine, statusLabel, statusTipText } from "./labels.js";
 import { documentLinks } from "./lookup.js";
 
 const PAGE_SIZE = 100;
@@ -20,22 +20,6 @@ function toggleIndication(event, product) {
   const expanded = this.getAttribute("aria-expanded") !== "true";
   d3.select(this).attr("aria-expanded", expanded).text(expanded ? UI.table.hide : UI.table.show);
   d3.select(document.getElementById(indicationRowId(product))).attr("hidden", expanded ? null : "");
-}
-
-// "L01FA01" -> one name per level found in atc_classes (level 1 in title case, the others verbatim).
-function atcLevelNames(row, atcNames) {
-  return atcPrefixes(atcCode(row))
-    .filter((prefix) => atcNames.has(prefix))
-    .map((prefix) => atcClassLabel(prefix, atcNames.get(prefix)));
-}
-
-// Tooltip: the level names one per line, how the code differs from EMA's, then the source.
-function atcTitle(row, atcNames, retiredYears) {
-  const lines = atcLevelNames(row, atcNames);
-  if (atcRowIncomplete(row)) lines.push(UI.table.incompleteTitle);
-  const origin = atcOriginText(atcOrigin(row), atcNames, retiredYears);
-  if (origin) lines.push(origin);
-  return [...lines, UI.table.source(row.atc_code_source ?? row.source)].join("\n");
 }
 
 // The PI and EPAR links under the name (for its EMA status: quickDocuments()), replaced when the
@@ -77,16 +61,22 @@ function appendAtcBadge(parent, code, atcNames) {
 
 // One badge per code to use (atcCode(); rows without one are skipped), flagged when incomplete
 // (atcRowIncomplete(): atc_final_level, so B03AC is not; phase 4e) or
-// when it differs from EMA's published code (atcOrigin(): a short flag, the sentence as tooltip and
-// for screen readers).
+// when it differs from EMA's published code (atcOrigin(): a short flag, the sentence in the tooltip
+// and for screen readers). The tooltip (atcBadgeTip(): level names, origin, source) is a data-tip
+// as the type badges' (owner feedback 2026-09-29: it was a native title, which looked and behaved
+// otherwise); a tap shows it (tabindex -1, no tab stop), a tap on a segment once it has filtered
+// (the table puts focus back on the segment; review of PR #15: most badges are all segments, so a
+// tap had nowhere else to show it), and keyboard focus on a segment.
 function renderAtcCell(cell, product, atcNames, retiredYears) {
   const rows = product.atc.filter((row) => atcCode(row) !== null);
-  const codes = cell.selectAll("span.code").data(rows).join("span").attr("class", "code").attr("title", (row) => atcTitle(row, atcNames, retiredYears));
+  const codes = cell.selectAll("span.code").data(rows).join("span").attr("class", "code tip-lines")
+    .attr("data-tip", (row) => atcBadgeTip(row, atcNames, retiredYears))
+    .attr("tabindex", "-1");
   codes.each(function badge(row) {
     const code = d3.select(this);
     appendAtcBadge(code, atcCode(row), atcNames);
-    // The tooltip is out of reach for keyboard, touch and screen-reader users.
-    const names = atcLevelNames(row, atcNames);
+    // The level names for screen readers (the tooltip is left out of accessible names).
+    const names = atcLevelNames(atcCode(row), atcNames);
     if (names.length) code.append("span").attr("class", "visually-hidden").text(` (${names.join("; ")})`);
     if (atcRowIncomplete(row)) code.append("span").attr("class", "flag").text(UI.table.incomplete);
     const origin = atcOrigin(row);
@@ -112,7 +102,8 @@ function renderTypeCell(cell, product) {
 
 // Merged "Approved · Status": dot and status label (explained on hover and on a tap, as the type
 // badges: UI.statusTips; a negative opinion its own, statusTipText()), then the date line. Union
-// Register disagreement: a visible marker, the full text as tooltip and for screen readers.
+// Register disagreement: a visible marker, the full text as tooltip (a data-tip, shown on a tap too;
+// owner feedback 2026-09-29: it was a native title) and for screen readers.
 function renderStatusCell(cell, product, register) {
   const status = product.medicine_status;
   const tip = statusTipText(status, product.opinion_status);
@@ -123,7 +114,7 @@ function renderStatusCell(cell, product, register) {
   const row = register?.get(product.ema_product_number);
   if (row?.agrees_with_ema !== false) return;
   const text = `${UI.register.chip(row.register_status, row.register_last_decision_date)}. ${UI.register.note}`;
-  const flag = cell.append("span").attr("class", "flag register-flag").attr("title", text);
+  const flag = cell.append("span").attr("class", "flag register-flag").attr("data-tip", text).attr("tabindex", "-1");
   flag.append("span").attr("aria-hidden", "true").text(UI.register.marker);
   flag.append("span").attr("class", "visually-hidden").text(text);
 }
@@ -146,12 +137,17 @@ function renderAreaCell(cell, product, branchNamesByTerm, conditionLink, termTip
 
 // A term's MeSH explainer on its link once the notes have loaded (termTip(term): { text, id } or
 // null; owner request 2026-09-28): a tooltip, and the link's description. Until then, or without
-// one, its branch names as the term's tooltip (title; never both).
+// one, its branch names as the term's tooltip, one per line, with the explainers' pause (a data-tip
+// on the term; owner feedback 2026-09-29: it was a native title; never both). A term without a
+// link takes a tap (tabindex -1), as the type badges.
 function explainTerms(cell, branchNamesByTerm, termTip) {
   cell.selectAll("span.term").each(function explain(term) {
     const link = this.querySelector("a");
     const tip = link ? termTip(term) : null;
-    d3.select(this).attr("title", tip ? null : (branchNamesByTerm.get(term) ?? []).join("\n") || UI.table.noBranch);
+    d3.select(this)
+      .attr("data-tip", tip ? null : (branchNamesByTerm.get(term) ?? []).join("\n") || UI.table.noBranch)
+      .classed("mesh-tip tip-lines", !tip)
+      .attr("tabindex", tip || link ? null : "-1");
     if (link) d3.select(link).attr("data-tip", tip?.text ?? null).attr("aria-describedby", tip?.id ?? null).classed("mesh-tip", tip !== null);
   });
 }

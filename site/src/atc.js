@@ -1,6 +1,7 @@
 // Pure: the ATC hierarchy — a code's level prefixes, products per prefix, a prefix's children and
 // the ladder of one code. No DOM. Names: atc_classes.json code -> name (verbatim; null when missing).
 import { ATC_CODE, ATC_PREFIX_LENGTHS } from "./badges.js";
+import { UI, atcClassLabel, atcOriginText } from "./labels.js";
 
 // 1-5 for a valid code, else null.
 export function atcLevel(code) {
@@ -54,6 +55,41 @@ export const atcIncomplete = (code) => atcLevel(code) !== ATC_PREFIX_LENGTHS.len
 // level-4 code WHO does not subdivide, B03AC, or moved a code up to, J07BX03 -> J07BN, is
 // complete), else (older data files) not a level-5 code.
 export const atcRowIncomplete = (row) => (typeof row.atc_final_level === "boolean" ? !row.atc_final_level : atcIncomplete(atcCode(row)));
+
+// "L01FA01" -> "{code} {Title Case name}" for each of its levels WHO names (names: code -> name),
+// top first; a level without a name left out.
+export function atcLevelNames(code, names) {
+  return atcPrefixes(code).filter((prefix) => names.has(prefix)).map((prefix) => atcClassLabel(prefix, names.get(prefix)));
+}
+
+// An ATC badge's explainer, the same in the medicines table and the result tables (owner feedback
+// 2026-09-29: a data-tip as the type badges', no longer a native title), one line each: the code's
+// level names, why it is incomplete, how it differs from EMA's published code (atcOriginText();
+// years: retired code -> the year WHO retired it), then its source (atc_code_source; older data
+// files: the row's source).
+export function atcBadgeTip(row, names, years) {
+  const lines = atcLevelNames(atcCode(row), names);
+  if (atcRowIncomplete(row)) lines.push(UI.table.incompleteTitle);
+  const origin = atcOriginText(atcOrigin(row), names, years);
+  if (origin) lines.push(origin);
+  return [...lines, UI.table.source(row.atc_code_source ?? row.source)].join("\n");
+}
+
+// An ATC tree row's explainer (owner feedback 2026-09-29): the class, its level and what WHO calls
+// that level, the class above it, and whether WHO retired it (and what replaced it) or lists it as
+// temporary. classes: code -> atc_classes.json row ({ name, status, replaced_by, changed_year }).
+// Null for a malformed code.
+export function atcClassTip(code, classes) {
+  const level = atcLevel(code);
+  if (!level) return null;
+  const label = (key) => atcClassLabel(key, classes.get(key)?.name ?? null);
+  const parent = atcPrefixes(code).at(-2) ?? null;
+  const tip = UI.atc.classTip(label(code), level, parent && label(parent));
+  const entry = classes.get(code);
+  if (entry?.status === "retired") return `${tip} ${UI.atc.retired(entry.changed_year ?? null, entry.replaced_by ?? null)}`;
+  if (entry?.status === "temporary") return `${tip} ${UI.atc.temporary}`;
+  return tip;
+}
 
 // The valid codes some product is coded at exactly with an incomplete code (atcRowIncomplete()):
 // the tree's and breakdown's static row there reads "code incomplete", else "coded at this level".

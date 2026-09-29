@@ -187,6 +187,13 @@ export function buildAreaTree(branchRows, subtreeRows, noteRows = null) {
   return tree;
 }
 
+// A MeSH category's explainer (owner feedback 2026-09-29): no descriptor holds a category, so it has
+// no NLM scope note; its name and letter and the first and last of its branches in the data. Null
+// for any other key.
+export function areaCategoryTip(tree, key) {
+  return tree.isCategory(key) ? UI.areas.categoryTip(tree.name(key), key, tree.children(key)) : null;
+}
+
 // A tree row's checkbox against the selection (state.area, canonical keys): "checked" (a term's
 // leaf too when the nodes it is are selected), "included" (under a selected node on some path:
 // shown checked and disabled), "mixed" (a selected value is under it) or "unchecked".

@@ -806,6 +806,25 @@ export const UI = {
     // The same when their codes are complete there (phase 4e, atc_final_level: B03AC, which WHO
     // does not subdivide; J07BX03, which WHO moved up to J07BN).
     codedHere: "coded at this level",
+    // The two static rows' explainers (owner feedback 2026-09-29: every row of the tree explains
+    // itself).
+    incompleteTip: "Medicines coded only down to this class: their ATC code has no more specific level.",
+    codedHereTip: "Medicines whose complete ATC code is this class itself.",
+    // A tree row's explainer (owner feedback 2026-09-29; atc.js atcClassTip()): the class, its level
+    // with WHO's meaning for it (WHOCC, ATC structure and principles: 2nd levels pharmacological or
+    // therapeutic groups, 3rd and 4th chemical, pharmacological or therapeutic subgroups), the class
+    // above it, and a retired (atc_classes.json replaced_by, changed_year; now null: deleted) or
+    // temporary code's status.
+    levels: {
+      1: "anatomical main group",
+      2: "pharmacological or therapeutic subgroup",
+      3: "chemical, pharmacological or therapeutic subgroup",
+      4: "chemical, pharmacological or therapeutic subgroup",
+      5: "chemical substance",
+    },
+    classTip: (label, level, parentLabel) => `${label}: ATC level ${level}, ${UI.atc.levels[level]}${parentLabel ? `, in ${parentLabel}` : ""}.`,
+    retired: (year, now) => `Retired${year ? ` ${year}` : ""}, ${now ? `now ${now}` : "with no successor"}.`,
+    temporary: "On WHO's temporary list: it can still change.",
     note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives a complete one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.",
     // A code shown that differs from EMA's (atcOriginText(), atcOriginFlag()).
     origin: {
@@ -870,6 +889,11 @@ export const UI = {
       V: "Publication Characteristics",
       Z: "Geographicals",
     },
+    // A category's explainer (owner feedback 2026-09-29; areas.js areaCategoryTip()): no descriptor
+    // holds a category, so it has no NLM scope note; branches: its branch codes in the data, in order.
+    categoryTip: (name, letter, branches) => `${name} (MeSH category ${letter}): the top level of the MeSH tree; ${branches.length === 1
+      ? `its branch here: ${branches[0]}`
+      : `its branches here: ${branches[0]}–${branches.at(-1)}`}.`,
     find: "Find a therapeutic area",
     tree: "Therapeutic areas",
     expand: (name) => `Areas in ${name}`,

@@ -51,11 +51,15 @@ function appendSortButton(parent, { key, label, text = null, sort, onSort }) {
 
 const ARIA_SORT = { asc: "ascending", desc: "descending" };
 
-// A filter toggle's tooltip ("Show only …") and its description: what a click does.
-const filterButton = (button, label, pressed) => button
+// A filter toggle's tooltip ("Show only …", after lead: a row's EMA holder names) and its
+// description: what a click does. The tooltip is a data-tip with the explainers' pause, as the
+// other tooltips (owner feedback 2026-09-29: it was a native title); the button's name and
+// description already say it, so it is left out of both.
+const filterButton = (button, label, pressed, lead = null) => button
   .attr("aria-pressed", String(pressed))
   .attr("aria-describedby", HINT_ID)
-  .attr("title", pressed ? UI.activity.pressedTitle : UI.activity.filterBy(label));
+  .attr("data-tip", [lead, pressed ? UI.activity.pressedTitle : UI.activity.filterBy(label)].filter(Boolean).join("\n"))
+  .classed("mesh-tip tip-lines", true);
 
 // rows: holderActivity() output, in display order (companies part 2: company groups, each with
 // badge: its group row, and names: the EMA holder names behind it, in its name and tooltip);
@@ -100,9 +104,11 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
   const holderSorted = sort.key === "name" || sort.key === "total";
   head.append("th").attr("scope", "col").attr("aria-sort", holderSorted ? ARIA_SORT[sort.direction] : null).text(UI.activity.holder);
   head.selectAll("th.activity-col").data(columns).join("th").attr("scope", "col").attr("class", "activity-col").each(function header(column) {
-    const cell = d3.select(this).attr("title", column.title ?? null).attr("aria-sort", sort.key === column.key ? ARIA_SORT[sort.direction] : null);
+    const cell = d3.select(this).attr("aria-sort", sort.key === column.key ? ARIA_SORT[sort.direction] : null);
+    // A static column's full name ("Other therapeutic areas") as its tooltip; a filter column's
+    // button names it in its own.
     if (!column.filter) {
-      cell.append("span").attr("class", "activity-col-name").text(column.label);
+      cell.append("span").attr("class", "activity-col-name").attr("data-tip", column.title ?? null).text(column.label);
       return;
     }
     const button = cell.append("button")
@@ -129,9 +135,8 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
     .attr("data-focus-key", (row) => `row:${row.key}`)
     .attr("aria-label", (row) => UI.activity.holderRow(row.label, row.count, row.names ?? null))
     .each(function holder(row) {
-      const button = filterButton(d3.select(this), row.label, isSet({ mah: [row.key] }));
       // The EMA holder names behind the company, then what a click does.
-      if (row.names) button.attr("title", `${row.label}: ${row.names}\n${button.attr("title")}`);
+      filterButton(d3.select(this), row.label, isSet({ mah: [row.key] }), row.names ? `${row.label}: ${row.names}` : null);
     })
     .on("click", (event, row) => onFilter({ mah: [row.key] }));
   holders.filter((row) => row.badge).append((row) => companyBadge(row.badge));

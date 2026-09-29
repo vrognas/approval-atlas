@@ -33,12 +33,15 @@ export function holderDisplay(entry, { link }) {
   if (!line) return root;
   const note = root.appendChild(document.createElement("span"));
   note.className = "holder-ema";
-  // A plain EMA holder name is said as such (the register and representative lines name theirs).
+  // A plain EMA holder name is said as such (the register and representative lines name theirs):
+  // for screen readers, and as a tooltip (a data-tip, shown on a tap too; owner feedback
+  // 2026-09-29: it was a native title).
   if (entry.basis !== "register" && entry.basis !== "curated_sponsor" && entry.holder !== null && entry.holder !== entry.group.name) {
     const hidden = note.appendChild(document.createElement("span"));
     hidden.className = "visually-hidden";
     hidden.textContent = UI.companies.emaHolder;
-    note.title = UI.companies.holderTitle;
+    note.dataset.tip = UI.companies.holderTitle;
+    note.tabIndex = -1;
   }
   note.append(line);
   return root;

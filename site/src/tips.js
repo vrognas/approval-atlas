@@ -103,6 +103,25 @@ export function pointerBridge(anchor, tip) {
   return { left, top: tip.top, width: end - left, height: tip.height };
 }
 
+const inside = (box, at) => at.x >= box.left && at.x <= box.left + box.width && at.y >= box.top && at.y <= box.top + box.height;
+
+// What a click that reached a tip's carrier (setupTips()) at at landed on. carrier: its rectangle;
+// pointed: for a tip at the pointer { shown, tip, bridge } (rectangles; shown: they take the
+// pointer, a MeSH explainer's once its pause is over), else null (an anchored tip, beside its
+// carrier, so a click off the carrier is on it or its 4px bridge). "tip": on the tip where it does
+// not lie over its carrier: the click only hides it. "through": on the tip or its unseen bridge
+// where they lie over its carrier or the next row, whose controls the click is meant for (review of
+// PR #15: the bridge of a badge entered from above lay over its other ATC segments, and swallowed
+// their clicks): the tip is hidden and the click goes on to the element under it. "carrier": on the
+// carrier itself.
+export function tipClick(at, carrier, pointed) {
+  const overCarrier = inside(carrier, at);
+  if (!pointed) return overCarrier ? "carrier" : "tip";
+  if (!pointed.shown) return "carrier";
+  if (inside(pointed.tip, at)) return overCarrier ? "through" : "tip";
+  return inside(pointed.bridge, at) ? "through" : "carrier";
+}
+
 // Whether point lies on the way from anchor (where the pointer opened the tip) to the tip
 // ({ left, top, width, height }), or on it: the ray from anchor through point meets the tip,
 // tolerance px larger all round, at or beyond point. A tip at the pointer stays put, so the pointer

@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { areaCategoryTip, buildAreaTree } from "./areas.js";
 import { areaNote, buildMeshNotes, meshTipText, scopeNoteLead } from "./mesh-notes.js";
 
 // Rows in the form of mesh_descriptor_notes.json (NLM's scope notes, MeSH 2026).
@@ -71,3 +73,23 @@ test("meshTipText: name, tree numbers and the note's lead; none without a scope 
   assert.equal(meshTipText(many), "Pain (MeSH C10.597.617, C23.888.592.612, F02.830.816 and 1 more): An unpleasant sensation.");
   assert.equal(/—/.test(meshTipText(many)), false);
 });
+
+// Owner feedback 2026-09-29 ("no tooltips on top-level MeSH"): every row of the therapeutic area
+// tree above EMA's terms explains itself, a branch or node by its NLM scope note, a category (no
+// descriptor holds one) by areaCategoryTip(). Real data files, when the pipeline has written them.
+const dataFile = (name) => new URL(`../public/data/${name}`, import.meta.url);
+const realFiles = ["ema_therapeutic_area_branches.json", "ema_therapeutic_area_subtree.json", "mesh_descriptor_notes.json"].map(dataFile);
+test(
+  "area tree (real data): every category, branch and level-2 or level-3 node has an explainer",
+  { skip: realFiles.every(existsSync) ? false : "therapeutic area data files not found" },
+  () => {
+    const [branches, subtree, noteRows] = realFiles.map((file) => JSON.parse(readFileSync(file, "utf8")));
+    const tree = buildAreaTree(branches, subtree, noteRows);
+    const real = buildMeshNotes(noteRows);
+    const uiOf = new Map(branches.map((row) => [row.therapeutic_area_mesh, row.mesh_descriptor_ui]));
+    const keys = [...tree.names.keys()].filter((key) => !tree.isTerm(key));
+    assert.deepEqual(keys.filter((key) => tree.isCategory(key) && !areaCategoryTip(tree, key)), []);
+    assert.deepEqual(keys.filter((key) => !tree.isCategory(key) && !meshTipText(areaNote(real, key, (term) => uiOf.get(term)))), []);
+    assert.equal(tree.branches.length > 0, true);
+  },
+);
