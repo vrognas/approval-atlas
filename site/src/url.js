@@ -19,9 +19,31 @@ export const DEFAULT_STATE = Object.freeze({
   // Modality (M2 phase 2): group and modality keys (modalities.json) in one list, combined with OR;
   // none covers another.
   mod: [],
-  status: [], // empty = all statuses
+  // Owner decision 2026-09-29 ("Authorized by default"): the overview shows the authorized medicines
+  // unless the viewer widens the Status filter; empty = every status (the URL's status=all).
+  status: ["Authorised"],
   by: "atc",
 });
+
+// Every status in the URL (the default, Authorised, has no key; an empty list would have none too).
+export const STATUS_ALL = "all";
+
+// The default status filter (Authorised alone) is no active filter.
+export const isDefaultStatus = (status) => status.length === DEFAULT_STATE.status.length && status.every((value) => DEFAULT_STATE.status.includes(value));
+
+// Whether a filter key differs from its default: a list with values (the status: any other than the
+// default, every status included), a year bound or the breakdown set.
+export function filterIsSet(state, key) {
+  if (key === "status") return !isDefaultStatus(state.status);
+  return Array.isArray(DEFAULT_STATE[key]) ? state[key].length > 0 : state[key] !== DEFAULT_STATE[key];
+}
+
+// The filter dimensions set (the approval years one, however many ends), for "Reset all", the
+// headline's forms and the sentence's Reset; except: a dimension left out.
+const FILTER_DIMENSIONS = { mah: ["mah"], date: ["from", "to"], area: ["area"], atc: ["atc"], type: ["type"], mod: ["mod"], status: ["status"] };
+export function activeFilterCount(state, except = null) {
+  return Object.entries(FILTER_DIMENSIONS).filter(([dimension, keys]) => dimension !== except && keys.some((key) => filterIsSet(state, key))).length;
+}
 
 // Keys of earlier versions, ignored without a note: view (the "Authorized now" / "Approvals per
 // year" tabs, replaced by one dashboard in phase 4a).
@@ -54,7 +76,8 @@ export function encodeState(state) {
   appendAll("atc", atcValues(state.atc));
   appendAll("type");
   appendAll("mod");
-  appendAll("status");
+  if (state.status.length === 0) params.set("status", STATUS_ALL);
+  else if (!isDefaultStatus(state.status)) appendAll("status");
   if (state.by !== DEFAULT_STATE.by) params.set("by", state.by);
   return params;
 }
@@ -88,7 +111,13 @@ export function decodeState(params, domain) {
 
   for (const [key, domainName] of Object.entries(LIST_KEYS)) {
     const values = sortedDistinct(params.getAll(key));
-    state[key] = values.filter((value) => domain[domainName].has(value));
+    // The status: "all" is every status (whatever else is listed); no valid value leaves the default.
+    if (key === "status" && values.includes(STATUS_ALL)) {
+      state.status = [];
+      continue;
+    }
+    const valid = values.filter((value) => domain[domainName].has(value));
+    state[key] = key === "status" && valid.length === 0 ? structuredClone(DEFAULT_STATE.status) : valid;
     for (const value of values) if (!domain[domainName].has(value)) dropped.push({ key, value });
   }
 

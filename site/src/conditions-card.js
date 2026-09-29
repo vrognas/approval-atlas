@@ -169,8 +169,9 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
   }
 
   // The authorized medicines, then (muted) of every status, after a bar of every status (the
-  // authorized part solid; scaled to the largest count shown), 1px apart.
-  function medicinesCell(row, max) {
+  // authorized part solid; scaled to the largest count shown), 1px apart. authorizedOnly: only
+  // authorized medicines are shown (the default status filter): the number alone.
+  function medicinesCell(row, max, authorizedOnly) {
     const bar = node("span", "cond-bar");
     bar.setAttribute("aria-hidden", "true");
     const parts = [
@@ -183,12 +184,12 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
     }
     const value = node("span", "cond-value",
       node("span", "cond-number", formatCount(row.authorized)), " ",
-      node("span", "cond-of", COPY.of(row.count), node("span", "visually-hidden", COPY.everyStatus(row.count))),
+      authorizedOnly ? null : node("span", "cond-of", COPY.of(row.count), node("span", "visually-hidden", COPY.everyStatus(row.count))),
       unit(COPY.authorizedUnit));
     const element = cell("cond-medicines", bar, value);
     // What the numbers count, as a tooltip (a data-tip as every explanation, not a native title;
     // PR #15), shown on a tap too (tabindex -1, no tab stop), as the type badges'.
-    element.dataset.tip = COPY.medicinesTip(row.authorized, row.count);
+    element.dataset.tip = authorizedOnly ? COPY.authorizedTip(row.authorized) : COPY.medicinesTip(row.authorized, row.count);
     element.tabIndex = -1;
     return element;
   }
@@ -201,7 +202,8 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
     more.hidden = true;
   }
 
-  // view: { products (the medicines shown), anyFilter, within (term) => bool or null, broad (term) =>
+  // view: { products (the medicines shown), anyFilter, authorizedOnly (only authorized ones shown: the
+  // default status filter), within (term) => bool or null, broad (term) =>
   // bool (a broad category, not ranked: owner decision 2026-09-29; the area tree's), descriptorOf,
   // descriptors (buildConditions()'s, so each row counts as its condition page; undefined while
   // they load, FAILED when they could not), setKeyOf, selectedArea (the area filter, for the chips),
@@ -215,7 +217,7 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
     const target = refocus ?? focusedControl();
     refocus = null;
     title.textContent = COPY.title(sort.key, sort.direction);
-    subtitle.textContent = COPY.subtitle(view.products.length, view.anyFilter, view.within !== null);
+    subtitle.textContent = COPY.subtitle(view.products.length, view.anyFilter, view.within !== null, view.authorizedOnly);
     if (view.descriptors === undefined || view.descriptors === FAILED) {
       showLine(view.descriptors === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
       if (target) restore(target);
@@ -244,7 +246,7 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
       const tr = node("tr", null,
         conditionCell(row, view.selectedArea),
         cell("cond-treatments", node("span", "cond-value", node("span", "cond-number", formatCount(row.treatments)), unit(COPY.treatmentsUnit(row.treatments)))),
-        medicinesCell(row, max));
+        medicinesCell(row, max, view.authorizedOnly));
       tr.dataset.key = row.key;
       tbody.append(tr);
     }

@@ -52,7 +52,7 @@ import {
   yearStacks,
 } from "./facets.js";
 import { renderSentence } from "./filter-sentence.js";
-import { filterProducts, makePredicates, splitAtcValues } from "./filters.js";
+import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
@@ -75,9 +75,11 @@ import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipClick, t
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
+  activeFilterCount,
   classState,
   decodeLookup,
   decodeState,
+  isDefaultStatus,
   lookupView,
   patchFilterParams,
   patchIsSet,
@@ -961,6 +963,7 @@ function startDashboard(meta, [
   for (const selector of ["#facet-modality", '#breakdown-by [data-by="mod"]', '#chart-stack [data-stack="mod"]']) $(selector).hidden = !modalityTree;
 
   renderOverTimeLegend($("#over-time-legend"));
+  $("#over-time-subtitle").textContent = UI.overTime.subtitle;
 
   // Every filter key reset to its default (the sentence's remove buttons, Clear, Reset).
   const cleared = (keys) => Object.fromEntries(keys.map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
@@ -981,6 +984,15 @@ function startDashboard(meta, [
     return link;
   };
   const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch) });
+  // Under the default headline: include the medicines of every status (owner decision 2026-09-29);
+  // the line goes, so focus goes to the headline, which then counts them.
+  const includeEveryStatus = $("#status-include");
+  includeEveryStatus.textContent = UI.statusScope.include;
+  includeEveryStatus.setAttribute("aria-label", UI.statusScope.includeLabel);
+  includeEveryStatus.addEventListener("click", () => {
+    setState({ status: [] });
+    $("#headline").focus();
+  });
   // Collapsible sections (owner decision 2026-09-29 (2)): collapsed by default, each viewer's open
   // ones remembered; Reset all leaves them as they are.
   const facetSections = createFacetSections();
@@ -1226,24 +1238,42 @@ function startDashboard(meta, [
   const registerDiffers = (product) => register?.get(product.ema_product_number)?.agrees_with_ema === false;
   const showCount = (selector, count, text) => d3.select(selector).text(count ? text(count) : "").attr("hidden", count ? null : "");
 
-  // The answer headline counts the medicines matching the filters (every status) and those
-  // currently authorized; with exactly one ATC code, or one therapeutic area (phase 4g), and no
-  // other filter it names the class or area, with its levels below. The dek: the medicines by status
-  // (the authorized ones without an approval date named, as the headline leaves them out), then
-  // substances and types. areaCounts: medicines per area key matching every filter but the area one.
-  function renderHeadline(predicates, filtered, atcCounts, areaCounts, undatedAuthorized) {
+  // The answer headline. By default (owner decision 2026-09-29, "Authorized by default": status
+  // Authorised) it counts the authorized medicines matching the other filters, and one quiet line
+  // under the dek says how many of other statuses the default leaves out (statusHidden), with a
+  // control to include them; with another status filter (every status included, or a choice) it
+  // counts the medicines matching the filters and those currently authorized, and the dek starts
+  // with the medicines by status (the authorized ones without an approval date named, as the
+  // headline leaves them out). With exactly one ATC code, or one therapeutic area (phase 4g), and no
+  // other filter (the status: the default, or every status) it names the class or area, with its
+  // levels below. Then substances and types. areaCounts: medicines per area key matching every
+  // filter but the area one.
+  function renderHeadline(filtered, atcCounts, areaCounts, undatedAuthorized, statusHidden) {
     const authorized = filtered.filter(isAuthorizedNow).length;
-    const activeCount = Object.keys(predicates).length;
-    const classCode = activeCount === 1 ? drillCode() : null;
-    const areaKey = activeCount === 1 ? drillArea() : null;
+    const byDefault = isDefaultStatus(state.status);
+    const others = activeFilterCount(state, "status");
+    // Every status included reads as the default does (no narrowing); a choice of statuses is one
+    // more filter.
+    const narrowing = others + (byDefault || state.status.length === 0 ? 0 : 1);
+    const classCode = narrowing === 1 && others === 1 ? drillCode() : null;
+    const areaKey = narrowing === 1 && others === 1 ? drillArea() : null;
     classTitle = classCode ? atcClassLabel(classCode, atcNames.get(classCode)) : null;
+    const copy = byDefault ? UI.headline.authorized : null;
     let parts;
-    if (classCode) parts = UI.headline.atcClass(filtered.length, authorized, atcClassLabel(classCode, atcNames.get(classCode)));
-    else if (areaKey) parts = UI.headline.area(filtered.length, authorized, meshTree.name(areaKey), meshTree.isRootTag(areaKey));
-    else if (activeCount) parts = UI.headline.filtered(filtered.length, authorized);
-    else parts = UI.headline.home(filtered.length, authorized);
+    if (classCode) {
+      const label = atcClassLabel(classCode, atcNames.get(classCode));
+      parts = copy ? copy.atcClass(filtered.length, label) : UI.headline.atcClass(filtered.length, authorized, label);
+    } else if (areaKey) {
+      const [name, tag] = [meshTree.name(areaKey), meshTree.isRootTag(areaKey)];
+      parts = copy ? copy.area(filtered.length, name, tag) : UI.headline.area(filtered.length, authorized, name, tag);
+    } else if (narrowing) parts = copy ? copy.filtered(filtered.length) : UI.headline.filtered(filtered.length, authorized);
+    else parts = copy ? copy.home(filtered.length) : UI.headline.home(filtered.length, authorized);
     $("#headline").replaceChildren(...headlineNodes(parts));
-    d3.select("#headline-dek").text([UI.headline.statuses(statusBreakdown(filtered), undatedAuthorized), UI.headline.dek(countTiles(filtered))].filter(Boolean).join(" "));
+    const statuses = byDefault ? null : UI.headline.statuses(statusBreakdown(filtered), undatedAuthorized);
+    d3.select("#headline-dek").text([statuses, UI.headline.dek(countTiles(filtered))].filter(Boolean).join(" "));
+    const scope = $("#status-scope");
+    scope.hidden = !(byDefault && statusHidden > 0);
+    $("#status-scope-text").textContent = scope.hidden ? "" : UI.statusScope.more(statusHidden, others > 0);
     const classPath = $("#class-path");
     classPath.hidden = classCode === null && areaKey === null;
     if (classCode) renderAtcPath(classPath, { current: classCode, counts: atcCounts, names: atcNames, onSelect: openAtc, all: false, label: UI.atc.classPath });
@@ -1452,6 +1482,8 @@ function startDashboard(meta, [
     conditionsCard.render({
       products: filtered,
       anyFilter,
+      // By default only authorized medicines are shown: their number alone, no "of" every status.
+      authorizedOnly: isDefaultStatus(state.status),
       within: state.area.length ? (term) => inAreas(meshTree, state.area, term) : null,
       // Only specific conditions are ranked (owner decision 2026-09-29): MeSH level 3 and deeper.
       broad: meshTree.broad,
@@ -1724,7 +1756,8 @@ function startDashboard(meta, [
     d3.select("#chart-note").text(UI.years.note(stack.counting));
     // By status, the note names the statuses the chart cannot show.
     const undated = withoutDateFilter.length - dated.length;
-    d3.select("#undated-note").text(stackMode === "status"
+    // By default (authorized) the undated ones are authorized ones: the plain note.
+    d3.select("#undated-note").text(stackMode === "status" && !isDefaultStatus(state.status)
       ? (undated ? UI.years.undatedStatuses(undated, state.from !== null || state.to !== null) : "")
       : UI.years.undated(undated));
   }
@@ -1797,7 +1830,12 @@ function startDashboard(meta, [
     areaShown = areaNow;
 
     const predicates = makePredicates(state, atcClasses);
-    const activeCount = Object.keys(predicates).length;
+    // The filters set: the default status (authorized; owner decision 2026-09-29) is none, every
+    // status or a choice of statuses is one.
+    const activeCount = activeFilterCount(state);
+    // Whether the medicines shown are fewer than the default overview's or every medicine's: the
+    // cards that say "all … medicines" (conditions, protection calendar) say "matching the filters".
+    const narrowed = activeFilterCount(state, "status") > 0 || (!isDefaultStatus(state.status) && state.status.length > 0);
     // The names the filter sentence and the collapsed sections' summaries give the selections.
     const selectionNames = {
       years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName, modalityNames,
@@ -1862,11 +1900,17 @@ function startDashboard(meta, [
     const authorizedNow = filtered.filter(isAuthorizedNow);
     sheet.update(filtered.length);
     const undatedAuthorized = filtered.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
-    safely($(".answer"), () => renderHeadline(predicates, filtered, atcCounts, areaCounts, undatedAuthorized.length));
-    // The top row: "Authorized over time" beside the four type tiles (owner decision 2026-09-29).
+    // By default, the medicines of other statuses matching the other filters, which the headline's
+    // quiet line offers to include.
+    const statusHidden = isDefaultStatus(state.status) ? filterProducts(products, predicates, "status").length - filtered.length : 0;
+    safely($(".answer"), () => renderHeadline(filtered, atcCounts, areaCounts, undatedAuthorized.length, statusHidden));
+    // The top row: "Authorized over time" beside the four type tiles (owner decision 2026-09-29). It
+    // is authorization history: neither the status filter nor the year filter applies (the chart
+    // marks the range instead; OVER_TIME_EXCEPT).
     safely(cardOf("#over-time"), () => {
-      renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
-      const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
+      const history = filterProducts(products, predicates, OVER_TIME_EXCEPT);
+      renderOverTime($("#over-time"), authorizedSeries(history, seriesDates), state);
+      const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
       d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
     });
     safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered)));
@@ -1875,8 +1919,8 @@ function startDashboard(meta, [
     safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete));
     safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
     safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
-    safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, activeCount > 0));
-    safely($("#conditions"), () => renderConditions(filtered, activeCount > 0));
+    safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, narrowed));
+    safely($("#conditions"), () => renderConditions(filtered, narrowed));
 
     const undated = filtered.filter((product) => product.year === null).length;
     tableRows = newestFirst(filtered);

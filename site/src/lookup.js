@@ -1199,8 +1199,10 @@ export function createLookup(panel, {
     // toggle; a company with none currently authorized shows every status (no toggle then).
     const { current, everyStatus, shown } = authorizedFirst(all, showAll);
     const anyAuthorized = current > 0;
-    // The overview filtered to values (as the tree selects them: companies.js structure()) and more.
-    const filtered = (values, extra = {}) => ({ ...structuredClone(DEFAULT_STATE), mah: values, ...extra });
+    // The overview filtered to values (as the tree selects them: companies.js structure()) and more,
+    // with every status (status []), as this page counts them (owner decision 2026-09-29: the
+    // overview shows authorized medicines by default).
+    const filtered = (values, extra = {}) => ({ ...structuredClone(DEFAULT_STATE), mah: values, status: [], ...extra });
 
     const partners = [...row.partners.map(companies.row).filter(Boolean).map(groupLink), ...row.other_partners];
     const ventures = row.kind === "group" ? companies.jointVentures(key).map(companies.row).filter(Boolean).map(groupLink) : [];

@@ -62,10 +62,20 @@ const products = [
   // Refused: never dated.
   product("P6", { medicine_status: "Refused", year: null, authorized_from: null }),
 ];
-const predicatesOf = (patch) => makePredicates({ ...structuredClone(DEFAULT_STATE), ...patch }, []);
+// These tests start from every status (status []); the default shows the authorized ones (below).
+const predicatesOf = (patch) => makePredicates({ ...structuredClone(DEFAULT_STATE), status: [], ...patch }, []);
 const counted = (patch, dimension) => Object.fromEntries(facetCounts(products, predicatesOf(patch), dimension, FACET_VALUES[dimension]));
 
-test("facets count every matching medicine, whatever its status", () => {
+// Owner decision 2026-09-29 ("Authorized by default"): by default the facets count the authorized
+// medicines matching the other filters; the Status facet, its own filter left out, every status.
+test("by default the facets count the authorized medicines; the Status facet counts every status", () => {
+  const byDefault = (dimension) => Object.fromEntries(facetCounts(products, makePredicates(DEFAULT_STATE, []), dimension, FACET_VALUES[dimension]));
+  assert.deepEqual(byDefault("type"), { Biosimilar: 2, Generic: 2 });
+  assert.deepEqual(byDefault("status"), { Authorised: 4, Withdrawn: 1, Refused: 1 });
+  assert.deepEqual(nonZero(yearHistogram(products, makePredicates(DEFAULT_STATE, []), [2014, 2021])), { 2015: 2, 2020: 1 });
+});
+
+test("facets count every matching medicine, whatever its status (every status shown)", () => {
   assert.deepEqual(counted({}, "type"), { Biosimilar: 2, Generic: 2, Other: 2 });
   assert.deepEqual(counted({}, "status"), { Authorised: 4, Withdrawn: 1, Refused: 1 });
 });
@@ -178,8 +188,18 @@ test("sentence tokens read as defaults without filters", () => {
   const label = (dimension) => tokenLabel(dimension, stateOf({}), lookups);
   assert.deepEqual(
     ["type", "atc", "mah", "area", "from", "to", "status"].map(label),
-    ["all medicine types", "all ATC classes", "all companies", "all therapeutic areas", "1995", "2026", "any status"],
+    ["all medicine types", "all ATC classes", "all companies", "all therapeutic areas", "1995", "2026", "authorized status"],
   );
+});
+
+// Owner decision 2026-09-29 ("Authorized by default"): the default status reads as a default, not
+// a pill; every status (status []) and any other choice are filters with a remove button.
+test("the status token: authorized by default, every status or a choice as an active filter", () => {
+  const statusToken = (status) => sentenceParts(stateOf(status === undefined ? {} : { status }), lookups).find((part) => part.key === "status");
+  assert.deepEqual(statusToken(undefined), { key: "status", text: "authorized status", active: false, clears: ["status"], tip: "Authorised" });
+  assert.deepEqual([statusToken([]).text, statusToken([]).active], ["every status", true]);
+  assert.deepEqual([statusToken(["Withdrawn"]).text, statusToken(["Withdrawn"]).active], ["status Withdrawn", true]);
+  assert.deepEqual([statusToken(["Refused", "Withdrawn"]).text, statusToken(["Refused", "Withdrawn"]).active], ["2 statuses", true]);
 });
 
 test("sentence tokens name one selection, or count several", () => {
@@ -192,7 +212,9 @@ test("sentence tokens name one selection, or count several", () => {
   assert.equal(tokenLabel("area", stateOf({ area: ["C17.800"] }), lookups), "Skin Diseases");
   assert.equal(tokenLabel("area", stateOf({ area: ["Psoriasis"] }), lookups), "Psoriasis");
   assert.equal(tokenLabel("area", stateOf({ area: ["Psoriasis", "Asthma"] }), lookups), "2 therapeutic areas");
-  assert.equal(tokenLabel("status", stateOf({ status: ["Authorised"] }), lookups), "status Authorized");
+  assert.equal(tokenLabel("status", stateOf({ status: ["Authorised"] }), lookups), "authorized status");
+  assert.equal(tokenLabel("status", stateOf({ status: ["Withdrawn"] }), lookups), "status Withdrawn");
+  assert.equal(tokenLabel("status", stateOf({ status: [] }), lookups), "every status");
   assert.equal(tokenLabel("status", stateOf({ status: ["Refused", "Withdrawn"] }), lookups), "2 statuses");
   assert.equal(tokenLabel("from", stateOf({ from: 2015 }), lookups), "2015");
   assert.equal(tokenLabel("to", stateOf({ to: 2020 }), lookups), "2020");
@@ -220,8 +242,11 @@ test("a collapsed section's summary names its one value, else counts them; none 
   assert.equal(summary("atc", { atc: ["insulin"] }), "ATC classes matching “insulin”");
   // Two classes are two sentence tokens; the section counts them as any other.
   assert.equal(summary("atc", { atc: ["C", "H03"] }), "2 selected");
-  // A status by its label alone (the sentence's token says "status Authorized").
-  assert.equal(summary("status", { status: ["Authorised"] }), "Authorized");
+  // A status by its label alone (the sentence's token says "status Withdrawn"); the default
+  // (Authorised) is no filter, every status is (owner decision 2026-09-29).
+  assert.equal(summary("status", { status: ["Withdrawn"] }), "Withdrawn");
+  assert.equal(summary("status", { status: ["Authorised"] }), null);
+  assert.equal(summary("status", { status: [] }), "Every status");
   assert.equal(summary("status", { status: ["Refused", "Withdrawn"] }), "2 selected");
   assert.equal(summary("mod", { mod: ["antibody"] }, { modalityNames: new Map([["antibody", "Antibody"]]) }), "Antibody");
   assert.equal(summary("mah", { mah: ["g.roche"] }, { mahName: (value) => (value === "g.roche" ? "Roche" : value) }), "Roche");
@@ -248,7 +273,7 @@ const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `
 test("the filter sentence: defaults, one therapeutic area token", () => {
   assert.equal(
     text(sentenceParts(stateOf({}), lookups)),
-    "Showing [all medicine types] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [any year], with [any status].",
+    "Showing [all medicine types] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [any year], with [authorized status].",
   );
   const [areas] = sentenceParts(stateOf({}), lookups).filter((part) => part.key === "area");
   assert.deepEqual(areas, { key: "area", text: "all therapeutic areas", active: false, clears: ["area"] });
@@ -259,10 +284,10 @@ test("the filter sentence: defaults, one therapeutic area token", () => {
 });
 
 test("the filter sentence: active tokens, each clearing its own filter", () => {
-  const parts = sentenceParts(stateOf({ type: ["Biosimilar"], atc: ["L04AC"], area: ["C17"], from: 2015, status: ["Authorised"] }), lookups);
+  const parts = sentenceParts(stateOf({ type: ["Biosimilar"], atc: ["L04AC"], area: ["C17"], from: 2015, status: ["Withdrawn"] }), lookups);
   assert.equal(
     text(parts),
-    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all companies] in [Skin and Connective Tissue Diseases], approved [2015]–[2026] (medicines without an approval date left out), with [status Authorized].",
+    "Showing [Biosimilar] in [L04AC Interleukin Inhibitors] from [all companies] in [Skin and Connective Tissue Diseases], approved [2015]–[2026] (medicines without an approval date left out), with [status Withdrawn].",
   );
   const tokens = parts.filter((part) => typeof part !== "string");
   assert.deepEqual(tokens.filter((part) => part.active).map((part) => [part.key, part.clears]), [
@@ -275,7 +300,7 @@ test("the filter sentence: one approval year is one token clearing both ends", (
   const parts = sentenceParts(stateOf({ from: 2024, to: 2024 }), lookups);
   assert.equal(
     text(parts),
-    "Showing [all medicine types] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [2024] (medicines without an approval date left out), with [any status].",
+    "Showing [all medicine types] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [2024] (medicines without an approval date left out), with [authorized status].",
   );
   assert.deepEqual(parts.find((part) => part.key === "year"), { key: "year", text: "2024", active: true, clears: ["from", "to"] });
   // The data's first or last year alone keeps that end open (normalizeYearRange()).
@@ -318,7 +343,7 @@ test("the filter sentence: the modality token names one modality with its explai
   const withModalities = { ...lookups, modalityNames: new Map([["antibody", "Antibody"], ["sirna", "siRNA"]]) };
   assert.equal(
     text(sentenceParts(stateOf({}), withModalities)),
-    "Showing [all medicine types] with [all modalities] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [any year], with [any status].",
+    "Showing [all medicine types] with [all modalities] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [any year], with [authorized status].",
   );
   const token = (mod) => sentenceParts(stateOf({ mod }), withModalities).find((part) => part.key === "mod");
   assert.deepEqual(token(["sirna"]), { key: "mod", text: "siRNA", active: true, clears: ["mod"], tip: "sirna" });

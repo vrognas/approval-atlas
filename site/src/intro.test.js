@@ -45,9 +45,11 @@ test("the untouched overview: no lookup and no filter", () => {
   for (const lookup of [{ q: "wegovy" }, { med: "EMEA/H/C/005422" }, { sub: "semaglutide" }, { cond: "D011565" }, { co: "g.roche" }]) {
     assert.equal(isOverview({ ...home, ...lookup }), false, JSON.stringify(lookup));
   }
-  for (const filter of [{ atc: ["L04AC"] }, { area: ["C04"] }, { mah: ["g.roche"] }, { type: ["Generic"] }, { status: ["Refused"] }, { from: 2015 }, { to: 2020 }]) {
+  // Every status (owner decision 2026-09-29: authorized is the default, not a filter) is a filter.
+  for (const filter of [{ atc: ["L04AC"] }, { area: ["C04"] }, { mah: ["g.roche"] }, { type: ["Generic"] }, { status: ["Refused"] }, { status: [] }, { from: 2015 }, { to: 2020 }]) {
     assert.equal(isOverview({ ...home, ...filter }), false, JSON.stringify(filter));
   }
+  assert.equal(isOverview({ ...home, status: ["Authorised"] }), true);
 });
 
 // Before the dashboard's data has loaded, the URL's filters are kept verbatim (main.js pendingFilters).
@@ -55,6 +57,7 @@ test("filters still loading count as filters; the breakdown's mode does not", ()
   assert.equal(isOverview(home, new URLSearchParams("")), true);
   assert.equal(isOverview(home, new URLSearchParams("by=mah")), true);
   assert.equal(isOverview(home, new URLSearchParams("atc=L04AC")), false);
+  assert.equal(isOverview(home, new URLSearchParams("status=all")), false);
   // Links from before phase 4f carry therapeutic areas under "branch".
   assert.equal(isOverview(home, new URLSearchParams("branch=C04")), false);
 });

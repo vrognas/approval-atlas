@@ -368,8 +368,10 @@ test("tiles: the four types with their share", () => {
     ["advancedTherapy", "Advanced therapy"],
   ]);
   for (const tile of labels.UI.tiles) assert.equal(tile.captionFiltered, undefined, tile.key);
-  assert.equal(labels.UI.undatedAuthorized(6), "6 authorized medicines without an approval date are not counted as currently authorized.");
-  assert.equal(labels.UI.undatedAuthorized(1), "1 authorized medicine without an approval date is not counted as currently authorized.");
+  // Owner decision 2026-09-29 ("Authorized by default"): the default headline counts them (status
+  // Authorised), "Authorized over time" and the currently authorized count leave them out.
+  assert.equal(labels.UI.undatedAuthorized(6), "6 authorized medicines without an approval date are left out of “Authorized over time” and of the currently authorized count.");
+  assert.equal(labels.UI.undatedAuthorized(1), "1 authorized medicine without an approval date is left out of “Authorized over time” and of the currently authorized count.");
 });
 
 test("tile shares are percentages with one decimal", () => {
@@ -387,8 +389,9 @@ const toned = (parts) => parts.filter((part) => typeof part !== "string").map((p
 // (phase 4c: not "authorized today", which reads as "authorized on this date").
 test("the dashboard headline counts the medicines and those currently authorized, with or without filters", () => {
   const { headline } = labels.UI;
-  assert.equal(plain(headline.home(2351, 1567)), "1,567 of 2,351 medicines in the EMA data are currently authorized in the EU.");
-  assert.deepEqual(toned(headline.home(2351, 1567)), [["1,567", "number"], ["2,351", "number"]]);
+  // Owner decision 2026-09-29: with every status included (?status=all), the headline says so.
+  assert.equal(plain(headline.home(2351, 1567)), "2,351 medicines in the EMA data, 1,567 of them currently authorized.");
+  assert.deepEqual(toned(headline.home(2351, 1567)), [["2,351", "number"], ["1,567", "number"]]);
   assert.equal(plain(headline.filtered(12, 5)), "12 medicines match these filters, 5 of them currently authorized.");
   assert.deepEqual(toned(headline.filtered(12, 5)), [["12", "number"], ["5", "number"]]);
   assert.equal(plain(headline.filtered(12, 12)), "12 medicines match these filters, all of them currently authorized.");
@@ -398,6 +401,50 @@ test("the dashboard headline counts the medicines and those currently authorized
   assert.deepEqual(toned(headline.filtered(1, 0)), [["1", "number"], ["not", "negative"]]);
   assert.equal(plain(headline.filtered(0, 0)), "No medicines match these filters.");
   assert.deepEqual(toned(headline.filtered(0, 0)), []);
+});
+
+// Owner decision 2026-09-29 ("Authorized by default"): the overview shows the authorized medicines
+// unless the viewer widens the Status filter; the headline says what is shown.
+test("the default headline counts the authorized medicines, with or without other filters", () => {
+  const { authorized } = labels.UI.headline;
+  assert.equal(plain(authorized.home(1573)), "1,573 medicines are authorized EU-wide through EMA.");
+  assert.deepEqual(toned(authorized.home(1573)), [["1,573", "number"]]);
+  assert.equal(plain(authorized.home(1)), "1 medicine is authorized EU-wide through EMA.");
+  assert.equal(plain(authorized.filtered(385)), "385 authorized medicines match these filters.");
+  assert.deepEqual(toned(authorized.filtered(385)), [["385", "number"]]);
+  assert.equal(plain(authorized.filtered(1)), "1 authorized medicine matches these filters.");
+  assert.equal(plain(authorized.filtered(0)), "No authorized medicines match these filters.");
+  assert.equal(plain(authorized.atcClass(12, "L04AC Interleukin Inhibitors")), "12 authorized medicines in L04AC Interleukin Inhibitors.");
+  assert.equal(plain(authorized.atcClass(1, "L04AC Interleukin Inhibitors")), "1 authorized medicine in L04AC Interleukin Inhibitors.");
+  assert.equal(plain(authorized.atcClass(0, "B06C")), "No authorized medicines are classed B06C.");
+  assert.equal(plain(authorized.area(386, "Neoplasms")), "386 authorized medicines in Neoplasms.");
+  assert.equal(plain(authorized.area(17, "Cancer", true)), "17 authorized medicines tagged Cancer.");
+  assert.equal(plain(authorized.area(0, "Psoriasis")), "No authorized medicines are in Psoriasis.");
+});
+
+// One quiet line under the default headline (no breakdown by every status): what the default leaves
+// out, with a control to include them.
+test("the default dek says how many medicines of other statuses are left out", () => {
+  const { statusScope } = labels.UI;
+  assert.equal(statusScope.more(778, false), "EMA's list also has 778 medicines that are not authorized: withdrawn, refused, expired or awaiting a decision.");
+  assert.equal(statusScope.more(1, false), "EMA's list also has 1 medicine that is not authorized: withdrawn, refused, expired or awaiting a decision.");
+  assert.equal(statusScope.more(40, true), "40 more medicines matching these filters are not authorized: withdrawn, refused, expired or awaiting a decision.");
+  assert.equal(statusScope.more(1, true), "1 more medicine matching these filters is not authorized: withdrawn, refused, expired or awaiting a decision.");
+  assert.equal(statusScope.include, "Include them");
+  // The visible text first (WCAG 2.5.3).
+  assert.ok(statusScope.includeLabel.startsWith(statusScope.include));
+  // The Status section: widen to every status, or back to the default.
+  assert.equal(labels.UI.facets.statusWiden, "Include withdrawn, refused and pending");
+  assert.equal(labels.UI.facets.statusDefault, "Authorized only");
+  assert.equal(labels.UI.facets.everyStatus, "Every status");
+  assert.equal(labels.UI.sentence.statusDefault, "authorized status");
+  assert.equal(labels.UI.sentence.defaults.status, "every status");
+});
+
+// "Authorized over time" is authorization history: the status filter does not apply (owner decision
+// 2026-09-29); its note says so.
+test("the over-time subtitle says the status filter does not apply", () => {
+  assert.equal(labels.UI.overTime.subtitle, "Authorized products and distinct active substances at each month end, those withdrawn since included. Every filter applies but the status and the approval years, which are shaded.");
 });
 
 test("the dek starts with the medicines by status: the top four, then how many more", () => {
@@ -839,6 +886,12 @@ test("the conditions card names its ranking, what it counts, its columns and sor
   assert.equal(conditions.subtitle(2351, false), "Conditions of all 2,351 medicines in the EMA data, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
   assert.equal(conditions.subtitle(33, true), "Conditions of the 33 medicines matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
   assert.equal(conditions.subtitle(1, true), "Conditions of the 1 medicine matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  // Owner decision 2026-09-29 ("Authorized by default"): only authorized medicines shown.
+  assert.equal(conditions.subtitle(1573, false, false, true), "Conditions of all 1,573 authorized medicines, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(33, true, true, true), "Conditions of the 33 authorized medicines matching the filters, within the selected areas, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(1, true, false, true), "Conditions of the 1 authorized medicine matching the filters, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.authorizedTip(120), "120 authorized medicines");
+  assert.equal(conditions.authorizedTip(1), "1 authorized medicine");
   assert.deepEqual(conditions.headers, { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" });
   // Sort buttons (the site's convention: a second click reverses; the pressed one names its order).
   assert.equal(sortOrder.name(conditions.sortBy.treatments, "count", "asc"), "Sort by treatments, fewest first");
@@ -1376,7 +1429,8 @@ test("page titles name the view; the overview under a result is headed as such",
   assert.equal(UI.pageTitle("Wegovy"), "Wegovy · Approval Atlas");
   assert.equal(UI.pageTitle(null), "Approval Atlas");
   assert.equal(UI.textTitle("wegovy"), "“wegovy”");
-  assert.equal(UI.explore.title, "Explore all EMA medicines");
+  // Owner decision 2026-09-29: the overview shows the authorized medicines by default, not all.
+  assert.equal(UI.explore.title, "Explore EMA medicines");
   assert.equal(UI.explore.note, "The filters apply to this overview, not to the result above.");
 });
 

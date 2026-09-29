@@ -13,6 +13,10 @@ import {
   encodeUrl,
   lookupView,
   modalityState,
+  STATUS_ALL,
+  activeFilterCount,
+  filterIsSet,
+  isDefaultStatus,
   normalizeYearRange,
   patchFilterParams,
   patchIsSet,
@@ -69,6 +73,70 @@ test("default state encodes to an empty query string and back", () => {
   assert.deepEqual(decode(""), { state: structuredClone(DEFAULT_STATE), dropped: [] });
 });
 
+// Owner decision 2026-09-29 ("Authorized by default"): the overview shows authorized medicines
+// unless the viewer widens the Status filter; every status is a state of its own in the URL.
+test("the status filter defaults to authorized: no key in the URL", () => {
+  assert.deepEqual(DEFAULT_STATE.status, ["Authorised"]);
+  assert.deepEqual(decode("").state.status, ["Authorised"]);
+  assert.deepEqual(decode("atc=L04").state.status, ["Authorised"]);
+  // An explicit Authorised is the default, written without a key.
+  assert.deepEqual(decode("status=Authorised"), { state: structuredClone(DEFAULT_STATE), dropped: [] });
+  assert.equal(encode({ status: ["Authorised"] }), "");
+});
+
+test("every status is status=all, and round-trips", () => {
+  assert.equal(STATUS_ALL, "all");
+  assert.deepEqual(decode("status=all"), { state: { ...structuredClone(DEFAULT_STATE), status: [] }, dropped: [] });
+  assert.equal(encode({ status: [] }), "status=all");
+  assert.equal(encode({ status: [], atc: ["L04"] }), "atc=L04&status=all");
+  // "all" wins over values listed with it.
+  assert.deepEqual(decode("status=Withdrawn&status=all").state.status, []);
+});
+
+test("explicit statuses keep their values (older links too); unknown ones fall back to the default", () => {
+  assert.deepEqual(decode("status=Withdrawn").state.status, ["Withdrawn"]);
+  assert.deepEqual(decode("status=Withdrawn&status=Authorised").state.status, ["Authorised", "Withdrawn"]);
+  assert.equal(encode({ status: ["Withdrawn", "Authorised"] }), "status=Authorised&status=Withdrawn");
+  // A value the data does not have is reported; with none left, the default applies.
+  assert.deepEqual(decode("status=Pending"), { state: structuredClone(DEFAULT_STATE), dropped: [{ key: "status", value: "Pending" }] });
+  assert.deepEqual(decode("status=Pending&status=Withdrawn").state.status, ["Withdrawn"]);
+});
+
+test("the default status is no active filter; every status and other choices are", () => {
+  assert.equal(isDefaultStatus(["Authorised"]), true);
+  assert.equal(isDefaultStatus([]), false);
+  assert.equal(isDefaultStatus(["Withdrawn"]), false);
+  assert.equal(isDefaultStatus(["Authorised", "Withdrawn"]), false);
+  const state = (patch) => ({ ...structuredClone(DEFAULT_STATE), ...patch });
+  assert.equal(filterIsSet(state({}), "status"), false);
+  assert.equal(filterIsSet(state({ status: [] }), "status"), true);
+  assert.equal(filterIsSet(state({ status: ["Refused"] }), "status"), true);
+  assert.equal(filterIsSet(state({}), "atc"), false);
+  assert.equal(filterIsSet(state({ atc: ["L04"] }), "atc"), true);
+  assert.equal(filterIsSet(state({ from: 2015 }), "from"), true);
+  assert.equal(filterIsSet(state({}), "to"), false);
+});
+
+// The dimensions that count as active filters ("Reset all", the headline's forms): the years one,
+// the default status none. except: a dimension left out (the headline asks about the others).
+test("active filters are counted by dimension, the default status not among them", () => {
+  const state = (patch) => ({ ...structuredClone(DEFAULT_STATE), ...patch });
+  assert.equal(activeFilterCount(state({})), 0);
+  assert.equal(activeFilterCount(state({ status: [] })), 1);
+  assert.equal(activeFilterCount(state({ status: ["Withdrawn"] })), 1);
+  assert.equal(activeFilterCount(state({ from: 2015, to: 2020 })), 1);
+  assert.equal(activeFilterCount(state({ atc: ["L04"], area: ["C04"], mah: ["g.roche"], type: ["Other"], mod: ["antibody"], from: 2015, status: [] })), 7);
+  assert.equal(activeFilterCount(state({ atc: ["L04"], status: [] }), "status"), 1);
+  assert.equal(activeFilterCount(state({ status: ["Refused"] }), "status"), 0);
+});
+
+test("filter changes made before the domain loads write the status as the URL keeps it", () => {
+  assert.equal(patchFilterParams(new URLSearchParams("atc=L04"), { status: [] }).toString(), "atc=L04&status=all");
+  assert.equal(patchFilterParams(new URLSearchParams("atc=L04&status=all"), { status: ["Authorised"] }).toString(), "atc=L04");
+  // Opened alone (a drug class), the status goes back to the default too.
+  assert.equal(patchFilterParams(new URLSearchParams("status=all"), classState("L04")).toString(), "atc=L04");
+});
+
 test("names with commas, ampersands and slashes round-trip via repeated keys", () => {
   const query = encode({
     mah: ["Sanofi Pasteur MSD, SNC", "Merck Sharp & Dohme B.V.", "Not stated"],
@@ -100,7 +168,8 @@ test("unknown values are dropped and reported, never thrown", () => {
   assert.equal(state.by, "atc");
   assert.deepEqual(state.mah, ["Pfizer Europe MA EEIG"]);
   assert.equal(state.from, null);
-  assert.deepEqual([state.area, state.type, state.status, state.atc], [[], [], [], ["L04"]]);
+  // Owner decision 2026-09-29 ("Authorized by default"): an unknown status leaves the default.
+  assert.deepEqual([state.area, state.type, state.status, state.atc], [[], [], ["Authorised"], ["L04"]]);
   assert.deepEqual(dropped.map((item) => item.key).sort(), ["area", "atc", "branch", "by", "from", "mah", "status", "type"]);
 });
 
@@ -169,7 +238,7 @@ test("modalities: repeated keys, a modality under a selected group dropped, unkn
   assert.deepEqual(load("mod=peptoid&mod=sirna"), { state: { ...structuredClone(DEFAULT_STATE), mod: ["sirna"] }, dropped: [{ key: "mod", value: "peptoid" }] });
   // Without the modality data (older data files) every value is reported.
   assert.deepEqual(decode("mod=sirna").dropped, [{ key: "mod", value: "sirna" }]);
-  assert.equal(encode({ mod: ["sirna", "antibody", "sirna"], type: ["Other"], status: ["Authorised"] }), "type=Other&mod=antibody&mod=sirna&status=Authorised");
+  assert.equal(encode({ mod: ["sirna", "antibody", "sirna"], type: ["Other"], status: ["Withdrawn"] }), "type=Other&mod=antibody&mod=sirna&status=Withdrawn");
   // The breakdown by modality.
   assert.equal(load("by=mod").state.by, "mod");
   assert.equal(encode({ by: "mod" }), "by=mod");
