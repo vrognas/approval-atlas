@@ -14,7 +14,7 @@ test("the intro cards' actions open a medicine card or one therapeutic area alon
   assert.deepEqual(keytruda, { med: "EMEA/H/C/003820" });
   assert.deepEqual(humira, { med: "EMEA/H/C/000481" });
   assert.deepEqual(cancer, areaState("C04"));
-  assert.equal(encodeUrl({ ...home, ...cancer }).toString(), "area=C04&by=area");
+  assert.equal(encodeUrl({ ...home, ...cancer }).toString(), "area=C04&by=area&tab=classes");
   // None opens the untouched overview (the card would stay on screen).
   for (const patch of [keytruda, humira, cancer]) assert.equal(isOverview({ ...home, ...patch }), false);
 });
@@ -38,8 +38,9 @@ test(
 
 test("the untouched overview: no lookup and no filter", () => {
   assert.equal(isOverview(home), true);
-  // The breakdown's mode is not a filter.
+  // The breakdown's mode and the tab (F · Spacious, phase 2) are not filters.
   assert.equal(isOverview({ ...home, by: "area" }), true);
+  assert.equal(isOverview({ ...home, tab: "medicines" }), true);
   // One letter typed and submitted opens no result.
   assert.equal(isOverview({ ...home, q: "k" }), true);
   for (const lookup of [{ q: "wegovy" }, { med: "EMEA/H/C/005422" }, { sub: "semaglutide" }, { cond: "D011565" }, { co: "g.roche" }]) {
@@ -56,6 +57,7 @@ test("the untouched overview: no lookup and no filter", () => {
 test("filters still loading count as filters; the breakdown's mode does not", () => {
   assert.equal(isOverview(home, new URLSearchParams("")), true);
   assert.equal(isOverview(home, new URLSearchParams("by=mah")), true);
+  assert.equal(isOverview(home, new URLSearchParams("by=mah&tab=companies")), true);
   assert.equal(isOverview(home, new URLSearchParams("atc=L04AC")), false);
   assert.equal(isOverview(home, new URLSearchParams("status=all")), false);
   // Links from before phase 4f carry therapeutic areas under "branch".

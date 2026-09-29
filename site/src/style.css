@@ -2168,6 +2168,248 @@ input::placeholder {
   font-size: 0.8125rem;
 }
 
+/* The tabs (F · Spacious, phase 2; main.js renderTabs()): links under the chip bar, the one shown
+   in the ink, semibold, with a 2px accent underline (3:1 on the page, palette.test.js), the others
+   in the secondary ink; a hairline under the strip. Drawn with inset shadows, not borders with a
+   negative margin, as the strip scrolls sideways on phones (an overflowing border would make it
+   scroll down too). Focus rings sit inside the tab, which the scroll box would clip. */
+.tabs {
+  display: flex;
+  gap: 28px;
+  margin: 0 0 8px;
+  box-shadow: inset 0 -1px var(--grid);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink-secondary);
+  font-size: 0.90625rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab[aria-current="page"] {
+  box-shadow: inset 0 -2px var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A tab's panel: its cards (the first one's top margin is the strip's gap). */
+.tab-panel > .chart-card:first-child,
+.tab-panel > .top-row-frame:first-child {
+  margin-top: 16px;
+}
+
+/* Phones: the strip scrolls sideways across the gutters (no page scroll), the tabs closer. */
+@media (max-width: 720px) {
+  .tabs {
+    gap: 22px;
+    margin: 0 -16px 8px;
+    padding: 0 16px;
+  }
+
+  .tab {
+    font-size: 0.9375rem;
+  }
+}
+
+/* The Overview's previews of other tabs (overview-previews.js): three cards side by side from a
+   900px main column, else one under the other; each a head (title, then its tab's link), then its
+   rows: the label (a company's badge and name, a condition, a year), a bar to the scale of the
+   largest, the count. The frame is their size container. */
+.previews-frame {
+  container-type: inline-size;
+}
+
+.previews {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 24px;
+}
+
+@container (min-width: 900px) {
+  .previews {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.preview-card {
+  margin: 24px 0 0;
+}
+
+/* The title, its tab's link under it (beside it, three cards in a row left the titles 3-4 lines). */
+.preview-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.preview-head h2 {
+  margin: 0;
+}
+
+.preview-tab-link {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.preview-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(2rem, 25%) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* A company's badge stays beside its name, which wraps beside it; long words hyphenate. */
+.preview-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+.preview-label > * {
+  min-width: 0;
+}
+
+.preview-label > .company-badge {
+  flex: none;
+}
+
+.preview-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--raised);
+}
+
+.preview-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 4px;
+  background: var(--bar);
+}
+
+.preview-count {
+  min-width: 2.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-caption {
+  margin-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .preview-row {
+    min-height: 44px;
+  }
+
+  .preview-tab-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* "View options" (view-options.js; Hick's Law): a quiet outlined button at the right of a card's
+   head (a sliders icon, the text, a chevron pointing down, up while open); its panel under the head
+   holds the card's secondary controls, each a visible label and a segmented control. */
+.card-head-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-options-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.view-options-button:hover,
+.view-options-button[aria-expanded="true"] {
+  color: var(--ink);
+}
+
+.view-options-icon,
+.view-options-chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.view-options-button[aria-expanded="true"] .view-options-chevron {
+  transform: rotate(180deg);
+}
+
+.view-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 12px 0 4px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--grid);
+}
+
+.view-options[hidden] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .view-options-button {
+    min-height: 44px;
+  }
+}
+
 /* Breakdown: HTML toggle buttons with a bar each. */
 .breakdown {
   margin-top: 8px;

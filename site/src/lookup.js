@@ -1205,8 +1205,10 @@ export function createLookup(panel, {
     const anyAuthorized = current > 0;
     // The overview filtered to values (as the tree selects them: companies.js structure()) and more,
     // with every status (status []), as this page counts them (owner decision 2026-09-29: the
-    // overview shows authorized medicines by default).
-    const filtered = (values, extra = {}) => ({ ...structuredClone(DEFAULT_STATE), mah: values, status: [], ...extra });
+    // overview shows authorized medicines by default). A company's or holder name's medicines open
+    // on the Medicines tab (the list of them), an ATC group's on Classes and areas (the class's
+    // breakdown; F · Spacious, phase 2).
+    const filtered = (values, extra = {}) => ({ ...structuredClone(DEFAULT_STATE), mah: values, status: [], tab: "medicines", ...extra });
 
     const partners = [...row.partners.map(companies.row).filter(Boolean).map(groupLink), ...row.other_partners];
     const ventures = row.kind === "group" ? companies.jointVentures(key).map(companies.row).filter(Boolean).map(groupLink) : [];
@@ -1252,7 +1254,7 @@ export function createLookup(panel, {
         el("p", { class: "muted" }, UI.companies.atcHint),
         el("ol", { class: "condition-list company-mix" }, rows.map(([code, count]) => mixRow(
           internalLink([el("span", { class: `letter-badge hue-${atcHue(code)}` }, code), " ", el("span", null, atcName(atc.names.get(code)))],
-            filtered(companies.canonical(key), { atc: [code] }), "mix-link", UI.companies.mixLink(atcClassLabel(code, atc.names.get(code)), count)),
+            filtered(companies.canonical(key), { atc: [code], tab: "classes" }), "mix-link", UI.companies.mixLink(atcClassLabel(code, atc.names.get(code)), count)),
           count, rows[0][1])))) : null;
     }
 

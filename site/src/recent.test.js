@@ -160,6 +160,9 @@ test("a view is added when it opens or is named, not on every render; Clear stic
 // navigate() with classState() (the Drug classes suggestion, a ladder, the Try link, a recent pick).
 test("only a class opened as a lookup is recorded; a drill chain or a filter is not", () => {
   assert.equal(openedClass(classState("L04AC")), "L04AC");
+  // classState() opens the Classes and areas tab (F · Spacious, phase 2): still a class opened.
+  assert.equal(classState("L04AC").tab, "classes");
+  assert.equal(openedClass({ ...classState("L04AC"), tab: "overview" }), "L04AC");
   for (const patch of [{ med: "EMEA/H/C/005422" }, { area: ["C04"] }, structuredClone(DEFAULT_STATE), { ...classState("L04AC"), type: ["Generic"] }, { ...classState("L"), atc: ["L", "C"] }]) {
     assert.equal(openedClass(patch), null, JSON.stringify(patch));
   }
@@ -170,6 +173,9 @@ test("only a class opened as a lookup is recorded; a drill chain or a filter is 
   assert.equal(keptOpenedClass({ ...shown, med: "EMEA/H/C/005422" }, "L04AC"), null);
   assert.equal(keptOpenedClass(home, "L04AC"), null);
   assert.equal(keptOpenedClass(shown, null), null);
+  // Switching tabs keeps the class shown alone (and records nothing new: it is the same entry).
+  assert.equal(keptOpenedClass({ ...shown, tab: "medicines" }, "L04AC"), "L04AC");
+  assert.equal(keptOpenedClass({ ...shown, tab: "medicines" }, null), null);
 
   // The drill chain from /?by=atc after Humira: each level named by the dashboard, none opened.
   const recent = createRecent(storage());

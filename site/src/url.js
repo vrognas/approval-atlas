@@ -2,6 +2,9 @@
 import { splitAtcValues } from "./filters.js";
 
 export const BREAKDOWNS = ["atc", "area", "mah", "mod"];
+// F · Spacious, phase 2: the dashboard's tabs, in their order (Serial Position / Pareto: Protection
+// next to the Overview, the conference question "is it still protected?").
+export const TABS = ["overview", "protection", "classes", "companies", "years", "medicines"];
 // The longest ATC value a link may carry (a class-name query); the longest ATC class name is 113.
 export const ATC_QUERY_MAX = 120;
 
@@ -23,7 +26,14 @@ export const DEFAULT_STATE = Object.freeze({
   // unless the viewer widens the Status filter; empty = every status (the URL's status=all).
   status: ["Authorised"],
   by: "atc",
+  // The dashboard's tab (F · Spacious, phase 2): a view, not a filter, as the breakdown's mode.
+  tab: "overview",
 });
+
+// The keys that are views, not filters: the breakdown's mode and the tab. No filter count, Clear or
+// announcement of a filter change counts them.
+const VIEW_KEYS = ["by", "tab"];
+export const FILTER_KEYS = Object.freeze(Object.keys(DEFAULT_STATE).filter((key) => !VIEW_KEYS.includes(key)));
 
 // Every status in the URL (the default, Authorised, has no key; an empty list would have none too).
 export const STATUS_ALL = "all";
@@ -79,6 +89,7 @@ export function encodeState(state) {
   if (state.status.length === 0) params.set("status", STATUS_ALL);
   else if (!isDefaultStatus(state.status)) appendAll("status");
   if (state.by !== DEFAULT_STATE.by) params.set("by", state.by);
+  if (state.tab !== DEFAULT_STATE.tab) params.set("tab", state.tab);
   return params;
 }
 
@@ -108,6 +119,8 @@ export function decodeState(params, domain) {
     return DEFAULT_STATE[key];
   };
   state.by = oneOf("by", BREAKDOWNS);
+  // Links from before the tabs have no key: the Overview.
+  state.tab = oneOf("tab", TABS);
 
   for (const [key, domainName] of Object.entries(LIST_KEYS)) {
     const values = sortedDistinct(params.getAll(key));
@@ -188,16 +201,18 @@ export function togglePatch(state, patch) {
 }
 
 // A drug class opened from a suggestion, a card ladder or a Try link: the class alone (other
-// filters cleared, ATC breakdown), so the link's href and its click agree.
-export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [code] });
+// filters cleared, ATC breakdown on the Classes and areas tab), so the link's href and its click
+// agree.
+export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [code], tab: "classes" });
 
 // A modality opened from a medicine or substance card (M2 phase 2): the overview filtered to it
-// alone, broken down by modality (a group's bars are its modalities).
-export const modalityState = (key) => ({ ...structuredClone(DEFAULT_STATE), mod: [key], by: "mod" });
+// alone, broken down by modality (a group's bars are its modalities), on the Classes and areas tab.
+export const modalityState = (key) => ({ ...structuredClone(DEFAULT_STATE), mod: [key], by: "mod", tab: "classes" });
 
 // A therapeutic area opened from the intro card (owner decision 2026-09-29): the overview filtered to
-// it alone, broken down by therapeutic area (its bars are the areas under it).
-export const areaState = (key) => ({ ...structuredClone(DEFAULT_STATE), area: [key], by: "area" });
+// it alone, broken down by therapeutic area (its bars are the areas under it), on the Classes and
+// areas tab.
+export const areaState = (key) => ({ ...structuredClone(DEFAULT_STATE), area: [key], by: "area", tab: "classes" });
 
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI, company group or
 // company key (companies part 2). Kept verbatim: an unknown value shows a "not found" result

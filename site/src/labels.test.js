@@ -1544,7 +1544,20 @@ test("companies: tree, company page, search and footer copy", () => {
   assert.match(footer.companies("2026-09-28"), /^Company groups \(current owner as of 28 Sep 2026\) curated by Approval Atlas; LEI data from .*GLEIF.*CC0\. GLEIF does not provide or endorse this site\.$/);
   // The answer strip leads with the company group, as the table's "Company · Holder" column.
   assert.equal(card.strip.company, "Company");
-  assert.equal(companies.atcHint, "Each opens the overview filtered to this company and ATC group.");
+  // F · Spacious, phase 2: the links land on the tab that shows what they count.
+  assert.equal(companies.atcHint, "Each opens the overview's Classes and areas tab, filtered to this company and ATC group.");
+  assert.equal(companies.namesHint, "Each lists its medicines in the overview's Medicines tab.");
+});
+
+// F · Spacious, phase 2: the tabs (url.js TABS), in their order, and the previews' links to them.
+test("tabs: a name for every tab, the previews' links named after their tab", () => {
+  const { tabs, previews, viewOptions } = labels.UI;
+  assert.deepEqual(Object.keys(tabs.names), ["overview", "protection", "classes", "companies", "years", "medicines"]);
+  assert.deepEqual(Object.values(tabs.names), ["Overview", "Protection", "Classes and areas", "Companies", "By year", "Medicines"]);
+  assert.equal(previews.tabLink(tabs.names.companies), "Companies tab");
+  assert.equal(viewOptions, "View options");
+  assert.equal(previews.companies.unit(1), "medicine");
+  assert.equal(previews.conditions.unit(2), "treatments");
 });
 
 test("companies: the company page's medicine list says which statuses it shows", () => {

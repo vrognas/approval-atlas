@@ -4,7 +4,9 @@ import {
   ATC_QUERY_MAX,
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
+  FILTER_KEYS,
   LOOKUP_QUERY_MAX,
+  TABS,
   areaState,
   classState,
   decodeLookup,
@@ -134,7 +136,7 @@ test("filter changes made before the domain loads write the status as the URL ke
   assert.equal(patchFilterParams(new URLSearchParams("atc=L04"), { status: [] }).toString(), "atc=L04&status=all");
   assert.equal(patchFilterParams(new URLSearchParams("atc=L04&status=all"), { status: ["Authorised"] }).toString(), "atc=L04");
   // Opened alone (a drug class), the status goes back to the default too.
-  assert.equal(patchFilterParams(new URLSearchParams("status=all"), classState("L04")).toString(), "atc=L04");
+  assert.equal(patchFilterParams(new URLSearchParams("status=all"), classState("L04")).toString(), "atc=L04&tab=classes");
 });
 
 test("names with commas, ampersands and slashes round-trip via repeated keys", () => {
@@ -246,17 +248,17 @@ test("modalities: repeated keys, a modality under a selected group dropped, unkn
 
 // A modality opened from a card: the overview filtered to it alone, broken down by modality.
 test("a modality opened from a card is the overview filtered to it alone, by modality", () => {
-  assert.deepEqual(modalityState("antibody"), { ...structuredClone(DEFAULT_STATE), mod: ["antibody"], by: "mod" });
-  assert.equal(encodeState(modalityState("sirna")).toString(), "mod=sirna&by=mod");
+  assert.deepEqual(modalityState("antibody"), { ...structuredClone(DEFAULT_STATE), mod: ["antibody"], by: "mod", tab: "classes" });
+  assert.equal(encodeState(modalityState("sirna")).toString(), "mod=sirna&by=mod&tab=classes");
 });
 
 // The intro card's "Explore cancer medicines" (owner decision 2026-09-29): the overview filtered to
 // one therapeutic area alone, broken down by therapeutic area.
 test("a therapeutic area opened alone is the overview filtered to it, by therapeutic area", () => {
-  assert.deepEqual(areaState("C04"), { ...structuredClone(DEFAULT_STATE), area: ["C04"], by: "area" });
-  assert.equal(encodeUrl({ ...DEFAULT_LOOKUP, ...areaState("C04") }).toString(), "area=C04&by=area");
+  assert.deepEqual(areaState("C04"), { ...structuredClone(DEFAULT_STATE), area: ["C04"], by: "area", tab: "classes" });
+  assert.equal(encodeUrl({ ...DEFAULT_LOOKUP, ...areaState("C04") }).toString(), "area=C04&by=area&tab=classes");
   // Applied before the dashboard has loaded, it clears the kept filters too.
-  assert.equal(patchFilterParams(new URLSearchParams("mah=B&atc=C"), areaState("C04")).toString(), "area=C04&by=area");
+  assert.equal(patchFilterParams(new URLSearchParams("mah=B&atc=C"), areaState("C04")).toString(), "area=C04&by=area&tab=classes");
   assert.notEqual(areaState("C04").area, areaState("C04").area);
 });
 
@@ -343,12 +345,32 @@ test("patchFilterParams replaces the patched filter keys in a verbatim filter pa
 
 // Suggestion, card ladder and Try link: the link's href and its click give the same view.
 test("a drug class opens alone: default filters with only its ATC code", () => {
-  assert.deepEqual(classState("L04AC"), { ...structuredClone(DEFAULT_STATE), atc: ["L04AC"] });
-  assert.equal(encodeUrl({ ...DEFAULT_LOOKUP, ...classState("L04AC") }).toString(), "atc=L04AC");
+  assert.deepEqual(classState("L04AC"), { ...structuredClone(DEFAULT_STATE), atc: ["L04AC"], tab: "classes" });
+  assert.equal(encodeUrl({ ...DEFAULT_LOOKUP, ...classState("L04AC") }).toString(), "atc=L04AC&tab=classes");
   // Applied before the dashboard has loaded, it clears the kept filters too.
-  assert.equal(patchFilterParams(new URLSearchParams("mah=B&atc=C&by=mah"), classState("L04AC")).toString(), "atc=L04AC");
+  assert.equal(patchFilterParams(new URLSearchParams("mah=B&atc=C&by=mah"), classState("L04AC")).toString(), "atc=L04AC&tab=classes");
   assert.notEqual(classState("L").mah, DEFAULT_STATE.mah);
   assert.notEqual(classState("L").atc, classState("L").atc);
+});
+
+// F · Spacious, phase 2: the dashboard's tabs. Not a filter: a view, as the breakdown's mode.
+test("the tab: Overview by default and without a key, others as tab=…, unknown ones reported", () => {
+  assert.deepEqual(TABS, ["overview", "protection", "classes", "companies", "years", "medicines"]);
+  assert.equal(DEFAULT_STATE.tab, "overview");
+  assert.equal(encode({ tab: "overview" }), "");
+  assert.equal(encode({ tab: "protection", atc: ["L"], by: "mah" }), "atc=L&by=mah&tab=protection");
+  for (const tab of TABS) assert.equal(decode(encode({ tab })).state.tab, tab);
+  // Old links (no tab key) load on the Overview; an unknown tab too, reported.
+  assert.equal(decode("atc=L04AC&by=area").state.tab, "overview");
+  assert.deepEqual(decode("tab=lifecycle"), { state: structuredClone(DEFAULT_STATE), dropped: [{ key: "tab", value: "lifecycle" }] });
+  // Not a filter: no filter count, no Clear, no announcement.
+  assert.equal(FILTER_KEYS.includes("tab"), false);
+  assert.equal(FILTER_KEYS.includes("by"), false);
+  assert.deepEqual([...FILTER_KEYS].sort(), ["area", "atc", "from", "mah", "mod", "status", "to", "type"]);
+  assert.equal(activeFilterCount({ ...structuredClone(DEFAULT_STATE), tab: "medicines" }), 0);
+  // A tab changed before the filter domain loads is kept in the URL's filter part.
+  assert.equal(patchFilterParams(new URLSearchParams("atc=L"), { tab: "years" }).toString(), "atc=L&tab=years");
+  assert.equal(patchFilterParams(new URLSearchParams("atc=L&tab=years"), { tab: "overview" }).toString(), "atc=L");
 });
 
 test("the filter decoder ignores lookup keys", () => {
