@@ -1,16 +1,18 @@
 // The conditions card (redesign 2026-09-29, owner-approved): the therapeutic areas of the medicines
-// shown as a compact table, one row per condition, counted as its condition page counts (facets.js
-// conditionRows(): a MeSH descriptor with its narrower EMA terms; review 2026-09-29): the condition
-// (a link to its condition page, with its MeSH explainer and its branch chips, area-chips.js), its
-// treatments (distinct authorized active substances or combinations) and its authorized medicines
-// with a bar of every status (the authorized part solid). Ranked by treatments or authorized
-// medicines, most or fewest first: a sort button in each of those headers (the site's convention:
-// facets.js nextSort(), a second click on the sort in force reverses it; aria-sort on the sorted
-// header, the pressed button's name says the order). The first 10 rows, then "Show 10 more"; the
-// count shown goes back to 10 when the sort or the filters change. The sort and the count are UI
-// state (not in the URL), kept across renders. Rebuilt on every render; focus goes back to the same
-// link, chip or button. Explicit table roles keep the semantics where narrow cards and phones stack
-// each row on two lines (style.css). Text goes in via textContent only; bar widths through the CSSOM.
+// shown as a compact table, one row per specific condition (MeSH level 3 and deeper; broad
+// categories such as Neoplasms are left out: owner decision 2026-09-29), counted as its condition
+// page counts (facets.js conditionRows(): a MeSH descriptor with its narrower EMA terms; review
+// 2026-09-29): the condition (a link to its condition page, with its MeSH explainer and its branch
+// chips, area-chips.js), its treatments (distinct authorized active substances or combinations) and
+// its authorized medicines with a bar of every status (the authorized part solid). Ranked by
+// treatments or authorized medicines, most or fewest first: a sort button in each of those headers
+// (the site's convention: facets.js nextSort(), a second click on the sort in force reverses it;
+// aria-sort on the sorted header, the pressed button's name says the order). The first 10 rows,
+// then "Show 10 more"; the count shown goes back to 10 when the sort or the filters change. The
+// sort and the count are UI state (not in the URL), kept across renders. Rebuilt on every render;
+// focus goes back to the same link, chip or button. Explicit table roles keep the semantics where
+// narrow cards and phones stack each row on two lines (style.css). Text goes in via textContent
+// only; bar widths through the CSSOM.
 import * as d3 from "d3";
 import { appendSortIcon } from "./activity.js";
 import { areaChips, chipTogglable, fillTerm } from "./area-chips.js";
@@ -199,7 +201,8 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
     more.hidden = true;
   }
 
-  // view: { products (the medicines shown), anyFilter, within (term) => bool or null, descriptorOf,
+  // view: { products (the medicines shown), anyFilter, within (term) => bool or null, broad (term) =>
+  // bool (a broad category, not ranked: owner decision 2026-09-29; the area tree's), descriptorOf,
   // descriptors (buildConditions()'s, so each row counts as its condition page; undefined while
   // they load, FAILED when they could not), setKeyOf, selectedArea (the area filter, for the chips),
   // filterKey (the filters, so a change shows the first 10 again) }.
@@ -219,12 +222,13 @@ export function createConditionsCard(section, { link, noteOf, branches, onAreaCh
       return;
     }
     const result = conditionRows(view.products, {
-      descriptorOf: view.descriptorOf, descriptors: view.descriptors, within: view.within, setKeyOf: view.setKeyOf, sort: sort.key, direction: sort.direction, limit,
+      descriptorOf: view.descriptorOf, descriptors: view.descriptors, within: view.within, broad: view.broad, setKeyOf: view.setKeyOf, sort: sort.key, direction: sort.direction, limit,
     });
     const { rows, total, unlisted: left } = result;
     const state = conditionsCardState(result);
     if (state !== "table") {
-      showLine(state === "none" ? COPY.empty(view.products.length) : COPY.noneAuthorized(total + left));
+      if (state === "none") showLine(COPY.empty(view.products.length));
+      else showLine(state === "broad" ? COPY.onlyBroad(result.broad) : COPY.noneAuthorized(total + left));
       if (target) restore(target);
       return;
     }

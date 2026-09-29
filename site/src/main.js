@@ -1453,6 +1453,8 @@ function startDashboard(meta, [
       products: filtered,
       anyFilter,
       within: state.area.length ? (term) => inAreas(meshTree, state.area, term) : null,
+      // Only specific conditions are ranked (owner decision 2026-09-29): MeSH level 3 and deeper.
+      broad: meshTree.broad,
       descriptorOf,
       descriptors: conditions === FAILED ? FAILED : conditions?.descriptors,
       setKeyOf: (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents),

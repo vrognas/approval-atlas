@@ -296,13 +296,17 @@ export function sentenceParts(state, lookups) {
 // every status), authorized (those with EMA status Authorised, as its page's headline), treatments
 // (their distinct substance sets, as its page's dek: step 4, #10; setKeyOf(product): its set,
 // equivalent spellings joined, or null) }. within(term): only the conditions with a term within the
-// therapeutic area filter (phase 4f; areas.js inAreas()), or null for all. Ranked by sort
+// therapeutic area filter (phase 4f; areas.js inAreas()), or null for all. broad(term): a broad
+// category (areas.js tree.broad(): every tree number of its descriptor at level 1 or 2), or null:
+// owner decision 2026-09-29, only specific conditions are ranked, so a condition all of whose terms
+// are broad (Neoplasms, Lung Diseases, Infections: they are in the therapeutic area filter) is left
+// out, in both directions and within the filter; broad counts those left out. Ranked by sort
 // ("treatments" | "medicines": the authorized ones), direction "desc" (most first) or "asc" (fewest
 // first); ties by the other count in the same direction, then by name A to Z. Fewest first lists
 // only conditions with an authorized treatment (a condition with none is not the one with the
 // fewest): unlisted counts those left out. rows: the first limit; total: every row listed;
 // anyAuthorized: some condition has an authorized medicine (else nothing is ranked).
-export function conditionRows(products, { descriptorOf, descriptors = null, within = null, setKeyOf, sort = "treatments", direction = "desc", limit = Infinity }) {
+export function conditionRows(products, { descriptorOf, descriptors = null, within = null, broad = null, setKeyOf, sort = "treatments", direction = "desc", limit = Infinity }) {
   const shown = new Map(products.map((product) => [product.ema_product_number, product]));
   const groups = new Map();
   for (const term of new Set([...descriptorOf.keys(), ...products.flatMap((product) => product.areas)])) {
@@ -321,8 +325,13 @@ export function conditionRows(products, { descriptorOf, descriptors = null, with
     for (const term of product.areas) if (groups.get(term)?.terms.includes(term)) groups.get(term).members.push(product);
   }
   const all = [];
+  let broadCount = 0;
   for (const group of groups.values()) {
     if (!group.members.length || (within && !group.terms.some(within))) continue;
+    if (broad && group.terms.every(broad)) {
+      broadCount += 1;
+      continue;
+    }
     const authorized = group.members.filter((product) => product.medicine_status === "Authorised");
     all.push({
       key: group.key,
@@ -338,16 +347,23 @@ export function conditionRows(products, { descriptorOf, descriptors = null, with
   const sign = direction === "asc" ? 1 : -1;
   const listed = (direction === "asc" ? all.filter((row) => row.treatments > 0) : all)
     .sort((a, b) => sign * (a[first] - b[first]) || sign * (a[second] - b[second]) || a.name.localeCompare(b.name));
-  return { rows: listed.slice(0, limit), total: listed.length, unlisted: all.length - listed.length, anyAuthorized: all.some((row) => row.authorized > 0) };
+  return {
+    rows: listed.slice(0, limit),
+    total: listed.length,
+    unlisted: all.length - listed.length,
+    anyAuthorized: all.some((row) => row.authorized > 0),
+    broad: broadCount,
+  };
 }
 
 // What the conditions card shows for conditionRows()'s result: "none" (no condition among the
-// medicines shown: a line instead), "unranked" (none has an authorized medicine, so neither order
-// ranks anything; review 2026-09-29: the rows then read A to Z under "the most treatments"), else
-// "table", its header (the sort buttons) kept even when fewest first lists no row (review
-// 2026-09-29: hiding it left no way back to most first).
-export function conditionsCardState({ total, unlisted, anyAuthorized }) {
-  if (total + unlisted === 0) return "none";
+// medicines shown: a line instead), "broad" (every one a broad category, left out: a line saying so;
+// owner decision 2026-09-29), "unranked" (none has an authorized medicine, so neither order ranks
+// anything; review 2026-09-29: the rows then read A to Z under "the most treatments"), else "table",
+// its header (the sort buttons) kept even when fewest first lists no row (review 2026-09-29: hiding
+// it left no way back to most first).
+export function conditionsCardState({ total, unlisted, anyAuthorized, broad = 0 }) {
+  if (total + unlisted === 0) return broad ? "broad" : "none";
   return anyAuthorized ? "table" : "unranked";
 }
 

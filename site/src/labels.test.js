@@ -560,7 +560,7 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(labels.UI.activity.otherTitle, "Other therapeutic areas");
   assert.equal(
     labels.UI.conditions.subtitle(33, true, true),
-    "Conditions of the 33 medicines matching the filters, within the selected areas, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.",
+    "Conditions of the 33 medicines matching the filters, within the selected areas, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.",
   );
 });
 
@@ -833,12 +833,12 @@ test("the conditions card names its ranking, what it counts, its columns and sor
   assert.equal(conditions.title("treatments", "asc"), "Conditions with the fewest treatments");
   assert.equal(conditions.title("medicines", "desc"), "Conditions with the most authorized medicines");
   assert.equal(conditions.title("medicines", "asc"), "Conditions with the fewest authorized medicines");
-  // One sentence: the medicines covered, each condition with its narrower ones (as its condition page
-  // counts; review 2026-09-29), then what a treatment is (step 4, #10: distinct substance sets, a
-  // combination on its own).
-  assert.equal(conditions.subtitle(2351, false), "Conditions of all 2,351 medicines in the EMA data, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.");
-  assert.equal(conditions.subtitle(33, true), "Conditions of the 33 medicines matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.");
-  assert.equal(conditions.subtitle(1, true), "Conditions of the 1 medicine matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.");
+  // The medicines covered, each condition with its narrower ones (as its condition page counts;
+  // review 2026-09-29), then what a treatment is (step 4, #10: distinct substance sets, a combination
+  // on its own); then where the broad categories are (owner decision 2026-09-29: not ranked here).
+  assert.equal(conditions.subtitle(2351, false), "Conditions of all 2,351 medicines in the EMA data, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(33, true), "Conditions of the 33 medicines matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(1, true), "Conditions of the 1 medicine matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
   assert.deepEqual(conditions.headers, { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" });
   // Sort buttons (the site's convention: a second click reverses; the pressed one names its order).
   assert.equal(sortOrder.name(conditions.sortBy.treatments, "count", "asc"), "Sort by treatments, fewest first");
@@ -868,6 +868,9 @@ test("the conditions card names its ranking, what it counts, its columns and sor
   // rank, so a line instead of the table (review 2026-09-29).
   assert.equal(conditions.noneAuthorized(207), "None of the 207 conditions of these medicines has an authorized medicine, so they are not ranked.");
   assert.equal(conditions.noneAuthorized(1), "The one condition of these medicines has no authorized medicine, so it is not ranked.");
+  // Every condition of the medicines shown is a broad category (owner decision 2026-09-29): a line.
+  assert.equal(conditions.onlyBroad(3), "The 3 conditions of these medicines are broad categories, not ranked here: see the therapeutic area filter.");
+  assert.equal(conditions.onlyBroad(1), "The one condition of these medicines is a broad category, not ranked here: see the therapeutic area filter.");
   assert.equal(conditions.open("Neoplasms"), "Open condition page: Neoplasms");
 });
 
