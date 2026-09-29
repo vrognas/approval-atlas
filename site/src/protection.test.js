@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { espacenetUrl, isCopy, protectionGlance, protectionSummary } from "./protection.js";
+import { espacenetUrl, glanceIsEstimate, isCopy, protectionGlance, protectionSummary } from "./protection.js";
 
 const own = {
   ema_product_number: "EMEA/H/C/003820",
@@ -370,6 +370,17 @@ test("isCopy: a copy's estimate is its reference's (or none), never its own", ()
   assert.equal(isCopy({ basis: "follows_reference" }), true);
   assert.equal(isCopy({ basis: "reference_not_found" }), true);
   for (const basis of ["own", "other_company_reference", "paediatric_use"]) assert.equal(isCopy({ basis }), false);
+});
+
+// Review of phase 4: "(est.)" follows only the "Until …" form (a medicine's own protection running),
+// not "Ended", "Unclear" or a copy's value.
+test("glanceIsEstimate: only a medicine's own protection still running", () => {
+  assert.equal(glanceIsEstimate({ basis: "own", status: "protected" }), true);
+  assert.equal(glanceIsEstimate({ basis: "other_company_reference", status: "protected" }), true);
+  assert.equal(glanceIsEstimate({ basis: "own", status: "ended" }), false);
+  assert.equal(glanceIsEstimate({ basis: "own", status: "unclear" }), false);
+  assert.equal(glanceIsEstimate({ basis: "follows_reference", status: "protected" }), false);
+  assert.equal(glanceIsEstimate(undefined), false);
 });
 
 test("protectionGlance: orphan market exclusivity still running is named with its latest end year", () => {

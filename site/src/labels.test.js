@@ -797,14 +797,22 @@ test("the medicine card's blocks and More details", () => {
   const { card } = labels.UI;
   assert.deepEqual(card.blocks, { status: "Status", protection: "Protection and copies", documents: "Documents", indication: "Indication" });
   // The indication shows after the Documents block, so More details does not name it again.
-  assert.doesNotMatch(card.more.hint, /indication/i);
+  assert.doesNotMatch(card.more.hint(true), /indication/i);
+  // Review of phase 4: a short hint (the summary's name), "documents" only where More details has them.
+  assert.equal(card.more.hint(true), "All therapeutic areas, substances, type, modality, ATC, protection estimate, documents");
+  assert.equal(card.more.hint(false), "All therapeutic areas, substances, type, modality, ATC, protection estimate");
+  assert.ok(card.more.hint(true).split(/\s+/).length <= 12);
   assert.equal(card.more.summary, "More details");
   assert.equal(card.more.about, "About this medicine");
   assert.equal(card.more.allDocuments, "All documents");
   assert.equal(card.estimate, "(est.)");
   assert.equal(card.since, "since");
   assert.equal(card.approvedOn, "approved");
-  for (const text of [...Object.values(card.blocks), card.more.summary, card.more.hint, card.more.about, card.more.allDocuments]) {
+  // A substance's "2 authorized first approved 20 Nov 2006": the first of them, not all.
+  assert.equal(card.firstApproved, "first approved");
+  // An authorized medicine without an approval date: no "since", this instead.
+  assert.equal(card.noDate, "no approval date");
+  for (const text of [...Object.values(card.blocks), card.more.summary, card.more.hint(true), card.more.about, card.more.allDocuments]) {
     assert.doesNotMatch(text, /patent|—/i);
   }
 });
