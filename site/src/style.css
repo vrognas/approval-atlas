@@ -93,6 +93,10 @@
   --series-products: var(--accent);
   --series-substances: var(--gold-mid);
   --bar: var(--accent);
+  /* The conditions card's bars (redesign 2026-09-29): the medicines of every status, the authorized
+     part in the bar colour, the rest in a lighter tone of the accent (a chart mark, 1.5:1 in
+     lightness from the bar colour, palette.test.js); in dark mode one step darker. */
+  --bar-rest: var(--heat-4);
   --de-emphasis: #c8c8bc;
   --out-of-range: #c8c8bc;
   --range-band: rgba(43, 74, 49, 0.1);
@@ -127,6 +131,7 @@
     --status-pending-text: #eadfbc;
     --heat-1: #3d4239; --heat-2: #566051; --heat-3: #7a8c74; --heat-4: #8ea688; --heat-5: #a7c4a0;
     --heat-1-text: var(--ink); --heat-2-text: var(--ink); --heat-3-text: var(--on-accent); --heat-4-text: var(--on-accent); --heat-5-text: var(--on-accent);
+    --bar-rest: var(--heat-3);
     /* Dark fills step 8% toward the hue's mid per level; mids lightened 12% toward white. */
     --green-1: #28402a; --green-2: #2e472f; --green-3: #344e35; --green-4: #3a563a; --green-5: #3f5d40; --green-mid: #719a6e; --green-text: #c6e1bf;
     --teal-1: #1e3f3a; --teal-2: #244641; --teal-3: #294e49; --teal-4: #2f5550; --teal-5: #345d57; --teal-mid: #639c95; --teal-text: #b5ddd5;
@@ -196,6 +201,7 @@
   --status-pending-text: #eadfbc;
   --heat-1: #3d4239; --heat-2: #566051; --heat-3: #7a8c74; --heat-4: #8ea688; --heat-5: #a7c4a0;
   --heat-1-text: var(--ink); --heat-2-text: var(--ink); --heat-3-text: var(--on-accent); --heat-4-text: var(--on-accent); --heat-5-text: var(--on-accent);
+  --bar-rest: var(--heat-3);
   /* Dark fills step 8% toward the hue's mid per level; mids lightened 12% toward white. */
   --green-1: #28402a; --green-2: #2e472f; --green-3: #344e35; --green-4: #3a563a; --green-5: #3f5d40; --green-mid: #719a6e; --green-text: #c6e1bf;
   --teal-1: #1e3f3a; --teal-2: #244641; --teal-3: #294e49; --teal-4: #2f5550; --teal-5: #345d57; --teal-mid: #639c95; --teal-text: #b5ddd5;
@@ -2306,14 +2312,14 @@ td.result-holder .holder-main .company-badge {
   border-radius: 0 3px 3px 0;
 }
 
-/* Most common conditions: the term (a condition lookup link), a bar, the count. */
+/* The company page's ATC and condition mixes (lookup.js; .company-mix sets the columns): the term
+   (a link), a bar, the count. */
 .condition-list {
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
 }
 
-/* The value column: the medicines of every status, then (muted) those authorized. */
 .condition-list li {
   display: grid;
   grid-template-columns: minmax(8rem, 38%) 1fr 10rem;
@@ -2353,17 +2359,348 @@ td.result-holder .holder-main .company-badge {
   font-variant-numeric: tabular-nums;
 }
 
-.bar-authorized {
-  margin-left: 0.5em;
-  color: var(--ink-secondary);
-  font-size: 0.8125rem;
+/* The conditions card (redesign 2026-09-29; conditions-card.js): a compact table, one line per
+   condition where the card is wide enough: the condition (its condition page link and branch
+   chips), its treatments, then its authorized medicines after a bar of every status (the
+   authorized part in the bar colour, the rest in --bar-rest, 1px apart); numbers right-aligned and
+   tabular. A size container: under 520px (beside a wide sidebar), and on every phone (720px and
+   narrower), each row takes two lines (below). */
+.conditions-card {
+  container-type: inline-size;
 }
 
-/* Step 4 (#10): the authorized medicines' distinct active substances, on a line of their own. */
-.bar-substances {
-  display: block;
+table.conditions-table {
+  min-width: 0;
+  margin-top: 8px;
+}
+
+/* Rows as tall as a line of branch chips (24px here) and a hairline. */
+.conditions-table :is(th, td) {
+  position: static;
+  background: none;
+  box-shadow: none;
+  vertical-align: middle;
+}
+
+.conditions-table :is(th, td),
+.conditions-table :is(th, td):last-child {
+  padding: 0 0 0 16px;
+}
+
+.conditions-table :is(th, td):first-child {
+  padding-left: 0;
+}
+
+/* The header's text level with the sort buttons' (24px). */
+.conditions-table thead th {
+  height: 28px;
+  font-weight: 600;
+  line-height: 24px;
+  vertical-align: top;
+}
+
+.conditions-table tbody th {
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.conditions-table .cond-treatments,
+.conditions-table .cond-medicines {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The medicines cell carries its tooltip ("386 authorized of 549 medicines of every status"; a
+   data-tip), anchored to the cell with keyboard focus or a tap. */
+.conditions-table td.cond-medicines[data-tip] {
+  position: relative;
+}
+
+.cond-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The authorized medicines under each other, then (muted) of every status. */
+.cond-medicines .cond-number {
+  display: inline-block;
+  min-width: 3ch;
+  text-align: right;
+}
+
+.cond-of {
+  display: inline-block;
+  min-width: 6ch;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.cond-bar {
+  display: inline-flex;
+  width: 8rem;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.cond-bar > span {
+  flex: none;
+  height: 100%;
+  min-width: 2px;
+}
+
+.cond-bar > span + span {
+  margin-left: 1px;
+}
+
+.cond-bar > span:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+.cond-bar-authorized {
+  background: var(--bar);
+}
+
+.cond-bar-rest {
+  background: var(--bar-rest);
+}
+
+/* Phones: what each number counts (the header is hidden there). */
+.cond-unit {
+  display: none;
+}
+
+#conditions-more {
+  margin-top: 4px;
+}
+
+/* Review 2026-09-29 (the owner's estimate for 10 rows was about 380px): rows as tall as a line of
+   chips and the hairline (25px), and "Show 10 more" 24px, on desktop (phones: 44px, below). */
+.conditions-table .term-branches {
+  margin-bottom: 0;
+}
+
+#conditions-more {
+  min-height: 24px;
+  padding-block: 0;
+}
+
+/* A card under 800px (1024px wide with the 320px sidebar: 585px) keeps one line per condition
+   with a shorter bar (review 2026-09-29: with the 8rem bar the Condition column had 233px, and
+   long names wrapped their chips below them); under 560px (beside a sidebar wider than about 360px)
+   the every-status count "of 64" is visually hidden too (the bar's length, the tooltip and screen
+   readers keep it). Narrower cards and phones stack each row (below). */
+@container (max-width: 799px) {
+  .conditions-table .cond-bar {
+    width: 4rem;
+  }
+}
+
+@media (min-width: 721px) {
+  @container (min-width: 520px) and (max-width: 559px) {
+    .conditions-table .cond-of {
+      position: absolute;
+      width: 1px;
+      min-width: 0;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}
+
+/* Narrow: each condition on two lines, the condition, then its treatments and its authorized
+   medicines with the bar; the header's Condition cell visually hidden and its sort buttons a line
+   of their own at the top (so they stay visible; explicit table roles keep the semantics). Phones
+   repeat these rules whatever the card's width (below). */
+@container (max-width: 519px) {
+  .conditions-table,
+  .conditions-table thead,
+  .conditions-table tbody {
+    display: block;
+  }
+
+  .conditions-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .conditions-table thead tr {
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 0;
+  }
+
+  .conditions-table thead th {
+    height: auto;
+  }
+
+  .conditions-table :is(th, td),
+  .conditions-table :is(th, td):is(:first-child, :last-child) {
+    padding: 0;
+    border: 0;
+  }
+
+  .conditions-table thead th.cond-condition {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .conditions-table tbody th {
+    flex: 1 0 100%;
+  }
+
+  .conditions-table .cond-treatments,
+  .conditions-table .cond-medicines {
+    width: auto;
+    font-size: 0.8125rem;
+    text-align: left;
+  }
+
+  /* The bar takes what the numbers leave, the same in every row while the numbers have at most three
+     digits (at most 386 authorized medicines and 549 of every status, Neoplasms, on 2026-09-28), so
+     the bars keep one scale; a row too narrow for both cells moves the medicines to a line of their
+     own rather than overflow. */
+  .conditions-table td.cond-treatments .cond-number {
+    display: inline-block;
+    min-width: 3ch;
+    text-align: right;
+  }
+
+  .conditions-table td.cond-treatments {
+    min-width: 6.25rem;
+  }
+
+  .conditions-table td.cond-medicines {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+  }
+
+  .conditions-table .cond-bar {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 1.5rem;
+    margin-right: 6px;
+  }
+
+  .cond-unit {
+    display: inline;
+  }
+}
+
+/* Phones: every row on two lines whatever the card's width (review 2026-09-29: from about 586 to
+   720px the card is 520px or wider, and its one-line 27px rows overlapped the 44px condition links
+   and chip rims of the phones, so a tap could open the next row's condition). The rules above,
+   repeated (conditions-table.test.js keeps them alike). */
+@media (max-width: 720px) {
+  .conditions-table,
+  .conditions-table thead,
+  .conditions-table tbody {
+    display: block;
+  }
+
+  .conditions-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .conditions-table thead tr {
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 0;
+  }
+
+  .conditions-table thead th {
+    height: auto;
+  }
+
+  .conditions-table :is(th, td),
+  .conditions-table :is(th, td):is(:first-child, :last-child) {
+    padding: 0;
+    border: 0;
+  }
+
+  .conditions-table thead th.cond-condition {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .conditions-table tbody th {
+    flex: 1 0 100%;
+  }
+
+  .conditions-table .cond-treatments,
+  .conditions-table .cond-medicines {
+    width: auto;
+    font-size: 0.8125rem;
+    text-align: left;
+  }
+
+  .conditions-table td.cond-treatments .cond-number {
+    display: inline-block;
+    min-width: 3ch;
+    text-align: right;
+  }
+
+  .conditions-table td.cond-treatments {
+    min-width: 6.25rem;
+  }
+
+  .conditions-table td.cond-medicines {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+  }
+
+  .conditions-table .cond-bar {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 1.5rem;
+    margin-right: 6px;
+  }
+
+  .cond-unit {
+    display: inline;
+  }
+}
+
+/* The smallest phones (review 2026-09-29: at 320px the two sort buttons wrapped onto two lines, and
+   the bar kept its 1.5rem floor): the buttons 4px apart, and "of 64" visually hidden (the bar's
+   length, the tooltip and screen readers keep it). */
+@media (max-width: 359px) {
+  .conditions-table thead tr {
+    gap: 4px;
+  }
+
+  .conditions-table .cond-of {
+    position: absolute;
+    width: 1px;
+    min-width: 0;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* Draft (loss-of-exclusivity calendar; protection-calendar-card.js): a toggle button per year, its
@@ -3486,8 +3823,10 @@ td.area {
   margin-left: -3px;
 }
 
+/* The toolbar holds the chips and "+n" (so its arrow keys reach it; chips review 2026-09-29). */
 .area-chips {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -3539,9 +3878,31 @@ button.area-chip:focus-visible .area-chip-fill {
   outline-offset: 2px;
 }
 
+/* "+n": at least 24px (WCAG 2.5.8; conditions card review 2026-09-29: it was 13 by 15px, its
+   centre 10px from the chip beside it), the text centred in its visible part (.area-more-fill). */
 .area-more {
+  display: inline-flex;
   color: var(--ink-secondary);
   font: 500 0.75rem var(--font-mono);
+}
+
+.area-more-fill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+/* The focus ring round the visible part, not the phones' rim (as the chips'). */
+.area-more:focus-visible {
+  outline: none;
+}
+
+.area-more:focus-visible .area-more-fill {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* The medicine card on phones: the first three conditions, the rest behind "Show n more"
@@ -3737,7 +4098,7 @@ table.activity {
   text-align: left;
 }
 
-.activity .sort-button {
+:is(.activity, .conditions-table) .sort-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3754,7 +4115,7 @@ table.activity {
   cursor: pointer;
 }
 
-.activity .sort-button.sort-text {
+:is(.activity, .conditions-table) .sort-button.sort-text {
   width: auto;
   padding: 0 6px;
   color: var(--ink-secondary);
@@ -3762,14 +4123,14 @@ table.activity {
   font-weight: 600;
 }
 
-.activity .sort-button:hover {
+:is(.activity, .conditions-table) .sort-button:hover {
   background: var(--wash);
   box-shadow: none;
   color: var(--ink);
   text-decoration: none;
 }
 
-.activity .sort-button[aria-pressed="true"] {
+:is(.activity, .conditions-table) .sort-button[aria-pressed="true"] {
   background: var(--accent-wash);
   box-shadow: inset 0 -2px var(--accent);
   color: var(--accent);
@@ -3777,7 +4138,7 @@ table.activity {
   text-decoration: none;
 }
 
-.activity .sort-button[aria-pressed="true"] svg {
+:is(.activity, .conditions-table) .sort-button[aria-pressed="true"] svg {
   stroke-width: 2.5;
 }
 
@@ -5084,6 +5445,83 @@ details > summary {
   }
 }
 
+/* The substance card's table (six columns with its Therapeutic area column: .with-areas, lookup.js
+   resultTable()) stacks the same way under 780px, its columns' minimum (chips review 2026-09-29: up
+   to 751px on 2026-09-28, elivaldogene autotemcel; at 1024px with the 320px sidebar 237 of the 1,273
+   substance tables, 624 to 751px, crossed their 623px card, adalimumab's scrolling the page 8px
+   sideways; the five-column tables fit). The same rules as the block above, for it alone: keep the
+   two alike (result-table.test.js compares them). */
+@container (max-width: 779px) {
+  .result-table.with-areas thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .result-table.with-areas table,
+  .result-table.with-areas tbody {
+    display: block;
+  }
+
+  .result-table.with-areas tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .result-table.with-areas tbody:last-child tr:last-child,
+  .result-table.with-areas tr:has(+ .snippet-row) {
+    border-bottom: 0;
+  }
+
+  .result-table.with-areas tr:has(+ .snippet-row) {
+    padding-bottom: 4px;
+  }
+
+  .result-table.with-areas .snippet-row {
+    padding-top: 0;
+  }
+
+  .result-table.with-areas td,
+  .result-table.with-areas :is(th, td):first-child,
+  .result-table.with-areas :is(th, td):last-child {
+    padding: 0;
+    border: 0;
+  }
+
+  .result-table.with-areas td:empty {
+    display: none;
+  }
+
+  .result-table.with-areas td.result-medicine,
+  .result-table.with-areas td.result-areas,
+  .result-table.with-areas td.type-cell,
+  .result-table.with-areas td.result-holder,
+  .result-table.with-areas .snippet-row > td {
+    flex: 1 0 100%;
+  }
+
+  .result-table.with-areas td.status-cell {
+    min-width: 0;
+  }
+
+  .result-table.with-areas td.result-holder {
+    color: var(--ink-secondary);
+  }
+
+  .result-table.with-areas td.type-cell .badge[data-tip]::after {
+    left: 0;
+    right: auto;
+    max-width: min(16rem, 100%);
+  }
+}
+
 mark {
   background: var(--mark);
   color: var(--ink);
@@ -5225,6 +5663,18 @@ mark {
     min-height: 44px;
   }
 
+  /* The conditions card: its condition links 44px tall (the negative margin keeps the row, as the
+     medicine names'), and "Show 10 more". */
+  .conditions-table .cond-name a {
+    display: inline-block;
+    margin: -12px 0;
+    padding: 12px 0;
+  }
+
+  #conditions-more {
+    min-height: 44px;
+  }
+
   /* Companies: the company page's names, and the company links of holder displays (tables, answer
      strip; the negative margin keeps the row's layout, as the medicine names'). */
   .company-names a {
@@ -5254,18 +5704,28 @@ mark {
     gap: 0;
   }
 
-  /* The ";" next to the last chip's fill, over its rim. */
-  .area-chips + .term-sep {
+  /* "+n" as a chip (conditions card review 2026-09-29): a transparent rim round its visible part
+     makes it 44px tall and 38px wide (its visible part 4px beyond the last chip's rim, as before,
+     the rim starting where that chip's ends), the negative margins keeping the line; the rim lies
+     under every fill and control (it is not raised, its visible part is). */
+  .area-chips > .area-more {
+    padding: 10px 10px 10px 4px;
+    margin: -10px -10px -10px 0;
+  }
+
+  /* The ";" next to the last chip's fill, over its rim (after "+n": as on desktop). */
+  .area-chips:not(:has(> .area-more)) + .term-sep {
     margin-left: -9px;
   }
 
-  .area-chip-fill {
+  .area-chip-fill,
+  .area-more-fill {
     position: relative;
     z-index: 1;
   }
 
-  :is(.term a, .area-more, .areas-more),
-  :is(#medicines-table, .result-table) :is(a, .atc-badge, .toggle, [data-tip]:not(.area-chip)) {
+  :is(.term a, .areas-more),
+  :is(#medicines-table, .result-table) :is(a, .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more)) {
     position: relative;
     z-index: 1;
   }
@@ -5307,12 +5767,12 @@ mark {
     min-width: 44px;
   }
 
-  .activity .sort-button {
+  :is(.activity, .conditions-table) .sort-button {
     width: 44px;
     height: 44px;
   }
 
-  .activity .sort-button.sort-text {
+  :is(.activity, .conditions-table) .sort-button.sort-text {
     width: auto;
     min-width: 44px;
   }
@@ -5399,13 +5859,29 @@ code {
     border: 1px solid GrayText;
   }
 
-  .activity button[aria-pressed="true"] {
+  :is(.activity button, .conditions-table .sort-button)[aria-pressed="true"] {
     outline: 2px solid SelectedItem;
     outline-offset: -2px;
   }
 
-  .activity button[aria-pressed="true"]:focus-visible {
+  :is(.activity button, .conditions-table .sort-button)[aria-pressed="true"]:focus-visible {
     outline-offset: 2px;
+  }
+
+  /* The conditions card's bars (review 2026-09-29: both parts vanished): the authorized part filled,
+     the rest outlined. */
+  .cond-bar > span {
+    forced-color-adjust: none;
+    box-sizing: border-box;
+  }
+
+  .cond-bar-authorized {
+    background: CanvasText;
+  }
+
+  .cond-bar-rest {
+    background: Canvas;
+    border: 1px solid CanvasText;
   }
 
   /* The per-year chart's legend keeps its swatches (with a border). */

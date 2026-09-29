@@ -195,12 +195,13 @@
           <div id="pc-body"></div>
         </section>
 
-        <!-- Most common conditions of the medicines shown (every one without a filter); each opens its condition page. -->
-        <section id="conditions" class="chart-card" aria-labelledby="conditions-title">
+        <!-- The conditions of the medicines shown (every one without a filter), ranked by treatments or authorized medicines (conditions-card.js); each opens its condition page. -->
+        <section id="conditions" class="chart-card conditions-card" aria-labelledby="conditions-title">
           <h2 id="conditions-title"></h2>
           <p id="conditions-subtitle" class="muted"></p>
-          <p id="conditions-hint" class="muted"></p>
-          <ol id="conditions-list" class="condition-list"></ol>
+          <table id="conditions-table" class="conditions-table" role="table" aria-labelledby="conditions-title" aria-describedby="conditions-subtitle" hidden></table>
+          <button id="conditions-more" class="text-button" type="button" hidden></button>
+          <p id="conditions-unlisted" class="muted"></p>
           <p id="conditions-empty" class="muted"></p>
         </section>
 

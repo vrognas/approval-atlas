@@ -241,10 +241,15 @@ export function termBranches(branchRows) {
   return { of: (term) => codes.get(term) ?? [], name: (code) => names.get(code) ?? code };
 }
 
-// The chips of a term's branches: at most BRANCH_CHIPS, the rest named behind "+n".
+// The chips of a term's branches (codes: termBranches().of()): at most BRANCH_CHIPS, the rest named
+// behind "+n", each list in code order. Those within the selection (the area filter) are shown first
+// (chips review 2026-09-29: ?area=C18 left Adrenoleukodystrophy's C18 unpressed behind "+2"):
+// selected themselves, then included through their selected category, then the others.
 const BRANCH_CHIPS = 2;
-export function branchChips(codes) {
-  return { shown: codes.slice(0, BRANCH_CHIPS), rest: codes.slice(BRANCH_CHIPS) };
+export function branchChips(codes, selected = []) {
+  const rank = (code) => (branchIncludedIn(selected, code) ? 1 : branchSelected(selected, code) ? 0 : 2);
+  const shown = new Set([...codes].sort((a, b) => rank(a) - rank(b)).slice(0, BRANCH_CHIPS));
+  return { shown: codes.filter((code) => shown.has(code)), rest: codes.filter((code) => !shown.has(code)) };
 }
 
 // A chip is pressed when its branch is within the selection: selected, or under its selected

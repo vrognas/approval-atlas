@@ -560,7 +560,7 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(labels.UI.activity.otherTitle, "Other therapeutic areas");
   assert.equal(
     labels.UI.conditions.subtitle(33, true, true),
-    "Therapeutic areas of the 33 medicines matching the filters, within the selected areas: medicines of every status, then those authorized and their active substances or combinations",
+    "Conditions of the 33 medicines matching the filters, within the selected areas, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.",
   );
 });
 
@@ -824,22 +824,50 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
   );
 });
 
-// Shown with and without filters (phase 4c), with a hint that leads to the condition pages.
-test("the most common conditions card names the medicines it covers and how to open a condition", () => {
-  const { conditions } = labels.UI;
-  assert.equal(conditions.title, "Most common conditions");
-  // Phase 4c review: each row counts every status, then the authorized ones (the condition page's
-  // list); step 4 (#10): and their distinct substance sets, a combination on its own (review).
-  assert.equal(conditions.subtitle(2351, false), "Therapeutic areas of all 2,351 medicines in the EMA data: medicines of every status, then those authorized and their active substances or combinations");
-  assert.equal(conditions.subtitle(33, true), "Therapeutic areas of the 33 medicines matching the filters: medicines of every status, then those authorized and their active substances or combinations");
-  assert.equal(conditions.subtitle(1, true), "Therapeutic areas of the 1 medicine matching the filters: medicines of every status, then those authorized and their active substances or combinations");
-  assert.equal(conditions.authorized(48), "48 authorized");
+// The conditions card (redesign 2026-09-29): a table ranked by treatments or authorized medicines,
+// most or fewest first; its title says which (a proposal for the owner). Shown with and without
+// filters (phase 4c).
+test("the conditions card names its ranking, what it counts, its columns and sorts", () => {
+  const { conditions, sortOrder } = labels.UI;
+  assert.equal(conditions.title("treatments", "desc"), "Conditions with the most treatments");
+  assert.equal(conditions.title("treatments", "asc"), "Conditions with the fewest treatments");
+  assert.equal(conditions.title("medicines", "desc"), "Conditions with the most authorized medicines");
+  assert.equal(conditions.title("medicines", "asc"), "Conditions with the fewest authorized medicines");
+  // One sentence: the medicines covered, each condition with its narrower ones (as its condition page
+  // counts; review 2026-09-29), then what a treatment is (step 4, #10: distinct substance sets, a
+  // combination on its own).
+  assert.equal(conditions.subtitle(2351, false), "Conditions of all 2,351 medicines in the EMA data, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.");
+  assert.equal(conditions.subtitle(33, true), "Conditions of the 33 medicines matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.");
+  assert.equal(conditions.subtitle(1, true), "Conditions of the 1 medicine matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.");
+  assert.deepEqual(conditions.headers, { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" });
+  // Sort buttons (the site's convention: a second click reverses; the pressed one names its order).
+  assert.equal(sortOrder.name(conditions.sortBy.treatments, "count", "asc"), "Sort by treatments, fewest first");
+  assert.equal(sortOrder.name(conditions.sortBy.medicines, "count", "desc"), "Sort by authorized medicines, most first");
+  // Each medicines cell: the authorized, then (muted) of every status; on phones each number says
+  // what it counts (the header is hidden there).
+  assert.equal(conditions.of(64), "of 64");
+  // Visually hidden after it (review 2026-09-29: "47 of 64" did not say what the 64 counts).
+  assert.equal(conditions.everyStatus(64), " medicines of every status");
+  assert.equal(conditions.everyStatus(1), " medicine of every status");
+  assert.equal(conditions.treatmentsUnit(16), "treatments");
+  assert.equal(conditions.treatmentsUnit(1), "treatment");
+  assert.equal(conditions.authorizedUnit, "authorized");
+  assert.equal(conditions.medicinesTip(47, 64), "47 authorized of 64 medicines of every status");
+  assert.equal(conditions.medicinesTip(1, 1), "1 authorized of 1 medicine of every status");
+  assert.equal(conditions.showMore(10), "Show 10 more");
+  assert.equal(conditions.showMore(3), "Show 3 more");
+  // Fewest first leaves out the conditions without an authorized treatment, and says so.
+  assert.equal(conditions.unlisted(12), "12 conditions without an authorized treatment are not listed.");
+  assert.equal(conditions.unlisted(1), "1 condition without an authorized treatment is not listed.");
   assert.equal(conditions.substances(16), "16 active substances or combinations");
   assert.equal(conditions.substances(1), "1 active substance or combination");
-  assert.equal(conditions.hint, "Open a condition to see its approval timeline.");
   assert.equal(conditions.empty(0), "No medicines match the current filters.");
   assert.equal(conditions.empty(1), "No therapeutic area is listed for this medicine.");
   assert.equal(conditions.empty(3), "No therapeutic areas are listed for these medicines.");
+  // None of the conditions has an authorized medicine (e.g. only withdrawn ones shown): nothing to
+  // rank, so a line instead of the table (review 2026-09-29).
+  assert.equal(conditions.noneAuthorized(207), "None of the 207 conditions of these medicines has an authorized medicine, so they are not ranked.");
+  assert.equal(conditions.noneAuthorized(1), "The one condition of these medicines has no authorized medicine, so it is not ranked.");
   assert.equal(conditions.open("Neoplasms"), "Open condition page: Neoplasms");
 });
 

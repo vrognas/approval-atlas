@@ -212,17 +212,19 @@ export function createTable(table, moreButton, captionNode, {
     onAtcSelect(button.dataset.code);
   });
 
-  // Toolbar keys (the ATC segments, the branch chips): Left/Right to the neighboring button,
-  // Home/End to the first/last.
-  d3.select(table).on("keydown", (event) => toolbarKeydown(event, "button.atc-seg, button.area-chip"));
+  // Toolbar keys (the ATC segments, the branch chips and their "+n"): Left/Right to the neighboring
+  // item, Home/End to the first/last.
+  d3.select(table).on("keydown", (event) => toolbarKeydown(event, "button.atc-seg, button.area-chip, .area-more"));
 
-  // The rows are rebuilt: back to the same button of the same medicine (a chip: of the same term),
+  // The rows are rebuilt: back to the same button of the same medicine (a chip: of the same term,
+  // else that term's "+n", where a chip no longer within the area filter can go: branchChips()),
   // else of any medicine.
   function restoreFocus() {
     const { number, selector, within, fallback } = refocus;
     refocus = null;
     const row = d3.select(table).selectAll("tbody").filter((product) => product.ema_product_number === number).node();
-    const target = (within ? row?.querySelector(`${within} ${selector}`) : null) ?? row?.querySelector(selector) ?? table.querySelector(selector);
+    const inTerm = within ? row?.querySelector(`${within} ${selector}`) ?? row?.querySelector(`${within} .area-more`) : null;
+    const target = inTerm ?? row?.querySelector(selector) ?? table.querySelector(selector);
     if (target) focusToolbarButton(target);
     else fallback();
   }

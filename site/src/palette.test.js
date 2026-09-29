@@ -81,7 +81,7 @@ const TEXT_PAIRS = [
 // (badges.js companySeriesColors()).
 const MARK_PAIRS = [
   "--type-other", "--type-generic", "--type-biosimilar", "--type-advanced-therapy",
-  "--series-products", "--series-substances", "--bar", "--status-authorized",
+  "--series-products", "--series-substances", "--bar", "--bar-rest", "--status-authorized",
   ...ATC_HUES.map((hue) => `--${hue}-mid`),
   ...[...ATC_HUES, ...BRANDS].map((hue) => `--${hue}-text`),
   ...BRANDS.map((hue) => `--${hue}-mid`),
@@ -132,6 +132,13 @@ for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
   // lightness too, not in hue alone.
   test(`${mode} the calendar's orphan segment differs in lightness from the bar beside it (1.5:1)`, () => {
     assert.ok(contrast(tokens, "--bar", "--pink-mid") >= 1.5, `--bar ~ --pink-mid ${contrast(tokens, "--bar", "--pink-mid").toFixed(2)}`);
+  });
+
+  // The conditions card (redesign 2026-09-29): each Medicines bar is its medicines of every status,
+  // the authorized part --bar, the rest --bar-rest (a lighter tone of the accent; a chart mark on the
+  // card, MARK_PAIRS), 1px apart: they differ in lightness, not only in shade.
+  test(`${mode} the conditions card's authorized part differs in lightness from the rest of its bar (1.5:1)`, () => {
+    assert.ok(contrast(tokens, "--bar", "--bar-rest") >= 1.5, `--bar ~ --bar-rest ${contrast(tokens, "--bar", "--bar-rest").toFixed(2)}`);
   });
 }
 

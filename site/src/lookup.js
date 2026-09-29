@@ -190,7 +190,11 @@ const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substanc
 // decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
 // opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
 // onAreaChip(branch): a condition's branch chip was clicked (owner decision 2026-09-29).
-export function createLookup(panel, { index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null, onAreaChip = () => {} }) {
+// areaFilter(): the area filter its chips show and toggle, null while it is unknown (before the
+// dashboard's data has loaded: the chips are inert then; chips review 2026-09-29).
+export function createLookup(panel, {
+  index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null, onAreaChip = () => {}, areaFilter = () => null,
+}) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
     // Rows without a code to use (atcCode()) are left out.
@@ -259,13 +263,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   const ready = (value) => value !== undefined && value !== FAILED;
 
   // Branch chips (area-chips.js): a click toggles the branch (the caller's), unless it is included
-  // through a selected category (disabled, as the tree's row); the arrow keys move within a
-  // condition's chips.
+  // through a selected category (disabled, as the tree's row) or the area filter is still unknown;
+  // the arrow keys move within a condition's chips and "+n".
   panel.addEventListener("click", (event) => {
     const chip = event.target.closest("button.area-chip");
     if (chip && chipTogglable(chip)) onAreaChip(chip.dataset.area);
   });
-  panel.addEventListener("keydown", (event) => toolbarKeydown(event, "button.area-chip"));
+  panel.addEventListener("keydown", (event) => toolbarKeydown(event, "button.area-chip, .area-more"));
   const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
   // The substance equivalents (step 3): none when the file is missing (older data), undefined while
@@ -842,7 +846,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       const last = position === terms.length - 1;
       if (!chips) return [name, last ? "" : "; "];
       const group = el("span", { class: "term" });
-      fillTerm(group, name, ready(conditions) ? areaChips(term, conditions.branches, lastState?.area ?? []) : null, last);
+      fillTerm(group, name, ready(conditions) ? areaChips(term, conditions.branches, areaFilter()) : null, last);
       return last ? group : [group, " "];
     });
   }
@@ -864,8 +868,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   // substance (sameSubstance(row)); the narrower terms or the words mentioned; PI and EPAR once the
   // documents index has loaded), with areas (substance cards: what each medicine is for) its
   // therapeutic areas, ATC, Approved · Status, Type, Holder, then the matched indication text in a
-  // full-width row. Phones stack the rows (style.css); explicit roles keep the table semantics
-  // there. labelledBy: the heading's id.
+  // full-width row. Phones stack the rows (style.css; with areas, .with-areas, below a wider width:
+  // six columns need more room); explicit roles keep the table semantics there. labelledBy: the
+  // heading's id.
   function resultTable(entries, medicines, labelledBy, { areas = false, sameSubstance = () => false } = {}) {
     if (!entries.length) return el("p", { class: "muted" }, UI.condition.none);
     const [documents, atc] = [need("documents"), need("atc")];
@@ -900,7 +905,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
             el("p", { class: "snippet" }, snippet.before, el("mark", null, snippet.match), snippet.after)))
           : null);
     });
-    return el("div", { class: "result-table" }, el("table", { role: "table", "aria-labelledby": labelledBy },
+    return el("div", { class: areas ? "result-table with-areas" : "result-table" }, el("table", { role: "table", "aria-labelledby": labelledBy },
       el("thead", { role: "rowgroup" }, el("tr", { role: "row" }, headers.map((header) => el("th", { scope: "col", role: "columnheader" }, header)))),
       bodies));
   }
@@ -1338,8 +1343,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
   function render(state, force = false) {
     lastState = state;
-    // The branch chips follow the area filter (the desktop sidebar can change it under a card).
-    markAreaChips(panel, state.area ?? []);
+    // The branch chips follow the area filter (the desktop sidebar can change it under a card; the
+    // dashboard's arrival makes it known).
+    markAreaChips(panel, areaFilter());
     const view = lookupView(state);
     const key = JSON.stringify(view);
     const sameView = key === renderedKey;
