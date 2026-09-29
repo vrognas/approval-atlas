@@ -359,7 +359,7 @@ test("the medicines table merges approval date and status into one column", () =
 });
 
 // Owner decision 2026-09-29 (layout): the headline states every medicine and those currently
-// authorized, so only the four type tiles stay (2 x 2 beside "Authorized over time").
+// authorized, so only the four type tiles stay (under "Authorized over time").
 test("tiles: the four types with their share", () => {
   assert.deepEqual(labels.UI.tiles.map((tile) => [tile.key, tile.label]), [
     ["orphan", "Orphan"],
