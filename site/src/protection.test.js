@@ -226,6 +226,44 @@ test("without its curated row (older data, a missing file) a copy without a cent
   assert.deepEqual(protectionSummary({ ...buprenorphineNeuraxpharm, copy_source: "ema_flag" }, [], "x", "2026-09-29", null, { curated: buprenorphineNeuraxpharmCopy }).lines, [generic]);
 });
 
+// Backlog (step 4 review): a curated copy following a central reference says what it is, from its
+// ema_curated_copies.json row, with a link to the EMA page that says so, as one with a national
+// reference does (real rows 2026-09-29).
+const curatedRow = (ema_product_number, copy_type, reference_product_number, reference_name, slug) => ({
+  ema_product_number, copy_type, reference_product_number, reference_name,
+  evidence_url: `https://www.ema.europa.eu/en/medicines/human/EPAR/${slug}`, evidence_quote: "…", checked_date: "2026-09-29", note: null, source: "curated",
+});
+
+test("a curated copy of a central reference names its copy type and the evidence", () => {
+  const riulvyCopy = curatedRow("EMEA/H/C/006427", "hybrid", "EMEA/H/C/002601", "Tecfidera", "riulvy");
+  const summary = protectionSummary(riulvy, [], "tegomil fumarate", "2026-09-29", "Tecfidera", { curated: riulvyCopy, referenceSubstance: "dimethyl fumarate" });
+  assert.deepEqual(summary.lines[0], [
+    "No protection of its own; a hybrid of Tecfidera.",
+    " ",
+    { text: "Source", url: "https://www.ema.europa.eu/en/medicines/human/EPAR/riulvy" },
+  ]);
+  // The dates and the counted-from line as before.
+  assert.equal(summary.lines.length, 4);
+  assert.equal(summary.lines[3], "Counted from its reference medicine Tecfidera's first central approval: 30 Jan 2014");
+  // A generic (Sugammadex Adroiq: Bridion) and a biosimilar (Tuznue: Herceptin) EMA does not flag.
+  const sugammadexAdroiq = { ...curatedFollower, ema_product_number: "EMEA/H/C/006046", reference_product_number: "EMEA/H/C/000885", reference_name: "Bridion",
+    counted_from: "2008-07-25", data_exclusivity_end: "2016-07-25", market_protection_end_min: "2018-07-25", market_protection_end_max: "2019-07-25" };
+  assert.equal(protectionSummary(sugammadexAdroiq, [], "sugammadex", "2026-09-29", "Bridion",
+    { curated: curatedRow("EMEA/H/C/006046", "generic", "EMEA/H/C/000885", "Bridion", "sugammadex-adroiq") }).lines[0][0],
+  "No protection of its own; a generic of Bridion.");
+  const tuznue = { ...sugammadexAdroiq, ema_product_number: "EMEA/H/C/006252", reference_product_number: "EMEA/H/C/000278", reference_name: "Herceptin" };
+  assert.equal(protectionSummary(tuznue, [], "trastuzumab", "2026-09-29", "Herceptin",
+    { curated: curatedRow("EMEA/H/C/006252", "biosimilar", "EMEA/H/C/000278", "Herceptin", "tuznue") }).lines[0][0],
+  "No protection of its own; a biosimilar of Herceptin.");
+  // No https evidence: the sentence alone.
+  assert.equal(protectionSummary(riulvy, [], "x", "2026-09-29", "Tecfidera", { curated: { ...riulvyCopy, evidence_url: null } }).lines[0],
+    "No protection of its own; a hybrid of Tecfidera.");
+  // Without its curated row (older data, a missing file), or a copy EMA flags: "follows" as before.
+  assert.equal(protectionSummary(riulvy, [], "x", "2026-09-29", "Tecfidera").lines[0], "No protection of its own; follows Tecfidera");
+  assert.equal(protectionSummary({ ...riulvy, copy_source: "ema_flag" }, [], "x", "2026-09-29", "Tecfidera", { curated: riulvyCopy }).lines[0],
+    "No protection of its own; follows Tecfidera");
+});
+
 test("protectionGlance: the answer strip's short form of the estimate", () => {
   const protectedRow = { ...own, market_protection_end_min: "2031-01-06", market_protection_end_max: "2032-01-06", status: "protected" };
   assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Until 2031–2032", orphan: null });

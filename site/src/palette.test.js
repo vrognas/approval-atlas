@@ -14,7 +14,11 @@ function declarations(block) {
 }
 
 const light = declarations(css.match(/:root\s*\{([^}]*)\}/)[1]);
-const dark = { ...light, ...declarations(css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([^}]*)\}/)[1]) };
+// Dark tokens: the device's dark scheme under Auto, and the viewer's Dark (theme.js), two blocks of
+// the same declarations (checked below).
+const DARK_AUTO = /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)\s*\{([^}]*)\}/;
+const DARK_CHOSEN = /\n:root\[data-theme="dark"\]\s*\{([^}]*)\}/;
+const dark = { ...light, ...declarations(css.match(DARK_AUTO)[1]) };
 
 function resolve(tokens, name) {
   const value = tokens[name];
@@ -197,6 +201,23 @@ test("modality stacks: neighbouring stack hues differ by the series distance, ea
     }
   }
   assert.deepEqual(failing, []);
+});
+
+// Theme button (theme.js): the viewer's Dark repeats the device's dark block, declaration for
+// declaration (color-scheme included), so the two cannot drift apart.
+test("the chosen Dark theme's block equals the device's dark block", () => {
+  const all = (block) => [...block.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([\w-]+):\s*([^;]+);/g)].map(([, name, value]) => `${name}: ${value.trim()}`);
+  const [auto, chosen] = [DARK_AUTO, DARK_CHOSEN].map((pattern) => css.match(pattern)?.[1]);
+  assert.ok(auto && chosen, "a dark block is missing");
+  assert.ok(all(auto).includes("color-scheme: dark"));
+  assert.deepEqual(all(chosen), all(auto));
+});
+
+// The browser's toolbar colour (theme.js themeColors()) is each mode's page colour.
+test("index.html's theme-color tags are the page colour of each mode", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const tag = (scheme) => html.match(new RegExp(`<meta name="theme-color" content="(#[0-9a-f]{6})" media="\\(prefers-color-scheme: ${scheme}\\)"`, "i"))?.[1].toLowerCase();
+  assert.deepEqual([tag("light"), tag("dark")], [resolve(light, "--page").toLowerCase(), resolve(dark, "--page").toLowerCase()]);
 });
 
 test("light tokens match the approved E · Sage palette", () => {

@@ -15,8 +15,9 @@ const COPY = UI.protection;
 // range where R gives its end counted from the company's own first approval too
 // (data_exclusivity_end_max, other_company_reference rows; owner request 2026-09-28).
 // copy (step 4 review), for a curated copy (copy_source "curated"): curated, its
-// ema_curated_copies.json row (undefined without one: older data, a missing file), which names a
-// national reference; referenceSubstance, the central reference's substances (null when unknown).
+// ema_curated_copies.json row (undefined without one: older data, a missing file), which names its
+// copy type ("a hybrid of Tecfidera"), a national reference and the EMA page that says so;
+// referenceSubstance, the central reference's substances (null when unknown).
 // A curated copy is counted as its reference is, so its counted-from line names the reference
 // (firstName: the reference's name when it was approved on counted_from). A line is a string, or
 // parts: strings and { text, url } for an external link.
@@ -28,7 +29,7 @@ export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate,
     lines.push(curated ? nationalReference(copy.curated) : COPY.referenceNotFound);
   } else {
     if (row.basis === "other_company_reference") lines.push(COPY.otherCompany(substanceLabel, firstName, row.counted_from, row.own_counted_from ?? null));
-    if (row.basis === "follows_reference") lines.push(COPY.follows(row.reference_name));
+    if (row.basis === "follows_reference") lines.push(curated && copy.curated ? curatedFollows(row, copy.curated) : COPY.follows(row.reference_name));
     const exclusivityMax = row.data_exclusivity_end_max ?? null;
     lines.push(
       exclusivityMax && exclusivityMax !== row.data_exclusivity_end
@@ -54,9 +55,18 @@ export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate,
 // naming a national reference.
 function nationalReference(curatedRow) {
   if (!curatedRow?.reference_name || curatedRow.reference_product_number) return COPY.referenceNotFound;
-  const text = COPY.nationalReference(curatedRow.copy_type, curatedRow.reference_name);
-  return curatedRow.evidence_url?.startsWith("https://") ? [text, " ", { text: COPY.copyEvidence, url: curatedRow.evidence_url }] : text;
+  return withEvidence(COPY.nationalReference(curatedRow.copy_type, curatedRow.reference_name), curatedRow);
 }
+
+// A curated copy of a central reference (backlog, step 4 review): its copy type and the reference
+// as the estimate names it ("a hybrid of Tecfidera"), then the same evidence link.
+function curatedFollows(row, curatedRow) {
+  return withEvidence(COPY.curatedFollows(curatedRow.copy_type, row.reference_name ?? curatedRow.reference_name), curatedRow);
+}
+
+const withEvidence = (text, curatedRow) => (curatedRow.evidence_url?.startsWith("https://")
+  ? [text, " ", { text: COPY.copyEvidence, url: curatedRow.evidence_url }]
+  : text);
 
 // The answer strip's short form (step 3, #7): { value: "Until 2031–2032" | "Ended" | "Unclear"
 // (the status; the years of the market protection range while protected), orphan: the latest

@@ -1117,6 +1117,14 @@ test("protection copy: strip cell, basis note and the other-company reason", () 
   }
 });
 
+// Backlog (step 4 review): the legal basis is no longer EMA's flags alone; copies EMA does not flag
+// are checked by hand against their EPAR pages (ema_curated_copies.json), and not every one yet.
+test("protection caveats: the legal basis comes from EMA flags and from copies checked by hand", () => {
+  const { caveats } = labels.UI.protection;
+  assert.ok(!caveats.includes("The legal basis is inferred from EMA flags."));
+  assert.ok(caveats.includes("The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, checked by hand; copies not yet checked count as medicines of their own."));
+});
+
 test("breakdown notes say how many medicines have no value", () => {
   assert.equal(labels.UI.breakdown.atc.excluded(20), "20 medicines without a valid ATC code are not shown.");
   assert.equal(labels.UI.breakdown.area.excluded(1), "1 medicine without a therapeutic area is not shown.");

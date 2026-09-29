@@ -5,6 +5,8 @@
 const formatCount = new Intl.NumberFormat("en-US").format;
 const formatPercent = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format;
 const plural = (count, one, many) => `${formatCount(count)} ${count === 1 ? one : many}`;
+// A curated copy's copy_type (ema_curated_copies.json) as a word; "copy" for a type not known here.
+const copyTypeWord = (type) => ({ hybrid: "hybrid", generic: "generic", biosimilar: "biosimilar" })[type] ?? "copy";
 
 // Fixed month names: Intl's en-GB "short" month is "Sept" in current ICU.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -1128,6 +1130,17 @@ export const UI = {
     hint: "Drag or use the arrow keys to resize the filters; double-click to reset",
   },
 
+  // The header's theme button (theme.js; owner request 2026-09-28): an icon of the theme shown; a
+  // press moves to the next one (nextTheme()). button: its name; hint: its tooltip.
+  theme: {
+    names: { auto: "Auto", light: "Light", dark: "Dark" },
+    button: (theme) => `Theme: ${UI.theme.names[theme]}`,
+    hint: (theme, next) => {
+      const name = (key) => (key === "auto" ? `${UI.theme.names.auto} (follows your device)` : UI.theme.names[key]);
+      return `Theme: ${name(theme)}. Select to switch to ${name(next)}.`;
+    },
+  },
+
   lookup: {
     // The search field (landing, 2026-09-28): plain words; ATC codes still work, so its name says so.
     placeholder: "Drug name, active ingredient or condition",
@@ -1306,11 +1319,14 @@ export const UI = {
     countedAsReference: (reference, substance, name, date) =>
       `Counted, as for its reference medicine ${reference}, from the first central EU approval of ${substance ?? "its active substance"}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
     follows: (name) => `No protection of its own; follows ${name}`,
+    // Backlog (step 4 review): a curated copy of a central reference says what it is (type: the
+    // row's copy_type), then links the EMA page that says so (copyEvidence), as nationalReference.
+    curatedFollows: (type, name) => `No protection of its own; a ${copyTypeWord(type)} of ${name}.`,
     referenceNotFound: "No protection of its own; reference product not found in EU central authorizations",
     // Step 4 review: a curated copy of a nationally authorized medicine (no central reference);
     // type: the row's copy_type; then a link to the EMA page that says so (copyEvidence).
     nationalReference: (type, name) =>
-      `No protection of its own; a ${{ hybrid: "hybrid", generic: "generic", biosimilar: "biosimilar" }[type] ?? "copy"} of ${name} (authorized nationally), whose protection dates are not in EU central data.`,
+      `No protection of its own; a ${copyTypeWord(type)} of ${name} (authorized nationally), whose protection dates are not in EU central data.`,
     copyEvidence: "Source",
     // Step 3 (#6): counted from another company group's earlier medicine of the same substance set
     // (basis other_company_reference; own: the medicine's own group's first approval date, or
@@ -1338,7 +1354,7 @@ export const UI = {
     caveats: [
       "Not legal advice.",
       "Ignores earlier national authorizations, the possible extra year (shown as a range), pediatric rewards, orphan exclusivity reductions and derogations.",
-      "The legal basis is inferred from EMA flags.",
+      "The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, checked by hand; copies not yet checked count as medicines of their own.",
       "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
     ],
   },

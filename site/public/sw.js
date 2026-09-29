@@ -1,11 +1,12 @@
 // Offline support (registered only in production builds). Hashed /assets/* are cache-first;
 // the page, manifest, icon and data files are network-first with the cache as fallback, and but for
-// the page the cache answers when the network is slow (NETWORK_TIMEOUT_MS). Cross-origin
+// the page the cache answers when the network is slow (NETWORK_TIMEOUT_MS). The theme script, which
+// holds up the first paint, is answered from the cache at once and refreshed. Cross-origin
 // requests (EMA PDFs, links) are never intercepted or cached. A cache failure never breaks a
 // network response.
 const CACHE_PREFIX = "approval-atlas-";
-// Page, manifest, icon and data files: one cache kept across builds, so files cached on an earlier
-// visit (a card's documents, condition results) stay available offline after a deploy.
+// Page, manifest, icon, theme script and data files: one cache kept across builds, so files cached
+// on an earlier visit (a card's documents, condition results) stay available offline after a deploy.
 const DATA_CACHE = `${CACHE_PREFIX}data`;
 // The build replaces the placeholder with a version (site/vite.config.js), so each deploy that
 // changes an asset gets a new asset cache and the previous builds' asset caches are deleted on activate.
@@ -58,15 +59,25 @@ async function networkFirst(event) {
   return Promise.race([network, slow]).catch(() => hit);
 }
 
+// The theme script (theme-init.js) holds up the first paint: a cached copy answers at once,
+// however slow the network, and the network's answer is kept for the next load.
+async function cacheThenRefresh(event) {
+  const network = fetch(event.request).then((response) => remember(event, response, DATA_CACHE));
+  event.waitUntil(network.catch(() => {}));
+  return (await cached(event.request)) ?? network;
+}
+
 const isSameOrigin = (url) => url.origin === self.location.origin;
 const isAsset = (url) => isSameOrigin(url) && url.pathname.startsWith("/assets/");
 const isPageOrData = (url) => isSameOrigin(url) && (["/", "/index.html", "/manifest.webmanifest", "/icon.svg"].includes(url.pathname) || /^\/data\/[^/]+\.json$/.test(url.pathname));
+const isThemeScript = (url) => isSameOrigin(url) && url.pathname === "/theme-init.js";
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (isAsset(url)) event.respondWith(cacheFirst(event));
+  else if (isThemeScript(url)) event.respondWith(cacheThenRefresh(event));
   else if (isPageOrData(url)) event.respondWith(networkFirst(event));
 });
 
@@ -75,7 +86,7 @@ self.addEventListener("fetch", (event) => {
 // worker would cache are fetched into the matching cache now.
 self.addEventListener("message", (event) => {
   if (!Array.isArray(event.data)) return;
-  const urls = new Set(["/", ...event.data].map((url) => new URL(url, self.location.origin)).filter((url) => isAsset(url) || isPageOrData(url)).map((url) => url.href));
+  const urls = new Set(["/", ...event.data].map((url) => new URL(url, self.location.origin)).filter((url) => isAsset(url) || isPageOrData(url) || isThemeScript(url)).map((url) => url.href));
   const add = (url) => caches.open(isAsset(new URL(url)) ? ASSET_CACHE : DATA_CACHE).then((cache) => cache.add(url)).catch(() => {});
   event.waitUntil(Promise.all([...urls].map(add)));
 });
