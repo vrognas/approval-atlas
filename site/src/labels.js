@@ -80,11 +80,11 @@ export function statusSentence(status, date, opinion, { decision = null, asOf = 
   }
   const on = date ? ` on ${formatDate(date)}` : "";
   if (status === "Opinion under re-examination") {
-    return opinion === "Negative" ? `Negative opinion${on}; under re-examination at the company's request.` : "Opinion under re-examination; not yet authorized.";
+    return opinion === "Negative" ? `Negative opinion${on}; under re-examination at the company's request.` : "Opinion under re-examination at the company's request.";
   }
   if (status === "Opinion") {
-    if (opinion === "Negative") return `Negative opinion${on}.`;
-    const sentence = `${opinion === "Positive" ? "Positive opinion" : "Opinion adopted"}${on}; not yet authorized.`;
+    if (opinion === "Negative") return `Negative opinion${on}: EMA recommended refusal.`;
+    const sentence = opinion === "Positive" ? `Positive opinion${on}: EMA recommended approval.` : `Opinion adopted${on}; EU decision pending.`;
     if (opinion !== "Positive" || !decision) return sentence;
     // ISO dates parse as UTC midnight, so the difference is whole days.
     const waited = date && asOf ? Math.round((Date.parse(asOf) - Date.parse(date)) / 86400000) : null;
@@ -160,7 +160,7 @@ export function atcDisplayName(name) {
 }
 
 // Codes EMA uses that atc_classes.json has no name for.
-const NO_ATC_NAME = "no WHO name yet";
+const NO_ATC_NAME = "no WHO name";
 
 // A class in running text: "L Antineoplastic and Immunomodulating Agents", "L04 Immunosuppressants";
 // the code alone without a WHO name.
@@ -242,6 +242,22 @@ const DEK_STATUSES = 4;
 const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance, or 11 with the possible extra year: each range spans both. Pediatric rewards other than a pediatric-use marketing authorization's own protection, and derogations, are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
 const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
 
+// The footer's and About's links (https): sources, licences, the repository.
+const LINKS = {
+  emaData: "https://www.ema.europa.eu/en/medicines/download-medicine-data",
+  whocc: "https://atcddd.fhi.no",
+  unionRegister: "https://ec.europa.eu/health/documents/community-register/html/index_en.htm",
+  chembl: "https://www.ebi.ac.uk/chembl",
+  chemblPaper: "https://doi.org/10.1093/nar/gky1075",
+  ccBy: "https://creativecommons.org/licenses/by/4.0/",
+  ccBySa3: "https://creativecommons.org/licenses/by-sa/3.0/",
+  ccBySa4: "https://creativecommons.org/licenses/by-sa/4.0/",
+  ofl: "https://openfontlicense.org/open-font-license-official-text/",
+  mit: "https://github.com/vrognas/approval-atlas/blob/main/LICENSE",
+  issues: "https://github.com/vrognas/approval-atlas/issues",
+  security: "https://github.com/vrognas/approval-atlas/blob/main/SECURITY.md",
+};
+
 export const UI = {
   // Under the wordmark in the top bar (F · Spacious, phase 1): the source and the data's date ("EMA
   // data" until meta.json has loaded). The tagline and the scope line left the bar: beside the
@@ -293,7 +309,9 @@ export const UI = {
     // The card's heading (visually hidden; the link's text, so the link and its target agree).
     title: "What is this?",
     close: "Close the introduction",
-    closeHint: "Close; “What is this?” at the top brings it back",
+    // "Remembered on this device": the close is kept in localStorage (legal review 2026-09-30:
+    // storage the viewer asked for, said next to the control).
+    closeHint: "Close (remembered on this device). “What is this?” at the top brings it back.",
     // Owner decision 2026-09-29: three onboarding cards, each an icon on its hue's tint (hue: a .hue-*
     // class; icon: intro.js ICONS), a bold title, one plain sentence and an example to try: a medicine
     // card (patch, ids checked against the data), or the overview filtered to one therapeutic area
@@ -302,8 +320,8 @@ export const UI = {
       {
         hue: "green",
         icon: "lookup",
-        title: "Look up any drug",
-        text: "Type a brand or active ingredient: is it approved in the EU, since when, and who owns it?",
+        title: "Look up a drug",
+        text: "Type a brand or active substance: is it authorized in the EU, what for, since when, and who owns it?",
         action: "Try Keytruda",
         patch: { med: "EMEA/H/C/003820" },
       },
@@ -311,7 +329,7 @@ export const UI = {
         hue: "gold",
         icon: "shield",
         title: "Protection and copies",
-        text: "See roughly how long market protection runs, and whether generics or biosimilars exist yet.",
+        text: "See roughly how long market protection runs, and whether generics or biosimilars are authorized yet.",
         action: "Try Humira",
         patch: { med: "EMEA/H/C/000481" },
       },
@@ -319,13 +337,13 @@ export const UI = {
         hue: "blue",
         icon: "chart",
         title: "Explore the landscape",
-        text: "Which conditions have the most treatments, which companies work where, how approvals change over time.",
+        text: "Which conditions have the most medicines, which companies are active where, and how approvals change over time.",
         action: "Explore cancer medicines",
         area: "C04",
       },
     ],
     // One quiet line under the cards: the scope (step 2, #1) and the intended use.
-    scope: "Covers medicines authorized EU-wide through the European Medicines Agency (EMA); many older ones (e.g. paracetamol) are authorized country by country and aren't here. For information only, not medical advice.",
+    scope: "Covers medicines authorized EU-wide through the European Medicines Agency (EMA). Many older medicines, such as paracetamol, are authorized country by country and aren't here. For information only, not medical advice.",
   },
   // The tab's title: the view's name (a medicine, substance, condition, search or drug class) first.
   pageTitle: (name) => (name ? `${name} · Approval Atlas` : "Approval Atlas"),
@@ -335,7 +353,7 @@ export const UI = {
     title: "Explore EMA medicines",
     note: "The filters apply to this overview, not to the result above.",
   },
-  missingData: ["No data found. Run ", "Rscript scripts/run-pipeline.R", " first."],
+  missingData: ["Could not load the data. Check your connection and reload. Developers: run ", "Rscript scripts/run-pipeline.R", " first."],
   ignoredValues: (count) => `${plural(count, "filter value", "filter values")} in the link ${count === 1 ? "was" : "were"} not recognized and ignored.`,
 
   // The filter tokens (facets.js sentenceParts()), which the filter chips read (facets.js
@@ -440,7 +458,7 @@ export const UI = {
     end: "End year",
     summary: (first, last, total, peakYear, peakCount) => (total === 0
       ? "No medicines with an approval date match the other filters."
-      : `Column chart of approvals per year, ${first} to ${last}, of the medicines matching the other filters: ` +
+      : `Approvals per year, ${first} to ${last}, for the medicines matching the other filters: ` +
         `${formatCount(total)} in total, most in ${peakYear} (${formatCount(peakCount)}).`),
   },
 
@@ -477,19 +495,19 @@ export const UI = {
       const count = (entry) => (statusKind(entry.status) === "authorized" && undated
         ? `${statusCount(entry)} (${formatCount(undated)} without an approval date, not counted above)`
         : statusCount(entry));
-      return `By status: ${listing([...shown.map(count), ...(rest ? [`${formatCount(rest)} more`] : [])])}.`;
+      return `By status: ${listing([...shown.map(count), ...(rest ? [`${formatCount(rest)} with ${rest === 1 ? "another status" : "other statuses"}`] : [])])}.`;
     },
     // counts: countTiles() output; flag clauses with a zero count are left out.
     dek: ({ products, substances, orphan, generic, biosimilar, advancedTherapy }) => {
       if (products === 0) return null;
       const clause = (count, one, many) => (count === 0 ? null : `${formatCount(count)} ${count === 1 ? one : many}`);
       const clauses = [
-        clause(orphan, "carries an orphan designation", "carry an orphan designation"),
+        clause(orphan, "is an orphan medicine", "are orphan medicines"),
         clause(generic, "is a generic", "are generics"),
         clause(biosimilar, "is a biosimilar", "are biosimilars"),
         clause(advancedTherapy, "is an advanced therapy", "are advanced therapies"),
       ].filter(Boolean);
-      const contents = `${products === 1 ? "It contains" : "They contain"} ${plural(substances, "distinct active substance", "distinct active substances")}.`;
+      const contents = `${products === 1 ? "It contains" : "They contain"} ${plural(substances, "active substance or combination", "different active substances or combinations")}.`;
       return clauses.length ? `${contents} ${listing(clauses)}.` : contents;
     },
     // Only one ATC code is selected, no other filter. label: atcClassLabel().
@@ -515,7 +533,7 @@ export const UI = {
     // the data holds EMA's central procedure only, so a substance with no medicine there (celecoxib)
     // can still be authorized nationally.
     substance: (name, count) => (count > 0
-      ? [`${capitalize(name)} is authorized EU-wide through EMA in `, number(count), ` ${count === 1 ? "medicine" : "medicines"}.`]
+      ? [`${capitalize(name)} is in `, number(count), ` ${count === 1 ? "medicine" : "medicines"} authorized EU-wide through EMA.`]
       : [`${capitalize(name)}: `, { text: "no medicine", tone: "negative" }, " is currently authorized through EMA ",
         { text: "(national authorizations are not included).", tone: "aside" }]),
     // EMA's therapeutic-area tags (not indications); narrower: the count includes medicines tagged
@@ -537,7 +555,7 @@ export const UI = {
     include: "Include them",
     includeLabel: "Include them: show medicines of every status",
   },
-  kicker: { medicine: "Medicine", substance: "Substance", condition: "Condition", text: "Indication text", company: "Company" },
+  kicker: { medicine: "Medicine", substance: "Active substance", condition: "Condition", text: "Indication text", company: "Company" },
 
   // The four types with their share of the medicines matching the filters (by default the authorized
   // ones); the headline states those medicines (owner decision 2026-09-29).
@@ -563,14 +581,14 @@ export const UI = {
   // "Stack by Status" legend entry or the Status chip names one; at most 10 words.
   statusTips: {
     // Step 2 (#16): authorized is not available or reimbursed everywhere.
-    Authorised: "Can be marketed EU-wide; availability and reimbursement vary by country.",
+    Authorised: "Can be sold EU-wide; availability and reimbursement vary by country.",
     Opinion: "EMA has given its opinion; EU decision pending.",
     "Opinion under re-examination": "EMA is re-examining its opinion at the company's request.",
     Refused: "The EU refused authorization.",
     "Application withdrawn": "The company withdrew its application before a decision.",
     "Withdrawn from rolling review": "The company stopped the early (rolling) review.",
     Withdrawn: "Authorization withdrawn, usually at the company's request.",
-    Expired: "Authorization not renewed.",
+    Expired: "Authorization ended: not renewed.",
     Lapsed: "Authorization ended: not marketed for 3 years.",
     Suspended: "Authorization temporarily suspended.",
     Revoked: "Authorization canceled by the EU.",
@@ -600,6 +618,9 @@ export const UI = {
       "creativecommons.org": "Creative Commons website",
       "atcddd.fhi.no": "WHOCC website",
       "search.gleif.org": "GLEIF website",
+      // The About disclosure's font licence and ChEMBL citation (legal review 2026-09-30).
+      "openfontlicense.org": "Open Font License website",
+      "doi.org": "the article (DOI)",
       // A medicine's modality source (M2 phase 2): its ChEMBL record, a curated row's PubMed evidence.
       "www.ebi.ac.uk": "ChEMBL website",
       "pubmed.ncbi.nlm.nih.gov": "PubMed",
@@ -647,14 +668,14 @@ export const UI = {
   // information and the latest public assessment report (documents.js quickDocuments()).
   documentLinks: {
     productInformation: { text: "PI", label: (name) => `PI, product information PDF for ${name}` },
-    epar: { text: "EPAR", label: (name) => `EPAR public assessment report PDF for ${name}` },
+    epar: { text: "EPAR", label: (name) => `EPAR, European public assessment report PDF for ${name}` },
   },
 
   // Union Register (the Commission's legal record) vs EMA's status: shown only when they disagree.
   register: {
     chip: (status, date) => `EU register: ${statusLabel(status)}${date ? ` (${formatDate(date)})` : ""}`,
     // Neutral: either source can be the one behind (e.g. Suboxone: EMA withdrawn, register still active).
-    note: "EMA and the Commission's Union Register (the legal record) show different statuses; either can lag behind a recent decision.",
+    note: "EMA and the EU Union Register (the legal record) show different statuses; either can lag behind a recent decision.",
     marker: "⚠ register differs",
     // Under the top row (over time, tiles): of the medicines currently authorized.
     notAuthorized: (count) =>
@@ -880,7 +901,7 @@ export const UI = {
     show: "Show indication",
     hide: "Hide indication",
     incomplete: "incomplete",
-    incompleteTitle: "Incomplete code: fewer than 7 characters or not a valid ATC code",
+    incompleteTitle: "Incomplete code: not at WHO's most specific level, or not a valid ATC code",
     source: (source) => `Source: ${SOURCE_LABELS[source] ?? source}`,
     noBranch: "No MeSH branch matched",
   },
@@ -899,7 +920,7 @@ export const UI = {
       "Not affiliated with or endorsed by EMA.",
     headers: [
       "EMA product number", "Medicine", "Active substances", "Status", "Approval date", "Medicine type", "Orphan",
-      "Company group", "Holder (EMA)", "ATC codes", "Therapeutic areas",
+      "Company group", "EMA holder name", "ATC codes", "Therapeutic areas",
     ],
     yes: "Yes",
     no: "No",
@@ -950,7 +971,7 @@ export const UI = {
     classTip: (label, level, parentCode) => `${label}: ATC level ${level}, ${UI.atc.levels[level]}${parentCode ? `, in ${parentCode}` : ""}.`,
     retired: (year, now) => `Retired${year ? ` ${year}` : ""}, ${now ? `now ${now}` : "with no successor"}.`,
     temporary: "On WHO's temporary list: it can still change.",
-    note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives a complete one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.",
+    note: "Retired codes count under the class WHO moved them to. Missing or incomplete EMA codes are filled in where possible: from the product information (SmPC), else from WHO's ATC index, its temporary list or the SmPC text, checked by hand.",
     // A code shown that differs from EMA's (atcOriginText(), atcOriginFlag()).
     origin: {
       retired: (label, year, now) => `${label}: retired${year ? ` ${year}` : ""}, now ${now}.`,
@@ -1031,7 +1052,7 @@ export const UI = {
     included: (name, count, ancestor) => `${UI.areas.count(name, count)}, included in ${ancestor}`,
     noMatches: "No matching therapeutic areas",
     // The medicines tagged with the node's own term: a static last row.
-    notMoreSpecific: "not more specific",
+    notMoreSpecific: "tagged at this level",
     // A branch's static last row (phase 4g): the medicines tagged only with its root tags (tags: the
     // heading first, "Neoplasms", then its entry terms, "Cancer").
     taggedOnly: (tags) => `Tagged only as ${tags.length > 1 ? `${tags.slice(0, -1).join(", ")} or ${tags.at(-1)}` : tags[0]}`,
@@ -1042,7 +1063,7 @@ export const UI = {
     // and the tree's note, as its branch row is only indeterminate.
     tag: (name) => `tagged ${name}`,
     tagNote: (tags) => `Also filtering by the ${tags.length === 1 ? "tag" : "tags"} ${tags.map((tag) => `“${tag}”`).join(" or ")}.`,
-    note: "MeSH categories, their branches and the branches' first two levels, then EMA's terms, each with its MeSH tree number. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
+    note: "MeSH categories, branches and two more levels, then EMA's terms, each with its tree number. A medicine counts once in every area that holds one of its terms, so sub-areas need not add up to their parent. MeSH: Medical Subject Headings, from the U.S. National Library of Medicine.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",
     // Branch chips after each condition (owner decision 2026-09-29; area-chips.js): a toolbar of
@@ -1102,40 +1123,40 @@ export const UI = {
     polymer: "Polymer",
   },
   modalityTips: {
-    small_molecule: "Chemically made drug with a small, well-defined structure.",
+    small_molecule: "Small chemical compound with a well-defined structure.",
     protein: "Chain of amino acids, made by living cells or synthesis.",
     peptide: "Short chain of amino acids, often made by synthesis, such as semaglutide.",
-    hormone_cytokine: "Natural signaling protein made in the lab, such as insulin.",
+    hormone_cytokine: "Lab-made form of a natural signaling protein, such as insulin.",
     enzyme: "Protein that speeds up a chemical reaction, often replacing a missing one.",
     coagulation_factor: "Blood-clotting protein, such as factor VIII or fibrinogen.",
     fusion_protein: "Two proteins joined into one, often with an antibody part.",
-    other_protein: "Protein medicine that fits none of the kinds above.",
+    other_protein: "Other protein medicine, such as botulinum toxin or antithrombin.",
     antibody: "Immune protein that binds a precise target.",
     monoclonal_antibody: "Lab-made antibody that binds one target.",
     adc: "Antibody that carries a cell-killing drug or toxin to its target.",
     bispecific_antibody: "Antibody built to bind two different targets at once.",
     antibody_fragment: "Smaller piece of an antibody that still binds its target.",
     polyclonal_immunoglobulin: "Mix of many antibodies purified from human or animal blood.",
-    nucleic_acid: "Strand of RNA or DNA that changes which proteins cells make.",
-    mrna: "Messenger RNA that instructs cells to make a protein.",
+    nucleic_acid: "Strand of RNA or DNA; most change which proteins cells make.",
+    mrna: "Messenger RNA that tells cells to make a protein.",
     sirna: "Short double-stranded RNA that silences one gene.",
     antisense: "Short single strand that binds one RNA to block or fix it.",
     aptamer: "Folded nucleic acid strand that binds a target like an antibody.",
-    other_oligonucleotide: "Nucleic acid medicine that fits none of the kinds above.",
+    other_oligonucleotide: "Other short DNA or RNA medicine, such as defibrotide.",
     cell_gene: "Advanced therapy made from living cells, tissue or genes.",
     car_t: "Patient's T cells engineered to find and kill cancer cells.",
     gene_modified_cells: "Cells given a new or edited gene outside the body.",
-    gene_therapy: "Virus or DNA that carries a working gene into the body.",
+    gene_therapy: "Virus or DNA that delivers a gene into the body's cells.",
     other_cell_therapy: "Living cells, not genetically modified, given as a treatment.",
     tissue_engineered: "Cells grown into tissue that repairs or replaces damaged tissue.",
     vaccine: "Trains the immune system against a germ; mRNA vaccines are under mRNA.",
-    live_vaccine: "Weakened live germ that trains immunity without causing disease.",
+    live_vaccine: "Weakened live germ, or a related virus, that trains immunity.",
     inactivated_vaccine: "Killed germ or purified germ parts; cannot cause the infection.",
-    vector_vaccine: "Harmless virus carrying a gene for one of the germ's proteins.",
+    vector_vaccine: "Modified virus carrying a gene for one of the germ's proteins.",
     radiopharmaceutical: "Medicine with a radioactive atom, used for scans or treatment.",
     diagnostic_radiopharmaceutical: "Radioactive tracer that shows disease on a scan.",
     therapeutic_radiopharmaceutical: "Carries radiation to diseased cells to destroy them.",
-    other: "Kinds outside the groups above, such as allergen extracts.",
+    other: "Other kinds of medicine, such as allergen extracts, heparins and polymers.",
     allergen: "Allergen given in rising doses to calm an allergy.",
     polysaccharide: "Chain of sugar units, such as heparin.",
     plant_extract: "Extract of a plant, such as birch bark.",
@@ -1159,7 +1180,7 @@ export const UI = {
     groupOnlyTip: "Our sources name the group, not the exact modality.",
     notClassified: "Not classified",
     notClassifiedTip: "No source we use states its modality yet.",
-    note: "Groups, then the kinds in each, from WHO INN stems, ChEMBL, EMA data and checks by hand. A medicine counts in every modality of its substances.",
+    note: "What kind of medicine each active substance is: groups, then kinds. From WHO INN stems (name parts such as -mab, for antibodies), ChEMBL, EMA data and checks by hand. A medicine counts in every modality of its substances.",
     all: "All modalities",
     path: "Modality path",
     // The card's source line: the group's source, then the kind's when another source named it.
@@ -1175,7 +1196,7 @@ export const UI = {
       chemblType: (type) => `ChEMBL molecule type “${type}”`,
       atc: (label) => `WHO ATC class ${label}`,
       atmp: "EMA: advanced therapy medicinal product",
-      text: (detail) => `EMA text “${detail}”`,
+      text: (detail) => `EMA text (keywords: ${detail})`,
       // After the evidence's link: "Source: EPAR public assessment report (checked by hand)".
       curated: " (checked by hand)",
       curatedNoLink: "Checked by hand",
@@ -1183,7 +1204,7 @@ export const UI = {
     // A curated row's evidence, by the document its link opens (modalities.js evidenceDocument()).
     documents: {
       productInformation: "Product information (SmPC)",
-      epar: "EPAR public assessment report",
+      epar: "Public assessment report (EPAR)",
       refusal: "Refusal assessment report",
       withdrawalReport: "Withdrawal assessment report",
       scientificDiscussion: "Scientific discussion",
@@ -1219,14 +1240,14 @@ export const UI = {
       // the representative holding it (the Union Register's when it decided).
       if (basis === "curated_sponsor") {
         const held = register
-          ? [holder === null ? "EMA names no holder" : `EMA: ${holder}`, `via register: ${register}, a regulatory representative`]
+          ? [holder === null ? "EMA names no holder" : `EMA: ${holder}`, `EU register: ${register}, a regulatory representative`]
           : [`via a regulatory representative: ${holder}`];
         return [...(company?.name && company.name !== shown ? [company.name] : []), ...held].join(" · ");
       }
       const parts = basis === "register" && register
-        ? [holder === null ? "EMA names no holder" : `EMA: ${holder}`, `via register: ${register}`]
+        ? [holder === null ? "EMA names no holder" : `EMA: ${holder}`, `EU register: ${register}`]
         : holder === null || holder === shown ? [] : [holder];
-      if (representative) parts.push("held via a regulatory representative");
+      if (representative) parts.push("a regulatory representative, holding for another company");
       return parts.length ? parts.join(" · ") : null;
     },
     // Before a plain EMA holder name, for screen readers, and its tooltip.
@@ -1258,11 +1279,11 @@ export const UI = {
     find: "Find a company",
     tree: "Companies",
     // kind: companies.js kind() of the row's value; byHolder: its rows are holder names.
-    expand: (name, byHolder) => `${byHolder ? "Holder names of" : "Companies in"} ${name}`,
+    expand: (name, byHolder) => `${byHolder ? "EMA holder names of" : "Companies in"} ${name}`,
     count: (name, count) => `${name}, ${plural(count, "medicine", "medicines")}`,
     included: (name, count, ancestor) => `${UI.companies.count(name, count)}, included in ${ancestor}`,
     noMatches: "No matching companies",
-    note: (date) => `Companies by current owner${date ? ` as of ${formatDate(date)}` : ""}, then the companies they hold and the holder names EMA publishes. A level that only repeats a name is left out.`,
+    note: (date) => `Grouped by current owner${date ? ` (as of ${formatDate(date)})` : ""}, then company, then EMA holder name. A level that only repeats a name is left out.`,
     open: (name) => `Open company page: ${name}`,
     all: "All companies",
     path: "Company path",
@@ -1280,10 +1301,10 @@ export const UI = {
     // After each group of a company whose medicines are with several: its medicines there.
     groupCount: (count) => `(${plural(count, "medicine", "medicines")})`,
     and: " and ",
-    representative: "A regulatory representative: it holds medicines on behalf of other companies.",
-    asOf: (date) => `Company group as of ${formatDate(date)}: the current owner, not the owner at approval. Each medicine keeps the holder name EMA publishes.`,
+    representative: "A regulatory representative: it holds medicines for other companies.",
+    asOf: (date) => `Grouped by current owner as of ${formatDate(date)}, not the owner at approval. Each medicine keeps its EMA holder name.`,
     // The medicine card's fact.
-    asOfShort: (date) => `Company group as of ${formatDate(date)} (current owner).`,
+    asOfShort: (date) => `Company as of ${formatDate(date)} (current owner).`,
     // Provenance (curated notes are fragments; a sentence ends with one full stop): why a
     // per-medicine row put the medicine under its group, a plain note on a medicine's later
     // ownership (group_note without a move: no "Why"), a curated sponsor behind a regulatory
@@ -1299,7 +1320,7 @@ export const UI = {
     noteSummary: "Ownership",
     sponsorSummary: "Sponsor",
     noteBody: (note) => sentenceOf(note),
-    sponsorEvidence: "Sponsor evidence",
+    sponsorEvidence: "Sponsor source",
     evidence: "Source",
     renameEvidence: "Rename source",
     // The company page's Sources: the ownership notes of its members (acquisitions, renames,
@@ -1320,7 +1341,7 @@ export const UI = {
     // A mix row's link: the group or area, then its count.
     mixLink: (label, count) => `${label}, ${plural(count, "medicine", "medicines")}`,
     sources: "Sources",
-    lei: (lei) => `LEI ${lei}`,
+    lei: (lei) => `LEI (legal entity identifier) ${lei}`,
     legalName: (name) => `Legal name (GLEIF): ${name}`,
     parent: (name) => `Ultimate parent reported to GLEIF: ${name}`,
     sourceNames: { ema: "EMA holder names", union_register: "the EU Union Register", curated: "company groups checked by hand", gleif: "GLEIF LEI records" },
@@ -1338,14 +1359,14 @@ export const UI = {
     hint: (theme, shown) => {
       const other = shown === "dark" ? "light" : "dark";
       const follows = theme === "auto" ? " (follows your device)" : "";
-      return `Theme: ${UI.theme.names[shown]}${follows}. Select to switch to ${UI.theme.names[other]}.`;
+      return `Theme: ${UI.theme.names[shown]}${follows}. Select to switch to ${UI.theme.names[other]} (remembered on this device).`;
     },
   },
 
   lookup: {
     // The search field (landing, 2026-09-28): plain words; ATC codes still work, so its name says so.
-    placeholder: "Drug name, active ingredient or condition",
-    label: "Search by drug name, active ingredient, condition or ATC code",
+    placeholder: "Drug name, active substance or condition",
+    label: "Search by drug name, active substance, condition, company or ATC code",
     // fuzzy: close names when nothing matched (step 2, #5); text: the name of the last group, the
     // indication-text search (#14), which has no visible heading.
     groups: {
@@ -1372,17 +1393,17 @@ export const UI = {
     // then what can be searched, what cannot yet, and what is not in the data.
     empty: {
       nothing: (query) => `Nothing in the EMA data matches “${query}”.`,
-      known: (name, code) => `${name} (ATC ${code}) is a known active substance, but no medicine with it went through EMA's central procedure; it may be authorized nationally.`,
+      known: (name, code) => `${name} (ATC ${code}): no medicine with it went through EMA's central procedure, but it may be authorized nationally.`,
       noText: (query) => `No indication text mentions “${query}”.`,
       otherStatuses: (count) => `No currently authorized medicine mentions it in its indication; ${plural(count, "medicine", "medicines")} of another status ${count === 1 ? "does" : "do"} (Show all statuses).`,
       sameClass: "Medicines in the same drug class: ",
       names: "Matching names: ",
       didYouMean: "Did you mean: ",
-      searchable: "You can search by brand name, active ingredient (INN), condition or ATC code.",
+      searchable: "Search by brand name, active substance (such as pembrolizumab), condition, company or ATC code.",
       notYet: "Not searchable yet: development codes (such as MK-3475) and brand names used outside the EU.",
-      notInData: "Not in the data: medicines authorized only nationally, country by country. Look them up in the ",
-      registers: "national registers of authorized medicines",
-      registersAfter: " (EMA's list). The pack of a medicine authorized through EMA carries an EU number (EU/1/…).",
+      notInData: "Not in the data: medicines authorized only nationally. Find them in the ",
+      registers: "national medicine registers",
+      registersAfter: " (EMA's list). A medicine authorized through EMA has an EU number (EU/1/…) on its pack.",
     },
     conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     classMeta: (count, unnamed = false) => [unnamed ? NO_ATC_NAME : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
@@ -1393,7 +1414,8 @@ export const UI = {
     // 2026-09-29: the viewer's last lookups (recent.js), listed while the search field is focused and
     // empty; kinds name each entry's kind in its meta line; Clear (named in full) empties the list.
     recent: {
-      label: "Recently viewed",
+      // Kept in localStorage, never sent (legal review 2026-09-30: said where the list shows).
+      label: "Recently viewed (kept on this device)",
       kinds: { medicines: "Medicine", substances: "Active substance", conditions: "Condition", companies: "Company", classes: "Drug class" },
       clear: "Clear",
       clearName: "Clear recently viewed",
@@ -1407,7 +1429,7 @@ export const UI = {
     tryLead: "Try",
     examples: [
       { label: "Keytruda", kind: "brand", patch: { med: "EMEA/H/C/003820" } },
-      { label: "semaglutide", kind: "active ingredient", patch: { sub: "semaglutide" } },
+      { label: "semaglutide", kind: "active substance", patch: { sub: "semaglutide" } },
       { label: "psoriasis", kind: "condition", patch: { cond: "D011565" } },
       // A drug class: the dashboard filtered to it alone (url.js classState()).
       { label: "L04AC", kind: "drug class", atc: "L04AC" },
@@ -1419,14 +1441,14 @@ export const UI = {
     notFoundTitle: "Not found",
     notFound: (kind, value) => `No ${kind} “${value}” in the EMA data.`,
     noDate: "no approval date",
-    kinds: { medicine: "medicine", substance: "substance", condition: "condition", company: "company" },
+    kinds: { medicine: "medicine", substance: "active substance", condition: "condition", company: "company" },
     documentMeta: (isPdf, date) => [isPdf ? UI.card.pdf : null, UI.card.updated(date)].filter(Boolean).join(" · "),
     substances: "Active substance(s)",
     // The medicine's company group and holder (companies part 2), with the groups' as-of date; the
     // Status blocks' label too (it leads with the company group, as the table's "Company · Holder").
     company: "Company",
     type: "Medicine type",
-    atc: "ATC classification",
+    atc: "Drug class (ATC)",
     areas: "Therapeutic areas",
     fullIndication: "Show full indication",
     // F · Spacious, phase 4: the Status block's first three conditions, then this button, which
@@ -1455,7 +1477,7 @@ export const UI = {
     // card, then its status; documents: the namesake's documents EMA lists under this one.
     namesake: {
       link: (name, number) => `Another medicine named ${name} (${number})`,
-      authorized: (date) => ` is authorized since ${formatDate(date)}.`,
+      authorized: (date) => ` has been authorized since ${formatDate(date)}.`,
       other: (status) => `: ${statusLabel(status)}.`,
       documents: (count) => `${plural(count, "later document", "later documents")} EMA lists here ${count === 1 ? "belongs" : "belong"} to `,
       documentsLink: (name) => `the other ${name}`,
@@ -1486,11 +1508,11 @@ export const UI = {
     decisionUsually: (days) => `The EU decision usually comes about ${formatCount(days)} days after the opinion.`,
     // Review of step 4: a positive opinion past the median, by the data's date; beyondMost: past the
     // 90th percentile of the last 5 years' decisions (opinion_to_decision.p90_days).
-    waited: (days, beyondMost) => `This one has waited ${formatCount(days)} days so far${beyondMost ? ", longer than 9 in 10 decisions of the last 5 years took" : ""}.`,
+    waited: (days, beyondMost) => `This one has waited ${formatCount(days)} days so far${beyondMost ? "; 9 in 10 decisions of the last 5 years came sooner" : ""}.`,
     // Step 4 (#15): the SmPC, EPAR and overview buttons (the documents list keeps UI.documents).
     buttons: {
       productInformation: "Product information (SmPC and package leaflet)",
-      epar: "EPAR public assessment report",
+      epar: "Public assessment report (EPAR)",
       overview: "Plain-language overview",
     },
   },
@@ -1514,17 +1536,17 @@ export const UI = {
 
   documents: {
     productInformation: "Product information (SmPC)",
-    epar: "EPAR public assessment report",
+    epar: "Public assessment report (EPAR)",
     scientificDiscussion: "Scientific discussion",
-    variations: (count) => `Assessment reports for variations and extensions (${formatCount(count)})`,
-    overview: "Summary for the public",
-    rmpSummary: "Risk management plan (RMP) summary",
+    variations: (count) => `Assessment reports on changes after authorization (${formatCount(count)})`,
+    overview: "Plain-language overview",
+    rmpSummary: "Risk management plan summary",
     proceduralSteps: "Procedural steps after authorization",
     archive: (label) => `${label} (archive)`,
   },
 
   protection: {
-    title: "EU regulatory protection (estimate)",
+    title: "EU regulatory protection (est.)",
     status: { protected: "Protected", ended: "Ended", unclear: "Unclear" },
     // QA 2026-09-29 (#1): a copy's chip and protection lead (basis follows_reference or
     // reference_not_found): its status and dates are its reference's, never its own.
@@ -1547,30 +1569,30 @@ export const UI = {
     // so the line names the reference, never the copy's substance. countedFromReference: the
     // reference was approved on that date; countedAsReference: it counts from an earlier medicine
     // (Ablymico: Saxenda, counted from Victoza); substance: the reference's, null when unknown.
-    countedFromReference: (reference, date) => `Counted from its reference medicine ${reference}'s first central approval: ${formatDate(date)}`,
+    countedFromReference: (reference, date) => `Counted from the approval of its reference medicine, ${reference}: ${formatDate(date)}`,
     countedAsReference: (reference, substance, name, date) =>
-      `Counted, as for its reference medicine ${reference}, from the first central EU approval of ${substance ?? "its active substance"}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
+      `As for its reference medicine ${reference}, counted from the first central EU approval of ${substance ?? "its active substance"}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
     // 2026-09-29: a pediatric-use marketing authorization (basis paediatric_use,
     // ema_curated_pumas.json) has protection of its own, counted from its own approval, not from
     // its substance's first central approval (Alkindi 2018, hydrocortisone's Plenadren 2011); then
     // a link to its public assessment report (copyEvidence).
-    paediatricUse: (date) => `A pediatric-use marketing authorization: protection counted from its own EU authorization, ${formatDate(date)}`,
-    follows: (name) => `No protection of its own; follows ${name}`,
+    paediatricUse: (date) => `A pediatric-use marketing authorization (for children): protection counted from its own approval, ${formatDate(date)}`,
+    follows: (name) => `No protection of its own; the dates below are for its reference medicine, ${name}`,
     // Backlog (step 4 review): a curated copy of a central reference says what it is (type: the
     // row's copy_type), then links the EMA page that says so (copyEvidence), as nationalReference.
     curatedFollows: (type, name) => `No protection of its own; a ${copyTypeWord(type)} of ${name}.`,
-    referenceNotFound: "No protection of its own; reference product not found in EU central authorizations",
+    referenceNotFound: "No protection of its own; its reference medicine was not found among EU central authorizations",
     // Step 4 review: a curated copy of a nationally authorized medicine (no central reference);
     // type: the row's copy_type; then a link to the EMA page that says so (copyEvidence).
     nationalReference: (type, name) =>
-      `No protection of its own; a ${copyTypeWord(type)} of ${name} (authorized nationally), whose protection dates are not in EU central data.`,
+      `No protection of its own; a ${copyTypeWord(type)} of ${name} (authorized nationally, so no EU central date to count from).`,
     copyEvidence: "Source",
     // Step 3 (#6): counted from another company group's earlier medicine of the same substance set
     // (basis other_company_reference; own: the medicine's own group's first approval date, or
     // null). The status is unclear where the two estimates' statuses differ, else protected (step 3
     // review), so the line does not say which.
     otherCompany: (substance, name, date, own) =>
-      `The first central EU approval of ${substance} was another company's medicine (${name ? `${name}, ` : ""}${formatDate(date)}); counted from this company's own first approval${own ? ` (${formatDate(own)})` : ""}, protection would end later, so the market protection range covers both.`,
+      `The first central EU approval of ${substance} was another company's medicine (${name ? `${name}, ` : ""}${formatDate(date)}). Counted from this company's own first approval${own ? ` (${formatDate(own)})` : ""}, protection would end later; the market protection range covers both.`,
     // Step 3 (#7, e): the estimate's basis, next to the chip (it used to sit in the collapsed caveats).
     basisNote: "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.",
     // The medicine card's protection lead (protectionGlance(); the answer strip's "Protection (est.)"
@@ -1583,21 +1605,22 @@ export const UI = {
     glance: {
       until: (from, to) => (from === to ? `Until ${from}` : `Until ${from}–${to}`),
       follows: (name) => `Follows ${name}`,
-      referenceUntil: (name, from, to) => `${name}'s: until ${from === to ? from : `${from}–${to}`}`,
+      referenceUntil: (name, from, to) => `${name}'s protection until ${from === to ? from : `${from}–${to}`}`,
       orphan: (year) => `Orphan exclusivity until ${year}`,
       link: ", see the estimate in More details",
     },
     orphan: (condition, date, source, ended) =>
-      `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)} ${source === "register" ? "(register)" : "(estimate)"}`,
+      `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)} ${source === "register" ? "(Union Register)" : "(est.)"}`,
     orphanNoEnd: (condition, designationStatus) =>
       `Orphan designation for ${condition}: ${designationStatus.toLowerCase()} (end date not published)`,
     patents: "Patents and supplementary protection certificates: not shown (no open EU-wide source).",
     espacenet: "Search patents on Espacenet",
-    caveatsTitle: "Caveats",
+    caveatsTitle: "Limits of the estimate",
     caveats: [
       "Not legal advice.",
-      "Ignores earlier national authorizations, the possible extra year (shown as a range), pediatric rewards other than a pediatric-use marketing authorization's own protection, orphan exclusivity reductions and derogations.",
-      "The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, and pediatric-use marketing authorizations from their EMA public assessment reports, checked by hand; copies not yet checked count as medicines of their own.",
+      "The possible extra year (for a significant new indication) is not known, so market protection is shown as a range.",
+      "Ignores pediatric rewards other than a pediatric-use marketing authorization's own protection, orphan exclusivity reductions and derogations.",
+      "The legal basis comes from EMA's generic and biosimilar flags and from EMA documents checked by hand (hybrids and other unflagged copies, pediatric-use marketing authorizations). Copies not yet checked count as medicines of their own.",
       "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
     ],
   },
@@ -1764,31 +1787,106 @@ export const UI = {
     undated: (count) => `${plural(count, "medicine", "medicines")} without an approval date ${count === 1 ? "is" : "are"} not shown.`,
   },
 
+  // The footer and "About this site" (legal review of 2026-09-30, .remember/legal/footer-review.md;
+  // not legal advice). Rendered by main.js renderFooter() in the DOM (text nodes, no HTML): a part is text, or
+  // { text, url } for a link to another website (markExternal()). Every third-party credit stands in
+  // the visible first line, equally prominent (CC BY-SA 3.0 4(c): ChEMBL's too), with the licence
+  // links CC BY 4.0 and CC BY-SA 3.0 require; About has the detail. Contact: the repository's issues
+  // until the owner decides on an operator name and email (none on the site until then).
   footer: {
-    mesh: (version) => `MeSH® courtesy of the U.S. National Library of Medicine${version ? ` (${version})` : ""}.`,
-    chembl: (version) => `ATC classification from ChEMBL${version ? ` (${version})` : ""}. ChEMBL data is from https://www.ebi.ac.uk/chembl.`,
-    // explained: the data credits the ATC class explanations (owner decisions 2026-09-29): WHO's
-    // codes and names are WHO's, the explanations ours.
-    atc: (explained) => `ATC classification © WHO Collaborating Centre for Drug Statistics Methodology.${explained
-      ? " ATC codes and class names are WHO's; the class explanations in the tooltips are Approval Atlas's own plain-language summaries, not WHO's."
-      : ""}`,
-    // CC BY 4.0 requires indicating that the material was modified.
-    unionRegister: "Orphan exclusivity, EU register status and holders: © European Union, Union Register, CC BY 4.0, modified.",
-    // date: the company groups' curation date.
-    companies: (date) => `Company groups (current owner${date ? ` as of ${formatDate(date)}` : ""}) curated by Approval Atlas; LEI data from the Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site.`,
-    // Modality (M2 phase 2): WHO INN stems (Stem book 2024, CC BY-NC-SA 3.0 IGO: credited, no
-    // endorsement), ChEMBL molecule types (release: ChEMBL's in meta.json) and EMA data.
-    modality: (release) => `Modalities from WHO INN stems (WHO Stem book 2024, CC BY-NC-SA 3.0 IGO), ChEMBL molecule types${release ? ` (${release})` : ""} and EMA data, some checked by hand.`,
+    // mesh, chembl: meta.json's versions ("MeSH 2026", "ChEMBL_37"); date: the data's date (null
+    // until meta.json has loaded).
+    sources: ({ date = null, mesh = null, chembl = null } = {}) => [
+      "Sources: ",
+      { text: "European Medicines Agency (EMA)", url: LINKS.emaData },
+      `, © EMA${date ? `, data as of ${formatDate(date)}` : ""} · MeSH® courtesy of the U.S. National Library of Medicine${mesh ? ` (${mesh})` : ""} · ATC © `,
+      { text: "WHO Collaborating Centre for Drug Statistics Methodology", url: LINKS.whocc },
+      " · ",
+      { text: "Union Register", url: LINKS.unionRegister },
+      " © European Union, ",
+      { text: "CC BY 4.0", url: LINKS.ccBy },
+      ", modified · ",
+      { text: "ChEMBL", url: LINKS.chembl },
+      `${chembl ? ` (${chembl})` : ""}, `,
+      { text: "CC BY-SA 3.0", url: LINKS.ccBySa3 },
+      ".",
+    ],
+    use: "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI or GLEIF.",
+    licence: [
+      "Data ",
+      { text: "CC BY-SA 4.0", url: LINKS.ccBySa4 },
+      " (third-party values keep their own terms) · Code ",
+      { text: "MIT", url: LINKS.mit },
+      " · No cookies or tracking · ",
+      { text: "Contact", url: LINKS.issues },
+    ],
   },
 
   about: {
     summary: "About this site",
+    // Run-in headings of the disclosure's paragraphs.
+    heads: {
+      what: "What this is.",
+      scope: "Scope.",
+      use: "Use with care.",
+      sources: "Sources and licenses.",
+      privacy: "Privacy.",
+      contact: "Contact.",
+    },
+    // A personal, non-commercial project; the operator is not named until the owner decides.
+    what: "Approval Atlas is a free, non-commercial lookup of human medicines authorized through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
     // Step 2 (#1, #16): what is in the data, where a central authorization is valid, and that
     // availability and reimbursement are national.
-    scope: "Only human medicines that went through the European Medicines Agency's (EMA) central procedure are included, whatever their status. Many older or common medicines are authorized country by country and are not here; check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not in the UK or Switzerland; whether a medicine is sold or reimbursed in a country is decided nationally.",
-    intendedUse: "Informational only: not medical or legal advice; not a medical device. Data can lag EMA.",
-    privacy:
-      "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device. Your recently viewed lookups (in the search; Clear removes them) and display choices stay in this browser and are never sent.",
-    security: "Security policy and how to report a vulnerability (GitHub)",
+    scope: "It covers every medicine that went through EMA's central procedure, whatever its status. Many older or common medicines are authorized country by country and are not here: check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not the UK or Switzerland. Availability and reimbursement vary by country.",
+    // The intended purpose (MDCG 2019-11: no medical purpose of its own, so not a medical device), no
+    // warranty, the protection estimates (never patents), the company groups (date: their curation date).
+    use: (date = null) => [
+      "For information only: not medical, legal or regulatory advice, and not meant for decisions about any patient's care, so it is not a medical device. Check the official product information and ask a health professional. Approval Atlas does not recommend any medicine.",
+      "Data are processed automatically and partly checked by hand; they can lag EMA or contain errors. Provided as is, without warranty.",
+      "Protection dates are rough estimates from EU central approval dates only: not patent or supplementary protection certificate data, and not legal advice.",
+      `Company groups show the current owner as curated here${date ? ` (as of ${formatDate(date)})` : ""}, not an official record.`,
+    ],
+    // One list item per source (parts). explained: the data credits the ATC class explanations (owner
+    // decisions 2026-09-29); innStems: the data credits WHO's INN stems (modality, M2 phase 2).
+    sources: ({ mesh = null, chembl = null, explained = false, innStems = false } = {}) => [
+      ["Source: ", { text: "European Medicines Agency (EMA)", url: LINKS.emaData }, ": medicines data, EPAR documents and orphan designations. © EMA. Filtered and reshaped."],
+      [{ text: "Union Register of medicinal products", url: LINKS.unionRegister }, " © European Union, ", { text: "CC BY 4.0", url: LINKS.ccBy }, ", modified: matched to EMA records."],
+      [`MeSH® courtesy of the U.S. National Library of Medicine${mesh ? ` (${mesh})` : ""}; definitions verbatim.`],
+      [
+        "ATC codes and names © ",
+        { text: "WHO Collaborating Centre for Drug Statistics Methodology", url: LINKS.whocc },
+        `, Oslo: verbatim in the data, shown in title case; not for commercial distribution.${explained ? " The plain-language class explanations are Approval Atlas's own, not WHO's." : ""}`,
+      ],
+      [
+        "ChEMBL data is from ",
+        { text: "https://www.ebi.ac.uk/chembl", url: LINKS.chembl },
+        `${chembl ? ` (${chembl})` : ""}, `,
+        { text: "CC BY-SA 3.0", url: LINKS.ccBySa3 },
+        ": molecule types and ATC names, adapted. Mendez D. et al., Nucleic Acids Res. 2019;47(D1):D930–D940, ",
+        { text: "doi:10.1093/nar/gky1075", url: LINKS.chemblPaper },
+        ".",
+      ],
+      ...(innStems ? [["Modalities from WHO INN stems (World Health Organization, 2024), read as facts in our own words, ChEMBL molecule types and EMA data, some checked by hand."]] : []),
+      ["LEI data: Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site."],
+      ["Fonts: Geist and Geist Mono, ", { text: "SIL Open Font License 1.1", url: LINKS.ofl }, "."],
+      [
+        "Approval Atlas's data files are licensed ",
+        { text: "CC BY-SA 4.0", url: LINKS.ccBySa4 },
+        ", ChEMBL-derived values adapted from CC BY-SA 3.0. Values from other sources, including WHO's ATC codes and names and quoted text, keep their own terms. Code: ",
+        { text: "MIT", url: LINKS.mit },
+        ".",
+      ],
+      ["Medicine and company names are trademarks of their owners; their use here identifies them only."],
+    ],
+    // What reaches GitHub (the host), and what this browser keeps (intro.js, recent.js, theme.js, the
+    // service worker).
+    privacy: "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and requested page addresses, including any search in a link, for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
+    contact: [
+      "Questions and corrections: ",
+      { text: "GitHub issues", url: LINKS.issues },
+      ". Security reports: see the ",
+      { text: "security policy", url: LINKS.security },
+      ".",
+    ],
   },
 };

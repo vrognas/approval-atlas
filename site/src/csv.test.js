@@ -91,7 +91,7 @@ test("medicinesCsv: UTF-8 BOM, EMA acknowledged with the data's date, headers, o
   );
   assert.deepEqual(parseCsv(text)[1], [
     "EMA product number", "Medicine", "Active substances", "Status", "Approval date", "Medicine type", "Orphan",
-    "Company group", "Holder (EMA)", "ATC codes", "Therapeutic areas",
+    "Company group", "EMA holder name", "ATC codes", "Therapeutic areas",
   ]);
   assert.equal(lines.length, 4); // source, headers, one medicine, the empty end
 });

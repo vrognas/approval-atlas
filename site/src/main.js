@@ -348,18 +348,73 @@ function showMissingData() {
   d3.select("#app-loading").attr("hidden", "");
 }
 
-function renderFooter(meta) {
-  const versionOf = (pattern) => meta.sources?.find((source) => pattern.test(source.name))?.version ?? null;
-  d3.select("#attribution").text(meta.attribution);
-  d3.select("#credit-mesh").text(UI.footer.mesh(versionOf(/mesh/i)));
-  d3.select("#credit-chembl").text(UI.footer.chembl(versionOf(/chembl/i)));
-  d3.select("#credit-atc").text(UI.footer.atc(meta.sources?.some((source) => /atc class explanations/i.test(source.name)) ?? false));
-  d3.select("#credit-union-register").text(UI.footer.unionRegister);
-  // Companies part 2: the curated company groups ("As of 2026-09-28") and GLEIF's LEI data.
-  d3.select("#credit-companies").text(UI.footer.companies(versionOf(/company groups/i)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null));
-  // Modality (M2 phase 2): shown once the data credits WHO's INN stems (older data: none).
-  const innStems = meta.sources?.some((source) => /inn stems/i.test(source.name));
-  d3.select("#credit-modality").attr("hidden", innStems ? null : "").text(innStems ? UI.footer.modality(versionOf(/chembl molecules/i)) : "");
+// Copy parts (labels.js UI.footer, UI.about) into an element: text as text nodes, { text, url } as a
+// link to another website (new tab, no opener or referrer, marked by markExternal()), never parsed as HTML.
+function appendParts(element, parts) {
+  for (const part of parts) {
+    if (typeof part === "string") {
+      element.append(part);
+      continue;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = part.url;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.textContent = part.text;
+    element.append(anchor);
+    markExternal(anchor);
+  }
+}
+
+// The footer's three lines and the About disclosure (legal review 2026-09-30). Rendered before any
+// data loads (meta null: no versions or dates), and again with meta.json's sources: the data's date,
+// the MeSH version, the ChEMBL release, the company groups' curation date, and whether the data
+// credits the ATC class explanations and WHO's INN stems (older data: neither).
+function renderFooter(meta = null) {
+  const sources = meta?.sources ?? [];
+  const versionOf = (pattern) => sources.find((source) => pattern.test(source.name))?.version ?? null;
+  const credits = {
+    date: meta ? (meta.snapshot_date ?? meta.source_timestamp?.slice(0, 10) ?? null) : null,
+    mesh: versionOf(/mesh/i),
+    chembl: versionOf(/chembl/i),
+    explained: sources.some((source) => /atc class explanations/i.test(source.name)),
+    innStems: sources.some((source) => /inn stems/i.test(source.name)),
+  };
+  const groupsDate = versionOf(/company groups/i)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+  const line = (id, parts) => {
+    const element = document.getElementById(id);
+    element.replaceChildren();
+    appendParts(element, parts);
+  };
+  line("footer-sources", UI.footer.sources(credits));
+  line("footer-use", [UI.footer.use]);
+  line("footer-licence", UI.footer.licence);
+
+  const { about } = UI;
+  const body = document.getElementById("about-body");
+  body.replaceChildren();
+  const paragraph = (head, parts) => {
+    const element = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = head;
+    element.append(strong, " ");
+    appendParts(element, parts);
+    body.append(element);
+  };
+  paragraph(about.heads.what, [about.what]);
+  paragraph(about.heads.scope, [about.scope]);
+  paragraph(about.heads.use, [about.use(groupsDate).join(" ")]);
+  paragraph(about.heads.sources, []);
+  const list = document.createElement("ul");
+  list.className = "about-sources";
+  for (const parts of about.sources(credits)) {
+    const item = document.createElement("li");
+    appendParts(item, parts);
+    list.append(item);
+  }
+  body.append(list);
+  paragraph(about.heads.privacy, [about.privacy]);
+  paragraph(about.heads.contact, about.contact);
 }
 
 // The type and status explanations as hidden elements, which describe the focusable carriers (facet
@@ -647,8 +702,8 @@ function setupTips() {
 
 // Filled before any data loads, so it shows even when the data files are missing: the top bar's
 // source line (the data's date follows with meta.json), the search field's name and placeholder, the
-// page heading, the filter bar's name and the About disclosure. The footer's links to other
-// websites are marked as such (after their text is set).
+// page heading, the filter bar's name, the footer and the About disclosure (without the data's
+// versions and dates until meta.json has loaded: renderFooter(meta)).
 function renderAbout() {
   d3.select("#data-date").text(UI.dataDate(null));
   d3.select("#page-title").text(UI.page.title);
@@ -656,11 +711,7 @@ function renderAbout() {
   d3.select("#lookup-label").text(UI.lookup.label);
   d3.select("#lookup-input").attr("placeholder", UI.lookup.placeholder);
   d3.select("#about-summary").text(UI.about.summary);
-  d3.select("#about-scope").text(UI.about.scope);
-  d3.select("#about-use").text(UI.about.intendedUse);
-  d3.select("#about-privacy").text(UI.about.privacy);
-  d3.select("#about-security").text(UI.about.security);
-  for (const anchor of document.querySelectorAll('footer a[target="_blank"]')) markExternal(anchor);
+  renderFooter();
 }
 
 // The colour tokens of both modes (style.css :root and its dark override, read from the chosen Dark
@@ -797,7 +848,7 @@ function addSearchIcon() {
   icon.append("path").attr("d", "M12.75 12.75l4.5 4.5");
 }
 
-// "Try Keytruda (brand) · semaglutide (active ingredient) · …": links that open those lookups, each
+// "Try Keytruda (brand) · semaglutide (active substance) · …": links that open those lookups, each
 // followed by the kind of thing it is (kept on one line with its link).
 function renderTryLinks() {
   const line = d3.select("#lookup-try");

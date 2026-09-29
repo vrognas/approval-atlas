@@ -85,8 +85,8 @@ test("colorSchemeContent: both schemes under Auto, else the chosen one", () => {
 test("the theme button's name says the scheme shown; its tooltip whether it follows the device and what a press does", () => {
   assert.equal(UI.theme.button("dark"), "Theme: Dark");
   assert.equal(UI.theme.button("light"), "Theme: Light");
-  assert.equal(UI.theme.hint("auto", "dark"), "Theme: Dark (follows your device). Select to switch to Light.");
-  assert.equal(UI.theme.hint("light", "light"), "Theme: Light. Select to switch to Dark.");
+  assert.equal(UI.theme.hint("auto", "dark"), "Theme: Dark (follows your device). Select to switch to Light (remembered on this device).");
+  assert.equal(UI.theme.hint("light", "light"), "Theme: Light. Select to switch to Dark (remembered on this device).");
 });
 
 // public/theme-init.js runs before the first paint (a classic script in <head>, as the CSP allows no

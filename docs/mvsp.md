@@ -17,7 +17,7 @@ Status: **Met**, **Partly met** (usually waiting for a GitHub setting listed und
 | 1.3 Self-assessment | Met | This document | Reviewed yearly against the latest MVSP release. |
 | 1.4 External testing | N/A | — | No backend, accounts or user data; solo non-commercial project. Checks instead: R and node tests, CSP and `npm audit` gate in CI; one-off headless-browser check and axe-core scan before release. |
 | 1.5 Training | N/A | — | Solo project, no personnel. |
-| 1.6 Compliance | Met | Privacy note in the site footer ("About this site"); `README.md` (source terms) | GDPR: the project collects no personal data — no cookies, analytics or tracking; searches run in the browser. The search is kept in the page address, so a reload or an opened link sends it to GitHub like any page request; GitHub, as host, may log IP addresses and page addresses (both stated in the privacy note). PCI DSS, HITRUST, ISO 27001, SSAE 18 and data localization: not applicable (no card, health or personal records; organization-level standards). Source reuse terms are followed and credited (README, footer). |
+| 1.6 Compliance | Met | Privacy note in the site footer ("About this site"); `README.md` (source terms) | GDPR: the project collects no personal data — no cookies, analytics or tracking; searches run in the browser. The search is kept in the page address, so a reload or an opened link sends it to GitHub like any page request; GitHub, as host, logs IP addresses and page addresses (both stated in the privacy note). PCI DSS, HITRUST, ISO 27001, SSAE 18 and data localization: not applicable (no card, health or personal records; organization-level standards). Source reuse terms are followed and credited (README, footer). |
 | 1.7 Incident handling | Met | `SECURITY.md` ("What to expect") | Notice on the site and in the README within 72 hours of confirming an incident that affected published data or code: what happened, contact (private vulnerability report), consequences, remediation. No sensitive information is held; the realistic incident is tampered code or data. |
 | 1.8 Data handling | N/A | — | No storage media holding production data under the project's control; all data is public. Hosting storage is GitHub's. |
 | 2.1 Single Sign-On | N/A | — | No accounts or logins. |
@@ -53,7 +53,7 @@ The project processes public regulatory data only. No personal data is collected
 | ATC classification names, status (current, retired, temporary) and replacement codes | ChEMBL (WHO ATC); WHOCC ATC/DDD Index site (update lists, cumulative alterations, single index pages); archived index copies (Internet Archive) | Public | As above |
 | ATC codes read from section 5.1 of product information PDFs (a few per run), with the document link and date | EMA product information (SmPC) | Public | As above (`ema_medicine_smpc_atc.json`); the PDFs themselves are read in a temporary file and not kept |
 | Source download cache | All of the above | Public | GitHub Actions cache (`.cache/downloads`) |
-| Visitor data | — | None collected by the site | The browser keeps the site's files and data for offline use (service worker cache) on the visitor's device only. GitHub, as host, may log IP addresses and page addresses (which carry the lookup state, see [Data flow](#data-flow)). |
+| Visitor data | — | None collected by the site | The browser keeps the site's files and data for offline use (service worker cache) on the visitor's device only. GitHub, as host, logs IP addresses and page addresses (which carry the lookup state, see [Data flow](#data-flow)). |
 
 ## Data flow
 
@@ -86,7 +86,7 @@ flowchart LR
 
 | Company | Role | Access to customer data |
 |---|---|---|
-| GitHub (Microsoft) | Hosting (Pages), CI (Actions), source code | None held by the project; as host, GitHub may log visitors' IP addresses |
+| GitHub (Microsoft) | Hosting (Pages), CI (Actions), source code | None held by the project; as host, GitHub logs visitors' IP addresses (for security, per GitHub's Pages documentation) |
 
 DNS for `vrognas.com` is served by Netlify DNS (NS1). It answers DNS queries only and has no access to site content or visitor traffic.
 

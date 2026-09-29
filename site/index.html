@@ -16,6 +16,9 @@
          so it runs as soon as it arrives. theme.js (the header's button) does the rest. -->
     <script src="/theme-init.js"></script>
     <title>Approval Atlas</title>
+    <!-- The tagline (owner decision on the copy review, 2026-09-30): the bar no longer shows one, so
+         it names the site in search results and shared links. -->
+    <meta name="description" content="Look up the EU approval status of medicines authorized through EMA." />
     <!-- favicon.ico (16/32/48 PNGs) for clients that ask for it or cannot draw SVG; the SVG wins where supported. -->
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -398,27 +401,14 @@
     <footer>
       <details class="about">
         <summary id="about-summary"></summary>
-        <p id="about-scope"></p>
-        <p id="about-use"></p>
-        <p id="about-privacy"></p>
-        <p><a id="about-security" href="https://github.com/vrognas/approval-atlas/blob/main/SECURITY.md" rel="noopener noreferrer" target="_blank"></a></p>
+        <div id="about-body"></div>
       </details>
-      <p id="attribution"></p>
-      <p id="credit-mesh"></p>
-      <p id="credit-chembl"></p>
-      <p id="credit-atc"></p>
-      <p id="credit-union-register"></p>
-      <p id="credit-companies"></p>
-      <p id="credit-modality" hidden></p>
-      <p>
-        Data files: a compilation licensed
-        <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener noreferrer" target="_blank">CC BY-SA 4.0</a>;
-        ChEMBL-derived values are adapted from ChEMBL (CC BY-SA 3.0). Values from other sources keep their own terms. Code: MIT license.
-      </p>
-      <p>Not affiliated with or endorsed by EMA, NLM, EMBL-EBI or WHO.</p>
-      <p>
-        <a href="https://www.ema.europa.eu/en/medicines/download-medicine-data" rel="noopener noreferrer" target="_blank">EMA medicine data download page</a>
-      </p>
+      <!-- Three lines (legal review 2026-09-30): every source's credit with its licence links, the
+           intended use and non-affiliation, the site's own licences and contact. Filled by main.js
+           renderFooter() from labels.js (UI.footer), with links built in the DOM. -->
+      <p id="footer-sources"></p>
+      <p id="footer-use"></p>
+      <p id="footer-licence"></p>
     </footer>
 
     <script type="module" src="/src/main.js"></script>

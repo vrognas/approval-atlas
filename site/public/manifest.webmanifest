@@ -1,7 +1,7 @@
 {
   "name": "Approval Atlas",
   "short_name": "Approval Atlas",
-  "description": "Look up EU approvals of human medicines: status, indication, documents.",
+  "description": "Look up the EU approval status of medicines authorized through EMA.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

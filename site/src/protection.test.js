@@ -44,7 +44,7 @@ test("a generic or biosimilar has no protection of its own and follows its refer
   // QA 2026-09-29 (#1): the chip never shows the reference's status as the copy's own.
   assert.equal(summary.status, "Data/market protection: None of its own");
   assert.equal(protectionSummary({ ...follows, status: "protected" }, [], "adalimumab", "2026-09-26").status, "Data/market protection: None of its own");
-  assert.equal(summary.lines[0], "No protection of its own; follows Humira");
+  assert.equal(summary.lines[0], "No protection of its own; the dates below are for its reference medicine, Humira");
   assert.equal(summary.lines.length, 4);
 });
 
@@ -52,7 +52,7 @@ test("a generic whose reference is not centrally authorized shows no dates", () 
   const missing = { ...own, basis: "reference_not_found", reference_product_number: null, reference_name: null, counted_from: null, data_exclusivity_end: null, market_protection_end_min: null, market_protection_end_max: null, status: null };
   assert.deepEqual(protectionSummary(missing, [], "x", "2026-09-26"), {
     status: "Data/market protection: None of its own",
-    lines: ["No protection of its own; reference product not found in EU central authorizations"],
+    lines: ["No protection of its own; its reference medicine was not found among EU central authorizations"],
     orphan: [],
   });
 });
@@ -65,10 +65,10 @@ test("orphan market exclusivity rows say whether it ends or ended and where the 
     { condition: "Treatment of Y", exclusivity_end: "2026-09-26", end_source: "computed" },
   ];
   assert.deepEqual(protectionSummary(own, orphan, "x", "2026-09-26").orphan, [
-    "Orphan market exclusivity for Treatment of spinal muscular atrophy: ends 30 May 2031 (register)",
-    "Orphan market exclusivity for Treatment of X: ends 1 Jan 2032 (estimate)",
-    "Orphan market exclusivity for Treatment of Hodgkin lymphoma: ended 20 Jun 2024 (register)",
-    "Orphan market exclusivity for Treatment of Y: ends 26 Sep 2026 (estimate)",
+    "Orphan market exclusivity for Treatment of spinal muscular atrophy: ends 30 May 2031 (Union Register)",
+    "Orphan market exclusivity for Treatment of X: ends 1 Jan 2032 (est.)",
+    "Orphan market exclusivity for Treatment of Hodgkin lymphoma: ended 20 Jun 2024 (Union Register)",
+    "Orphan market exclusivity for Treatment of Y: ends 26 Sep 2026 (est.)",
   ]);
 });
 
@@ -96,14 +96,14 @@ test("protection counted from another company's medicine says so before the date
   const summary = protectionSummary(other, [], "ruxolitinib", "2026-09-28", "Jakavi");
   assert.equal(summary.status, "Data/market protection: Unclear");
   assert.deepEqual(summary.lines, [
-    "The first central EU approval of ruxolitinib was another company's medicine (Jakavi, 23 Aug 2012); counted from this company's own first approval (19 Apr 2023), protection would end later, so the market protection range covers both.",
+    "The first central EU approval of ruxolitinib was another company's medicine (Jakavi, 23 Aug 2012). Counted from this company's own first approval (19 Apr 2023), protection would end later; the market protection range covers both.",
     "Data exclusivity ended (est.) 23 Aug 2020",
     "Market protection ends (est.) 23 Aug 2022 – 19 Apr 2034",
     "Counted from the first central EU approval of ruxolitinib: Jakavi, 23 Aug 2012",
   ]);
   const both = protectionSummary({ ...other, status: "protected", own_counted_from: null }, [], "x", "2026-09-28", null);
   assert.equal(both.status, "Data/market protection: Protected");
-  assert.equal(both.lines[0], "The first central EU approval of x was another company's medicine (23 Aug 2012); counted from this company's own first approval, protection would end later, so the market protection range covers both.");
+  assert.equal(both.lines[0], "The first central EU approval of x was another company's medicine (23 Aug 2012). Counted from this company's own first approval, protection would end later; the market protection range covers both.");
 });
 
 // Step 4 (owner request 2026-09-28): R writes the data exclusivity counted from the company's own
@@ -159,18 +159,18 @@ test("a curated copy's counted-from line names its reference medicine, not its o
   const summary = protectionSummary(riulvy, [], "tegomil fumarate", "2026-09-29", "Tecfidera", { referenceSubstance: "dimethyl fumarate" });
   assert.equal(summary.status, "Data/market protection: None of its own");
   assert.deepEqual(summary.lines, [
-    "No protection of its own; follows Tecfidera",
+    "No protection of its own; the dates below are for its reference medicine, Tecfidera",
     "Data exclusivity ended (est.) 30 Jan 2022",
     "Market protection ended (est.) 30 Jan 2024 – 30 Jan 2025",
-    "Counted from its reference medicine Tecfidera's first central approval: 30 Jan 2014",
+    "Counted from the approval of its reference medicine, Tecfidera: 30 Jan 2014",
   ]);
   assert.ok(summary.lines.every((line) => !line.includes("tegomil")));
   // Liraglutide STADA, a hybrid of Victoza (same substance): the reference too, not "of liraglutide".
   assert.equal(protectionSummary(liraglutideStada, [], "liraglutide", "2026-09-29", "Victoza", { referenceSubstance: "liraglutide" }).lines.at(-1),
-    "Counted from its reference medicine Victoza's first central approval: 30 Jun 2009");
+    "Counted from the approval of its reference medicine, Victoza: 30 Jun 2009");
   // Without a name passed: the reference's.
   assert.equal(protectionSummary(liraglutideStada, [], "liraglutide", "2026-09-29").lines.at(-1),
-    "Counted from its reference medicine Victoza's first central approval: 30 Jun 2009");
+    "Counted from the approval of its reference medicine, Victoza: 30 Jun 2009");
   // A copy EMA flags keeps the substance's line (Dimethyl fumarate Neuraxpharm, a generic of Tecfidera).
   assert.equal(protectionSummary({ ...riulvy, ema_product_number: "EMEA/H/C/005950", copy_source: "ema_flag" }, [], "dimethyl fumarate", "2026-09-29", "Tecfidera").lines.at(-1),
     "Counted from the first central EU approval of dimethyl fumarate: Tecfidera, 30 Jan 2014");
@@ -182,11 +182,11 @@ test("a curated copy's counted-from line names its reference medicine, not its o
 test("a curated copy whose reference is counted from another medicine names both", () => {
   const ablymico = { ...liraglutideStada, ema_product_number: "EMEA/H/C/006620", reference_product_number: "EMEA/H/C/003780", reference_name: "Saxenda" };
   assert.equal(protectionSummary(ablymico, [], "liraglutide", "2026-09-29", "Victoza", { referenceSubstance: "liraglutide" }).lines.at(-1),
-    "Counted, as for its reference medicine Saxenda, from the first central EU approval of liraglutide: Victoza, 30 Jun 2009");
+    "As for its reference medicine Saxenda, counted from the first central EU approval of liraglutide: Victoza, 30 Jun 2009");
   assert.equal(protectionSummary(ablymico, [], "liraglutide", "2026-09-29", null, { referenceSubstance: "liraglutide" }).lines.at(-1),
-    "Counted, as for its reference medicine Saxenda, from the first central EU approval of liraglutide: 30 Jun 2009");
+    "As for its reference medicine Saxenda, counted from the first central EU approval of liraglutide: 30 Jun 2009");
   assert.equal(protectionSummary(ablymico, [], "liraglutide", "2026-09-29", null).lines.at(-1),
-    "Counted, as for its reference medicine Saxenda, from the first central EU approval of its active substance: 30 Jun 2009");
+    "As for its reference medicine Saxenda, counted from the first central EU approval of its active substance: 30 Jun 2009");
 });
 
 // Step 4 review (rFix b): a curated copy of a nationally authorized medicine has no central
@@ -208,20 +208,20 @@ test("a curated copy of a nationally authorized medicine names its reference and
   const summary = protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: buprenorphineNeuraxpharmCopy });
   assert.equal(summary.status, "Data/market protection: None of its own");
   assert.deepEqual(summary.lines, [[
-    "No protection of its own; a hybrid of Subutex (authorized nationally), whose protection dates are not in EU central data.",
+    "No protection of its own; a hybrid of Subutex (authorized nationally, so no EU central date to count from).",
     " ",
     { text: "Source", url: "https://www.ema.europa.eu/en/medicines/human/EPAR/buprenorphine-neuraxpharm" },
   ]]);
   // The copy type as the row gives it (Sugammadex Adroiq is a generic, Tuznue a biosimilar).
   assert.equal(protectionSummary(buprenorphineNeuraxpharm, [], "x", "2026-09-29", null, { curated: { ...buprenorphineNeuraxpharmCopy, copy_type: "generic" } }).lines[0][0],
-    "No protection of its own; a generic of Subutex (authorized nationally), whose protection dates are not in EU central data.");
+    "No protection of its own; a generic of Subutex (authorized nationally, so no EU central date to count from).");
   // No https evidence: the sentence alone.
   assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "x", "2026-09-29", null, { curated: { ...buprenorphineNeuraxpharmCopy, evidence_url: "http://example.org" } }).lines,
-    ["No protection of its own; a hybrid of Subutex (authorized nationally), whose protection dates are not in EU central data."]);
+    ["No protection of its own; a hybrid of Subutex (authorized nationally, so no EU central date to count from)."]);
 });
 
 test("without its curated row (older data, a missing file) a copy without a central reference reads as before", () => {
-  const generic = "No protection of its own; reference product not found in EU central authorizations";
+  const generic = "No protection of its own; its reference medicine was not found among EU central authorizations";
   assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null).lines, [generic]);
   assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: undefined }).lines, [generic]);
   // A generic EMA flags whose reference is national has no curated row either.
@@ -246,7 +246,7 @@ test("a curated copy of a central reference names its copy type and the evidence
   ]);
   // The dates and the counted-from line as before.
   assert.equal(summary.lines.length, 4);
-  assert.equal(summary.lines[3], "Counted from its reference medicine Tecfidera's first central approval: 30 Jan 2014");
+  assert.equal(summary.lines[3], "Counted from the approval of its reference medicine, Tecfidera: 30 Jan 2014");
   // A generic (Sugammadex Adroiq: Bridion) and a biosimilar (Tuznue: Herceptin) EMA does not flag.
   const sugammadexAdroiq = { ...curatedFollower, ema_product_number: "EMEA/H/C/006046", reference_product_number: "EMEA/H/C/000885", reference_name: "Bridion",
     counted_from: "2008-07-25", data_exclusivity_end: "2016-07-25", market_protection_end_min: "2018-07-25", market_protection_end_max: "2019-07-25" };
@@ -261,9 +261,9 @@ test("a curated copy of a central reference names its copy type and the evidence
   assert.equal(protectionSummary(riulvy, [], "x", "2026-09-29", "Tecfidera", { curated: { ...riulvyCopy, evidence_url: null } }).lines[0],
     "No protection of its own; a hybrid of Tecfidera.");
   // Without its curated row (older data, a missing file), or a copy EMA flags: "follows" as before.
-  assert.equal(protectionSummary(riulvy, [], "x", "2026-09-29", "Tecfidera").lines[0], "No protection of its own; follows Tecfidera");
+  assert.equal(protectionSummary(riulvy, [], "x", "2026-09-29", "Tecfidera").lines[0], "No protection of its own; the dates below are for its reference medicine, Tecfidera");
   assert.equal(protectionSummary({ ...riulvy, copy_source: "ema_flag" }, [], "x", "2026-09-29", "Tecfidera", { curated: riulvyCopy }).lines[0],
-    "No protection of its own; follows Tecfidera");
+    "No protection of its own; the dates below are for its reference medicine, Tecfidera");
 });
 
 // 2026-09-29: a pediatric-use marketing authorization (basis paediatric_use, a row of
@@ -296,7 +296,7 @@ test("a pediatric-use marketing authorization counts from its own approval, not 
     "Data exclusivity ended (est.) 9 Feb 2026",
     "Market protection ends (est.) 9 Feb 2028 – 9 Feb 2029",
     [
-      "A pediatric-use marketing authorization: protection counted from its own EU authorization, 9 Feb 2018",
+      "A pediatric-use marketing authorization (for children): protection counted from its own approval, 9 Feb 2018",
       " ",
       { text: "Source", url: "https://www.ema.europa.eu/en/documents/assessment-report/alkindi-epar-public-assessment-report_en.pdf" },
     ],
@@ -309,7 +309,7 @@ test("a pediatric-use marketing authorization counts from its own approval, not 
       "Data exclusivity ended (est.) 4 Sep 2019",
       "Market protection ended (est.) 4 Sep 2021 – 4 Sep 2022",
       [
-        "A pediatric-use marketing authorization: protection counted from its own EU authorization, 4 Sep 2011",
+        "A pediatric-use marketing authorization (for children): protection counted from its own approval, 4 Sep 2011",
         " ",
         { text: "Source", url: "https://www.ema.europa.eu/en/documents/assessment-report/buccolam-epar-public-assessment-report_en.pdf" },
       ],
@@ -317,7 +317,7 @@ test("a pediatric-use marketing authorization counts from its own approval, not 
     orphan: [],
   });
   // Without its curated row (a missing ema_curated_pumas.json) or without https evidence: the sentence alone.
-  const sentence = "A pediatric-use marketing authorization: protection counted from its own EU authorization, 9 Feb 2018";
+  const sentence = "A pediatric-use marketing authorization (for children): protection counted from its own approval, 9 Feb 2018";
   assert.equal(protectionSummary(alkindi, [], "hydrocortisone", "2026-09-29", "Alkindi").lines[2], sentence);
   assert.equal(protectionSummary(alkindi, [], "hydrocortisone", "2026-09-29", "Alkindi", { puma: { ...pumaRow("EMEA/H/C/004416", "alkindi"), evidence_url: null } }).lines[2], sentence);
 });
@@ -346,8 +346,8 @@ test("protectionGlance: a copy follows its reference and never shows the referen
     reference_name: "Ibrance", counted_from: "2016-11-09", data_exclusivity_end: "2024-11-09", market_protection_end_min: "2026-11-09",
     market_protection_end_max: "2027-11-09", status: "protected",
   };
-  assert.deepEqual(protectionGlance(palbociclibViatris, [], "2026-09-29"), { value: "Follows Ibrance", reference: "Ibrance's: until 2026–2027", orphan: null });
-  assert.equal(protectionGlance({ ...palbociclibViatris, market_protection_end_min: "2027-01-01" }, [], "2026-09-29").reference, "Ibrance's: until 2027");
+  assert.deepEqual(protectionGlance(palbociclibViatris, [], "2026-09-29"), { value: "Follows Ibrance", reference: "Ibrance's protection until 2026–2027", orphan: null });
+  assert.equal(protectionGlance({ ...palbociclibViatris, market_protection_end_min: "2027-01-01" }, [], "2026-09-29").reference, "Ibrance's protection until 2027");
   // Once the reference's protection has ended (or is unclear): the reference alone.
   assert.deepEqual(protectionGlance({ ...palbociclibViatris, status: "ended" }, [], "2026-09-29"), { value: "Follows Ibrance", reference: null, orphan: null });
   assert.equal(protectionGlance({ ...palbociclibViatris, status: "unclear" }, [], "2026-09-29").reference, null);

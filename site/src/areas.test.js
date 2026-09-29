@@ -199,7 +199,7 @@ test("area tree: tags matched at a branch root are the branch's static row, not 
   assert.deepEqual(tree.rootTerms("C04"), ["Neoplasms", "Cancer"]);
   assert.deepEqual(tree.rootTerms("C04.588.180"), []);
   assert.equal(areaExactLabel(tree, "C04"), "Tagged only as Neoplasms or Cancer");
-  assert.equal(areaExactLabel(tree, "C04.588.180"), "not more specific");
+  assert.equal(areaExactLabel(tree, "C04.588.180"), "tagged at this level");
   // A tag of the branch: its parent (the path and "Up one level" go through the branch).
   assert.deepEqual(tree.parents("Cancer"), ["C04"]);
   assert.deepEqual(tree.path("Cancer"), ["C", "C04", "Cancer"]);
@@ -613,7 +613,7 @@ test("area breakdown: the level below a node, most first, then the medicines at 
   // rank: the row's place in tree order, for the Sort control's MeSH order (sortBreakdownRows()).
   assert.deepEqual(areaBreakdownRows(tree, "C04.588.180", products), [
     { key: "Triple Negative Breast Neoplasms", label: "Triple Negative Breast Neoplasms", count: 1, rank: 0 },
-    { key: "C04.588.180", label: "not more specific", count: 2, static: true, incomplete: true },
+    { key: "C04.588.180", label: "tagged at this level", count: 2, static: true, incomplete: true },
   ]);
   // A branch ends with the medicines tagged only at its root (one static row; the medicine also
   // tagged Breast Neoplasms counts under Neoplasms by Site only).
