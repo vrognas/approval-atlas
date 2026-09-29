@@ -24,6 +24,7 @@ import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, sugg
 import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
 import { equivalentSetKey } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
+import { FAILED } from "./datasets.js";
 import { createFacetPanel } from "./facet-panel.js";
 import {
   FACET_VALUES,
@@ -59,6 +60,8 @@ import { addMeshTip, areaNote, meshTip } from "./mesh-notes.js";
 import { NOT_CLASSIFIED, buildModalityTree, modalityBreakdownRows, modalityTip, modalityTipId, toggleModality } from "./modalities.js";
 import { createModalityTree, renderModalityPath } from "./modality-tree.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
+import { renderProtectionCalendar } from "./protection-calendar-card.js";
+import { calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
 import { createSheet } from "./sheet.js";
@@ -1553,6 +1556,53 @@ function startDashboard(meta, [
       : UI.years.undated(undated));
   }
 
+  // Draft (loss-of-exclusivity calendar): the currently authorized medicines matching the filters
+  // whose estimated market protection runs, by the year it ends at the earliest (this year, the next
+  // four, later); a year's medicines listed below, or (calendarYear ORPHAN_ONLY) those whose orphan
+  // market exclusivity alone runs on (UI state, not in the URL). The protection files
+  // load lazily (the card near the viewport, or the page idle): "Loading estimates…" until then.
+  let calendarYear = null;
+  let calendarShowAll = false;
+  const calendarFirstYear = Number(dataDate.slice(0, 4));
+  function renderCalendarCard(authorizedNow, anyFilter) {
+    d3.select("#pc-title").text(UI.protectionCalendar.title);
+    d3.select("#pc-note").text(UI.protectionCalendar.note);
+    const protection = lookup.protection();
+    if (protection === undefined || protection === FAILED) {
+      renderProtectionCalendar($("#pc-body"), { status: protection === FAILED ? "failed" : "loading" });
+      return;
+    }
+    const { rows, orphanOnly, unclear, unclearLatest } = protectionEnding(authorizedNow, protection, dataDate);
+    renderProtectionCalendar($("#pc-body"), {
+      status: "ready",
+      buckets: calendarBuckets(rows, calendarFirstYear, 5),
+      unclear,
+      unclearLatest,
+      orphanOnly,
+      running: rows.length,
+      authorized: authorizedNow.length,
+      filtered: anyFilter,
+      selected: calendarYear,
+      showAll: calendarShowAll,
+    }, {
+      onSelect: (key) => {
+        calendarYear = calendarYear === key ? null : key;
+        calendarShowAll = false;
+        scheduleRender();
+      },
+      onShowAll: () => {
+        calendarShowAll = true;
+        scheduleRender();
+      },
+      medicineLink: (product) => lookup.link(product.name_of_medicine, { med: product.ema_product_number }),
+      companyOf: (product) => {
+        const group = companies.entry(product.ema_product_number)?.group;
+        return group ? [companyBadge(group), " ", companyLink(group.name, group.key)] : null;
+      },
+      substancesOf: (product) => (substanceIndex.get(product.ema_product_number) ?? []).join("; "),
+    });
+  }
+
   // One part's failure (data it cannot handle) must not blank the parts after it: the error is
   // logged and the part says its content is not available until a render succeeds.
   function safely(container, draw) {
@@ -1639,6 +1689,7 @@ function startDashboard(meta, [
     safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete));
     safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
     safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
+    safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, activeCount > 0));
     safely(cardOf("#conditions-list"), () => renderConditions(filtered, activeCount > 0));
 
     safely(cardOf("#over-time"), () => {
@@ -1676,7 +1727,7 @@ function startDashboard(meta, [
   // the MeSH notes.
   lookup.onData((name) => {
     if (name === "meshNotes") meshTree.setNotes(lookup.meshNotes()?.rows ?? null);
-    if (name === "documents" || name === "conditions" || name === "meshNotes" || name === "equivalents") scheduleRender();
+    if (name === "documents" || name === "conditions" || name === "meshNotes" || name === "equivalents" || name === "protection") scheduleRender();
   });
   lookup.need("documents");
   lookup.need("meshNotes");
@@ -1686,6 +1737,12 @@ function startDashboard(meta, [
   // 61 KB gzipped) once the page is idle, so a card opened later, offline or on a slow network,
   // has them (the service worker keeps what was loaded).
   whenIdle(() => lookup.need("protection"));
+  // Draft (loss-of-exclusivity calendar): or as soon as its card comes near the viewport.
+  new IntersectionObserver((entries, observer) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    observer.disconnect();
+    lookup.need("protection");
+  }, { rootMargin: "400px 0px" }).observe(cardOf("#pc-body"));
 }
 
 // Desktop: the sidebar starts below the fixed header, whose height follows its text (the offline

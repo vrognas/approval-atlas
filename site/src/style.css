@@ -2270,6 +2270,199 @@ td.result-holder .holder-main .company-badge {
   font-size: 0.8125rem;
 }
 
+/* Draft (loss-of-exclusivity calendar; protection-calendar-card.js): a toggle button per year, its
+   bar split into the medicines without and with orphan market exclusivity running later (--bar and
+   --pink-mid, both chart marks in palette.test.js; 1px apart), the other years greyed while one is
+   selected, then the selected year's medicines. The company page's list by end year. */
+.pc-summary {
+  margin: 8px 0 0;
+}
+
+.pc-legend .pc-protection,
+.pc-bars .pc-protection {
+  background: var(--bar);
+}
+
+.pc-legend .pc-orphan,
+.pc-bars .pc-orphan {
+  background: var(--pink-mid);
+}
+
+.pc-bars .bar-row {
+  grid-template-columns: 7.5rem 1fr 4.5ch;
+}
+
+.pc-seg {
+  flex: none;
+  height: 100%;
+  min-width: 2px;
+}
+
+.pc-seg + .pc-seg {
+  margin-left: 1px;
+}
+
+.pc-seg:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+.pc-bars.has-selection .bar-row:not([aria-pressed="true"]) .pc-seg {
+  background: var(--de-emphasis);
+}
+
+/* The later bar, longer than the busiest single year's, is cut to fit: a slanted gap in the card's
+   colour at 45% of its length (before its orphan segment, at its end). */
+.pc-clamped {
+  position: relative;
+}
+
+.pc-clamped::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: 45%;
+  width: 5px;
+  background: var(--surface);
+  transform: skewX(-24deg);
+}
+
+.pc-scale {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+}
+
+.pc-unclear {
+  margin: 8px 0 0;
+  font-size: 0.8125rem;
+}
+
+/* The year, then its orphan segment's count ("4 orphan", a dot in the segment's colour) under it. */
+.pc-bars .pc-bar-label {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.pc-bar-orphan {
+  color: var(--ink-secondary);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+/* The orphan-only line's toggle: in the line's size; bold while its list is shown. */
+.pc-orphan-toggle {
+  min-height: 24px;
+  padding: 0;
+  font-size: inherit;
+}
+
+.pc-orphan-toggle[aria-pressed="true"] {
+  font-weight: 700;
+}
+
+.pc-list {
+  margin-top: 12px;
+}
+
+.pc-list-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.pc-medicines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--grid);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.pc-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.pc-company {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pc-item-substance,
+.pc-item-range,
+.pc-item-orphan {
+  color: var(--ink-secondary);
+}
+
+.pc-item-orphan::before,
+.pc-bar-orphan::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--pink-mid);
+}
+
+.pc-company-list > li + li {
+  margin-top: 6px;
+}
+
+.pc-company-year {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .pc-bars .bar-row {
+    grid-template-columns: 6rem 1fr 4.5ch;
+    min-height: 44px;
+  }
+
+  .pc-bars .bar-label {
+    grid-column: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  .pc-seg,
+  .pc-swatch,
+  .pc-item-orphan::before,
+  .pc-bar-orphan::before {
+    forced-color-adjust: none;
+  }
+
+  .pc-legend .pc-protection,
+  .pc-bars .pc-protection {
+    background: CanvasText;
+  }
+
+  /* The orphan dots as the orphan segment (they used to be CanvasText, the other segment's). */
+  .pc-legend .pc-orphan,
+  .pc-bars .pc-orphan,
+  .pc-item-orphan::before,
+  .pc-bar-orphan::before {
+    background: Canvas;
+    box-shadow: inset 0 0 0 1px CanvasText;
+  }
+
+  .pc-bars.has-selection .bar-row:not([aria-pressed="true"]) .pc-seg {
+    background: GrayText;
+  }
+}
+
 /* Phones: the label takes its own line above the bar. */
 @media (max-width: 600px) {
   .bar-row {

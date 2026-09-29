@@ -34,6 +34,7 @@ import { markExternal } from "./links.js";
 import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
 import { buildModalityTree, modalityLines, modalitySource } from "./modalities.js";
 import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
+import { endingByYear, protectionEnding } from "./protection-calendar.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
@@ -1205,6 +1206,33 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
         }))) : null;
     }
 
+    // Draft (loss-of-exclusivity calendar): its currently authorized medicines by the year their
+    // estimated market protection ends at the earliest, those whose orphan market exclusivity alone
+    // runs on by the year it ends; unclear estimates only counted.
+    const protection = need("protection");
+    const endingCopy = UI.protectionCalendar;
+    let protectionEndingPart = el("p", { class: "muted" }, protection === FAILED ? UI.lookup.notAvailable : endingCopy.loading);
+    if (ready(protection)) {
+      const { rows: ending, orphanOnly, unclear, unclearLatest } = protectionEnding(anyAuthorized ? authorizedFirst(all, false).shown : [], protection, snapshotDate);
+      const orphanNote = (item) => (item.orphanOnly ? endingCopy.company.orphanOnly(item.orphanEnd) : item.orphanEnd ? endingCopy.company.orphan(item.orphanEnd) : null);
+      protectionEndingPart = [
+        ending.length || orphanOnly.length
+          ? el("ul", { class: "plain pc-company-list" }, endingByYear(ending, orphanOnly).map(({ year, rows }) => el("li", null,
+            el("span", { class: "pc-company-year" }, String(year)), " ",
+            rows.map((item, position) => [
+              position ? ", " : "",
+              internalLink(item.product.name_of_medicine, { med: item.product.ema_product_number }),
+              orphanNote(item) ? [" (", orphanNote(item), ")"] : null,
+            ]))))
+          : el("p", null, endingCopy.company.none),
+        unclear ? el("p", { class: "muted" }, endingCopy.unclear(unclear, unclearLatest)) : null,
+      ];
+    }
+    const protectionEndingSection = el("section", { class: "card-section" },
+      el("h3", null, endingCopy.company.title),
+      el("p", { class: "muted" }, endingCopy.company.note),
+      protectionEndingPart);
+
     const toggle = anyAuthorized ? el("label", { class: "toggle-all" },
       el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
         showAll = event.currentTarget.checked;
@@ -1248,6 +1276,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       timelineBlock(shown, medicines),
       atcMix,
       areaMix,
+      protectionEndingSection,
       el("h3", { id: "results-company" }, UI.companies.medicines(shown.length, everyStatus)),
       toggle,
       resultTable(shown.map((item) => ({ row: item })), medicines, "results-company"),
@@ -1337,6 +1366,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     // Substance equivalents (substanceEquivalents()): null until need("equivalents") has loaded them
     // (none when that failed: older data).
     equivalents: () => (ready(datasets.peek("equivalents")) ? datasets.peek("equivalents") : null),
+    // Draft (loss-of-exclusivity calendar): the protection dataset as need() gives it (undefined
+    // while loading or not asked for yet, FAILED), without starting a load.
+    protection: () => datasets.peek("protection"),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [datasets.peek("atc"), datasets.peek("atcCounts")];
