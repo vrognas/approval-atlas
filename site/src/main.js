@@ -1684,7 +1684,7 @@ function startDashboard(meta, [
     // Its takeaway: the group with the most medicines among its bars (an ATC class with its code).
     // None while several values are selected (review of phase 3): the bars are then every group, the
     // selected ones marked, and the largest can be unrelated to the selection.
-    setTakeaway("#breakdown-takeaway", tree.isSelected ? null : breakdownTakeaway(tree.rows, atc ? (row) => atcClassLabel(row.key, atcNames.get(row.key)) : undefined));
+    setTakeaway("#breakdown-takeaway", tree.isSelected ? null : breakdownTakeaway(tree.rows, atc ? (row) => atcClassLabel(row.key, atcNames.get(row.key)) : undefined, by));
     d3.select("#breakdown-title").text(tree.title);
     d3.select("#breakdown-note").text(UI.breakdown[by].note).attr("hidden", UI.breakdown[by].note ? null : "");
     // One legend per card: the medicine types the stacked ATC or modality bars show.
