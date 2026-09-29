@@ -1010,30 +1010,19 @@ test("the header's tagline and the intro card say what the site is for and what 
   const { UI } = labels;
   assert.equal(UI.tagline, "Heard of a drug at a talk, a poster or anywhere? Look it up in seconds: EU approval, what it's for, who owns it, how long it's protected.");
   assert.equal(UI.intro.link, "What is this?");
-  assert.equal(UI.intro.lookupLead, "Look up a drug or active ingredient to see:");
-  assert.deepEqual(UI.intro.lookup, [
-    "whether it's approved in the EU and since when",
-    "what it's approved for",
-    "which company owns it",
-    "how long its market protection runs (an estimate, not patents)",
-    "its official product information and EMA assessment report",
+  // Owner decision 2026-09-29: three onboarding cards (a bold title, one plain sentence, an example to
+  // try) in place of the two lists, then one quiet line on scope and use.
+  assert.deepEqual(UI.intro.cards.map(({ hue, title, text, action }) => ({ hue, title, text, action })), [
+    { hue: "green", title: "Look up any drug", text: "Type a brand or active ingredient: is it approved in the EU, since when, and who owns it?", action: "Try Keytruda" },
+    { hue: "gold", title: "Protection and copies", text: "See roughly how long market protection runs, and whether generics or biosimilars exist yet.", action: "Try Humira" },
+    { hue: "blue", title: "Explore the landscape", text: "Which conditions have the most treatments, which companies work where, how approvals change over time.", action: "Explore cancer medicines" },
   ]);
-  // User decision 2026-09-28: "EMA medicines", as the scope is EMA's central procedure.
-  assert.equal(UI.intro.exploreLead, "Or explore all EMA medicines:");
-  assert.deepEqual(UI.intro.explore, [
-    "which companies have which kinds of drugs",
-    "which conditions have the most, or the fewest, approved treatments",
-    "how approvals changed over the years, by drug class, condition or company",
-  ]);
+  assert.deepEqual(UI.intro.cards.map((card) => card.patch ?? { area: card.area }), [{ med: "EMEA/H/C/003820" }, { med: "EMEA/H/C/000481" }, { area: "C04" }]);
   assert.equal(
     UI.intro.scope,
-    "Only medicines authorized EU-wide through the European Medicines Agency (EMA) are included. Many older or common medicines, such as paracetamol, are authorized country by country and are not here.",
+    "Covers medicines authorized EU-wide through the European Medicines Agency (EMA); many older ones (e.g. paracetamol) are authorized country by country and aren't here. For information only, not medical advice.",
   );
-  assert.equal(
-    UI.intro.authorized,
-    "Authorized means it may be marketed in the EU, Iceland, Liechtenstein and Norway; whether it is sold or reimbursed in your country is decided nationally.",
-  );
-  assert.equal(UI.intro.smallPrint, "Data from EMA, updated daily. For information only, not medical advice.");
+  for (const removed of ["lookupLead", "lookup", "exploreLead", "explore", "authorized", "smallPrint"]) assert.equal(UI.intro[removed], undefined, removed);
 });
 
 // Step 2 (#1): 284 of 1,278 substances have no centrally authorized medicine (celecoxib, testosterone),

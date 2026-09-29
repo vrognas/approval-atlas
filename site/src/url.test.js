@@ -5,6 +5,7 @@ import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
   LOOKUP_QUERY_MAX,
+  areaState,
   classState,
   decodeLookup,
   decodeState,
@@ -178,6 +179,16 @@ test("modalities: repeated keys, a modality under a selected group dropped, unkn
 test("a modality opened from a card is the overview filtered to it alone, by modality", () => {
   assert.deepEqual(modalityState("antibody"), { ...structuredClone(DEFAULT_STATE), mod: ["antibody"], by: "mod" });
   assert.equal(encodeState(modalityState("sirna")).toString(), "mod=sirna&by=mod");
+});
+
+// The intro card's "Explore cancer medicines" (owner decision 2026-09-29): the overview filtered to
+// one therapeutic area alone, broken down by therapeutic area.
+test("a therapeutic area opened alone is the overview filtered to it, by therapeutic area", () => {
+  assert.deepEqual(areaState("C04"), { ...structuredClone(DEFAULT_STATE), area: ["C04"], by: "area" });
+  assert.equal(encodeUrl({ ...DEFAULT_LOOKUP, ...areaState("C04") }).toString(), "area=C04&by=area");
+  // Applied before the dashboard has loaded, it clears the kept filters too.
+  assert.equal(patchFilterParams(new URLSearchParams("mah=B&atc=C"), areaState("C04")).toString(), "area=C04&by=area");
+  assert.notEqual(areaState("C04").area, areaState("C04").area);
 });
 
 // The "Authorized now" / "Approvals per year" tabs (view=years) are gone: one dashboard (phase 4a).

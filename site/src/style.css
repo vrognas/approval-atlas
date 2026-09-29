@@ -3867,14 +3867,17 @@ table.activity {
   white-space: nowrap;
 }
 
-/* The landing intro (intro.js; user-approved design 2026-09-28): between the Try line and the
-   headline, on the untouched overview. Compact on phones: small type, tight lists, the close button
-   in the corner beside the first line; two columns from 721px. */
+/* The landing intro (intro.js; user-approved design 2026-09-28; owner decision 2026-09-29: three
+   onboarding cards and a quiet line): between the Try line and the headline, on the untouched
+   overview. A size container, so its layout follows its own width (the resizable sidebar sets the
+   main column's on desktop): the cards side by side from 640px, else compact rows (icon left, text
+   right); the close button in the corner. */
 .intro {
   position: relative;
-  max-width: 820px;
+  container-type: inline-size;
+  max-width: 880px;
   margin: 0 0 24px;
-  padding: 10px 12px 12px;
+  padding: 10px 10px 8px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -3917,93 +3920,243 @@ table.activity {
   color: var(--ink);
 }
 
-.intro-columns {
+.intro-cards {
   display: grid;
-  gap: 10px 32px;
-}
-
-.intro-lead {
+  gap: 10px;
   margin: 0;
-  font-weight: 600;
+  padding: 0;
+  list-style: none;
 }
 
-/* Clear of the close button. */
-.intro-block:first-child .intro-lead {
-  margin-right: 36px;
+/* Rows: the icon tile beside the text (the title, then the sentence with the example after it). */
+.intro-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.intro-list {
-  margin: 2px 0 0;
-  padding-left: 1rem;
+/* The icon on its hue's tint (.hue-*: level-1 fill, text shade; the soft parts in the mid). */
+.intro-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--hue-1);
+  color: var(--hue-text);
 }
 
-/* Phones (below 600px): the explore list behind a disclosure (intro.js disclosureList()), its
-   summary the lead in the link colour, as the company notes' (.company-note), on a 44px target;
-   pulled up over the list above (nothing to tap there). */
-.intro-more > summary {
-  margin-top: -8px;
-  padding: 12px 0;
-  color: var(--link);
-  font-weight: 600;
-  line-height: 20px;
+.intro-icon-svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-/* Closed, the summary's own padding is the space before the scope line. */
-.intro-columns:has(.intro-more:not([open])) + .intro-scope {
-  margin-top: 0;
+.intro-icon-svg .icon-solid,
+.intro-icon-svg .icon-soft {
+  stroke: none;
 }
 
-.intro-scope {
-  margin: 10px 0 0;
+.intro-icon-svg .icon-solid {
+  fill: currentColor;
 }
 
-.intro-authorized {
-  margin: 4px 0 0;
-  color: var(--ink-secondary);
+.intro-icon-svg .icon-soft {
+  fill: var(--hue-mid);
+  opacity: 0.45;
+}
+
+/* The lookup icon's capsule outline (intro.js ICONS), finer than the magnifier around it. */
+.intro-icon-svg .icon-thin {
+  stroke-width: 1.5;
+}
+
+/* The sentence's size, so the lines it shares with the example are no taller than its own. */
+.intro-card-body {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8125rem;
+  line-height: 1.0625rem;
+}
+
+.intro-card-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 650;
   line-height: 1.125rem;
 }
 
-.intro-small {
-  margin: 6px 0 0;
+/* Rows: the sentence and its example run on in one paragraph (intro.js puts a space between). */
+.intro-card-text {
+  display: inline;
+  margin: 0;
   color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.0625rem;
+}
+
+/* The example, kept on one line. Where it is inline, an area above and below its text makes it 44px
+   tall without taking room in the line (over the lines around it); its focus ring stays on the text. */
+.intro-action {
+  position: relative;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.0625rem;
+  white-space: nowrap;
+}
+
+.intro-action::before {
+  content: "";
+  position: absolute;
+  inset: -13.5px 0;
+}
+
+.intro-arrow {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 3px;
+  vertical-align: -2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* One quiet line under the cards: scope and intended use. */
+.intro-scope {
+  margin: 10px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--grid);
+  color: var(--muted);
   font-size: 0.75rem;
   line-height: 1rem;
 }
 
-@media (min-width: 721px) {
-  .intro {
-    padding: 16px 20px 18px;
+/* Rows: the close button's × level with the first title, which keeps clear of it (the sentence's
+   first line runs under the button's corner, not its ×). */
+.intro-card:first-child .intro-card-title {
+  margin-right: 30px;
+}
+
+@container (max-width: 639.98px) {
+  .intro-close {
+    top: 0;
+    right: 0;
+    align-items: flex-start;
+    padding-top: 5px;
+  }
+}
+
+/* Rows in a wider card (a tablet, or the main column beside a wide sidebar): larger type. */
+@container (min-width: 480px) {
+  .intro-card {
+    gap: 14px;
+  }
+
+  .intro-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .intro-card-title {
     font-size: 0.9375rem;
-    line-height: 1.375rem;
+    line-height: 1.25rem;
   }
 
-  .intro-list {
-    padding-left: 1.125rem;
-  }
-
-  .intro-scope {
-    margin-top: 12px;
-  }
-
-  .intro-authorized {
+  .intro-card-body,
+  .intro-card-text {
     font-size: 0.875rem;
     line-height: 1.25rem;
   }
 
-  .intro-small {
-    margin-top: 8px;
-    font-size: 0.8125rem;
+  .intro-action {
+    font-size: 0.875rem;
     line-height: 1.25rem;
   }
 
-  .intro-columns {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  .intro-scope {
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+  }
+}
+
+/* Side by side: each card a column (icon, title, sentence, then the example at the foot, level
+   across the cards). */
+@container (min-width: 640px) {
+  .intro-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px;
   }
 
-  /* The close button sits above the second column's lead. */
-  .intro-block .intro-lead {
-    margin-right: 36px;
+  .intro-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .intro-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .intro-card-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .intro-card:first-child .intro-card-title {
+    margin-right: 0;
+  }
+
+  .intro-card-title {
+    font-size: 1rem;
+    line-height: 1.375rem;
+  }
+
+  .intro-card-text {
+    display: block;
+    margin: 4px 0 8px;
+    font-size: 0.875rem;
+    line-height: 1.3125rem;
+  }
+
+  .intro-action {
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    margin: auto 0 -4px;
+    padding: 4px 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .intro-action::before {
+    display: none;
+  }
+
+  .intro-arrow {
+    margin-left: 4px;
+  }
+
+  .intro-scope {
+    margin-top: 18px;
+    padding-top: 12px;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+}
+
+@media (min-width: 721px) {
+  .intro {
+    padding: 20px 20px 16px;
   }
 }
 

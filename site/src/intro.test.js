@@ -1,9 +1,40 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { introVisible, isOverview, readIntroClosed, storeIntroClosed } from "./intro.js";
-import { DEFAULT_LOOKUP, DEFAULT_STATE } from "./url.js";
+import { existsSync, readFileSync } from "node:fs";
+import { introCardPatch, introVisible, isOverview, readIntroClosed, storeIntroClosed, tryLineVisible } from "./intro.js";
+import { UI } from "./labels.js";
+import { DEFAULT_LOOKUP, DEFAULT_STATE, areaState, encodeUrl } from "./url.js";
 
 const home = { ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP };
+
+// Owner decision 2026-09-29: each card's action runs an example, as the Try line does: a medicine
+// card, or the overview filtered to one therapeutic area alone (other filters cleared).
+test("the intro cards' actions open a medicine card or one therapeutic area alone", () => {
+  const [keytruda, humira, cancer] = UI.intro.cards.map(introCardPatch);
+  assert.deepEqual(keytruda, { med: "EMEA/H/C/003820" });
+  assert.deepEqual(humira, { med: "EMEA/H/C/000481" });
+  assert.deepEqual(cancer, areaState("C04"));
+  assert.equal(encodeUrl({ ...home, ...cancer }).toString(), "area=C04&by=area");
+  // None opens the untouched overview (the card would stay on screen).
+  for (const patch of [keytruda, humira, cancer]) assert.equal(isOverview({ ...home, ...patch }), false);
+});
+
+// The examples exist in the data (skipped before a pipeline run): the medicines by product number
+// and name, the area as a MeSH branch.
+const dataFile = (name) => new URL(`../public/data/${name}`, import.meta.url);
+const exampleFiles = ["ema_search_index.json", "ema_therapeutic_area_branches.json"];
+test(
+  "the intro cards' examples are in the data",
+  { skip: exampleFiles.every((name) => existsSync(dataFile(name))) ? false : "data files not found" },
+  () => {
+    const [index, branches] = exampleFiles.map((name) => JSON.parse(readFileSync(dataFile(name), "utf8")));
+    const nameOf = new Map(index.map((row) => [row.ema_product_number, row.name_of_medicine]));
+    const [keytruda, humira, cancer] = UI.intro.cards.map(introCardPatch);
+    assert.equal(nameOf.get(keytruda.med), "Keytruda");
+    assert.equal(nameOf.get(humira.med), "Humira");
+    assert.equal(branches.find((row) => row.branch === cancer.area[0])?.branch_name, "Neoplasms");
+  },
+);
 
 test("the untouched overview: no lookup and no filter", () => {
   assert.equal(isOverview(home), true);
@@ -34,6 +65,20 @@ test("the intro shows on the untouched overview until closed, and wherever the v
   assert.equal(introVisible({ overview: false, closed: false, requested: false }), false);
   assert.equal(introVisible({ overview: false, closed: false, requested: true }), true);
   assert.equal(introVisible({ overview: true, closed: true, requested: true }), true);
+});
+
+// Owner decision 2026-09-29: the cards' examples stand in for the Try line while the card shows; the
+// line is back once it is closed and on the filtered overview; a lookup hides it, as before.
+test("the Try line hides while the intro shows or a lookup is open", () => {
+  assert.equal(tryLineVisible(true), false);
+  assert.equal(tryLineVisible(false), true);
+  assert.equal(tryLineVisible(false, true), false); // a lookup: the result starts under the search
+  const shown = (overview, closed, requested) => introVisible({ overview, closed, requested });
+  assert.equal(tryLineVisible(shown(true, false, false), false), false); // the untouched overview
+  assert.equal(tryLineVisible(shown(true, true, false), false), true); // closed
+  assert.equal(tryLineVisible(shown(false, false, false), false), true); // a filter
+  assert.equal(tryLineVisible(shown(false, false, false), true), false); // a lookup
+  assert.equal(tryLineVisible(shown(false, true, true), true), false); // asked for on a lookup
 });
 
 // A fake localStorage; throwing: blocked storage (private windows, disabled site data).
