@@ -6230,13 +6230,32 @@ footer p {
   font-weight: 600;
 }
 
-/* About's paragraphs: a run-in heading each; the sources a list under theirs. */
-.about p {
+/* Phones: a 44px target; the negative margins keep the footer's spacing. */
+@media (max-width: 720px) {
+  .about > summary {
+    padding-block: 11.5px;
+    margin-block: -7.5px;
+  }
+}
+
+/* About's parts: a real h3 each (heading navigation), run in before its paragraph; the sources a
+   list under theirs. */
+.about-part {
   margin: 8px 0;
 }
 
-.about strong {
+.about-part > h3 {
+  display: inline;
+  margin: 0;
   color: var(--ink);
+  font-size: inherit;
+  font-weight: 700;
+  line-height: inherit;
+}
+
+.about-part > p {
+  display: inline;
+  margin: 0;
 }
 
 .about-sources {

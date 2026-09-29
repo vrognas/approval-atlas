@@ -242,7 +242,37 @@ const DEK_STATUSES = 4;
 const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance, or 11 with the possible extra year: each range spans both. Pediatric rewards other than a pediatric-use marketing authorization's own protection, and derogations, are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
 const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
 
-// The footer's and About's links (https): sources, licences, the repository.
+// A medicine card's modality source "EMA text naming …": the modality rules' text hints (the "text:…"
+// rule values of ema_medicine_modalities.json) in words; another rule "vaccine {kind}" reads "a {kind}
+// vaccine", any other as it is.
+const TEXT_RULE_WORDS = {
+  "vaccine live": "a live vaccine",
+  "vaccine inactivated": "an inactivated vaccine",
+  "vaccine whole cell": "a whole-cell vaccine",
+  "vaccine acellular": "an acellular vaccine",
+  "vaccine rdna": "an rDNA vaccine",
+  "vaccine conjugate": "a conjugate vaccine",
+  "vaccine recombinant": "a recombinant vaccine",
+  "vaccine surface antigen": "a surface-antigen vaccine",
+  "vaccine split virion": "a split-virion vaccine",
+  "vaccine polysaccharide": "a polysaccharide vaccine",
+  "vaccine rvsv": "an rVSV vector vaccine",
+  "vaccine ad26.": "an Ad26 vector vaccine",
+  "vaccine mva-bn": "an MVA-BN vector vaccine",
+  "vaccine chadox1": "a ChAdOx1 vector vaccine",
+  toxin: "a toxin",
+  coagulation: "a coagulation factor",
+  immunoglobulin: "an immunoglobulin",
+  hormone: "a hormone",
+  "gene + vector": "a gene and its vector",
+  "c1 inhibitor": "C1 inhibitor",
+  "proteinase inhibitor": "a proteinase inhibitor",
+  extract: "an extract",
+  "monoclonal antibody": "a monoclonal antibody",
+  mrna: "mRNA",
+};
+
+// The footer's and About's links (https): sources, licenses, the repository.
 const LINKS = {
   emaData: "https://www.ema.europa.eu/en/medicines/download-medicine-data",
   whocc: "https://atcddd.fhi.no",
@@ -1196,7 +1226,8 @@ export const UI = {
       chemblType: (type) => `ChEMBL molecule type “${type}”`,
       atc: (label) => `WHO ATC class ${label}`,
       atmp: "EMA: advanced therapy medicinal product",
-      text: (detail) => `EMA text (keywords: ${detail})`,
+      // The rule's words (ema_medicine_modalities.json "text:…", kept as they are) as what EMA's text names.
+      text: (detail) => `EMA text naming ${TEXT_RULE_WORDS[detail] ?? (detail.startsWith("vaccine ") ? `a ${detail.slice(8)} vaccine` : detail)}`,
       // After the evidence's link: "Source: EPAR public assessment report (checked by hand)".
       curated: " (checked by hand)",
       curatedNoLink: "Checked by hand",
@@ -1304,7 +1335,7 @@ export const UI = {
     representative: "A regulatory representative: it holds medicines for other companies.",
     asOf: (date) => `Grouped by current owner as of ${formatDate(date)}, not the owner at approval. Each medicine keeps its EMA holder name.`,
     // The medicine card's fact.
-    asOfShort: (date) => `Company as of ${formatDate(date)} (current owner).`,
+    asOfShort: (date) => `Company group as of ${formatDate(date)} (the current owner).`,
     // Provenance (curated notes are fragments; a sentence ends with one full stop): why a
     // per-medicine row put the medicine under its group, a plain note on a medicine's later
     // ownership (group_note without a move: no "Why"), a curated sponsor behind a regulatory
@@ -1356,10 +1387,12 @@ export const UI = {
   theme: {
     names: { light: "Light", dark: "Dark" },
     button: (shown) => `Theme: ${UI.theme.names[shown]}`,
-    hint: (theme, shown) => {
+    // stores: the press stores a choice (legal review 2026-09-30: said next to the control); a press
+    // back to Auto removes it.
+    hint: (theme, shown, stores = false) => {
       const other = shown === "dark" ? "light" : "dark";
       const follows = theme === "auto" ? " (follows your device)" : "";
-      return `Theme: ${UI.theme.names[shown]}${follows}. Select to switch to ${UI.theme.names[other]} (remembered on this device).`;
+      return `Theme: ${UI.theme.names[shown]}${follows}. Select to switch to ${UI.theme.names[other]}${stores ? " (remembered on this device)" : ""}.`;
     },
   },
 
@@ -1834,10 +1867,10 @@ export const UI = {
       contact: "Contact.",
     },
     // A personal, non-commercial project; the operator is not named until the owner decides.
-    what: "Approval Atlas is a free, non-commercial lookup of human medicines authorized through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
+    what: "Approval Atlas is a free, non-commercial lookup of human medicines that went through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
     // Step 2 (#1, #16): what is in the data, where a central authorization is valid, and that
     // availability and reimbursement are national.
-    scope: "It covers every medicine that went through EMA's central procedure, whatever its status. Many older or common medicines are authorized country by country and are not here: check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not the UK or Switzerland. Availability and reimbursement vary by country.",
+    scope: "It covers the medicines EMA lists from its central procedure, whatever their status. Many older or common medicines are authorized country by country and are not here: check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not the UK or Switzerland. Availability and reimbursement vary by country.",
     // The intended purpose (MDCG 2019-11: no medical purpose of its own, so not a medical device), no
     // warranty, the protection estimates (never patents), the company groups (date: their curation date).
     use: (date = null) => [
@@ -1862,13 +1895,13 @@ export const UI = {
         { text: "https://www.ebi.ac.uk/chembl", url: LINKS.chembl },
         `${chembl ? ` (${chembl})` : ""}, `,
         { text: "CC BY-SA 3.0", url: LINKS.ccBySa3 },
-        ": molecule types and ATC names, adapted. Mendez D. et al., Nucleic Acids Res. 2019;47(D1):D930–D940, ",
+        ": molecule types, and ATC names mapped. Mendez D. et al., Nucleic Acids Res. 2019;47(D1):D930–D940, ",
         { text: "doi:10.1093/nar/gky1075", url: LINKS.chemblPaper },
         ".",
       ],
       ...(innStems ? [["Modalities from WHO INN stems (World Health Organization, 2024), read as facts in our own words, ChEMBL molecule types and EMA data, some checked by hand."]] : []),
       ["LEI data: Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site."],
-      ["Fonts: Geist and Geist Mono, ", { text: "SIL Open Font License 1.1", url: LINKS.ofl }, "."],
+      ["Fonts: Geist and Geist Mono © The Geist Project Authors, ", { text: "SIL Open Font License 1.1", url: LINKS.ofl }, "."],
       [
         "Approval Atlas's data files are licensed ",
         { text: "CC BY-SA 4.0", url: LINKS.ccBySa4 },
@@ -1880,7 +1913,7 @@ export const UI = {
     ],
     // What reaches GitHub (the host), and what this browser keeps (intro.js, recent.js, theme.js, the
     // service worker).
-    privacy: "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and requested page addresses, including any search in a link, for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
+    privacy: "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and, like any web server, the page addresses they request (including any search in a link), for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
     contact: [
       "Questions and corrections: ",
       { text: "GitHub issues", url: LINKS.issues },

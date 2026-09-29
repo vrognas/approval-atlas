@@ -393,18 +393,23 @@ function renderFooter(meta = null) {
   const { about } = UI;
   const body = document.getElementById("about-body");
   body.replaceChildren();
-  const paragraph = (head, parts) => {
-    const element = document.createElement("p");
-    const strong = document.createElement("strong");
-    strong.textContent = head;
-    element.append(strong, " ");
-    appendParts(element, parts);
-    body.append(element);
+  // Each part a real heading (heading navigation), styled run-in before its text (style.css).
+  const section = (head, content) => {
+    const part = document.createElement("div");
+    part.className = "about-part";
+    const heading = document.createElement("h3");
+    heading.textContent = head;
+    part.append(heading, " ", content);
+    body.append(part);
   };
-  paragraph(about.heads.what, [about.what]);
-  paragraph(about.heads.scope, [about.scope]);
-  paragraph(about.heads.use, [about.use(groupsDate).join(" ")]);
-  paragraph(about.heads.sources, []);
+  const paragraph = (parts) => {
+    const element = document.createElement("p");
+    appendParts(element, parts);
+    return element;
+  };
+  section(about.heads.what, paragraph([about.what]));
+  section(about.heads.scope, paragraph([about.scope]));
+  section(about.heads.use, paragraph([about.use(groupsDate).join(" ")]));
   const list = document.createElement("ul");
   list.className = "about-sources";
   for (const parts of about.sources(credits)) {
@@ -412,9 +417,9 @@ function renderFooter(meta = null) {
     appendParts(item, parts);
     list.append(item);
   }
-  body.append(list);
-  paragraph(about.heads.privacy, [about.privacy]);
-  paragraph(about.heads.contact, about.contact);
+  section(about.heads.sources, list);
+  section(about.heads.privacy, paragraph([about.privacy]));
+  section(about.heads.contact, paragraph(about.contact));
 }
 
 // The type and status explanations as hidden elements, which describe the focusable carriers (facet

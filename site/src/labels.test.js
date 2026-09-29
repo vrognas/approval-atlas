@@ -184,12 +184,12 @@ test("the About disclosure states scope, intended use and privacy", () => {
   const { about } = labels.UI;
   assert.equal(
     about.what,
-    "Approval Atlas is a free, non-commercial lookup of human medicines authorized through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
+    "Approval Atlas is a free, non-commercial lookup of human medicines that went through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
   );
   // Step 2 (#1, #16): central only; where an authorization is valid; availability is national.
   assert.equal(
     about.scope,
-    "It covers every medicine that went through EMA's central procedure, whatever its status. Many older or common medicines are authorized country by country and are not here: check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not the UK or Switzerland. Availability and reimbursement vary by country.",
+    "It covers the medicines EMA lists from its central procedure, whatever their status. Many older or common medicines are authorized country by country and are not here: check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not the UK or Switzerland. Availability and reimbursement vary by country.",
   );
   // The intended purpose (no medical purpose, so not a medical device), no warranty, the estimates
   // never patents, the company groups not an official record.
@@ -203,7 +203,7 @@ test("the About disclosure states scope, intended use and privacy", () => {
   // GitHub logs IP addresses (its own page says so: not "may"); every item this browser keeps, and how to clear them.
   assert.equal(
     about.privacy,
-    "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and requested page addresses, including any search in a link, for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
+    "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and, like any web server, the page addresses they request (including any search in a link), for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
   );
   // No personal name or email until the owner decides: the repository's issues.
   assert.equal(partsText(about.contact), "Questions and corrections: GitHub issues. Security reports: see the security policy.");
@@ -257,10 +257,10 @@ test("About's sources: each credit and licence, the ChEMBL citation, WHO's names
     "Union Register of medicinal products © European Union, CC BY 4.0, modified: matched to EMA records.",
     "MeSH® courtesy of the U.S. National Library of Medicine (MeSH 2026); definitions verbatim.",
     "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo: verbatim in the data, shown in title case; not for commercial distribution. The plain-language class explanations are Approval Atlas's own, not WHO's.",
-    "ChEMBL data is from https://www.ebi.ac.uk/chembl (ChEMBL_37), CC BY-SA 3.0: molecule types and ATC names, adapted. Mendez D. et al., Nucleic Acids Res. 2019;47(D1):D930–D940, doi:10.1093/nar/gky1075.",
+    "ChEMBL data is from https://www.ebi.ac.uk/chembl (ChEMBL_37), CC BY-SA 3.0: molecule types, and ATC names mapped. Mendez D. et al., Nucleic Acids Res. 2019;47(D1):D930–D940, doi:10.1093/nar/gky1075.",
     "Modalities from WHO INN stems (World Health Organization, 2024), read as facts in our own words, ChEMBL molecule types and EMA data, some checked by hand.",
     "LEI data: Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site.",
-    "Fonts: Geist and Geist Mono, SIL Open Font License 1.1.",
+    "Fonts: Geist and Geist Mono © The Geist Project Authors, SIL Open Font License 1.1.",
     "Approval Atlas's data files are licensed CC BY-SA 4.0, ChEMBL-derived values adapted from CC BY-SA 3.0. Values from other sources, including WHO's ATC codes and names and quoted text, keep their own terms. Code: MIT.",
     "Medicine and company names are trademarks of their owners; their use here identifies them only.",
   ]);
@@ -958,6 +958,12 @@ test("modality copy: filter chip, tree rows, static rows, breakdown and sources"
   assert.equal(modality.sources.stem("-siran"), "WHO INN stem “-siran”");
   assert.equal(modality.sources.chembl("CHEMBL941", "ChEMBL_37"), "ChEMBL CHEMBL941 (ChEMBL_37)");
   assert.equal(modality.sources.radionuclide("177Lu"), "Radionuclide in its INN (177Lu)");
+  // Review of the copy pass: an EMA text rule reads as what the text names, not as literal keywords.
+  assert.equal(modality.sources.text("vaccine live"), "EMA text naming a live vaccine");
+  assert.equal(modality.sources.text("vaccine ad26."), "EMA text naming an Ad26 vector vaccine");
+  assert.equal(modality.sources.text("mrna"), "EMA text naming mRNA");
+  assert.equal(modality.sources.text("vaccine toxoid"), "EMA text naming a toxoid vaccine");
+  assert.equal(modality.sources.text("cells"), "EMA text naming cells");
   assert.equal(modality.documents.pubmed("38142486"), "PubMed 38142486");
   // The modality credit is in About's sources (legal review 2026-09-30), once the data credits WHO's INN stems.
   assert.ok(about.sources({ innStems: true }).some((parts) => parts[0] === "Modalities from WHO INN stems (World Health Organization, 2024), read as facts in our own words, ChEMBL molecule types and EMA data, some checked by hand."));
