@@ -128,31 +128,44 @@ function renderStatusCell(cell, product, register) {
   flag.append("span").attr("class", "visually-hidden").text(text);
 }
 
-// Each term links to its condition page where its MeSH descriptor is known (conditionLink()); its
-// branch names as tooltip.
-function renderAreaCell(cell, product, branchNamesByTerm, conditionLink) {
+// Each term links to its condition page where its MeSH descriptor is known (conditionLink()), and is
+// explained (explainTerms()).
+function renderAreaCell(cell, product, branchNamesByTerm, conditionLink, termTip) {
   cell.selectAll("span.term")
     .data(product.areas)
     .join("span")
     .attr("class", "term")
-    .attr("title", (term) => (branchNamesByTerm.get(term) ?? []).join("\n") || UI.table.noBranch)
     .each(function term(value, index) {
       const link = conditionLink(value);
       if (link) this.append(link);
       else this.append(value);
       if (index < product.areas.length - 1) this.append("; ");
     });
+  explainTerms(cell, branchNamesByTerm, termTip);
+}
+
+// A term's MeSH explainer on its link once the notes have loaded (termTip(term): { text, id } or
+// null; owner request 2026-09-28): a tooltip, and the link's description. Until then, or without
+// one, its branch names as the term's tooltip (title; never both).
+function explainTerms(cell, branchNamesByTerm, termTip) {
+  cell.selectAll("span.term").each(function explain(term) {
+    const link = this.querySelector("a");
+    const tip = link ? termTip(term) : null;
+    d3.select(this).attr("title", tip ? null : (branchNamesByTerm.get(term) ?? []).join("\n") || UI.table.noBranch);
+    if (link) d3.select(link).attr("data-tip", tip?.text ?? null).attr("aria-describedby", tip?.id ?? null).classed("mesh-tip", tip !== null);
+  });
 }
 
 // lookups: substanceIndex (product -> EMA active substances), atcNames (code -> name),
 // atcRetiredYears (retired code -> the year WHO retired it), branchNamesByTerm (MeSH term ->
 // branch names). medicineLink(product): the name as a link to its
-// medicine card; conditionLink(term): a link to the term's condition page, or null.
+// medicine card; conditionLink(term): a link to the term's condition page, or null; termTip(term):
+// its MeSH explainer ({ text, id }), or null (none, or the notes still load).
 // holderOf(product): its Company · Holder cell's content (holders.js holderDisplay(); companies
 // part 2), a node or text. onAtcSelect(code): an ATC segment was clicked; focusFallback(): where
 // focus goes when the clicked segment's row is gone after the update.
 // All text goes through .text() or text nodes: decoded indications contain literal "<" and ">".
-export function createTable(table, moreButton, captionNode, { substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, holderOf, onAtcSelect, focusFallback }) {
+export function createTable(table, moreButton, captionNode, { substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, termTip = () => null, holderOf, onAtcSelect, focusFallback }) {
   let current = null;
   let shown = 0;
   let refocus = null; // { number, code } of a clicked ATC segment, until the next update
@@ -227,7 +240,7 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
       renderAtcCell(d3.select(this), product, atcNames, atcRetiredYears);
     });
     rows.append("td").attr("class", "area").each(function areaCell(product) {
-      renderAreaCell(d3.select(this), product, branchNamesByTerm, conditionLink);
+      renderAreaCell(d3.select(this), product, branchNamesByTerm, conditionLink, termTip);
     });
     rows.append("td").attr("class", "indication-cell")
       .filter(hasIndication)
@@ -269,8 +282,9 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
   // Rebuilds only when the rows, caption or register (ema_medicine_register_status.json rows by
   // product, null until loaded) changed, so resizes keep the pages already shown. selectedAtc: the
   // ATC codes selected in the filter, shown as pressed segments. documents: the documents index by
-  // product (null until loaded); its arrival adds the links in place.
-  return function update(products, caption, register, selectedAtc, documents) {
+  // product (null until loaded); its arrival adds the links in place. notes: the MeSH notes (null
+  // until loaded); their arrival adds the terms' explainers in place (termTip()).
+  return function update(products, caption, register, selectedAtc, documents, notes = null) {
     const unchanged = current !== null && current.caption === caption && current.register === register &&
       current.products.length === products.length && current.products.every((product, index) => product === products[index]);
     if (unchanged) {
@@ -284,10 +298,16 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
           renderDocumentLinks(d3.select(this).select("td.breakable"), product, documents);
         });
       }
+      if (current.notes !== notes) {
+        current.notes = notes;
+        d3.select(table).selectAll("td.area").each(function explain() {
+          explainTerms(d3.select(this), branchNamesByTerm, termTip);
+        });
+      }
       if (refocus) restoreFocus();
       return;
     }
-    current = { products, caption, register, selectedAtc, documents };
+    current = { products, caption, register, selectedAtc, documents, notes };
     shown = 0;
     const root = d3.select(table);
     root.selectChildren().remove();

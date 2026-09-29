@@ -2,10 +2,12 @@
 # counted from the first EU central authorisation of the same active
 # substances. Earlier national authorisations, pre-2005 rules, paediatric
 # rewards and derogations are ignored; the possible extra year is shown as a
-# range. EMA's data flags only generics and biosimilars as copies: hybrids,
-# informed-consent copies and biosimilars EMA does not flag count as medicines
-# of their own, so hybrids of nationally authorised medicines may show
-# protection they do not have (Colchicine Agepha Pharma, Cuprior).
+# range. EMA's data flags only generics and biosimilars as copies; hybrids
+# are copies too, so the copies checked by hand (curated_copy_medicines():
+# hybrids, and a generic and a biosimilar EMA does not flag) follow their
+# reference medicine, or, when it was authorised nationally, have no
+# reference found. Informed-consent copies and copies not on that list count
+# as medicines of their own, so they may show protection they do not have.
 data_exclusivity_years <- 8L
 market_protection_years_min <- 10L
 market_protection_years_max <- 11L
@@ -94,10 +96,12 @@ first_products <- function(originators, by) {
 # A generic or biosimilar follows the first product of its substances as
 # spelt, else of their equivalents (Dasatinib Accord Healthcare: Sprycel,
 # "dasatinib (anhydrous)"); any other medicine counts from the first product
-# of the equivalent substances, whoever holds it.
-match_references <- function(dated, originators) {
+# of the equivalent substances, whoever holds it. A curated copy follows
+# the reference medicine its EPAR names, from the date that medicine counts
+# from, whatever its substances (Riulvy, tegomil fumarate: Tecfidera).
+match_references <- function(dated, originators, copies) {
   by_spelling <- dated |>
-    dplyr::filter(.data$is_follower) |>
+    dplyr::filter(.data$is_follower, !.data$is_curated_copy) |>
     dplyr::select("ema_product_number", "set_key") |>
     dplyr::inner_join(
       first_products(originators, "set_key"),
@@ -105,6 +109,7 @@ match_references <- function(dated, originators) {
       relationship = "many-to-one"
     )
   by_substance <- dated |>
+    dplyr::filter(!.data$is_curated_copy) |>
     dplyr::anti_join(by_spelling, by = "ema_product_number") |>
     dplyr::select("ema_product_number", "equivalent_set_key") |>
     dplyr::inner_join(
@@ -112,7 +117,30 @@ match_references <- function(dated, originators) {
       by = "equivalent_set_key",
       relationship = "many-to-one"
     )
-  dplyr::bind_rows(by_spelling, by_substance) |>
+  references <- dplyr::bind_rows(by_spelling, by_substance)
+  by_curated <- copies |>
+    dplyr::filter(!is.na(.data$reference_product_number)) |>
+    dplyr::select("ema_product_number", "reference_product_number") |>
+    dplyr::inner_join(
+      dplyr::select(
+        references,
+        reference_product_number = "ema_product_number",
+        "counted_from"
+      ),
+      by = "reference_product_number",
+      relationship = "many-to-one"
+    ) |>
+    dplyr::inner_join(
+      dplyr::select(
+        dated,
+        reference_product_number = "ema_product_number",
+        reference_name = "name_of_medicine",
+        reference_group_key = "group_key"
+      ),
+      by = "reference_product_number",
+      relationship = "many-to-one"
+    )
+  dplyr::bind_rows(references, by_curated) |>
     dplyr::select(
       "ema_product_number",
       "reference_product_number",
@@ -135,7 +163,10 @@ own_company_firsts <- function(originators) {
     )
 }
 
-prepare_dated_medicines <- function(medicines, set_keys, medicine_groups) {
+prepare_dated_medicines <- function(medicines,
+                                    set_keys,
+                                    medicine_groups,
+                                    copies) {
   medicines |>
     dplyr::filter(!is.na(.data$marketing_authorisation_date)) |>
     dplyr::select(
@@ -163,7 +194,9 @@ prepare_dated_medicines <- function(medicines, set_keys, medicine_groups) {
         .data$equivalent_set_key,
         .data$set_key
       ),
-      is_follower = .data$generic | .data$biosimilar,
+      is_curated_copy = .data$ema_product_number %in%
+        copies$ema_product_number,
+      is_follower = .data$generic | .data$biosimilar | .data$is_curated_copy,
       is_authorised = .data$medicine_status %in% "Authorised"
     )
 }
@@ -210,6 +243,11 @@ apply_other_company_rule <- function(data, snapshot_date) {
         .data$own_market_protection_end_max,
         .data$market_protection_end_max
       ),
+      data_exclusivity_end_max = dplyr::if_else(
+        .data$other_company,
+        add_months(.data$own_counted_from, 12L * data_exclusivity_years),
+        as.Date(NA)
+      ),
       basis = dplyr::case_when(
         .data$other_company ~ "other_company_reference",
         !.data$is_follower ~ "own",
@@ -232,12 +270,18 @@ apply_other_company_rule <- function(data, snapshot_date) {
 build_protection_table <- function(medicines,
                                    snapshot_date,
                                    set_keys,
-                                   medicine_groups) {
-  dated <- prepare_dated_medicines(medicines, set_keys, medicine_groups)
+                                   medicine_groups,
+                                   copies) {
+  dated <- prepare_dated_medicines(
+    medicines,
+    set_keys,
+    medicine_groups,
+    copies
+  )
   originators <- dplyr::filter(dated, !.data$is_follower)
   dated |>
     dplyr::left_join(
-      match_references(dated, originators),
+      match_references(dated, originators, copies),
       by = "ema_product_number",
       relationship = "one-to-one"
     ) |>
@@ -254,17 +298,25 @@ build_protection_table <- function(medicines,
         .data$market_protection_end_max,
         snapshot_date
       ),
+      # Which source says the medicine is a copy.
+      copy_source = dplyr::case_when(
+        .data$is_curated_copy ~ "curated",
+        .data$is_follower ~ "ema_flag",
+        .default = NA_character_
+      ),
       source = "estimate_from_ema_dates"
     ) |>
     dplyr::select(
       "ema_product_number",
       "basis",
+      "copy_source",
       "reference_product_number",
       "reference_name",
       "counted_from",
       "own_reference_product_number",
       "own_counted_from",
       "data_exclusivity_end",
+      "data_exclusivity_end_max",
       "market_protection_end_min",
       "market_protection_end_max",
       "status",
@@ -273,23 +325,132 @@ build_protection_table <- function(medicines,
     dplyr::arrange(.data$ema_product_number)
 }
 
+is_product_number <- function(values) {
+  grepl("^EMEA/H/C/\\d{6}$", values)
+}
+
+copy_types <- c("hybrid", "generic", "biosimilar")
+
+# The quote must say what the table says the medicine is.
+quote_names_copy_type <- function(copies) {
+  purrr::map2_lgl(
+    copies$copy_type,
+    copies$evidence_quote,
+    function(copy_type, quote) {
+      copy_type %in% copy_types &&
+        grepl(copy_type, quote, ignore.case = TRUE)
+    }
+  )
+}
+
+# Product numbers, a copy type its EPAR quote names (has_evidence()), a
+# reference name, one row per medicine, and a reference that is not itself a
+# curated copy.
+check_curated_copies <- function(copies) {
+  references <- copies$reference_product_number
+  malformed <- !is_product_number(copies$ema_product_number) |
+    !(is.na(references) | is_product_number(references)) |
+    (references == copies$ema_product_number) %in% TRUE |
+    !grepl("[[:alnum:]]", copies$reference_name) |
+    !has_evidence(copies) |
+    !quote_names_copy_type(copies)
+  if (any(malformed)) {
+    cli::cli_abort(c(
+      "Curated copies need EMA product numbers, a copy type (hybrid,
+      generic or biosimilar), another medicine as reference with its name,
+      an https evidence URL, a quote of at most 20 words naming the copy
+      type and a checked date.",
+      x = "{.val {offender_values(copies$ema_product_number[malformed])}}"
+    ))
+  }
+  repeated <- duplicated(copies$ema_product_number)
+  if (any(repeated)) {
+    cli::cli_abort(c(
+      "Curated copies list a medicine more than once.",
+      x = "{.val {offender_values(copies$ema_product_number[repeated])}}"
+    ))
+  }
+  chained <- references %in% copies$ema_product_number
+  if (any(chained)) {
+    cli::cli_abort(c(
+      "Curated copies whose reference is itself a curated copy.",
+      x = "{.val {offender_values(copies$ema_product_number[chained])}}"
+    ))
+  }
+  copies
+}
+
+# The curated copies in the EMA data whose reference, if central, has an
+# approval date (published as ema_curated_copies.json); others are only
+# listed.
+select_curated_copies <- function(copies, medicines) {
+  dated <- medicines$ema_product_number[
+    !is.na(medicines$marketing_authorisation_date)
+  ]
+  in_data <- copies$ema_product_number %in% medicines$ema_product_number &
+    (is.na(copies$reference_product_number) |
+       copies$reference_product_number %in% dated)
+  if (!all(in_data)) {
+    cli::cli_warn(c(
+      "Curated copies or their references not in the EMA data (left out):",
+      x = "{.val {offender_values(copies$ema_product_number[!in_data])}}"
+    ))
+  }
+  copies[in_data, ] |>
+    dplyr::mutate(source = "curated") |>
+    dplyr::arrange(.data$ema_product_number)
+}
+
 # Built after the company tables, whose groups it reads.
 build_protection_tables <- function(tables,
                                     snapshot_date,
                                     equivalents =
-                                      curated_substance_equivalents()) {
+                                      curated_substance_equivalents(),
+                                    copies = curated_copy_medicines()) {
   equivalents <- build_substance_equivalents(
     equivalents,
     tables$ema_medicine_substances
   )
   set_keys <- protection_set_keys(tables$ema_medicine_substances, equivalents)
+  copies <- select_curated_copies(
+    check_curated_copies(copies),
+    tables$ema_medicines
+  )
   list(
     ema_medicine_protection = build_protection_table(
       tables$ema_medicines,
       snapshot_date,
       set_keys,
-      tables$ema_medicine_companies
+      tables$ema_medicine_companies,
+      copies
     ),
-    ema_substance_equivalents = equivalents
+    ema_substance_equivalents = equivalents,
+    ema_curated_copies = copies
+  )
+}
+
+# meta.json entry for the curated copies (none when no row is in the data).
+curated_copies_source_entry <- function(copies) {
+  if (nrow(copies) == 0) {
+    return(NULL)
+  }
+  checked <- format(max(copies$checked_date))
+  list(
+    name = paste(
+      "Hybrid, generic and biosimilar medicines EMA does not flag",
+      "(curated by approval-atlas from EMA EPAR pages)"
+    ),
+    url = paste0(
+      "https://github.com/vrognas/approval-atlas/blob/main/",
+      "R/curated-copies.R"
+    ),
+    version = paste("Checked", checked),
+    retrieved = checked,
+    licence = "© European Medicines Agency; reuse with acknowledgement",
+    attribution = paste(
+      "Copy type and reference medicine checked by hand by approval-atlas",
+      "against EMA EPAR pages, quoted verbatim;",
+      ema_attribution
+    )
   )
 }

@@ -82,14 +82,17 @@ run_fixture_pipeline <- function(output_directory,
                                  downloads_directory =
                                    seed_downloads_directory(),
                                  smpc_budget = 0L,
-                                 equivalents = no_equivalents()) {
-  # Read before curated_substance_equivalents() is mocked to return it.
+                                 equivalents = no_equivalents(),
+                                 copies = no_curated_copies()) {
+  # Read before the curated tables are mocked to return them.
   force(equivalents)
+  force(copies)
   testthat::local_mocked_bindings(
     fetch_whocc_index_page = function(page) {
       read_fixture_bytes(fixture_whocc_index_path("L04AC28"))
     },
-    curated_substance_equivalents = function() equivalents
+    curated_substance_equivalents = function() equivalents,
+    curated_copy_medicines = function() copies
   )
   run_ema_pipeline(
     output_directory = output_directory,
@@ -105,6 +108,11 @@ no_equivalents <- function() {
   curated_substance_equivalents()[0, ]
 }
 
+# Nor are the curated copies.
+no_curated_copies <- function() {
+  curated_copy_medicines()[0, ]
+}
+
 output_stems <- c(
   "ema_medicines",
   "ema_medicine_therapeutic_areas",
@@ -118,6 +126,7 @@ output_stems <- c(
   "ema_medicine_documents",
   "mesh_entry_terms",
   "mesh_descriptor_areas",
+  "mesh_descriptor_notes",
   "ema_search_index",
   "ema_medicine_orphan_exclusivity",
   "ema_medicine_register_status",
@@ -125,7 +134,8 @@ output_stems <- c(
   "ema_medicine_companies",
   "companies",
   "ema_medicine_protection",
-  "ema_substance_equivalents"
+  "ema_substance_equivalents",
+  "ema_curated_copies"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -237,6 +247,7 @@ test_that("run_ema_pipeline builds the lookup tables from cached sources", {
   # The fixture MeSH has none of the fixture EMA terms.
   expect_identical(nrow(tables$mesh_entry_terms), 0L)
   expect_identical(nrow(tables$mesh_descriptor_areas), 0L)
+  expect_identical(nrow(tables$mesh_descriptor_notes), 0L)
   expect_identical(nrow(tables$ema_therapeutic_area_subtree), 0L)
 })
 
@@ -678,6 +689,46 @@ test_that("run_ema_pipeline writes the substance equivalents it uses", {
   ]
   expect_identical(tyruko$basis, "follows_reference")
   expect_identical(tyruko$reference_name, "Mounjaro")
+})
+
+test_that("run_ema_pipeline applies, writes and credits the curated copies", {
+  forbid_network()
+  # Mounjaro stands in for a hybrid of Suboxone.
+  copies <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/005620",
+    copy_type = "hybrid",
+    reference_product_number = "EMEA/H/C/000697",
+    reference_name = "Suboxone",
+    evidence_url = "https://www.ema.europa.eu/en/medicines/human/EPAR/mounjaro",
+    evidence_quote = "Stand-in is a ‘hybrid medicine’.",
+    checked_date = as.Date("2026-09-29"),
+    note = "Stand-in row"
+  )
+  output_directory <- file.path(tempfile(), "data")
+  tables <- suppressMessages(run_fixture_pipeline(
+    output_directory,
+    copies = copies
+  ))
+  protection <- tables$ema_medicine_protection
+  mounjaro <- protection[protection$ema_product_number == "EMEA/H/C/005620", ]
+  expect_identical(mounjaro$basis, "follows_reference")
+  expect_identical(mounjaro$copy_source, "curated")
+  expect_identical(mounjaro$reference_name, "Suboxone")
+  expect_identical(mounjaro$status, "ended")
+  written <- jsonlite::fromJSON(
+    file.path(output_directory, "ema_curated_copies.json")
+  )
+  expect_identical(written$ema_product_number, "EMEA/H/C/005620")
+  expect_identical(written$copy_type, "hybrid")
+  expect_identical(written$checked_date, "2026-09-29")
+  expect_identical(written$source, "curated")
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  last_source <- meta$sources[[length(meta$sources)]]
+  expect_match(last_source$name, "curated by approval-atlas from EMA EPAR")
+  expect_identical(last_source$version, "Checked 2026-09-29")
 })
 
 test_that("run_ema_pipeline reports protection status changes", {

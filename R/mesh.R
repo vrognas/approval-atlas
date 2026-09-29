@@ -152,9 +152,28 @@ read_mesh_descriptors <- function(xml_path) {
       descriptors$descriptor_ui,
       "ConceptList/Concept/TermList/Term/String",
       "term"
-    )
+    ),
+    scope_notes = read_scope_notes(records, descriptors$descriptor_ui)
   )
 }
+
+# The descriptor's definition is the scope note of its preferred concept;
+# other concepts' notes define narrower ideas.
+read_scope_notes <- function(records, descriptor_ui) {
+  scope_note <- xml2::xml_find_first(
+    records,
+    "ConceptList/Concept[@PreferredConceptYN='Y']/ScopeNote"
+  )
+  dplyr::tibble(
+    descriptor_ui = descriptor_ui,
+    scope_note = stringr::str_squish(xml2::xml_text(scope_note))
+  ) |>
+    dplyr::filter(!is.na(.data$scope_note), .data$scope_note != "")
+}
+
+# Bumped when read_mesh_descriptors() reads more (2: scope notes), so a
+# cached parse of the same file is redone.
+mesh_parser_version <- 2L
 
 load_mesh_descriptors <- function(mesh_source) {
   # Parsing the 313 MB file takes ~15 s and ~1.9 GB, so keep the result until
@@ -165,14 +184,19 @@ load_mesh_descriptors <- function(mesh_source) {
   )
   if (!is.na(mesh_source$last_modified) && file.exists(parsed_path)) {
     parsed <- readRDS(parsed_path)
-    if (identical(parsed$last_modified, mesh_source$last_modified)) {
+    if (identical(parsed$last_modified, mesh_source$last_modified) &&
+          identical(parsed$parser_version, mesh_parser_version)) {
       return(parsed$mesh)
     }
   }
   cli::cli_inform("Parsing MeSH {mesh_source$year} descriptors.")
   mesh <- read_mesh_descriptors(mesh_source$path)
   saveRDS(
-    list(last_modified = mesh_source$last_modified, mesh = mesh),
+    list(
+      last_modified = mesh_source$last_modified,
+      parser_version = mesh_parser_version,
+      mesh = mesh
+    ),
     parsed_path
   )
   mesh
@@ -382,6 +406,55 @@ build_area_subtree_table <- function(term_matches, mesh) {
       .data$source
     ) |>
     dplyr::arrange(.data$therapeutic_area_mesh, .data$node)
+}
+
+# NLM's definitions of what the area tree shows: the descriptors of the EMA
+# terms and of their level-1 to 3 tree nodes (a branch root is the descriptor
+# holding its code, "C04" Neoplasms), with every tree number of each.
+build_mesh_descriptor_notes <- function(term_matches, mesh) {
+  matched <- unique(stats::na.omit(term_matches$mesh_descriptor_ui))
+  own_tree_numbers <- mesh$tree_numbers$tree_number[
+    mesh$tree_numbers$descriptor_ui %in% matched
+  ]
+  node_tree_numbers <- unlist(purrr::map(
+    own_tree_numbers,
+    function(tree_number) utils::head(tree_number_prefixes(tree_number), 3)
+  ))
+  descriptor_uis <- union(
+    matched,
+    mesh$tree_numbers$descriptor_ui[
+      mesh$tree_numbers$tree_number %in% node_tree_numbers
+    ]
+  )
+  tree_numbers <- mesh$tree_numbers |>
+    dplyr::filter(.data$descriptor_ui %in% descriptor_uis) |>
+    dplyr::summarise(
+      tree_numbers = list(sort(.data$tree_number, method = "radix")),
+      .by = "descriptor_ui"
+    )
+  mesh$descriptors |>
+    dplyr::filter(.data$descriptor_ui %in% descriptor_uis) |>
+    dplyr::left_join(
+      tree_numbers,
+      by = "descriptor_ui",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::left_join(
+      mesh$scope_notes,
+      by = "descriptor_ui",
+      relationship = "one-to-one"
+    ) |>
+    dplyr::transmute(
+      mesh_descriptor_ui = .data$descriptor_ui,
+      mesh_descriptor_name = .data$descriptor_name,
+      tree_numbers = purrr::map(
+        .data$tree_numbers,
+        function(numbers) numbers %||% character()
+      ),
+      .data$scope_note,
+      source = "nlm_mesh"
+    ) |>
+    dplyr::arrange(.data$mesh_descriptor_ui)
 }
 
 # Search folding, shared with the browser: both sides apply exactly these

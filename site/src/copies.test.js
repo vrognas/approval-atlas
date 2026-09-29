@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
+import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
 
 // ema_substance_equivalents.json rows (hand-checked pairs; both directions in the file).
 const pair = (substance_key, equivalent_key) => ({
@@ -230,6 +230,40 @@ test("copiesLinePlan: an advanced therapy without copies gets no \"none yet\" li
   // Other types still say so (Ozempic, the first semaglutide).
   const semaglutide = setGroups(ROWS, new Map()).get("semaglutide");
   assert.equal(copiesLinePlan(OZEMPIC, copiesSummary(OZEMPIC, semaglutide, groupOf), null).copies, "none");
+});
+
+// Step 4: R's curated hybrid list gives hybrids (EMA type Other) the basis of a copy: they follow
+// their reference's protection (follows_reference), or their reference is not a central one
+// (reference_not_found). Their cards read as a copy's, not as the originator's "No generic or
+// biosimilar authorized yet." Real rows (ema_search_index.json and ema_medicine_protection.json,
+// 2026-09-29).
+const VICTOZA = medicine("EMEA/H/C/001026", "Victoza", ["liraglutide"], "Other", "Authorised", "2009-06-30");
+const SAXENDA = medicine("EMEA/H/C/003780", "Saxenda", ["liraglutide"], "Other", "Authorised", "2015-03-23");
+const LIRAGLUTIDE_STADA = medicine("EMEA/H/C/006615", "Liraglutide STADA", ["liraglutide"], "Other", "Authorised", "2026-07-15");
+const COLCHICINE_AGEPHA = medicine("EMEA/H/C/006653", "Colchicine Agepha Pharma", ["colchicine"], "Other", "Authorised", "2026-07-24");
+const estimate = (row, basis, ref = null) => ({
+  ema_product_number: row.ema_product_number, basis, reference_product_number: ref?.ema_product_number ?? null,
+  reference_name: ref?.name_of_medicine ?? null, counted_from: ref?.marketing_authorisation_date ?? null, status: basis === "reference_not_found" ? "unclear" : "ended",
+});
+
+test("followsReference: a hybrid whose estimate follows a reference, or finds none, reads as a copy", () => {
+  const liraglutide = [VICTOZA, SAXENDA, LIRAGLUTIDE_STADA];
+  const stada = copiesSummary(LIRAGLUTIDE_STADA, liraglutide, groupOf);
+  assert.equal(stada.copy, false);
+  const asCopy = followsReference(stada, estimate(LIRAGLUTIDE_STADA, "follows_reference", VICTOZA));
+  assert.equal(asCopy.copy, true);
+  // No "No generic or biosimilar authorized yet." (the originator's line); the "same" line naming Victoza.
+  assert.deepEqual(copiesLinePlan(LIRAGLUTIDE_STADA, asCopy, shown(VICTOZA)), { copies: null, first: shown(VICTOZA), same: true });
+  // A hybrid of a nationally authorized medicine (Colchicine Tiofarma): no central first approval to name.
+  const colchicine = followsReference(copiesSummary(COLCHICINE_AGEPHA, [COLCHICINE_AGEPHA], groupOf), estimate(COLCHICINE_AGEPHA, "reference_not_found"));
+  assert.deepEqual(copiesLinePlan(COLCHICINE_AGEPHA, colchicine, null), { copies: null, first: null, same: true });
+  // The originator (basis own) and an estimate still loading change nothing.
+  const victoza = copiesSummary(VICTOZA, liraglutide, groupOf);
+  assert.equal(followsReference(victoza, estimate(VICTOZA, "own", VICTOZA)), victoza);
+  assert.equal(followsReference(stada, undefined), stada);
+  // A generic stays a copy whatever its estimate.
+  const hyrimoz = copiesSummary(HYRIMOZ, setGroups(ROWS, new Map()).get("adalimumab"), groupOf);
+  assert.equal(followsReference(hyrimoz, undefined).copy, true);
 });
 
 // R names a medicine's substances by its active substance field where EMA's INN field repeats the

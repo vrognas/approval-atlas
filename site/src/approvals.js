@@ -178,13 +178,17 @@ export function breakdownExcluded(products, by) {
 // Breakdown rows (areas.js areaBreakdownRows() or companies.js companyBreakdownRows() output, or
 // ATC classes) in the Sort control's order: "count"
 // as computed (most first) or, direction "asc", fewest first (ties keep their order); "key" ATC
-// classes by code and areas and holders by name, A-Z or, direction "desc", Z-A. The Other row and
-// the incomplete-code row stay last.
+// classes by code, areas in MeSH tree order (their rank, areaBreakdownRows(); owner request
+// 2026-09-28) and holders by name, A-Z or, direction "desc", Z-A. The Other row and the
+// incomplete-code row stay last.
 export function sortBreakdownRows(rows, order, by, direction = order === "key" ? "asc" : "desc") {
   if (order !== "key" && direction === "desc") return rows;
   const last = (row) => Boolean(row.other || row.incomplete);
   const sign = direction === "asc" ? 1 : -1;
-  const byKey = by === "atc" ? (a, b) => a.key.localeCompare(b.key) : (a, b) => a.label.localeCompare(b.label);
+  const byLabel = (a, b) => a.label.localeCompare(b.label);
+  const byKey = by === "atc" ? (a, b) => a.key.localeCompare(b.key)
+    : by === "area" ? (a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity) || byLabel(a, b)
+      : byLabel;
   const compare = order === "key" ? (a, b) => sign * byKey(a, b) : (a, b) => a.count - b.count;
   return [...rows.filter((row) => !last(row)).sort(compare), ...rows.filter(last)];
 }

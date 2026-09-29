@@ -54,8 +54,9 @@ const subtreeRows = [
 const tree = buildAreaTree(branchRows, subtreeRows);
 const everyKey = new Set([...tree.names.keys()]);
 
-test("area tree: MeSH branches by name, then level-2 and level-3 nodes, EMA's terms as leaves", () => {
-  assert.deepEqual(tree.roots, ["C05", "C04", "C17"]); // Musculoskeletal, Neoplasms, Skin (by name)
+test("area tree: MeSH branches by code, then level-2 and level-3 nodes, EMA's terms as leaves", () => {
+  // MeSH tree order (owner request 2026-09-28, as the ATC tree by code): not by name.
+  assert.deepEqual(tree.roots, ["C04", "C05", "C17"]); // Neoplasms, Musculoskeletal, Skin
   assert.deepEqual(tree.children("C17"), ["C17.800"]);
   assert.deepEqual(tree.children("C17.800"), ["C17.800.090", "C17.800.859"]);
   // Deeper than level 3: leaves under their level-3 node.
@@ -68,6 +69,52 @@ test("area tree: MeSH branches by name, then level-2 and level-3 nodes, EMA's te
   assert.equal(tree.isTerm("C17.800"), false);
   // An unmatched term has no place in the tree.
   assert.equal(tree.has("Unmatched term"), false);
+});
+
+// Owner request 2026-09-28: every level in MeSH tree order, as the ATC tree by code. EMA's terms
+// deeper than level 3 by their descriptor's tree number under the row's parent (from
+// mesh_descriptor_notes.json, which loads after the tree: setNotes()); terms without one last, by
+// name. Arthritis, Gouty (C05.550.114.423) comes after Arthritis, Juvenile (C05.550.114.099),
+// though its name comes first.
+const withUi = (row, ui) => ({ ...row, mesh_descriptor_ui: ui });
+const orderBranchRows = [
+  ...branchRows.map((row) => withUi(row, { "Arthritis, Juvenile": "D001171", "Arthritis, Juvenile Rheumatoid": "D001171", Psoriasis: "D011565" }[row.therapeutic_area_mesh] ?? null)),
+  withUi(branch("Arthritis, Gouty", "Arthritis, Gouty", "C05", "Musculoskeletal Diseases"), "D015210"),
+  withUi(branch("Arthritis, Experimental", "Arthritis, Experimental", "C05", "Musculoskeletal Diseases"), "D001169"),
+];
+const orderSubtreeRows = [
+  ...subtreeRows,
+  node("Arthritis, Gouty", "C05.550", 2, "C05", "Joint Diseases"),
+  node("Arthritis, Gouty", "C05.550.114", 3, "C05.550", "Arthritis"),
+  node("Arthritis, Gouty", "C05.550.354", 3, "C05.550", "Gout"),
+  node("Arthritis, Experimental", "C05.550", 2, "C05", "Joint Diseases"),
+  node("Arthritis, Experimental", "C05.550.114", 3, "C05.550", "Arthritis"),
+];
+const note = (ui, name, numbers) => ({ mesh_descriptor_ui: ui, mesh_descriptor_name: name, tree_numbers: numbers, scope_note: null, source: "nlm_mesh" });
+// No row for Arthritis, Experimental: it has no tree number here.
+const noteRows = [
+  note("D001171", "Arthritis, Juvenile", ["C05.550.114.099", "C05.799.056"]),
+  note("D015210", "Arthritis, Gouty", ["C05.550.114.423", "C05.550.354.500"]),
+  note("D011565", "Psoriasis", ["C17.800.859.675"]),
+];
+
+test("area tree order: terms by their tree number under the row's parent, those without one last by name", () => {
+  const ordered = buildAreaTree(orderBranchRows, orderSubtreeRows, noteRows);
+  assert.deepEqual(ordered.roots, ["C04", "C05", "C17"]);
+  assert.deepEqual(ordered.children("C05.550"), ["C05.550.114", "C05.550.354"]);
+  assert.deepEqual(ordered.children("C05.550.114"), ["Arthritis, Juvenile", "Arthritis, Juvenile Rheumatoid", "Arthritis, Gouty", "Arthritis, Experimental"]);
+  assert.deepEqual(ordered.children("C05.550.354"), ["Arthritis, Gouty"]);
+});
+
+test("area tree order: before the notes load, terms by name; setNotes() puts them in tree order", () => {
+  const ordered = buildAreaTree(orderBranchRows, orderSubtreeRows);
+  assert.deepEqual(ordered.children("C05.550.114"), ["Arthritis, Experimental", "Arthritis, Gouty", "Arthritis, Juvenile", "Arthritis, Juvenile Rheumatoid"]);
+  ordered.setNotes(noteRows);
+  assert.deepEqual(ordered.children("C05.550.114"), ["Arthritis, Juvenile", "Arthritis, Juvenile Rheumatoid", "Arthritis, Gouty", "Arthritis, Experimental"]);
+  // Nodes keep their order; no notes (a missing file) is the order by name again.
+  assert.deepEqual(ordered.children("C05.550"), ["C05.550.114", "C05.550.354"]);
+  ordered.setNotes(null);
+  assert.deepEqual(ordered.children("C05.550.114")[0], "Arthritis, Experimental");
 });
 
 test("area tree: a term whose descriptor is a level-2/3 node shows once, as that node", () => {
@@ -252,16 +299,18 @@ test("area breakdown: the level below a node, most first, then the medicines at 
     product(["Neoplasms", "Breast Neoplasms"]),
   ];
   assert.deepEqual(areaBreakdownRows(tree, null, products).map((row) => [row.key, row.count]), [["C04", 4], ["C17", 4]]);
+  // rank: the row's place in tree order, for the Sort control's MeSH order (sortBreakdownRows()).
   assert.deepEqual(areaBreakdownRows(tree, "C04.588.180", products), [
-    { key: "Triple Negative Breast Neoplasms", label: "Triple Negative Breast Neoplasms", count: 1 },
+    { key: "Triple Negative Breast Neoplasms", label: "Triple Negative Breast Neoplasms", count: 1, rank: 0 },
     { key: "C04.588.180", label: "not more specific", count: 2, static: true, incomplete: true },
   ]);
   // A branch ends with the medicines tagged only at its root (one static row; the medicine also
   // tagged Breast Neoplasms counts under Neoplasms by Site only).
   assert.deepEqual(areaBreakdownRows(tree, "C04", products), [
-    { key: "C04.588", label: "Neoplasms by Site", count: 3 },
+    { key: "C04.588", label: "Neoplasms by Site", count: 3, rank: 0 },
     { key: "C04", label: "Tagged only as Neoplasms or Cancer", count: 1, static: true, incomplete: true },
   ]);
+  assert.deepEqual(areaBreakdownRows(tree, null, products).map((row) => [row.key, row.rank]), [["C04", 0], ["C17", 2]]);
   // A leaf has no rows of its own; the breakdown shows it alone.
   assert.deepEqual(areaBreakdownRows(tree, "Psoriasis", products), []);
   assert.deepEqual(areaBreakdownRows(tree, "Cancer", products), []);
@@ -270,18 +319,40 @@ test("area breakdown: the level below a node, most first, then the medicines at 
   assert.deepEqual(rows.map((row) => [row.key, row.count, row.other ?? false]), [["C04", 4, false], [null, 4, true]]);
 });
 
-// Real data (ema_therapeutic_area_branches.json, ema_therapeutic_area_subtree.json).
+// Real data (ema_therapeutic_area_branches.json, ema_therapeutic_area_subtree.json and, when the
+// pipeline has written it, mesh_descriptor_notes.json).
 const dataFile = (name) => new URL(`../public/data/${name}`, import.meta.url);
 const realFiles = ["ema_therapeutic_area_branches.json", "ema_therapeutic_area_subtree.json"].map(dataFile);
+const notesFile = dataFile("mesh_descriptor_notes.json");
 test(
-  "area tree (real data): every level lists its children by name; root tags are no one's children",
+  "area tree (real data): every level lists its children in MeSH tree order; root tags are no one's children",
   { skip: realFiles.every(existsSync) ? false : "therapeutic area data files not found" },
   () => {
     const [branches, subtree] = realFiles.map((file) => JSON.parse(readFileSync(file, "utf8")));
-    const real = buildAreaTree(branches, subtree);
-    const byName = (keys) => [...keys].sort((a, b) => real.name(a).localeCompare(real.name(b)) || a.localeCompare(b));
+    const notes = existsSync(notesFile) ? JSON.parse(readFileSync(notesFile, "utf8")) : null;
+    const real = buildAreaTree(branches, subtree, notes);
+    // Each child's tree number under its parent (a node's key; a term's descriptor's number under
+    // it, null without one): non-decreasing, the unnumbered ones last by name.
+    const numbersOf = new Map((notes ?? []).map((row) => [row.mesh_descriptor_ui, row.tree_numbers]));
+    const uiOf = new Map(branches.map((row) => [row.therapeutic_area_mesh, row.mesh_descriptor_ui]));
+    const numberUnder = (key, parent) => (!real.isTerm(key) ? key
+      : (numbersOf.get(uiOf.get(key)) ?? []).filter((number) => number === parent || number.startsWith(`${parent}.`)).sort()[0] ?? null);
+    const outOfOrder = (parent) => {
+      const children = real.children(parent);
+      return children.some((key, index) => {
+        if (index === 0) return false;
+        const [before, after] = [numberUnder(children[index - 1], parent), numberUnder(key, parent)];
+        if (before === null) return after !== null || real.name(children[index - 1]).localeCompare(real.name(key)) > 0;
+        return after !== null && before > after;
+      });
+    };
+    assert.deepEqual(real.roots, [...real.roots].sort());
     const keys = [null, ...real.names.keys()];
-    assert.deepEqual(keys.filter((key) => real.children(key).join() !== byName(real.children(key)).join()), []);
+    assert.deepEqual(keys.filter(outOfOrder), []);
+    if (notes) {
+      // With the notes, every term under a node has its tree number there.
+      assert.deepEqual(keys.filter((key) => key !== null && real.children(key).some((child) => numberUnder(child, key) === null)), []);
+    }
     const rootTags = real.roots.flatMap((key) => real.rootTerms(key));
     assert.deepEqual(real.rootTerms("C04"), ["Neoplasms", "Cancer"]);
     assert.deepEqual(rootTags.filter((term) => keys.some((key) => real.children(key).includes(term))), []);

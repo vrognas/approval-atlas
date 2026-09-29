@@ -39,10 +39,24 @@ no_groups <- function() {
   dplyr::tibble(ema_product_number = character(), group_key = character())
 }
 
+no_copies <- function() {
+  dplyr::tibble(
+    ema_product_number = character(),
+    reference_product_number = character()
+  )
+}
+
 protection_of <- function(medicines,
                           set_keys = set_keys_of(medicines),
-                          medicine_groups = no_groups()) {
-  build_protection_table(medicines, snapshot, set_keys, medicine_groups)
+                          medicine_groups = no_groups(),
+                          copies = no_copies()) {
+  build_protection_table(
+    medicines,
+    snapshot,
+    set_keys,
+    medicine_groups,
+    copies
+  )
 }
 
 protection_row <- function(protection, product_number) {
@@ -54,9 +68,9 @@ test_that("build_protection_table has one row per medicine with an MA date", {
   expect_named(
     protection,
     c(
-      "ema_product_number", "basis", "reference_product_number",
+      "ema_product_number", "basis", "copy_source", "reference_product_number",
       "reference_name", "counted_from", "own_reference_product_number",
-      "own_counted_from", "data_exclusivity_end",
+      "own_counted_from", "data_exclusivity_end", "data_exclusivity_end_max",
       "market_protection_end_min", "market_protection_end_max", "status",
       "source"
     )
@@ -75,6 +89,7 @@ test_that("an originator counts from the first product of its substances", {
   protection <- protection_of(protection_medicines())
   mounjaro <- protection_row(protection, "EMEA/H/C/005620")
   expect_identical(mounjaro$basis, "own")
+  expect_identical(mounjaro$copy_source, NA_character_)
   expect_identical(mounjaro$reference_product_number, "EMEA/H/C/005620")
   expect_identical(mounjaro$reference_name, "Mounjaro")
   expect_identical(mounjaro$counted_from, as.Date("2022-09-15"))
@@ -94,6 +109,7 @@ test_that("a biosimilar follows its reference product's dates", {
   protection <- protection_of(protection_medicines())
   tyruko <- protection_row(protection, "EMEA/H/C/005752")
   expect_identical(tyruko$basis, "follows_reference")
+  expect_identical(tyruko$copy_source, "ema_flag")
   expect_identical(tyruko$reference_product_number, "EMEA/H/C/000603")
   expect_identical(tyruko$reference_name, "Tysabri")
   expect_identical(tyruko$counted_from, as.Date("2006-06-27"))
@@ -105,6 +121,7 @@ test_that("a generic without a reference product has no dates", {
   protection <- protection_of(protection_medicines())
   tenofovir <- protection_row(protection, "EMEA/H/C/004049")
   expect_identical(tenofovir$basis, "reference_not_found")
+  expect_identical(tenofovir$copy_source, "ema_flag")
   expect_identical(tenofovir$reference_product_number, NA_character_)
   expect_identical(tenofovir$reference_name, NA_character_)
   expect_identical(tenofovir$counted_from, as.Date(NA))
@@ -336,6 +353,8 @@ test_that("another company's first product makes a differing status unclear", {
   expect_identical(opzelura$own_reference_product_number, "EMEA/H/C/005843")
   expect_identical(opzelura$own_counted_from, as.Date("2023-04-19"))
   expect_identical(opzelura$data_exclusivity_end, as.Date("2020-08-23"))
+  # Data exclusivity counted from Opzelura itself.
+  expect_identical(opzelura$data_exclusivity_end_max, as.Date("2031-04-19"))
   expect_identical(opzelura$market_protection_end_min, as.Date("2022-08-23"))
   expect_identical(opzelura$market_protection_end_max, as.Date("2034-04-19"))
   jakavi <- protection_row(protection, "EMEA/H/C/002464")
@@ -343,6 +362,7 @@ test_that("another company's first product makes a differing status unclear", {
   expect_identical(jakavi$status, "ended")
   expect_identical(jakavi$own_reference_product_number, NA_character_)
   expect_identical(jakavi$own_counted_from, as.Date(NA))
+  expect_identical(jakavi$data_exclusivity_end_max, as.Date(NA))
 })
 
 test_that("another company's first product is kept when both have ended", {
@@ -378,6 +398,8 @@ test_that("another company's product keeps a status both estimates give", {
   expect_identical(qdenga$status, "protected")
   expect_identical(qdenga$counted_from, as.Date("2018-12-12"))
   expect_identical(qdenga$own_counted_from, as.Date("2022-12-05"))
+  expect_identical(qdenga$data_exclusivity_end, as.Date("2026-12-12"))
+  expect_identical(qdenga$data_exclusivity_end_max, as.Date("2030-12-05"))
   expect_identical(qdenga$market_protection_end_min, as.Date("2028-12-12"))
   expect_identical(qdenga$market_protection_end_max, as.Date("2033-12-05"))
   expect_identical(
@@ -496,6 +518,448 @@ test_that("a follower of another company's product is not questioned", {
   expect_false("other_company_reference" %in% protection$basis)
 })
 
+# Liraglutide STADA (STADA) is a hybrid of Victoza (Novo Nordisk), whose
+# second liraglutide is Saxenda.
+liraglutide_medicines <- function() {
+  dplyr::tibble(
+    ema_product_number = paste0(
+      "EMEA/H/C/",
+      c("001026", "003780", "006615")
+    ),
+    name_of_medicine = c("Victoza", "Saxenda", "Liraglutide STADA"),
+    medicine_status = "Authorised",
+    generic = FALSE,
+    biosimilar = FALSE,
+    marketing_authorisation_date = as.Date(c(
+      "2009-06-30", "2015-03-23", "2026-07-15"
+    )),
+    substance_set_key = "liraglutide"
+  )
+}
+
+liraglutide_groups <- function() {
+  dplyr::tibble(
+    ema_product_number = paste0(
+      "EMEA/H/C/",
+      c("001026", "003780", "006615")
+    ),
+    group_key = c("g.novo-nordisk", "g.novo-nordisk", "g.stada")
+  )
+}
+
+copy_of <- function(product_number, reference_product_number) {
+  dplyr::tibble(
+    ema_product_number = product_number,
+    reference_product_number = reference_product_number
+  )
+}
+
+test_that("a curated hybrid follows its reference medicine", {
+  without <- protection_of(
+    liraglutide_medicines(),
+    medicine_groups = liraglutide_groups()
+  )
+  expect_identical(
+    protection_row(without, "EMEA/H/C/006615")$basis,
+    "other_company_reference"
+  )
+  protection <- protection_of(
+    liraglutide_medicines(),
+    medicine_groups = liraglutide_groups(),
+    copies = copy_of("EMEA/H/C/006615", "EMEA/H/C/001026")
+  )
+  stada <- protection_row(protection, "EMEA/H/C/006615")
+  expect_identical(stada$basis, "follows_reference")
+  expect_identical(stada$copy_source, "curated")
+  expect_identical(stada$reference_product_number, "EMEA/H/C/001026")
+  expect_identical(stada$reference_name, "Victoza")
+  expect_identical(stada$counted_from, as.Date("2009-06-30"))
+  expect_identical(stada$data_exclusivity_end, as.Date("2017-06-30"))
+  expect_identical(stada$data_exclusivity_end_max, as.Date(NA))
+  expect_identical(stada$market_protection_end_max, as.Date("2020-06-30"))
+  expect_identical(stada$own_reference_product_number, NA_character_)
+  expect_identical(stada$own_counted_from, as.Date(NA))
+  expect_identical(stada$status, "ended")
+})
+
+test_that("a hybrid is counted from its reference's first approval", {
+  protection <- protection_of(
+    liraglutide_medicines(),
+    medicine_groups = liraglutide_groups(),
+    copies = copy_of("EMEA/H/C/006615", "EMEA/H/C/003780")
+  )
+  stada <- protection_row(protection, "EMEA/H/C/006615")
+  expect_identical(stada$reference_name, "Saxenda")
+  expect_identical(stada$counted_from, as.Date("2009-06-30"))
+})
+
+# Riulvy (tegomil fumarate), which EMA flags generic, is a hybrid of
+# Tecfidera (dimethyl fumarate): another active substance.
+test_that("a hybrid follows its reference across substances", {
+  medicines <- dplyr::tibble(
+    ema_product_number = c("EMEA/H/C/002601", "EMEA/H/C/006427"),
+    name_of_medicine = c("Tecfidera", "Riulvy"),
+    medicine_status = "Authorised",
+    generic = c(FALSE, TRUE),
+    biosimilar = FALSE,
+    marketing_authorisation_date = as.Date(c("2014-01-30", "2025-07-28")),
+    substance_set_key = c("dimethyl fumarate", "tegomil fumarate")
+  )
+  expect_identical(
+    protection_row(protection_of(medicines), "EMEA/H/C/006427")$basis,
+    "reference_not_found"
+  )
+  riulvy <- protection_row(
+    protection_of(
+      medicines,
+      copies = copy_of("EMEA/H/C/006427", "EMEA/H/C/002601")
+    ),
+    "EMEA/H/C/006427"
+  )
+  expect_identical(riulvy$basis, "follows_reference")
+  expect_identical(riulvy$reference_name, "Tecfidera")
+  expect_identical(riulvy$counted_from, as.Date("2014-01-30"))
+  expect_identical(riulvy$status, "ended")
+})
+
+# Xromi (Lipomed) is a hybrid of Hydrea, authorised nationally; Siklos
+# (Theravia) was the first central hydroxycarbamide.
+test_that("a hybrid of a nationally authorised medicine has no reference", {
+  medicines <- dplyr::tibble(
+    ema_product_number = c("EMEA/H/C/000689", "EMEA/H/C/004837"),
+    name_of_medicine = c("Siklos", "Xromi"),
+    medicine_status = "Authorised",
+    generic = FALSE,
+    biosimilar = FALSE,
+    marketing_authorisation_date = as.Date(c("2007-06-29", "2019-07-01")),
+    substance_set_key = "hydroxycarbamide"
+  )
+  groups <- dplyr::tibble(
+    ema_product_number = medicines$ema_product_number,
+    group_key = c("g.theravia", "g.lipomed")
+  )
+  protection <- protection_of(
+    medicines,
+    medicine_groups = groups,
+    copies = copy_of("EMEA/H/C/004837", NA_character_)
+  )
+  xromi <- protection_row(protection, "EMEA/H/C/004837")
+  expect_identical(xromi$basis, "reference_not_found")
+  expect_identical(xromi$copy_source, "curated")
+  expect_identical(xromi$reference_name, NA_character_)
+  expect_identical(xromi$counted_from, as.Date(NA))
+  expect_identical(xromi$own_counted_from, as.Date(NA))
+  expect_identical(xromi$status, "unclear")
+})
+
+# Buvidal (Camurus) is a hybrid of Subutex, authorised nationally; Sixmo
+# (Molteni), a buprenorphine implant, came half a year later.
+test_that("a hybrid is no other medicine's first product", {
+  medicines <- dplyr::tibble(
+    ema_product_number = c("EMEA/H/C/004651", "EMEA/H/C/004743"),
+    name_of_medicine = c("Buvidal", "Sixmo"),
+    medicine_status = c("Authorised", "Withdrawn"),
+    generic = FALSE,
+    biosimilar = FALSE,
+    marketing_authorisation_date = as.Date(c("2018-11-20", "2019-06-19")),
+    substance_set_key = "buprenorphine"
+  )
+  groups <- dplyr::tibble(
+    ema_product_number = medicines$ema_product_number,
+    group_key = c(
+      "g.camurus",
+      "g.l-molteni-c-dei-fratelli-alitti-societa-di-esercizio"
+    )
+  )
+  without <- protection_of(medicines, medicine_groups = groups)
+  expect_identical(
+    protection_row(without, "EMEA/H/C/004651")$status,
+    "protected"
+  )
+  expect_identical(
+    protection_row(without, "EMEA/H/C/004743")$basis,
+    "other_company_reference"
+  )
+  protection <- protection_of(
+    medicines,
+    medicine_groups = groups,
+    copies = copy_of("EMEA/H/C/004651", NA_character_)
+  )
+  expect_identical(
+    protection_row(protection, "EMEA/H/C/004651")$basis,
+    "reference_not_found"
+  )
+  sixmo <- protection_row(protection, "EMEA/H/C/004743")
+  expect_identical(sixmo$basis, "own")
+  expect_identical(sixmo$reference_name, "Sixmo")
+  expect_identical(sixmo$counted_from, as.Date("2019-06-19"))
+  expect_identical(sixmo$data_exclusivity_end_max, as.Date(NA))
+  expect_identical(sixmo$market_protection_end_max, as.Date("2030-06-19"))
+  expect_identical(sixmo$status, "protected")
+})
+
+# Sugammadex Adroiq (Extrovis) is a generic of Bridion (MSD) by its EPAR,
+# though EMA's generic flag is false.
+test_that("a curated generic follows its reference medicine", {
+  medicines <- dplyr::tibble(
+    ema_product_number = c("EMEA/H/C/000885", "EMEA/H/C/006046"),
+    name_of_medicine = c("Bridion", "Sugammadex Adroiq"),
+    medicine_status = "Authorised",
+    generic = FALSE,
+    biosimilar = FALSE,
+    marketing_authorisation_date = as.Date(c("2008-07-25", "2023-05-26")),
+    substance_set_key = "sugammadex"
+  )
+  groups <- dplyr::tibble(
+    ema_product_number = medicines$ema_product_number,
+    group_key = c("g.msd", "g.extrovis")
+  )
+  expect_identical(
+    protection_row(
+      protection_of(medicines, medicine_groups = groups),
+      "EMEA/H/C/006046"
+    )$status,
+    "unclear"
+  )
+  adroiq <- protection_row(
+    protection_of(
+      medicines,
+      medicine_groups = groups,
+      copies = copy_of("EMEA/H/C/006046", "EMEA/H/C/000885")
+    ),
+    "EMEA/H/C/006046"
+  )
+  expect_identical(adroiq$basis, "follows_reference")
+  expect_identical(adroiq$copy_source, "curated")
+  expect_identical(adroiq$reference_name, "Bridion")
+  expect_identical(adroiq$data_exclusivity_end_max, as.Date(NA))
+  expect_identical(adroiq$market_protection_end_max, as.Date("2019-07-25"))
+  expect_identical(adroiq$status, "ended")
+})
+
+curated_copy_row <- function() {
+  dplyr::tibble(
+    ema_product_number = "EMEA/H/C/006615",
+    copy_type = "hybrid",
+    reference_product_number = "EMEA/H/C/001026",
+    reference_name = "Victoza",
+    evidence_url = paste0(
+      "https://www.ema.europa.eu/en/medicines/human/EPAR/",
+      "liraglutide-stada"
+    ),
+    evidence_quote = "Liraglutide STADA is a ‘hybrid medicine’.",
+    checked_date = as.Date("2026-09-29"),
+    note = NA_character_
+  )
+}
+
+test_that("check_curated_copies accepts well-formed rows", {
+  copies <- dplyr::bind_rows(
+    curated_copy_row(),
+    curated_copy_row() |>
+      dplyr::mutate(
+        ema_product_number = "EMEA/H/C/004837",
+        reference_product_number = NA_character_,
+        reference_name = "Hydrea"
+      ),
+    curated_copy_row() |>
+      dplyr::mutate(
+        ema_product_number = "EMEA/H/C/006046",
+        copy_type = "generic",
+        reference_product_number = "EMEA/H/C/000885",
+        reference_name = "Bridion",
+        evidence_quote = "Sugammadex Adroiq is a ‘generic medicine’."
+      )
+  )
+  expect_identical(check_curated_copies(copies), copies)
+})
+
+test_that("check_curated_copies aborts on malformed rows", {
+  expect_copy_error <- function(copies, offender) {
+    error <- expect_error(
+      check_curated_copies(copies),
+      class = "rlang_error"
+    )
+    expect_match(conditionMessage(error), offender, fixed = TRUE)
+  }
+  row <- curated_copy_row()
+  expect_copy_error(
+    dplyr::mutate(row, ema_product_number = "H/C/6615"),
+    "H/C/6615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, reference_product_number = "EMEA/H/C/1026"),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, reference_product_number = "EMEA/H/C/006615"),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, reference_name = NA_character_),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, evidence_url = "http://www.ema.europa.eu/"),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, evidence_quote = paste(rep("word", 21), collapse = " ")),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, evidence_quote = NA_character_),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, checked_date = as.Date(NA)),
+    "EMEA/H/C/006615"
+  )
+  # The quote must name the copy type.
+  expect_copy_error(
+    dplyr::mutate(row, copy_type = "generic"),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(
+      row,
+      copy_type = "duplicate",
+      evidence_quote = "Liraglutide STADA is a duplicate."
+    ),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(
+    dplyr::mutate(row, copy_type = NA_character_),
+    "EMEA/H/C/006615"
+  )
+  expect_copy_error(dplyr::bind_rows(row, row), "more than once")
+  chained <- dplyr::bind_rows(
+    row,
+    dplyr::mutate(
+      row,
+      ema_product_number = "EMEA/H/C/001026",
+      reference_product_number = "EMEA/H/C/000001"
+    )
+  )
+  expect_copy_error(chained, "EMEA/H/C/006615")
+})
+
+test_that("select_curated_copies leaves out rows not in the data", {
+  copies <- dplyr::bind_rows(
+    curated_copy_row(),
+    curated_copy_row() |>
+      dplyr::mutate(ema_product_number = "EMEA/H/C/009999"),
+    curated_copy_row() |>
+      dplyr::mutate(
+        ema_product_number = "EMEA/H/C/003780",
+        reference_product_number = "EMEA/H/C/009998"
+      ),
+    curated_copy_row() |>
+      dplyr::mutate(
+        ema_product_number = "EMEA/H/C/001026",
+        reference_product_number = NA_character_,
+        reference_name = "A national medicine"
+      )
+  )
+  expect_warning(
+    selected <- select_curated_copies(copies, liraglutide_medicines()),
+    "EMEA/H/C/009999"
+  )
+  expect_identical(
+    selected$ema_product_number,
+    c("EMEA/H/C/001026", "EMEA/H/C/006615")
+  )
+  expect_identical(
+    selected$reference_product_number,
+    c(NA, "EMEA/H/C/001026")
+  )
+  expect_identical(
+    names(selected),
+    c(names(curated_copy_row()), "source")
+  )
+  expect_identical(unique(selected$source), "curated")
+  expect_no_warning(select_curated_copies(
+    curated_copy_row(),
+    liraglutide_medicines()
+  ))
+})
+
+test_that("the curated copies are well formed and say so", {
+  copies <- curated_copy_medicines()
+  expect_identical(check_curated_copies(copies), copies)
+  expect_true(all(startsWith(
+    copies$evidence_url,
+    "https://www.ema.europa.eu/en/medicines/human/EPAR/"
+  )))
+  expect_identical(
+    sort(unique(copies$copy_type)),
+    c("biosimilar", "generic", "hybrid")
+  )
+  copy_of_product <- function(product_number) {
+    copies[copies$ema_product_number == product_number, ]
+  }
+  # Buvidal, Camcevi and Okedi: hybrids of Subutex, Eligard and Risperdal,
+  # authorised nationally.
+  national <- paste0("EMEA/H/C/", c("004651", "005034", "005406"))
+  expect_true(all(national %in% copies$ema_product_number))
+  expect_true(all(is.na(
+    copies$reference_product_number[copies$ema_product_number %in% national]
+  )))
+  expect_identical(copy_of_product("EMEA/H/C/006046")$copy_type, "generic")
+  expect_identical(
+    copy_of_product("EMEA/H/C/006046")$reference_product_number,
+    "EMEA/H/C/000885"
+  )
+  expect_identical(copy_of_product("EMEA/H/C/006252")$copy_type, "biosimilar")
+  expect_identical(
+    copy_of_product("EMEA/H/C/006252")$reference_product_number,
+    "EMEA/H/C/000278"
+  )
+})
+
+test_that("build_protection_tables applies and returns the curated copies", {
+  medicines <- liraglutide_medicines()
+  tables <- list(
+    ema_medicines = medicines,
+    ema_medicine_substances = dplyr::tibble(
+      ema_product_number = medicines$ema_product_number,
+      substance = "liraglutide",
+      substance_key = "liraglutide"
+    ),
+    ema_medicine_companies = liraglutide_groups()
+  )
+  built <- build_protection_tables(
+    tables,
+    snapshot,
+    equivalents = curated_substance_equivalents()[0, ],
+    copies = curated_copy_row()
+  )
+  expect_named(
+    built,
+    c(
+      "ema_medicine_protection", "ema_substance_equivalents",
+      "ema_curated_copies"
+    )
+  )
+  stada <- protection_row(built$ema_medicine_protection, "EMEA/H/C/006615")
+  expect_identical(stada$basis, "follows_reference")
+  expect_identical(stada$copy_source, "curated")
+  expect_identical(nrow(built$ema_substance_equivalents), 0L)
+  expect_identical(built$ema_curated_copies$reference_name, "Victoza")
+})
+
+test_that("curated_copies_source_entry dates the entry by the last check", {
+  expect_null(curated_copies_source_entry(curated_copy_row()[0, ]))
+  entry <- curated_copies_source_entry(dplyr::bind_rows(
+    curated_copy_row(),
+    dplyr::mutate(curated_copy_row(), checked_date = as.Date("2026-09-30"))
+  ))
+  expect_match(entry$name, "EMA EPAR pages", fixed = TRUE)
+  expect_identical(entry$version, "Checked 2026-09-30")
+  expect_identical(entry$retrieved, "2026-09-30")
+  expect_match(entry$url, "R/curated-copies.R$")
+  expect_match(entry$attribution, "European Medicines Agency", fixed = TRUE)
+})
 test_that("add_months rolls a missing day into the next month", {
   expect_identical(
     add_months(as.Date(c("2016-02-29", "2020-01-31", NA)), c(120L, 12L, 1L)),

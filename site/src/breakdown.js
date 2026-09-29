@@ -14,8 +14,10 @@ import { UI } from "./labels.js";
 // row.ariaLabel: the button's name (ATC rows: badge, name, count and type split would read glued
 // together); row.split: the type split, read after a static row's count; row.incomplete: a
 // muted label (the products coded only down to the parent class). linkOf(row): a link shown after
-// the row (therapeutic area groups: their condition page), or null.
-export function renderBreakdown(container, rows, { isSelected = null, onToggle, badgeOf = () => null, linkOf = () => null }) {
+// the row (therapeutic area groups: their condition page), or null. tipOf(row): a bar's explainer
+// ({ text, id }: the therapeutic areas' MeSH notes, mesh-notes.js meshTip()), or null: a tooltip on
+// the bar, its text the button's description.
+export function renderBreakdown(container, rows, { isSelected = null, onToggle, badgeOf = () => null, linkOf = () => null, tipOf = () => null }) {
   const root = d3.select(container);
   // Rebuilt on every render; keep keyboard focus on the same value's row or link.
   const active = container.contains(document.activeElement) ? document.activeElement : null;
@@ -43,7 +45,11 @@ export function renderBreakdown(container, rows, { isSelected = null, onToggle, 
     .attr("type", "button")
     .attr("aria-pressed", isSelected === null ? null : (row) => String(isSelected(row.key)))
     .attr("aria-label", (row) => row.ariaLabel ?? null)
-    .on("click", (event, row) => onToggle(row.key));
+    .on("click", (event, row) => onToggle(row.key))
+    .each(function explain(row) {
+      const tip = tipOf(row);
+      if (tip) d3.select(this).attr("data-tip", tip.text).attr("aria-describedby", tip.id).classed("mesh-tip", true);
+    });
   const labels = items.append("span").attr("class", "bar-label");
   labels.filter((row) => !row.other && badgeOf(row)).each(function badge(row) {
     const spec = badgeOf(row);

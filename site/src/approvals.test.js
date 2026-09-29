@@ -278,7 +278,7 @@ test("breakdownExcluded counts the products a breakdown cannot show", () => {
 });
 
 // Phase 4c: the breakdown's Sort control (UI state).
-test("sortBreakdownRows: count keeps the rows; key sorts ATC classes by code, the others by name; Other and incomplete stay last", () => {
+test("sortBreakdownRows: count keeps the rows; key sorts ATC classes by code, areas in tree order, holders by name; Other and incomplete stay last", () => {
   const holders = [
     { key: "Zeta", label: "Zeta", count: 5 },
     { key: "alpha", label: "alpha", count: 3 },
@@ -287,9 +287,16 @@ test("sortBreakdownRows: count keeps the rows; key sorts ATC classes by code, th
   ];
   assert.equal(sortBreakdownRows(holders, "count", "mah"), holders);
   assert.deepEqual(sortBreakdownRows(holders, "key", "mah").map((row) => row.label), ["alpha", "Beta", "Zeta", "Other"]);
-  // Areas sort by their branch name, not by the branch code.
-  const areas = [{ key: "C04", label: "Neoplasms", count: 9 }, { key: "C14", label: "Cardiovascular Diseases", count: 4 }];
-  assert.deepEqual(sortBreakdownRows(areas, "key", "area").map((row) => row.key), ["C14", "C04"]);
+  // Areas in MeSH tree order (owner request 2026-09-28: their rank, areaBreakdownRows()), not by
+  // name: Infections (C01), Neoplasms (C04), Cardiovascular Diseases (C14); the static row last.
+  const areas = [
+    { key: "C04", label: "Neoplasms", count: 9, rank: 1 },
+    { key: "C14", label: "Cardiovascular Diseases", count: 4, rank: 2 },
+    { key: "C01", label: "Infections", count: 2, rank: 0 },
+    { key: "C04", label: "Tagged only as Neoplasms or Cancer", count: 1, static: true, incomplete: true },
+  ];
+  assert.deepEqual(sortBreakdownRows(areas, "key", "area").map((row) => row.label), ["Infections", "Neoplasms", "Cardiovascular Diseases", "Tagged only as Neoplasms or Cancer"]);
+  assert.deepEqual(sortBreakdownRows(areas, "key", "area", "desc").map((row) => row.label), ["Cardiovascular Diseases", "Neoplasms", "Infections", "Tagged only as Neoplasms or Cancer"]);
   const atc = [
     { key: "L04AC", label: "Interleukin Inhibitors", count: 30 },
     { key: "L04AB", label: "TNF-Alpha Inhibitors", count: 20 },

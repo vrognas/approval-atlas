@@ -86,7 +86,9 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
     ), atc_sources$source_entries, company_source_entries(
       register_source,
       gleif_matches
-    ))
+    ), purrr::compact(list(
+      curated_copies_source_entry(tables$ema_curated_copies)
+    )))
   )
   write_ema_outputs(tables, meta, output_directory)
   report_pipeline_summary(tables, snapshot_date)
@@ -154,6 +156,7 @@ build_ema_tables <- function(clean_medicines,
       mesh
     ),
     mesh_descriptor_areas = build_mesh_descriptor_areas(term_matches, mesh),
+    mesh_descriptor_notes = build_mesh_descriptor_notes(term_matches, mesh),
     ema_search_index = build_search_index(
       medicines,
       substances,
@@ -206,12 +209,14 @@ report_protection_summary <- function(protection) {
   cli::cli_alert_info(sprintf(
     paste(
       "Protection estimates: %s (%d follow a reference, %d reference not",
-      "found, %d counted from another company's medicine)."
+      "found, %d counted from another company's medicine; %d curated",
+      "copies)."
     ),
     protection_status_counts(protection),
     count_of("follows_reference"),
     count_of("reference_not_found"),
-    count_of("other_company_reference")
+    count_of("other_company_reference"),
+    sum(protection$copy_source %in% "curated")
   ))
 }
 
