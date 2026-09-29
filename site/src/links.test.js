@@ -43,8 +43,9 @@ test("modality sources name their destination", () => {
 // Links there are marked by main.js (markExternal()); the markup must already be safe.
 test("index.html links to other websites only over https, in a new tab, without opener or referrer", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  // Same-site links (the wordmark's "/", phase 4c review) stay in the tab.
-  const anchors = (html.match(/<a\s[^>]*>/g) ?? []).filter((anchor) => !/href="\//.test(anchor));
+  // Same-site links (the wordmark's "/", phase 4c review; the dashboard's tabs and the Overview's
+  // links to them, "?tab=…", F · Spacious, phase 2) stay in the tab.
+  const anchors = (html.match(/<a\s[^>]*>/g) ?? []).filter((anchor) => !/href="[/?]/.test(anchor));
   assert.ok(anchors.length >= 3);
   for (const anchor of anchors) {
     assert.match(anchor, /href="https:\/\//, anchor);

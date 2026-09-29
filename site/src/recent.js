@@ -5,7 +5,7 @@
 // search's group key, which opens it as a picked suggestion does: main.js PICKS), the URL state's
 // value and the name shown.
 import { UI } from "./labels.js";
-import { DEFAULT_LOOKUP, DEFAULT_STATE, filterIsSet, lookupView } from "./url.js";
+import { DEFAULT_LOOKUP, FILTER_KEYS, filterIsSet, lookupView } from "./url.js";
 
 const STORAGE_KEY = "approval-atlas:recent";
 export const RECENT_MAX = 5;
@@ -27,10 +27,12 @@ const same = (a, b) => a.kind === b.kind && a.value === b.value;
 
 // Pure (review 2026-09-29: drilling the ATC breakdown or filtering to one class stored every
 // level): the class a navigation opens as a lookup (url.js classState(): the Drug classes
-// suggestion, a ladder, the Try link, a recent pick; main.js navigate()), else null.
+// suggestion, a ladder, the Try link, a recent pick; main.js navigate()), else null. The views (the
+// breakdown's mode, the tab: classState() opens Classes and areas, F · Spacious phase 2) are no
+// filters (url.js FILTER_KEYS).
 export function openedClass(patch) {
   if (patch.atc?.length !== 1 || lookupView({ ...DEFAULT_LOOKUP, ...patch }).kind !== null) return null;
-  const others = Object.keys(DEFAULT_STATE).filter((key) => key !== "atc" && key !== "by");
+  const others = FILTER_KEYS.filter((key) => key !== "atc");
   return others.every((key) => key in patch && !filterIsSet(patch, key)) ? patch.atc[0] : null;
 }
 

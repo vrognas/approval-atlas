@@ -252,6 +252,40 @@ export const UI = {
   page: {
     title: "EU medicines",
   },
+  // The dashboard's tabs (F · Spacious, phase 2; url.js TABS): links under the chip bar.
+  tabs: {
+    label: "Dashboard views",
+    names: {
+      overview: "Overview",
+      protection: "Protection",
+      classes: "Classes and areas",
+      companies: "Companies",
+      years: "By year",
+      medicines: "Medicines",
+    },
+  },
+  // A card's secondary controls (Sort, Stack by, Columns, Column order) behind one disclosure
+  // (F · Spacious, phase 2; Hick's Law: each card opens in one view).
+  viewOptions: "View options",
+  // The Overview's previews of other tabs (overview-previews.js): each a few rows and a link to its
+  // tab ("Companies tab").
+  previews: {
+    tabLink: (name) => `${name} tab`,
+    companies: {
+      title: "Companies with the most medicines",
+      unit: (count) => (count === 1 ? "medicine" : "medicines"),
+    },
+    conditions: {
+      title: "Conditions with the most treatments",
+      unit: (count) => (count === 1 ? "treatment" : "treatments"),
+      none: "No condition of these medicines is ranked.",
+    },
+    protection: {
+      title: "Market protection ending (est.)",
+      caption: "Currently authorized medicines by the year their estimated market protection ends at the earliest.",
+      unit: (count) => (count === 1 ? "medicine" : "medicines"),
+    },
+  },
   // The landing intro card (intro.js): on the untouched overview (no lookup, no filter) on the first
   // visit, until the viewer does anything or closes it; the header's link brings it back.
   intro: {
@@ -1275,9 +1309,9 @@ export const UI = {
     ownershipNote: (holders, note) => `${holders.join(", ")}: ${sentenceOf(note)}`,
     moved: (group, note) => `${group ? ` (under ${group})` : ""}: ${sentenceOf(note)}`,
     names: "Companies and EMA holder names",
-    namesHint: "Each opens the overview filtered to it.",
+    namesHint: "Each lists its medicines in the overview's Medicines tab.",
     atc: "ATC groups",
-    atcHint: "Each opens the overview filtered to this company and ATC group.",
+    atcHint: "Each opens the overview's Classes and areas tab, filtered to this company and ATC group.",
     areas: "Most common conditions",
     // The medicine list: authorized ones (as condition pages), or every status (the "Show all
     // statuses" toggle, or a company with no authorized medicine).

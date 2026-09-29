@@ -34,6 +34,7 @@ import {
   OTHER_KEY,
   STACK_HUES,
   TYPE_ORDER,
+  conditionRows,
   defaultSortDirection,
   facetCounts,
   filterChips,
@@ -62,8 +63,9 @@ import { areaNote, describedTip, meshTip } from "./mesh-notes.js";
 import { NOT_CLASSIFIED, buildModalityTree, modalityBreakdownRows, modalityTip, modalityTipId, toggleModality } from "./modalities.js";
 import { createModalityTree, renderModalityPath } from "./modality-tree.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
+import { PREVIEW_ROWS, renderPreview, topGroups } from "./overview-previews.js";
 import { renderProtectionCalendar } from "./protection-calendar-card.js";
-import { calendarBuckets, protectionEnding } from "./protection-calendar.js";
+import { LATER, calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
 import { createRecent, keptOpenedClass, openedClass, recentEntry, recentLookupState } from "./recent.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
@@ -76,10 +78,12 @@ import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstim
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
+  FILTER_KEYS,
   activeFilterCount,
   classState,
   decodeLookup,
   decodeState,
+  encodeUrl,
   isDefaultStatus,
   lookupView,
   patchFilterParams,
@@ -88,6 +92,7 @@ import {
   togglePatch,
   withoutLookup,
 } from "./url.js";
+import { setupViewOptions } from "./view-options.js";
 import { createYearStrip } from "./year-slider.js";
 
 // First load: enough for the search box. Everything else loads in the background or on demand.
@@ -229,8 +234,8 @@ let lookup = null;
 let filtersOpen = () => false;
 let frame = 0;
 const urlNote = $("#url-note");
-// Filter edits (not the first render, the breakdown's mode or lookups) announce the new headline, debounced.
-const FILTER_KEYS = Object.keys(DEFAULT_STATE).filter((key) => key !== "by");
+// Filter edits (not the first render, the breakdown's mode, the tab or lookups) announce the new
+// headline, debounced (url.js FILTER_KEYS: every state key but the views, by and tab).
 let announceFilters = false;
 let announceTimer = 0;
 // A drug class opened from a card or the search: its headline takes focus once shown.
@@ -259,8 +264,12 @@ function applyUrl() {
 // The tab's title names the view (a card, condition, search or drug class), so history, tabs and
 // bookmarks tell them apart and screen readers hear the change (WCAG 2.4.2).
 function updateTitle() {
-  const name = lookupView(state).kind !== null ? lookup.title(state) : dashboard?.title() ?? null;
-  document.title = UI.pageTitle(name);
+  const lookupOpen = lookupView(state).kind !== null;
+  const name = lookupOpen ? lookup.title(state) : dashboard?.title() ?? null;
+  // The dashboard's tab follows the view's name (F · Spacious, phase 2: "L04AC … · Classes and
+  // areas"); a recent entry is named by the view alone.
+  const tab = lookupOpen ? null : dashboard?.tabName() ?? null;
+  document.title = UI.pageTitle([name, tab].filter(Boolean).join(" · ") || null);
   openClass = keptOpenedClass(state, openClass);
   recent.view(recentEntry(state, name, openClass));
 }
@@ -1006,6 +1015,67 @@ function startDashboard(meta, [
   // In the headline's lead (owner decision 2026-09-29, "Authorized by default"; inline after the
   // headline, F · Spacious): include the medicines of every status; the control goes, so focus goes
   // to the headline, which then counts them.
+  // The tabs (F · Spacious, phase 2): links to the dashboard's views (?tab=…). A plain click shows
+  // the tab without a reload (one history entry, as a lookup link); only the tab shown renders its
+  // cards (renderDashboard()). Focus stays on the link; from an Overview preview's "… tab" link it
+  // moves to the tab, scrolled into view (the preview link is gone with the Overview).
+  d3.select("#tabs-label").text(UI.tabs.label);
+  const tabLinks = [...document.querySelectorAll("#tabs .tab")];
+  const tabPanels = [...document.querySelectorAll("#app .tab-panel")];
+  const previewTabLinks = [...document.querySelectorAll("#app .preview-tab-link")];
+  const plainClick = (event) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+  let focusTab = false;
+  let tabShown = null;
+  function showTab(tab, focus = false) {
+    focusTab = focus;
+    if (tab === state.tab) scheduleRender();
+    else setState({ tab }, true);
+  }
+  for (const link of tabLinks) {
+    link.textContent = UI.tabs.names[link.dataset.tab];
+    link.addEventListener("click", (event) => {
+      if (!plainClick(event)) return;
+      event.preventDefault();
+      showTab(link.dataset.tab);
+    });
+  }
+  for (const link of previewTabLinks) {
+    link.textContent = UI.previews.tabLink(UI.tabs.names[link.dataset.tabLink]);
+    link.addEventListener("click", (event) => {
+      if (!plainClick(event)) return;
+      event.preventDefault();
+      showTab(link.dataset.tabLink, true);
+    });
+  }
+  // The tab links and their panels follow the state; hrefs keep the rest of the view (filters,
+  // lookup), so a new browser tab opens the same view on that tab. Phones: the strip scrolls
+  // sideways, the tab shown kept in it.
+  function renderTabs() {
+    const hrefOf = (tab) => `?${encodeUrl({ ...state, tab })}`;
+    for (const link of tabLinks) {
+      const current = link.dataset.tab === state.tab;
+      link.href = hrefOf(link.dataset.tab);
+      if (current) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    }
+    for (const link of previewTabLinks) link.href = hrefOf(link.dataset.tabLink);
+    for (const panel of tabPanels) panel.hidden = panel.dataset.tabPanel !== state.tab;
+    const current = tabLinks.find((link) => link.dataset.tab === state.tab);
+    if (tabShown !== state.tab) {
+      tabShown = state.tab;
+      const nav = $("#tabs");
+      const start = current.offsetLeft - nav.offsetLeft;
+      if (start < nav.scrollLeft || start + current.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = Math.max(0, start - 16);
+    }
+    if (focusTab) {
+      focusTab = false;
+      $("#tabs").scrollIntoView({ block: "start" });
+      current.focus({ preventScroll: true });
+    }
+  }
+  // "View options": each card's secondary controls behind one disclosure (Hick's Law).
+  setupViewOptions($("#app"), UI.viewOptions);
+
   const includeEveryStatus = $("#status-include");
   includeEveryStatus.textContent = UI.statusScope.include;
   includeEveryStatus.setAttribute("aria-label", UI.statusScope.includeLabel);
@@ -1149,7 +1219,7 @@ function startDashboard(meta, [
       activityMode = event.currentTarget.dataset.mode;
       scheduleRender();
     });
-  $("#activity-by").setAttribute("aria-label", UI.activity.modesLabel);
+  d3.select("#activity-by-label").text(UI.activity.modesLabel);
   d3.select("#activity-title").text(UI.activity.title);
   d3.select("#activity-note").text(UI.activity.note(companies.asOf));
   d3.select("#activity-order-label").text(UI.activity.order.label);
@@ -1833,6 +1903,70 @@ function startDashboard(meta, [
     });
   }
 
+  // The Overview's previews of other tabs (F · Spacious, phase 2): the company groups with the most
+  // medicines shown (each a link to its company page), the conditions with the most treatments (as
+  // the conditions card ranks them, each a link to its condition page) and the medicines currently
+  // authorized by the year their estimated market protection ends at the earliest (as the
+  // protection card counts them; its files load once the page is idle: "Loading estimates…").
+  function renderPreviews(filtered, authorizedNow, narrowed) {
+    d3.select("#preview-companies-title").text(UI.previews.companies.title);
+    d3.select("#preview-conditions-title").text(UI.previews.conditions.title);
+    d3.select("#preview-protection-title").text(UI.previews.protection.title);
+    const body = (id) => $(`#${id} .preview-body`);
+    safely($("#preview-companies"), () => renderPreview(body("preview-companies"), {
+      rows: topGroups(filtered).map(({ key, count }) => ({
+        key, lead: companyBadge(companies.row(key)), label: companyLink(companies.name(key), key), count, unit: UI.previews.companies.unit(count),
+      })),
+      line: filtered.some((product) => product.group_key) ? null : UI.breakdown.empty,
+    }));
+    safely($("#preview-conditions"), () => {
+      const conditions = lookup.need("conditions");
+      if (conditions === undefined || conditions === FAILED) {
+        renderPreview(body("preview-conditions"), { line: conditions === FAILED ? UI.lookup.notAvailable : UI.lookup.loading });
+        return;
+      }
+      const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
+      const { rows } = conditionRows(filtered, {
+        descriptorOf,
+        descriptors: conditions.descriptors,
+        within: state.area.length ? (term) => inAreas(meshTree, state.area, term) : null,
+        broad: meshTree.broad,
+        setKeyOf: (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents),
+        limit: PREVIEW_ROWS,
+      });
+      const ranked = rows.filter((row) => row.treatments > 0);
+      renderPreview(body("preview-conditions"), {
+        rows: ranked.map((row) => ({
+          key: row.key,
+          lead: null,
+          label: row.descriptorUi ? lookup.link(row.name, { cond: row.descriptorUi }) : row.name,
+          count: row.treatments,
+          unit: UI.previews.conditions.unit(row.treatments),
+        })),
+        line: ranked.length ? null : UI.previews.conditions.none,
+      });
+    });
+    safely($("#preview-protection"), () => {
+      const protection = lookup.protection();
+      if (protection === undefined || protection === FAILED) {
+        renderPreview(body("preview-protection"), { line: protection === FAILED ? UI.lookup.notAvailable : UI.protectionCalendar.loading });
+        return;
+      }
+      const { rows } = protectionEnding(authorizedNow, protection, dataDate);
+      const buckets = calendarBuckets(rows, calendarFirstYear, 5);
+      // To the scale of the busiest single year, as the protection card (the later bar spans
+      // several years: drawn broken when longer).
+      renderPreview(body("preview-protection"), {
+        scale: Math.max(0, ...buckets.filter((bucket) => bucket.key !== LATER).map((bucket) => bucket.count)) || undefined,
+        rows: buckets.map((bucket) => ({
+          key: bucket.key, lead: null, label: UI.protectionCalendar.yearLabel(bucket), count: bucket.count, unit: UI.previews.protection.unit(bucket.count),
+        })),
+        line: rows.length ? null : UI.protectionCalendar.none(narrowed),
+        caption: UI.previews.protection.caption,
+      });
+    });
+  }
+
   // One part's failure (data it cannot handle) must not blank the parts after it: the error is
   // logged and the part says its content is not available until a render succeeds.
   function safely(container, draw) {
@@ -1848,6 +1982,7 @@ function startDashboard(meta, [
   const cardOf = (selector) => $(selector).closest(".chart-card");
 
   function renderDashboard() {
+    renderTabs();
     showReadout(state.from ?? approvalYears[0], state.to ?? approvalYears[1]);
     const areaNow = drillArea();
     areaVia = areaDrillVia(meshTree, areaVia, areaShown, areaNow);
@@ -1929,31 +2064,45 @@ function startDashboard(meta, [
     // quiet line offers to include.
     const statusHidden = isDefaultStatus(state.status) ? filterProducts(products, predicates, "status").length - filtered.length : 0;
     safely($(".answer"), () => renderHeadline(filtered, atcCounts, areaCounts, undatedAuthorized.length, statusHidden));
-    // The top row: "Authorized over time" beside the four type tiles (owner decision 2026-09-29). It
-    // is authorization history: neither the status filter nor the year filter applies (the chart
-    // marks the range instead; OVER_TIME_EXCEPT).
-    safely(cardOf("#over-time"), () => {
-      const history = filterProducts(products, predicates, OVER_TIME_EXCEPT);
-      renderOverTime($("#over-time"), authorizedSeries(history, seriesDates), state);
-      const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
-      d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
-    });
-    safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered)));
-    showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
-    showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
-    safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete));
-    safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
-    safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
-    safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, narrowed));
-    safely($("#conditions"), () => renderConditions(filtered, narrowed));
-
-    const undated = filtered.filter((product) => product.year === null).length;
+    // Download CSV (the page header's, on every tab): every medicine the table lists.
     tableRows = newestFirst(filtered);
-    safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area));
+    // Doherty Threshold (F · Spacious, phase 2): only the tab shown renders its cards; a tab's cards
+    // render when it is shown (a render follows every tab change).
+    const tab = state.tab;
+    if (tab === "overview") {
+      // The top row: "Authorized over time" beside the four type tiles (owner decision 2026-09-29).
+      // It is authorization history: neither the status filter nor the year filter applies (the
+      // chart marks the range instead; OVER_TIME_EXCEPT).
+      safely(cardOf("#over-time"), () => {
+        const history = filterProducts(products, predicates, OVER_TIME_EXCEPT);
+        renderOverTime($("#over-time"), authorizedSeries(history, seriesDates), state);
+        const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
+        d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
+      });
+      safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered)));
+      showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
+      showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
+      renderPreviews(filtered, authorizedNow, narrowed);
+    } else if (tab === "protection") {
+      safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, narrowed));
+    } else if (tab === "classes") {
+      safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete));
+      safely($("#conditions"), () => renderConditions(filtered, narrowed));
+    } else if (tab === "companies") {
+      safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
+    } else if (tab === "years") {
+      safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
+    } else {
+      const undated = filtered.filter((product) => product.year === null).length;
+      safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area));
+    }
   }
 
-  // toggleArea(key): the area filter with key toggled (a card's branch chip; as the tree's).
-  dashboard = { domain, render: renderDashboard, title: () => classTitle, toggleArea: (key) => toggleArea(meshTree, state.area, key) };
+  // toggleArea(key): the area filter with key toggled (a card's branch chip; as the tree's). The
+  // page's title names the drug class shown alone (title(): also a recent entry's name) and the tab
+  // (tabName(): not the Overview).
+  const tabName = () => (state.tab === DEFAULT_STATE.tab ? null : UI.tabs.names[state.tab]);
+  dashboard = { domain, render: renderDashboard, title: () => classTitle, tabName, toggleArea: (key) => toggleArea(meshTree, state.area, key) };
   applyUrl();
   scheduleUrlWrite(state); // canonical form, invalid values removed
   d3.select("#app-loading").attr("hidden", "");

@@ -96,7 +96,9 @@ const MARK_PAIRS = [
 // their --raised fill. A pressed branch chip's accent underline (area-chips.js; owner decision
 // 2026-09-29) on the chip's fill. The filter chips (F · Spacious, phase 1; filter-bar.js): an
 // inactive chip's dashed --field-border outline on the page (above), an active chip's --accent
-// hairline on its wash and on the page, and the popover's controls (on --input) as in a sheet.
+// hairline on its wash and on the page, and the popover's controls (on --input) as in a sheet. The
+// tabs (F · Spacious, phase 2): the shown tab's --accent underline on the page; the View options
+// button's --field-border outline on the card (above).
 const NON_TEXT_PAIRS = [
   ...["--input", ...BACKGROUNDS].map((background) => ["--field-border", background]),
   ["--field-border", "--raised"],
