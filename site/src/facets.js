@@ -1,9 +1,11 @@
 // Pure: counts for the facet sidebar and sheets, the approval year filter, the filter sentence's
 // tokens, the most common conditions and the holder activity of the filtered medicines. No DOM.
-// Products come from buildProducts(); every status counts (one dashboard, phase 4a).
+// Products come from buildProducts(); every status counts (one dashboard, phase 4a) unless the status
+// filter (by default Authorised: owner decision 2026-09-29) leaves some out.
 import { byStatusOrder } from "./approvals.js";
 import { filterProducts, parseAtcQuery } from "./filters.js";
 import { UI, atcClassLabel, statusLabel } from "./labels.js";
+import { filterIsSet, isDefaultStatus } from "./url.js";
 
 // Stack order of the medicine types (bars left to right, legends, facet rows).
 export const TYPE_ORDER = ["Other", "Generic", "Biosimilar", "Advanced therapy"];
@@ -211,6 +213,8 @@ export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahNa
   if (dimension === "from") return String(state.from ?? years[0]);
   if (dimension === "to") return String(state.to ?? years[1]);
   const values = state[dimension];
+  // The status (owner decision 2026-09-29): authorized by default; none selected is every status.
+  if (dimension === "status" && isDefaultStatus(values)) return copy.statusDefault;
   if (values.length === 0) return copy.defaults[dimension];
   if (dimension === "atc" && values.length === 2) return values.map((value) => atcValueText(value, atcNames, true)).join(copy.words.and);
   if (dimension === "mah" && values.length > 1 && mahSelection(values)) return mahSelection(values);
@@ -235,15 +239,13 @@ export function sectionSummary(dimension, state, lookups) {
     return UI.yearRange(state.from ?? lookups.years[0], state.to ?? lookups.years[1]);
   }
   const values = state[dimension];
-  if (values.length === 0) return null;
+  if (!filterIsSet(state, dimension)) return null;
+  if (dimension === "status" && values.length === 0) return UI.facets.everyStatus;
   if (values.length === 1) return dimension === "status" ? statusLabel(values[0]) : tokenLabel(dimension, state, lookups);
   return (dimension === "mah" ? lookups.mahSelection?.(values) : null) ?? UI.facets.selected(values.length);
 }
 
-function isActive(key, state) {
-  if (key === "from" || key === "to") return state[key] !== null;
-  return state[key].length > 0;
-}
+const isActive = (key, state) => filterIsSet(state, key);
 
 // "Showing [all medicine types] with [all modalities] in [all ATC classes] from [all holders] in
 // [all therapeutic areas], approved [1995]–[2026], with [any status]." as strings and tokens { key,

@@ -5,6 +5,7 @@ import * as d3 from "d3";
 import { statusHue, statusTip, typeTip } from "./badges.js";
 import { TYPE_ORDER, facetRows } from "./facets.js";
 import { UI, statusLabel } from "./labels.js";
+import { DEFAULT_STATE, isDefaultStatus } from "./url.js";
 
 const formatCount = d3.format(",");
 const slug = (text) => text.toLowerCase().replaceAll(" ", "-");
@@ -52,6 +53,13 @@ export function createFacetPanel(root, { onChange }) {
   // was listed only because it was selected.
   const kept = { status: new Set() };
   let model = null;
+  // Under the Status rows (owner decision 2026-09-29, "Authorized by default"): include every status
+  // (status []), or, with any other choice, back to the default. Unchecking the one checked row
+  // leaves none checked, which is every status too (as in every facet), never an empty dashboard.
+  const widen = section("status").querySelector("#status-widen");
+  widen.addEventListener("click", () => {
+    onChange({ status: isDefaultStatus(model.state.status) ? [] : structuredClone(DEFAULT_STATE.status) });
+  });
 
   const toggle = (key) => (value, checked) => {
     const values = model.state[key];
@@ -83,6 +91,7 @@ export function createFacetPanel(root, { onChange }) {
       dotClass: (row) => `hue-${statusHue(row.value)}`,
       tipOf: (row) => statusTip(row.value),
     });
+    widen.textContent = isDefaultStatus(state.status) ? UI.facets.statusWiden : UI.facets.statusDefault;
   }
 
   return { render };

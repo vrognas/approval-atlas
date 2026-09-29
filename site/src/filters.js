@@ -78,9 +78,16 @@ export function makePredicates(state, atcClasses) {
   return predicates;
 }
 
+// "Authorized over time" (owner decision 2026-09-29): authorization history, so neither the status
+// filter (a medicine withdrawn in 2020 was authorized in 2015) nor the year filter (the chart marks
+// the range instead) applies.
+export const OVER_TIME_EXCEPT = ["date", "status"];
+
+// except: a dimension (or a list of them) whose filter does not apply (a facet's own, the charts').
 export function filterProducts(products, predicates, except = null) {
+  const skipped = new Set([except ?? []].flat());
   const active = Object.entries(predicates)
-    .filter(([dimension]) => dimension !== except)
+    .filter(([dimension]) => !skipped.has(dimension))
     .map(([, predicate]) => predicate);
   return products.filter((product) => active.every((predicate) => predicate(product)));
 }

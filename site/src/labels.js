@@ -295,7 +295,7 @@ export const UI = {
   textTitle: (query) => `“${query}”`,
   // Above the dashboard while a lookup result is open.
   explore: {
-    title: "Explore all EMA medicines",
+    title: "Explore EMA medicines",
     note: "The filters apply to this overview, not to the result above.",
   },
   missingData: ["No data found. Run ", "Rscript scripts/run-pipeline.R", " first."],
@@ -318,9 +318,13 @@ export const UI = {
       atc: "all ATC classes",
       mah: "all companies",
       area: "all therapeutic areas",
-      status: "any status",
+      // Nothing selected: every status, a filter of its own since authorized is the default (owner
+      // decision 2026-09-29).
+      status: "every status",
       mod: "all modalities",
     },
+    // The status token by default (owner decision 2026-09-29, "Authorized by default"): no filter.
+    statusDefault: "authorized status",
     many: {
       type: (count) => plural(count, "medicine type", "medicine types"),
       mod: (count) => plural(count, "modality", "modalities"),
@@ -362,6 +366,11 @@ export const UI = {
     // After a collapsed section's title (owner decision 2026-09-29 (2); facets.js sectionSummary()):
     // several values selected; one is named.
     selected: (count) => `${formatCount(count)} selected`,
+    // The Status section with every status included (owner decision 2026-09-29).
+    everyStatus: "Every status",
+    // Under the Status rows: widen the default to every status, or go back to it.
+    statusWiden: "Include withdrawn, refused and pending",
+    statusDefault: "Authorized only",
   },
   sheet: {
     show: (count) => `Show ${plural(count, "medicine", "medicines")}`,
@@ -384,10 +393,27 @@ export const UI = {
         `${formatCount(total)} in total, most in ${peakYear} (${formatCount(peakCount)}).`),
   },
 
-  // Answer headlines: the dashboard's (home, filters, one ATC class) and the lookup results'. The
-  // dashboard counts every medicine in the EMA data (total) and those currently authorized.
+  // Answer headlines: the dashboard's (home, filters, one ATC class) and the lookup results'. With a
+  // status filter other than the default, the dashboard counts the medicines shown (total) and those
+  // currently authorized; by default (authorized) only the medicines shown (headline.authorized).
   headline: {
-    home: (total, authorized) => [number(authorized), " of ", number(total), " medicines in the EMA data are currently authorized in the EU."],
+    // Every status included (?status=all; owner decision 2026-09-29: the headline says so).
+    home: (total, authorized) => [number(total), " medicines in the EMA data, ", number(authorized), " of them currently authorized."],
+    // Owner decision 2026-09-29 ("Authorized by default"): the medicines with status Authorised, as
+    // the dashboard lists them (the ones without an approval date included).
+    authorized: {
+      home: (count) => [number(count), ` ${count === 1 ? "medicine is" : "medicines are"} authorized EU-wide through EMA.`],
+      filtered: (count) => (count === 0
+        ? ["No authorized medicines match these filters."]
+        : [number(count), ` authorized ${count === 1 ? "medicine matches" : "medicines match"} these filters.`]),
+      atcClass: (count, label) => (count === 0
+        ? [`No authorized medicines are classed ${label}.`]
+        : [number(count), ` authorized ${count === 1 ? "medicine" : "medicines"} in ${label}.`]),
+      area: (count, name, tag = false) => {
+        const place = `${tag ? "tagged" : "in"} ${name}`;
+        return count === 0 ? [`No authorized medicines are ${place}.`] : [number(count), ` authorized ${count === 1 ? "medicine" : "medicines"} ${place}.`];
+      },
+    },
     filtered: (total, authorized) => (total === 0
       ? ["No medicines match these filters."]
       : [number(total), ` ${total === 1 ? "medicine matches" : "medicines match"} these filters`, ...currentlyAuthorized(total, authorized)]),
@@ -450,10 +476,19 @@ export const UI = {
         : ["No authorized medicines are ", ...what];
     },
   },
+  // Under the default headline (owner decision 2026-09-29), in place of the breakdown by every
+  // status: the medicines of other statuses the default leaves out, and a control to include them.
+  statusScope: {
+    more: (count, filtered) => `${filtered
+      ? `${plural(count, "more medicine", "more medicines")} matching these filters ${count === 1 ? "is" : "are"}`
+      : `EMA's list also has ${plural(count, "medicine", "medicines")} that ${count === 1 ? "is" : "are"}`} not authorized: withdrawn, refused, expired or awaiting a decision.`,
+    include: "Include them",
+    includeLabel: "Include them: show medicines of every status",
+  },
   kicker: { medicine: "Medicine", substance: "Substance", condition: "Condition", text: "Indication text", company: "Company" },
 
-  // The four types with their share of the medicines matching the filters (every status); the
-  // headline states those medicines and the currently authorized ones (owner decision 2026-09-29).
+  // The four types with their share of the medicines matching the filters (by default the authorized
+  // ones); the headline states those medicines (owner decision 2026-09-29).
   tiles: [
     { key: "orphan", label: "Orphan", caption: "Medicines with an orphan designation" },
     { key: "biosimilar", label: "Biosimilar", caption: "Biosimilar medicines" },
@@ -461,7 +496,7 @@ export const UI = {
     { key: "advancedTherapy", label: "Advanced therapy", caption: "Advanced therapy medicinal products" },
   ],
   undatedAuthorized: (count) =>
-    `${plural(count, "authorized medicine", "authorized medicines")} without an approval date ${count === 1 ? "is" : "are"} not counted as currently authorized.`,
+    `${plural(count, "authorized medicine", "authorized medicines")} without an approval date ${count === 1 ? "is" : "are"} left out of “Authorized over time” and of the currently authorized count.`,
   // Shown on hover and focus wherever a type badge, tile, facet row or sentence token names one
   // (keys: typeBadges() labels, medicine types); at most 12 words.
   typeTips: {
@@ -574,7 +609,7 @@ export const UI = {
       `${formatCount(count)} of the medicines EMA lists as currently authorized ${count === 1 ? "is" : "are"} no longer authorized according to the EU Union Register.`,
   },
 
-  // Every matching medicine, whatever its status.
+  // Every matching medicine (by default the authorized ones).
   breakdown: {
     atc: {
       title: "Medicines by ATC level 1",
@@ -632,9 +667,14 @@ export const UI = {
     // the conditions within it are listed. Kept short (review 2026-09-29: at 1024px it took 3 lines).
     // Broad categories are not ranked (owner decision 2026-09-29: only MeSH level 3 and deeper), and
     // the last sentence says where they are.
-    subtitle: (count, filtered, within = false) => `${filtered
-      ? `Conditions of the ${plural(count, "medicine", "medicines")} matching the filters`
-      : `Conditions of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.`,
+    // authorizedOnly: every medicine shown is authorized (the default status filter, owner decision
+    // 2026-09-29).
+    subtitle: (count, filtered, within = false, authorizedOnly = false) => {
+      const medicines = authorizedOnly ? plural(count, "authorized medicine", "authorized medicines") : plural(count, "medicine", "medicines");
+      const which = filtered ? `Conditions of the ${medicines} matching the filters` : `Conditions of all ${medicines}${authorizedOnly ? "" : " in the EMA data"}`;
+      const treatments = authorizedOnly ? "their active substances or combinations" : "the active substances or combinations of the authorized ones";
+      return `${which}${within ? ", within the selected areas" : ""}, each with its narrower ones; treatments are ${treatments}. Broad categories such as Neoplasms are in the therapeutic area filter.`;
+    },
     headers: { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" },
     // The sort buttons in the headers (UI.sortOrder.name() adds the order to the pressed one's).
     sortBy: { treatments: "Sort by treatments", medicines: "Sort by authorized medicines" },
@@ -642,6 +682,8 @@ export const UI = {
     // counts (review 2026-09-29: "47 of 64" did not say); its tooltip says both.
     of: (count) => `of ${formatCount(count)}`,
     everyStatus: (count) => ` ${count === 1 ? "medicine" : "medicines"} of every status`,
+    // Only authorized medicines shown: the number alone (no "of"), and its tooltip.
+    authorizedTip: (count) => plural(count, "authorized medicine", "authorized medicines"),
     medicinesTip: (authorized, count) => `${formatCount(authorized)} authorized of ${plural(count, "medicine", "medicines")} of every status`,
     // Phones (the header hidden): after each number, what it counts (aria-hidden: the header says it).
     treatmentsUnit: (count) => (count === 1 ? "treatment" : "treatments"),
@@ -752,6 +794,9 @@ export const UI = {
   },
 
   overTime: {
+    // Owner decision 2026-09-29: authorization history, whatever a medicine's status now, so the status
+    // filter does not apply (nor the year filter: the chart shades the range).
+    subtitle: "Authorized products and distinct active substances at each month end, those withdrawn since included. Every filter applies but the status and the approval years, which are shaded.",
     products: "Authorized products",
     substances: "Distinct active substances",
     excluded: (count) =>

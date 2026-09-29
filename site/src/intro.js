@@ -6,7 +6,7 @@
 // Owner decision 2026-09-29: three onboarding cards (icon on a tint, bold title, one plain sentence,
 // an example to try) and one quiet line on scope and use, in place of the two lists.
 import { UI } from "./labels.js";
-import { DEFAULT_STATE, areaState, encodeUrl, lookupView } from "./url.js";
+import { DEFAULT_STATE, areaState, encodeUrl, filterIsSet, lookupView } from "./url.js";
 
 const STORAGE_KEY = "approval-atlas:intro-closed";
 // The breakdown's mode ("by") is not a filter.
@@ -17,8 +17,8 @@ const FILTER_KEYS = Object.keys(DEFAULT_STATE).filter((key) => key !== "by");
 // before phase 4f carry areas as "branch"); null once the data has loaded.
 export function isOverview(state, pendingFilters = null) {
   if (lookupView(state).kind !== null) return false;
-  const isSet = (key) => (Array.isArray(DEFAULT_STATE[key]) ? state[key].length > 0 : state[key] !== DEFAULT_STATE[key]);
-  if (FILTER_KEYS.some(isSet)) return false;
+  // The default status (authorized) is no filter (owner decision 2026-09-29).
+  if (FILTER_KEYS.some((key) => filterIsSet(state, key))) return false;
   return pendingFilters === null || [...pendingFilters.keys()].every((key) => key === "by");
 }
 

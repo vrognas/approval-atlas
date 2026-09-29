@@ -85,6 +85,7 @@
         <section class="answer" aria-labelledby="headline">
           <h2 id="headline" class="headline" tabindex="-1"></h2>
           <p id="headline-dek" class="dek"></p>
+          <p id="status-scope" class="muted status-scope" hidden><span id="status-scope-text"></span> <button id="status-include" class="inline-button" type="button"></button></p>
           <div id="class-path" class="class-path" hidden></div>
         </section>
         <p id="filter-result" class="visually-hidden" role="status"></p>
@@ -96,7 +97,8 @@
         </div>
         <p id="url-note" class="note" role="status" hidden></p>
 
-        <!-- One dashboard: every medicine matching the filters, whatever its status. The top row
+        <!-- One dashboard: every medicine matching the filters (by default the authorized ones:
+             owner decision 2026-09-29). The top row
              (owner decision 2026-09-29, revised): "Authorized over time" across the main column,
              the four type tiles under it, in one row, 2 x 2 or one per row by the main column's
              width. The frame is their size container: the main column's width, which the
@@ -105,7 +107,7 @@
           <div class="top-row">
             <section class="chart-card" aria-labelledby="over-time-title">
               <h2 id="over-time-title">Authorized over time</h2>
-              <p class="muted">Authorized products and distinct active substances at each month end. All filters apply except approval years, which are shaded.</p>
+              <p id="over-time-subtitle" class="muted"></p>
               <ul id="over-time-legend" class="legend"></ul>
               <div id="over-time" class="chart"></div>
               <p id="over-time-note" class="muted"></p>
@@ -312,6 +314,7 @@
         </h3>
         <div id="facet-status-body" class="facet-body" hidden>
           <ul class="facet-list"></ul>
+          <button id="status-widen" class="text-button status-widen" type="button"></button>
         </div>
       </div>
       <!-- Approval year (owner decision 2026-09-29: back in the sidebar, last): slim one-colour

@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { authorizedSeries, buildProducts } from "./approvals.js";
 import { DEFAULT_STATE } from "./url.js";
-import { filterProducts, makePredicates, parseAtcQuery, splitAtcValues } from "./filters.js";
+import { OVER_TIME_EXCEPT, filterProducts, makePredicates, parseAtcQuery, splitAtcValues } from "./filters.js";
 
 const product = (id, fields) => ({
   ema_product_number: id,
@@ -34,11 +36,17 @@ const atcClasses = [
   { atc_code: "L01FA01", level: 5, name: "rituximab" },
 ];
 const ids = (rows) => rows.map((row) => row.ema_product_number);
+// The other dimensions are tested over every status (status [], no status filter).
+const EVERY_STATUS = { ...structuredClone(DEFAULT_STATE), status: [] };
 const run = (patch, except = null) =>
-  ids(filterProducts(products, makePredicates({ ...structuredClone(DEFAULT_STATE), ...patch }, atcClasses), except));
+  ids(filterProducts(products, makePredicates({ ...structuredClone(EVERY_STATUS), ...patch }, atcClasses), except));
 
-test("the default state has no predicates and keeps every product", () => {
-  assert.deepEqual(makePredicates(DEFAULT_STATE, atcClasses), {});
+// Owner decision 2026-09-29 ("Authorized by default"; before, the default kept every product): the
+// default state's one predicate is the status, Authorised; every status (status []) has none.
+test("the default state keeps the authorized products; every status has no predicates", () => {
+  assert.deepEqual(Object.keys(makePredicates(DEFAULT_STATE, atcClasses)), ["status"]);
+  assert.deepEqual(ids(filterProducts(products, makePredicates(DEFAULT_STATE, atcClasses))), ["P1", "P2", "P4"]);
+  assert.deepEqual(makePredicates(EVERY_STATUS, atcClasses), {});
   assert.deepEqual(run({}), ["P1", "P2", "P3", "P4"]);
 });
 
@@ -54,7 +62,7 @@ test("mah matches a product's company group, company or EMA holder name", () => 
     product("C3", { mah: "Sanofi Pasteur MSD, SNC", company_key: "c.sanofi-pasteur-msd", group_key: "g.sanofi-pasteur-msd" }),
     product("C4", { mah: "Not stated", company_key: null, group_key: null }),
   ];
-  const match = (mah) => ids(filterProducts(grouped, makePredicates({ ...structuredClone(DEFAULT_STATE), mah }, atcClasses)));
+  const match = (mah) => ids(filterProducts(grouped, makePredicates({ ...structuredClone(EVERY_STATUS), mah }, atcClasses)));
   assert.deepEqual(match(["g.pfizer"]), ["C1", "C2"]);
   assert.deepEqual(match(["c.wyeth"]), ["C2"]);
   assert.deepEqual(match(["c.wyeth", "Sanofi Pasteur MSD, SNC"]), ["C2", "C3"]);
@@ -69,11 +77,11 @@ test("mod matches any selected group or modality of a product's substances", () 
     product("D3", { modalityKeys: ["small_molecule"] }),
     product("D4", { modalityKeys: [] }),
   ];
-  const match = (mod) => ids(filterProducts(classified, makePredicates({ ...structuredClone(DEFAULT_STATE), mod }, atcClasses)));
+  const match = (mod) => ids(filterProducts(classified, makePredicates({ ...structuredClone(EVERY_STATUS), mod }, atcClasses)));
   assert.deepEqual(match(["antibody"]), ["D1"]);
   assert.deepEqual(match(["peptide", "small_molecule"]), ["D2", "D3"]);
   assert.deepEqual(match(["sirna"]), []);
-  assert.deepEqual(Object.keys(makePredicates({ ...structuredClone(DEFAULT_STATE), mod: ["antibody"] }, atcClasses)), ["mod"]);
+  assert.deepEqual(Object.keys(makePredicates({ ...structuredClone(EVERY_STATUS), mod: ["antibody"] }, atcClasses)), ["mod"]);
 });
 
 // A company tree row whose value also shows under another group (or company) selects by its path:
@@ -85,7 +93,7 @@ test("mah matches a row path: that group's medicines of the company (and EMA hol
     product("M3", { mah: "Organon N.V.", company_key: "c.organon", group_key: "g.organon" }),
     product("M4", { mah: "Merck Sharp & Dohme Ltd", company_key: "c.msd", group_key: "g.msd" }),
   ];
-  const match = (mah) => ids(filterProducts(split, makePredicates({ ...structuredClone(DEFAULT_STATE), mah }, atcClasses)));
+  const match = (mah) => ids(filterProducts(split, makePredicates({ ...structuredClone(EVERY_STATUS), mah }, atcClasses)));
   assert.deepEqual(match(["g.organon/c.msd"]), ["M2"]);
   assert.deepEqual(match(["g.msd/c.msd"]), ["M1", "M4"]);
   assert.deepEqual(match(["g.msd/c.msd/Merck Sharp & Dohme B.V."]), ["M1"]);
@@ -107,7 +115,7 @@ test("the area filter matches a product with any selected branch, tree node or t
   assert.deepEqual(run({ area: ["C17", "C18"] }), ["P2", "P3"]);
   assert.deepEqual(run({ area: ["C04.588"] }), ["P2"]);
   assert.deepEqual(run({ area: ["Lymphoma", "Breast Neoplasms"] }), ["P1", "P2"]);
-  assert.deepEqual(makePredicates({ ...structuredClone(DEFAULT_STATE), area: [] }, atcClasses), {});
+  assert.deepEqual(makePredicates({ ...structuredClone(EVERY_STATUS), area: [] }, atcClasses), {});
 });
 
 test("an ATC code is a case-insensitive prefix of any of the product's codes", () => {
@@ -127,12 +135,12 @@ test("several ATC values combine with OR: codes and class-name queries alike", (
   assert.deepEqual(run({ atc: ["L01F", "A10BH01"] }), ["P1", "P3"]);
   assert.deepEqual(run({ atc: ["RITUX", "A10"] }), ["P1", "P3"]);
   assert.deepEqual(run({ atc: ["L01XE", "no such class"] }), ["P2"]);
-  assert.deepEqual(makePredicates({ ...structuredClone(DEFAULT_STATE), atc: [] }, atcClasses), {});
+  assert.deepEqual(makePredicates({ ...structuredClone(EVERY_STATUS), atc: [] }, atcClasses), {});
 });
 
 test("ATC filters match valid code levels only: a malformed code (EMA's LX1XX02, VO4D) is in no class", () => {
   const coded = [product("M1", { atc: atcRows("LX1XX02") }), product("M2", { atc: atcRows("VO4D", "L04AC05") })];
-  const match = (atc) => ids(filterProducts(coded, makePredicates({ ...structuredClone(DEFAULT_STATE), atc }, atcClasses)));
+  const match = (atc) => ids(filterProducts(coded, makePredicates({ ...structuredClone(EVERY_STATUS), atc }, atcClasses)));
   assert.deepEqual(match(["L"]), ["M2"]);
   assert.deepEqual(match(["V"]), []);
   assert.deepEqual(match(["Antineoplastic"]), ["M2"]);
@@ -146,7 +154,7 @@ test("ATC filters match the code to use: a retired code's current class, a produ
     product("S1", { atc: [{ atc_code_human: null, atc_code: "L04AG05", current_atc_code: null }] }),
     product("N1", { atc: [{ atc_code_human: null }] }),
   ];
-  const match = (atc) => ids(filterProducts(coded, makePredicates({ ...structuredClone(DEFAULT_STATE), atc }, atcClasses)));
+  const match = (atc) => ids(filterProducts(coded, makePredicates({ ...structuredClone(EVERY_STATUS), atc }, atcClasses)));
   assert.deepEqual(match(["L01FA"]), ["R1"]);
   assert.deepEqual(match(["L01XC"]), []);
   assert.deepEqual(match(["L04AG"]), ["S1"]);
@@ -167,7 +175,41 @@ test("filters combine, and except skips one dimension", () => {
   assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], area: ["C04"] }), ["P2"]);
   assert.deepEqual(run({ mah: ["Pfizer Europe MA EEIG"], area: ["C04"] }, "mah"), ["P1", "P2"]);
   assert.deepEqual(run({ from: 2018, atc: ["L"] }, "date"), ["P1", "P2"]);
+  // Several dimensions skipped at once ("Authorized over time": the years and the status).
+  assert.deepEqual(run({ from: 2018, area: ["C18"] }, ["date", "status"]), ["P3"]);
+  assert.deepEqual(run({ from: 2018, area: ["C18"] }, OVER_TIME_EXCEPT), ["P3"]);
+  assert.deepEqual(run({ status: ["Withdrawn"], type: ["Generic"] }, ["status"]), ["P2"]);
+  assert.deepEqual(run({ status: ["Authorised"], type: ["Generic"] }, "type"), ["P1", "P2", "P4"]);
 });
+
+// "Authorized over time" is about authorization history: it ignores the status filter (a medicine
+// withdrawn in 2020 was authorized in 2015) and the year filter (it marks the range instead).
+test("the over-time series ignores the status and year filters", () => {
+  assert.deepEqual(OVER_TIME_EXCEPT, ["date", "status"]);
+  const shown = (patch) => ids(filterProducts(products, makePredicates({ ...structuredClone(DEFAULT_STATE), ...patch }, atcClasses), OVER_TIME_EXCEPT));
+  assert.deepEqual(shown({}), ["P1", "P2", "P3", "P4"]);
+  assert.deepEqual(shown({ status: ["Withdrawn"] }), ["P1", "P2", "P3", "P4"]);
+  assert.deepEqual(shown({ type: ["Generic"] }), ["P2"]);
+});
+
+const dataDir = new URL("../public/data/", import.meta.url);
+const read = (file) => JSON.parse(readFileSync(new URL(file, dataDir), "utf8"));
+test(
+  "real data: the default overview lists the medicines with status Authorised; its series is the pipeline's",
+  { skip: existsSync(new URL("ema_authorized_series.json", dataDir)) ? false : "site/public/data not found: run the pipeline first" },
+  () => {
+    const medicines = read("ema_medicines.json");
+    const products = buildProducts(medicines, { areaRows: [], branchRows: [], atcRows: [] });
+    const predicates = makePredicates(DEFAULT_STATE, []);
+    const shown = filterProducts(products, predicates);
+    assert.equal(shown.length, medicines.filter((row) => row.medicine_status === "Authorised").length);
+    assert.ok(shown.every((product) => product.medicine_status === "Authorised"));
+    // 2026-09-28 data: 1,573 of 2,351 (6 of them without an approval date).
+    assert.ok(shown.length > 1500 && shown.length < products.length, `${shown.length} of ${products.length}`);
+    const series = read("ema_authorized_series.json");
+    assert.deepEqual(authorizedSeries(filterProducts(products, predicates, OVER_TIME_EXCEPT), series.map((row) => row.date)), series);
+  },
+);
 
 test("parseAtcQuery tells code prefixes from names", () => {
   assert.deepEqual(parseAtcQuery("l01fa"), { kind: "code", value: "L01FA" });
