@@ -4287,8 +4287,11 @@ details > summary {
 }
 
 .protection h3 .chip {
+  max-width: 100%;
   margin-left: 4px;
   vertical-align: 1px;
+  /* A copy's "Data/market protection: None of its own" is wider than a 320px card. */
+  white-space: normal;
 }
 
 .protection ul {

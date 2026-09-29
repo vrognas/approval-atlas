@@ -7,7 +7,7 @@ import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowInco
 import { atcHue, atcSegments, statusFlags, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
 import {
-  copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup,
+  copiesLinePlan, copiesSummary, countedFromName, curatedTypeDiffers, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup,
   substanceSetCount,
 } from "./copies.js";
 import { FAILED, createDatasets } from "./datasets.js";
@@ -107,10 +107,21 @@ function typeBadgeList(row) {
 }
 
 // The medicine card has room: each type badge with its explanation as visible text, one per line
-// (read by everyone, no tooltip needed).
-function explainedTypes(row) {
+// (read by everyone, no tooltip needed). typeText: the medicine type's explanation (a curated copy
+// type can replace it: typeExplanation()).
+function explainedTypes(row, typeText = UI.typeTips[row.medicine_type]) {
   return typeBadges(row).map((badge) => el("span", { class: "type-explained" },
-    el("span", { class: `badge hue-${badge.hue}` }, badge.label), " ", el("span", { class: "muted" }, UI.typeTips[badge.label])));
+    el("span", { class: `badge hue-${badge.hue}` }, badge.label), " ",
+    el("span", { class: "muted" }, badge.label === row.medicine_type ? typeText : UI.typeTips[badge.label])));
+}
+
+// The card's explanation of EMA's type, or, where a curated copy type contradicts it, what the
+// EPAR page calls the medicine (QA 2026-09-29, #9: Riulvy, EMA Generic, a hybrid of Tecfidera).
+// curatedRow: its ema_curated_copies.json row (undefined without one, or while it loads).
+function typeExplanation(medicineType, curatedRow) {
+  return curatedTypeDiffers(medicineType, curatedRow)
+    ? UI.copies.typeDiffers(curatedRow.copy_type, curatedRow.reference_name)
+    : UI.typeTips[medicineType] ?? "";
 }
 
 // Segmented ATC badge (display only: the card's ladders are the links): one segment per level, in
@@ -326,7 +337,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     if (entry.groupNote && entry.moved) {
       group = noteLine(UI.companies.why(entry.group.name, entry.groupNote), entry.groupNote, entry.groupEvidenceUrl, UI.companies.whySummary(entry.group.name), "company-why");
     } else if (entry.groupNote) {
-      group = noteLine(UI.companies.note(entry.groupNote), entry.groupNote, entry.groupEvidenceUrl, UI.companies.noteSummary, "company-note");
+      group = noteLine(UI.companies.groupNote(entry.groupNote), entry.groupNote, entry.groupEvidenceUrl, UI.companies.noteSummary, "company-note");
     }
     return [holderDisplay(entry, { link: companyLink }), sponsor, group, el("p", { class: "muted company-as-of" }, UI.companies.asOfShort(entry.group.as_of))];
   }
@@ -587,6 +598,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     if (!glance) return null;
     return [UI.card.strip.protection, [
       el("a", { href: "#protection", class: "strip-link", onclick: jumpToProtection }, glance.value, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
+      // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
+      glance.reference ? el("span", { class: "strip-note" }, glance.reference) : null,
       glance.orphan ? el("span", { class: "strip-note" }, glance.orphan) : null,
     ]];
   }
@@ -691,6 +704,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       ? el("p", { class: "muted" }, UI.card.namesake.documents(split.namesake.length),
         internalLink(UI.card.namesake.documentsLink(later.name_of_medicine), { med: later.ema_product_number }), ".")
       : null;
+    const protection = need("protection");
+    const typeText = typeExplanation(row.medicine_type, ready(protection) ? protection.curatedCopies.get(number) : undefined);
     // An authorized medicine's sentence needs only its flags (a qualifier, #9); a positive opinion's
     // says when the EU decision usually comes (#12) and, past that, how long it has waited by the data's date.
     const sentence = medicine || authorized
@@ -736,8 +751,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
         fact(UI.card.type, [
           typeBadges({ medicine_type: row.medicine_type }).length
             ? null
-            : [el("span", { class: "type-explained" }, row.medicine_type, " ", el("span", { class: "muted" }, UI.typeTips[row.medicine_type] ?? "")), " "],
-          explainedTypes(medicine ?? row),
+            : [el("span", { class: "type-explained" }, row.medicine_type, " ", el("span", { class: "muted" }, typeText)), " "],
+          explainedTypes(medicine ?? row, typeText),
           flags.map((flag) => [" ", flagChip(flag)]),
         ]),
         fact(UI.modality.label, modalityFact(number, atc)),
