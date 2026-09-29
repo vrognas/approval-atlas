@@ -26,9 +26,10 @@ export function createSheet(dialog, { onClear }) {
   // Puts the borrowed sections back; returns the restore() of the sheet that had them.
   function giveBack() {
     if (!current) return null;
-    const { sections, markers, restore } = current;
+    const { sections, markers, restore, onClose } = current;
     current = null;
     markers.forEach((marker, index) => marker.replaceWith(sections[index]));
+    onClose?.();
     return restore;
   }
   // The close event is queued: the token that opened the sheet may have been rebuilt meanwhile.
@@ -36,8 +37,9 @@ export function createSheet(dialog, { onClear }) {
 
   return {
     // sections: facet elements to show; clears: filter keys Clear resets; restore(): the control
-    // that gets focus back (looked up on close).
-    open({ title: text, sections, clears, restore }) {
+    // that gets focus back (looked up on close); onOpen(), onClose(): as the sections move in and
+    // back (a single section shown open, facet-sections.js solo()); optional.
+    open({ title: text, sections, clears, restore, onOpen, onClose }) {
       if (dialog.open) return; // the page behind an open sheet is inert
       giveBack(); // closed, but its close event has not run yet
       const markers = sections.map((section) => {
@@ -45,7 +47,8 @@ export function createSheet(dialog, { onClear }) {
         section.before(marker);
         return marker;
       });
-      current = { sections, markers, clears, restore };
+      current = { sections, markers, clears, restore, onClose };
+      onOpen?.();
       title.textContent = text;
       body.replaceChildren(...sections);
       body.scrollTop = 0;

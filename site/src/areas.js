@@ -79,6 +79,13 @@ export function buildAreaTree(branchRows, subtreeRows, noteRows = null) {
   let termNumbers = new Map();
   const numberUnder = (key, parent) => (entries.get(key).kind !== "term" ? key
     : (termNumbers.get(key) ?? []).filter((number) => number === parent || number.startsWith(`${parent}.`)).sort(byCode)[0] ?? null);
+  // The number a row shows (owner decision 2026-09-29): as numberUnder(), but a term's strictly
+  // below parent, so a root tag (its descriptor is the branch) shows none of its own.
+  const number = (key, parent = null) => {
+    if (!entries.has(key)) return null;
+    const found = numberUnder(key, parent);
+    return found === parent ? null : found;
+  };
   const treeOrder = (parent) => (a, b) => {
     const [first, second] = [numberUnder(a, parent), numberUnder(b, parent)];
     if (first !== null && second !== null && first !== second) return byCode(first, second);
@@ -148,6 +155,10 @@ export function buildAreaTree(branchRows, subtreeRows, noteRows = null) {
     // The descriptors' tree numbers arrived (mesh_descriptor_notes.json rows; null: none): the
     // terms go in tree order.
     setNotes,
+    // A row's MeSH tree number (owner decision 2026-09-29: shown as the ATC tree shows its codes): a
+    // category's letter, a branch's code, a node's tree number, a term's descriptor's number under
+    // parent (the one its place there comes from; null before the notes load or without one).
+    number,
     // A term's parents in tree order (a root tag's: its branch); a node's or branch's one parent (a
     // branch's: its category); none for a category.
     parents: (key) => parents.get(key) ?? [],
@@ -222,30 +233,42 @@ export function areaTreeChildren(tree, parent, visible) {
   return tree.children(parent).filter((key) => visible.has(key));
 }
 
-// Names match a search from this many characters.
+// A tree number's badge shade (owner decision 2026-09-29, as the ATC code badges' levels): a
+// category's letter 1, a branch's code 2, level-2 and level-3 nodes 3 and 4, a term's number 5.
+export function areaNumberLevel(number) {
+  return number.length === 1 ? 1 : Math.min(5, number.split(".").length + 1);
+}
+
+// Names match a search from this many characters; a tree number ("C04.588", any case, a trailing dot
+// too) from the first, as a prefix (owner decision 2026-09-29, as the ATC tree's codes).
 const SEARCH_MIN = 3;
+const TREE_NUMBER = /^[a-z](?:\d{1,3}(?:\.\d{1,3})*\.?)?$/i;
 
 // The tree searched (not filtered): matches = the top matching nodes (a node under a matching one
 // is not a match of its own), then the terms matching where their parent is not already shown by a
 // match; open = the levels above them; shows(parent, key): whether a row shows (a node when open or
 // in a match's subtree; a term under a match, or matching itself). A category (owner decision
 // 2026-09-29) matches by its name only when nothing below it does ("anatomy"), so "diseases" still
-// finds the branches and nodes named so. null for a blank query.
+// finds the branches and nodes named so. A tree number typed as a prefix matches the rows whose
+// number starts with it (tree.number(); a term's under each parent). null for a blank query.
 export function areaTreeSearch(tree, visible, query) {
   const needle = foldSearchText(query);
   if (!needle) return null;
+  const prefix = TREE_NUMBER.test(query.trim()) ? query.trim().toUpperCase() : null;
+  const numberHit = (key, parent) => prefix !== null && Boolean(tree.number(key, parent)?.startsWith(prefix));
   const hit = (key) => needle.length >= SEARCH_MIN && tree.searchNames(key).some((name) => name.includes(needle));
   const nodes = [...visible].filter((key) => !tree.isTerm(key));
   const hitBelow = (category) => [...visible].some((key) => key !== category && tree.ancestors(key).has(category) && hit(key));
-  const hits = new Set(nodes.filter((key) => hit(key) && !(tree.isCategory(key) && hitBelow(key))));
+  const hits = new Set(nodes.filter((key) => numberHit(key) || (hit(key) && !(tree.isCategory(key) && hitBelow(key)))));
   const matchNodes = [...hits].filter((key) => ![...tree.ancestors(key)].some((above) => hits.has(above))).sort();
   const matched = new Set(matchNodes);
   const covered = new Set(nodes.filter((key) => matched.has(key) || [...tree.ancestors(key)].some((above) => matched.has(above))));
   const open = new Set(matchNodes.flatMap((key) => [...tree.ancestors(key)]));
   const leaves = new Set();
   const matchTerms = [];
-  for (const term of [...visible].filter((key) => tree.isTerm(key) && hit(key)).sort()) {
-    const places = tree.parents(term).filter((parent) => visible.has(parent) && !covered.has(parent));
+  for (const term of [...visible].filter((key) => tree.isTerm(key)).sort()) {
+    const named = hit(term);
+    const places = tree.parents(term).filter((parent) => visible.has(parent) && !covered.has(parent) && (named || numberHit(term, parent)));
     if (!places.length) continue;
     matchTerms.push(term);
     for (const parent of places) {

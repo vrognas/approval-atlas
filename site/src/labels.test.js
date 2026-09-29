@@ -754,6 +754,9 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(facets.matches(0), "No matches");
   assert.equal(facets.matches(1), "1 match");
   assert.equal(facets.matches(1234), "1,234 matches");
+  // A collapsed section with several values selected (owner decision 2026-09-29 (2)).
+  assert.equal(facets.selected(2), "2 selected");
+  assert.equal(facets.selected(1234), "1,234 selected");
   assert.equal(sheet.show(33), "Show 33 medicines");
   assert.equal(sheet.show(1), "Show 1 medicine");
   assert.equal(sheet.clear, "Clear");

@@ -345,6 +345,9 @@ export const UI = {
     noMatches: "No matches",
     // Announced after typing in a facet search.
     matches: (count) => (count ? plural(count, "match", "matches") : UI.facets.noMatches),
+    // After a collapsed section's title (owner decision 2026-09-29 (2); facets.js sectionSummary()):
+    // several values selected; one is named.
+    selected: (count) => `${formatCount(count)} selected`,
   },
   sheet: {
     show: (count) => `Show ${plural(count, "medicine", "medicines")}`,
@@ -858,6 +861,9 @@ export const UI = {
     expand: (name) => `Areas in ${name}`,
     // Rows, path items: the area and its count of medicines.
     count: (name, count) => `${name}, ${plural(count, "medicine", "medicines")}`,
+    // A tree row's name (owner decision 2026-09-29): the area, then the MeSH tree number its badge
+    // shows (null: none known), "Neoplasms by Site, C04.588".
+    numbered: (name, number) => (number ? `${name}, ${number}` : name),
     // An area under a checked one (on some path): checked and disabled.
     included: (name, count, ancestor) => `${UI.areas.count(name, count)}, included in ${ancestor}`,
     noMatches: "No matching therapeutic areas",
@@ -873,7 +879,7 @@ export const UI = {
     // and the tree's note, as its branch row is only indeterminate.
     tag: (name) => `tagged ${name}`,
     tagNote: (tags) => `Also filtering by the ${tags.length === 1 ? "tag" : "tags"} ${tags.map((tag) => `“${tag}”`).join(" or ")}.`,
-    note: "MeSH categories, their branches and the branches' first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
+    note: "MeSH categories, their branches and the branches' first two levels, then EMA's terms, each with its MeSH tree number. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",
   },

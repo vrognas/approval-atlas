@@ -26,6 +26,7 @@ import { equivalentSetKey } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
 import { FAILED } from "./datasets.js";
 import { createFacetPanel } from "./facet-panel.js";
+import { createFacetSections } from "./facet-sections.js";
 import {
   FACET_VALUES,
   OTHER_KEY,
@@ -37,6 +38,7 @@ import {
   keyCounts,
   nextSort,
   orderActivityColumns,
+  sectionSummary,
   sentenceParts,
   sortActivityRows,
   statusBreakdown,
@@ -834,6 +836,9 @@ function startDashboard(meta, [
     return link;
   };
   const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch) });
+  // Collapsible sections (owner decision 2026-09-29 (2)): collapsed by default, each viewer's open
+  // ones remembered; Reset all leaves them as they are.
+  const facetSections = createFacetSections();
   $("#reset-all").addEventListener("click", () => {
     setState(cleared(FILTER_KEYS));
     $("#facets-title").focus(); // the button is disabled now
@@ -907,6 +912,8 @@ function startDashboard(meta, [
     const sheetKey = TOKEN_SHEETS[key] ?? key;
     const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
     if (DESKTOP.matches) {
+      // A collapsed section opens first: its control cannot take focus while hidden.
+      facetSections.reveal(SHEET_SECTIONS[sheetKey][0]);
       const trees = { atc: atcTree, area: areaFacet, mah: companyFacet, mod: modalityFacet };
       const target = (trees[key] ? trees[key].focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
       target.closest(".facet").scrollIntoView({ block: "start" });
@@ -914,12 +921,17 @@ function startDashboard(meta, [
       opener = key;
       return;
     }
+    // One section: shown open, its heading hidden (the sheet's title names it); All filters: the
+    // sections' headings as in the sidebar, the open ones as the viewer left them.
+    const solo = sections.length === 1 ? SHEET_SECTIONS[sheetKey][0] : null;
     sheet.open({
-      title: UI.sheet.titles[sheetKey] ?? sections[0].querySelector(".facet-title").textContent,
+      title: UI.sheet.titles[sheetKey] ?? sections[0].querySelector(".facet-heading").textContent,
       sections,
       // All filters clears every filter, the years too (as the sidebar's Reset all).
       clears: sheetKey === "all" ? FILTER_KEYS : SHEET_SECTIONS[sheetKey].flatMap((section) => SECTION_KEYS[section]),
       restore: () => $(`#filter-sentence [data-sheet="${sheetKey}"]`) ?? $("#all-filters"),
+      onOpen: () => facetSections.solo(solo),
+      onClose: () => facetSections.solo(null),
     });
   }
   // Escape in the sidebar returns to the results: the token that led there, else the headline.
@@ -932,8 +944,12 @@ function startDashboard(meta, [
   allFilters.textContent = UI.sentence.allFilters;
   allFilters.addEventListener("click", () => openFilters("all"));
 
-  // The first checked class in the tree (sidebar), or the sentence's ATC token (phones, tablets).
-  const focusAtcFilter = () => (DESKTOP.matches ? atcTree.focusTarget() : $('#filter-sentence [data-sheet="atc"]'))?.focus();
+  // The first checked class in the tree (sidebar, its section opened first), or the sentence's ATC
+  // token (phones, tablets).
+  const focusAtcFilter = () => {
+    if (DESKTOP.matches) facetSections.reveal("atc");
+    (DESKTOP.matches ? atcTree.focusTarget() : $('#filter-sentence [data-sheet="atc"]'))?.focus();
+  };
 
   const readout = $("#year-readout");
   const showReadout = (from, to) => {
@@ -1625,18 +1641,23 @@ function startDashboard(meta, [
 
     const predicates = makePredicates(state, atcClasses);
     const activeCount = Object.keys(predicates).length;
-    safely($("#facets"), () => facetPanel.render({
-      state,
-      counts: Object.fromEntries(FACETS.map((dimension) => [dimension, facetCounts(products, predicates, dimension, FACET_VALUES[dimension])])),
-      activeCount,
-    }));
+    // The names the filter sentence and the collapsed sections' summaries give the selections.
+    const selectionNames = {
+      years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName, modalityNames,
+    };
+    safely($("#facets"), () => {
+      facetPanel.render({
+        state,
+        counts: Object.fromEntries(FACETS.map((dimension) => [dimension, facetCounts(products, predicates, dimension, FACET_VALUES[dimension])])),
+        activeCount,
+      });
+      facetSections.summarize(Object.fromEntries(Object.entries(SECTION_KEYS).map(([section, [dimension]]) => [section, sectionSummary(dimension, state, selectionNames)])));
+    });
     // The per-year chart, the strip and the over-time line ignore the approval-year filter and
     // mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
     safely($("#year-strip"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
-    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, {
-      years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName, modalityNames,
-    }), {
+    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, selectionNames), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
       popup: !DESKTOP.matches,

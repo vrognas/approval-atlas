@@ -1,11 +1,11 @@
 // The facet sidebar's therapeutic area section (the phone sheet borrows it; phase 4f): one tree of
 // MeSH category › branch › level 2 › level 3 › EMA's terms (areas.js, facet-tree.js), each row with
-// its name, count and a link to its condition page once known (none for a category). Checked areas
-// combine with OR (state.area). Diseases starts open (owner decision 2026-09-29), the other
-// categories closed. Also the path of areas of the breakdown and the one-area headline
+// its MeSH tree number (a badge, once known), name, count and a link to its condition page once
+// known (none for a category). Checked areas combine with OR (state.area). Diseases starts open
+// (owner decision 2026-09-29), the other categories closed. Also the path of areas of the breakdown and the one-area headline
 // (renderAreaPath()).
 import * as d3 from "d3";
-import { areaCheckState, areaExactLabel, areaIncludedIn, areaTreeChildren, areaTreeKeys, areaTreeSearch } from "./areas.js";
+import { areaCheckState, areaExactLabel, areaIncludedIn, areaNumberLevel, areaTreeChildren, areaTreeKeys, areaTreeSearch } from "./areas.js";
 import { createFacetTree } from "./facet-tree.js";
 import { UI } from "./labels.js";
 
@@ -27,8 +27,15 @@ export function createAreaTree(section, { tree, onToggle, linkOf, tipOf = () => 
       matches: UI.facets.matches,
       static: (parent) => areaExactLabel(tree, parent),
       expand: (key) => UI.areas.expand(tree.name(key)),
-      row: (key, count) => UI.areas.count(tree.name(key), count),
-      included: (key, count, ancestor) => UI.areas.included(tree.name(key), count, tree.name(ancestor)),
+      // Named by the area, then the tree number its badge shows (owner decision 2026-09-29).
+      row: (key, count, model, parent) => UI.areas.count(UI.areas.numbered(tree.name(key), tree.number(key, parent)), count),
+      included: (key, count, ancestor, model, parent) => UI.areas.included(UI.areas.numbered(tree.name(key), tree.number(key, parent)), count, tree.name(ancestor)),
+    },
+    // Each row's MeSH tree number as a code badge, as the ATC tree's codes (owner decision
+    // 2026-09-29): a term's under its row's parent once the notes have loaded.
+    number: (key, parent) => {
+      const number = tree.number(key, parent);
+      return number && { text: number, level: areaNumberLevel(number) };
     },
     // Only rows with children get a child list id: category letters, branch codes and tree numbers
     // ("C04.588"), valid and unique; terms (spaces, several parents) never have children.

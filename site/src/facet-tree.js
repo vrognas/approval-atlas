@@ -10,11 +10,24 @@ import { UI } from "./labels.js";
 
 const formatCount = d3.format(",");
 
+// A row's number badge (spec.number(): { text, level } or null: hidden). A tree number has no break
+// opportunity of its own (digits and dots stay together), so the badge may wrap after its dots only
+// (<wbr>), never inside a part: a term's number runs to 35 characters ("C10.228.140.163.…").
+function setNumber(badge, number) {
+  const text = number?.text ?? "";
+  badge.attr("hidden", number ? null : "").attr("class", `code-badge tree-number${number ? ` level-${number.level}` : ""}`);
+  if (badge.attr("data-number") === text) return;
+  badge.attr("data-number", text);
+  const parts = text.split(".");
+  badge.node().replaceChildren(...parts.flatMap((part, index) => (index < parts.length - 1 ? [`${part}.`, document.createElement("wbr")] : [part])));
+}
+
 // section: the facet section (.facet-search, .facet-live, the top list .atc-tree, .facet-empty).
 // onToggle(key): a checkbox changed. spec (model: render()'s argument, with selected: the keys
 // checked):
 //   copy: { find, tree, noMatches, matches(count), static(parent, model): the static row's text,
-//     expand(key, model), row(key, count, model), included(key, count, ancestor, model): names }
+//     expand(key, model), row(key, count, model, parent), included(key, count, ancestor, model,
+//     parent): names (parent: the row's, null at the top level) }
 //   idPrefix: of a node's child list id
 //   visible(model): the keys shown (a Set)
 //   children(parent, visible, model): the keys below parent (null: the top level), in order
@@ -27,6 +40,9 @@ const formatCount = d3.format(",");
 //   levelsAbove(key): the keys to open above a newly selected one
 //   name(key, model): { text, missing }
 //   decorate(label, key): content before the name (the ATC code badge), optional
+//   number(key, parent, model): { text, level } or null: a code badge before the name that can
+//     change or arrive later (the therapeutic areas' MeSH tree numbers, a term's under its row's
+//     parent), able to wrap after its dots only; optional
 //   link(key): an element after the row (a condition page link), or null; optional
 //   note(model): a line under the tree (older links' ATC name queries, root tags), or ""; optional
 //   tip(key, model): { text, id } or null: the row's explainer (the therapeutic areas' MeSH notes,
@@ -41,12 +57,14 @@ const formatCount = d3.format(",");
 //     shows.
 //   open: the keys open at first (the therapeutic areas' Diseases category); optional
 export function createFacetTree(section, spec, { onToggle }) {
-  const search = section.querySelector(".facet-search");
-  const status = section.querySelector(".facet-live");
-  const tree = section.querySelector(":scope > .atc-tree");
-  const empty = section.querySelector(".facet-empty");
-  const noteLine = section.querySelector(".tree-names");
-  const more = section.querySelector(":scope > .facet-more");
+  // The section's collapsible body (facet-sections.js) holds its controls.
+  const body = section.querySelector(":scope > .facet-body") ?? section;
+  const search = body.querySelector(".facet-search");
+  const status = body.querySelector(".facet-live");
+  const tree = body.querySelector(":scope > .atc-tree");
+  const empty = body.querySelector(".facet-empty");
+  const noteLine = body.querySelector(".tree-names");
+  const more = body.querySelector(":scope > .facet-more");
   let limit = spec.limit ?? Infinity;
   let hiddenTop = 0; // top-level rows the limit leaves out
   // Rows toggled here stay listed (unchecked, at count 0, past the limit) until the search or "Show
@@ -114,7 +132,7 @@ export function createFacetTree(section, spec, { onToggle }) {
       hiddenTop = children.length - shown.length;
       children = shown;
     }
-    const rows = children.map((key) => ({ key, count: model.counts.get(key) ?? 0 }));
+    const rows = children.map((key) => ({ key, parent, count: model.counts.get(key) ?? 0 }));
     const exact = found || (parent === null && !spec.rootStatic) ? 0 : spec.exact(parent, model);
     return (children.length || parent === null) && exact ? [...rows, { key: `${parent}#static`, parent, count: exact, static: true }] : rows;
   }
@@ -142,6 +160,7 @@ export function createFacetTree(section, spec, { onToggle }) {
         onToggle(row.key);
       });
       spec.decorate?.(label, row.key);
+      if (spec.number) label.append("span").attr("class", "code-badge tree-number").attr("hidden", "");
       // Name and count wrap together: short of room beside the badge, they move under it.
       const text = label.append("span").attr("class", "atc-text");
       text.append("span").attr("class", "facet-name");
@@ -183,8 +202,9 @@ export function createFacetTree(section, spec, { onToggle }) {
         .property("checked", state === "checked" || state === "included")
         .property("indeterminate", state === "mixed")
         .property("disabled", state === "included")
-        .attr("aria-label", ancestor ? spec.copy.included(row.key, row.count, ancestor, model) : spec.copy.row(row.key, row.count, model))
+        .attr("aria-label", ancestor ? spec.copy.included(row.key, row.count, ancestor, model, row.parent) : spec.copy.row(row.key, row.count, model, row.parent))
         .attr("aria-describedby", tip?.id ?? null);
+      if (spec.number) setNumber(item.select(":scope > .atc-row .tree-number"), spec.number(row.key, row.parent, model));
       // Its explainer (the data can arrive later), on hover and keyboard focus: on the whole row, so
       // the tip's hover bridge beside the desktop sidebar never covers the row's link (style.css).
       item.select(":scope > .atc-row").attr("data-tip", tip?.text ?? null).classed("mesh-tip", tip !== null)
