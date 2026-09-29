@@ -7,6 +7,7 @@ import {
   areaDrillVia,
   areaExactLabel,
   areaIncludedIn,
+  areaNumberLevel,
   areaTreeChildren,
   areaTreeKeys,
   areaTreeSearch,
@@ -16,6 +17,7 @@ import {
   toggleArea,
 } from "./areas.js";
 import { tokenLabel } from "./facets.js";
+import { UI } from "./labels.js";
 import { DEFAULT_STATE, decodeState, encodeState } from "./url.js";
 
 // Real rows (ema_therapeutic_area_branches.json, ema_therapeutic_area_subtree.json, 2026-09-28).
@@ -127,6 +129,38 @@ test("area tree order: before the notes load, terms by name; setNotes() puts the
   assert.deepEqual(ordered.children("C05.550"), ["C05.550.114", "C05.550.354"]);
   ordered.setNotes(null);
   assert.deepEqual(ordered.children("C05.550.114")[0], "Arthritis, Experimental");
+});
+
+// Owner decision 2026-09-29: each tree row shows its MeSH tree number, as the ATC tree its code: a
+// category's letter, a branch's code, a node's tree number, a term's descriptor's tree number under
+// the row's parent (the one the order uses; none before the notes load, or without one there).
+test("area tree numbers: category letter, branch code, node number, a term's number under the row's parent", () => {
+  const numbered = buildAreaTree(orderBranchRows, orderSubtreeRows, noteRows);
+  assert.deepEqual(["C", "C05", "C05.550", "C05.550.114"].map((key) => numbered.number(key)), ["C", "C05", "C05.550", "C05.550.114"]);
+  // A term under two nodes has a number under each.
+  assert.equal(numbered.number("Arthritis, Gouty", "C05.550.114"), "C05.550.114.423");
+  assert.equal(numbered.number("Arthritis, Gouty", "C05.550.354"), "C05.550.354.500");
+  assert.equal(numbered.number("Psoriasis", "C17.800.859"), "C17.800.859.675");
+  // None without a number under that parent, or before the notes load.
+  assert.equal(numbered.number("Arthritis, Experimental", "C05.550.114"), null);
+  assert.equal(numbered.number("Arthritis, Gouty", "C17.800.859"), null);
+  assert.equal(buildAreaTree(orderBranchRows, orderSubtreeRows).number("Arthritis, Gouty", "C05.550.114"), null);
+  assert.equal(numbered.number("Unknown key"), null);
+  // A tag matched at a branch root (its descriptor is the branch) has none of its own there.
+  const tagged = buildAreaTree([withUi(branch("Cancer", "Neoplasms", "C04", "Neoplasms"), "D009369")], [], [note("D009369", "Neoplasms", ["C04"])]);
+  assert.equal(tagged.number("Cancer", "C04"), null);
+});
+
+test("area tree numbers: the badge's level shade by depth, as the ATC code badges", () => {
+  assert.deepEqual(
+    ["C", "C04", "C04.588", "C04.588.180", "C04.588.180.260", "C10.228.140.163.100.435.825.700.875"].map(areaNumberLevel),
+    [1, 2, 3, 4, 5, 5],
+  );
+});
+
+test("area tree rows: named by the area, then its tree number (when known), then the count", () => {
+  assert.equal(UI.areas.count(UI.areas.numbered("Neoplasms by Site", "C04.588"), 284), "Neoplasms by Site, C04.588, 284 medicines");
+  assert.equal(UI.areas.count(UI.areas.numbered("Breast Neoplasms", null), 1), "Breast Neoplasms, 1 medicine");
 });
 
 test("area tree: a term whose descriptor is a level-2/3 node shows once, as that node", () => {
@@ -385,6 +419,39 @@ test("area tree search: a category matches by its name when nothing below it doe
   assert.equal(diseases.shows("C", "C04"), false);
 });
 
+// Owner decision 2026-09-29: a tree number typed as a prefix ("C04.588", any case) finds the rows
+// whose number starts with it, from the first character, as the ATC tree's code prefix: the top
+// ones, their levels opened; a term where its number under that parent does.
+test("area tree search: a tree number prefix finds the rows whose number starts with it", () => {
+  const sites = areaTreeSearch(tree, everyKey, "C04.588");
+  assert.deepEqual(sites.matches, ["C04.588"]);
+  assert.deepEqual([...sites.open].sort(), ["C", "C04"]);
+  assert.equal(sites.shows("C04", "C04.588"), true);
+  assert.equal(sites.shows("C04.588", "C04.588.180"), true);
+  assert.equal(sites.shows("C", "C17"), false);
+  assert.deepEqual(areaTreeSearch(tree, everyKey, " c04.588 ").matches, ["C04.588"]);
+  assert.deepEqual(areaTreeSearch(tree, everyKey, "C04.588.").matches, ["C04.588.180"]);
+  assert.deepEqual(areaTreeSearch(tree, everyKey, "C0").matches, ["C04", "C05"]);
+  // A category by its letter (a branch under it is no match of its own).
+  assert.deepEqual(areaTreeSearch(tree, everyKey, "c").matches, ["C"]);
+  assert.deepEqual(areaTreeSearch(tree, everyKey, "C99").matches, []);
+  // Terms by their number under each parent (from the notes): Arthritis, Gouty is C05.550.114.423
+  // and C05.550.354.500.
+  const numbered = buildAreaTree(orderBranchRows, orderSubtreeRows, noteRows);
+  const keys = new Set(numbered.names.keys());
+  const gouty = areaTreeSearch(numbered, keys, "C05.550.114.4");
+  assert.deepEqual(gouty.matches, ["Arthritis, Gouty"]);
+  assert.equal(gouty.shows("C05.550.114", "Arthritis, Gouty"), true);
+  assert.equal(gouty.shows("C05.550.354", "Arthritis, Gouty"), false);
+  assert.equal(gouty.shows("C05.550.114", "Arthritis, Juvenile"), false);
+  assert.deepEqual([...gouty.open].sort(), ["C", "C05", "C05.550", "C05.550.114"]);
+  const gout = areaTreeSearch(numbered, keys, "C05.550.354.5");
+  assert.equal(gout.shows("C05.550.354", "Arthritis, Gouty"), true);
+  assert.equal(gout.shows("C05.550.114", "Arthritis, Gouty"), false);
+  // Names still need 3 characters.
+  assert.deepEqual(areaTreeSearch(tree, everyKey, "ps").matches, []);
+});
+
 const product = (areas) => ({ areas, areaKeys: tree.keysOf(areas), areaExact: tree.exactOf(areas) });
 
 test("area breakdown: the level below a node, most first, then the medicines at the node itself", () => {
@@ -452,9 +519,11 @@ test(
     const keys = [null, ...real.names.keys()];
     assert.deepEqual(keys.filter(outOfOrder), []);
     if (notes) {
-      // With the notes, every term under a node has its tree number there.
+      // With the notes, every term under a node has its tree number there, the one its row shows.
       assert.deepEqual(keys.filter((key) => key !== null && real.children(key).some((child) => numberUnder(child, key) === null)), []);
+      assert.deepEqual(keys.filter((key) => key !== null && real.children(key).some((child) => real.number(child, key) !== numberUnder(child, key))), []);
     }
+    assert.deepEqual(areaTreeSearch(real, new Set(real.names.keys()), "C04.588").matches, ["C04.588"]);
     // Owner decision 2026-09-29: grouped by MeSH category, each by NLM's name, its branches those of
     // its letter (on 2026-09-28: A, B, C, D, E, F, G and N).
     assert.deepEqual(real.roots, [...new Set(real.branches.map((branch) => branch[0]))].sort());

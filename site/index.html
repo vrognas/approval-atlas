@@ -251,52 +251,79 @@
         <button id="reset-all" class="text-button" type="button">Reset all</button>
       </div>
       <p id="facets-note" class="facets-note"></p>
+      <!-- Each section's heading is a disclosure button (facet-sections.js; owner decision
+           2026-09-29 (2)): collapsed by default, the summary after its title names an active filter.
+           The group is named by the title alone. -->
       <div id="facet-type" class="facet" role="group" aria-labelledby="facet-type-title">
-        <h3 id="facet-type-title" class="facet-title">Medicine type</h3>
-        <ul class="facet-list"></ul>
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-type-body"><span id="facet-type-title" class="facet-heading">Medicine type</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-type-body" class="facet-body" hidden>
+          <ul class="facet-list"></ul>
+        </div>
       </div>
       <!-- One tree (M2 phase 2): modality group › modality (modality-tree.js); shown once the
            modality data has loaded. -->
       <div id="facet-modality" class="facet" role="group" aria-labelledby="facet-modality-title" hidden>
-        <h3 id="facet-modality-title" class="facet-title">Modality</h3>
-        <input id="modality-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-        <p class="facet-live visually-hidden" role="status"></p>
-        <ul id="modality-tree" class="atc-tree modality-tree"></ul>
-        <p class="facet-empty muted" hidden></p>
-        <p class="muted atc-note tree-note"></p>
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-modality-body"><span id="facet-modality-title" class="facet-heading">Modality</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-modality-body" class="facet-body" hidden>
+          <input id="modality-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+          <p class="facet-live visually-hidden" role="status"></p>
+          <ul id="modality-tree" class="atc-tree modality-tree"></ul>
+          <p class="facet-empty muted" hidden></p>
+          <p class="muted atc-note tree-note"></p>
+        </div>
       </div>
       <div id="facet-atc" class="facet" role="group" aria-labelledby="facet-atc-title">
-        <h3 id="facet-atc-title" class="facet-title">ATC class</h3>
-        <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-        <p class="facet-live visually-hidden" role="status"></p>
-        <p id="atc-names" class="muted tree-names" hidden></p>
-        <ul id="atc-tree" class="atc-tree"></ul>
-        <p class="facet-empty muted" hidden></p>
-        <p class="muted atc-note"></p>
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-atc-body"><span id="facet-atc-title" class="facet-heading">ATC class</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-atc-body" class="facet-body" hidden>
+          <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+          <p class="facet-live visually-hidden" role="status"></p>
+          <p id="atc-names" class="muted tree-names" hidden></p>
+          <ul id="atc-tree" class="atc-tree"></ul>
+          <p class="facet-empty muted" hidden></p>
+          <p class="muted atc-note"></p>
+        </div>
       </div>
       <!-- One tree (phase 4f): MeSH category › branch › level 2 › level 3 › EMA's terms (area-tree.js). -->
       <div id="facet-area" class="facet" role="group" aria-labelledby="facet-area-title">
-        <h3 id="facet-area-title" class="facet-title">Therapeutic area</h3>
-        <input id="area-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-        <p class="facet-live visually-hidden" role="status"></p>
-        <p id="area-tags" class="muted tree-names" hidden></p>
-        <ul id="area-tree" class="atc-tree area-tree"></ul>
-        <p class="facet-empty muted" hidden></p>
-        <p class="muted atc-note tree-note"></p>
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-area-body"><span id="facet-area-title" class="facet-heading">Therapeutic area</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-area-body" class="facet-body" hidden>
+          <input id="area-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+          <p class="facet-live visually-hidden" role="status"></p>
+          <p id="area-tags" class="muted tree-names" hidden></p>
+          <ul id="area-tree" class="atc-tree area-tree"></ul>
+          <p class="facet-empty muted" hidden></p>
+          <p class="muted atc-note tree-note"></p>
+        </div>
       </div>
       <!-- One tree (companies part 2): company group › company › EMA holder name (company-tree.js). -->
       <div id="facet-mah" class="facet" role="group" aria-labelledby="facet-mah-title">
-        <h3 id="facet-mah-title" class="facet-title">Company</h3>
-        <input id="company-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-        <p class="facet-live visually-hidden" role="status"></p>
-        <ul id="company-tree" class="atc-tree company-tree"></ul>
-        <p class="facet-empty muted" hidden></p>
-        <button class="facet-more text-button" type="button" hidden></button>
-        <p class="muted atc-note tree-note"></p>
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-mah-body"><span id="facet-mah-title" class="facet-heading">Company</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-mah-body" class="facet-body" hidden>
+          <input id="company-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+          <p class="facet-live visually-hidden" role="status"></p>
+          <ul id="company-tree" class="atc-tree company-tree"></ul>
+          <p class="facet-empty muted" hidden></p>
+          <button class="facet-more text-button" type="button" hidden></button>
+          <p class="muted atc-note tree-note"></p>
+        </div>
       </div>
       <div id="facet-status" class="facet" role="group" aria-labelledby="facet-status-title">
-        <h3 id="facet-status-title" class="facet-title">Status</h3>
-        <ul class="facet-list"></ul>
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-status-body"><span id="facet-status-title" class="facet-heading">Status</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-status-body" class="facet-body" hidden>
+          <ul class="facet-list"></ul>
+        </div>
       </div>
     </aside>
 

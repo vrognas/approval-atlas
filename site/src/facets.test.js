@@ -15,6 +15,7 @@ import {
   keyCounts,
   nextSort,
   orderActivityColumns,
+  sectionSummary,
   sentenceParts,
   sortActivityRows,
   statusBreakdown,
@@ -198,6 +199,30 @@ test("the ATC token names one class, quotes a name filter, reads two as codes an
   assert.equal(tokenLabel("atc", stateOf({ atc: ["insulin"] }), lookups), "ATC classes matching “insulin”");
   assert.equal(tokenLabel("atc", stateOf({ atc: ["C", "H03"] }), lookups), "C and H03");
   assert.equal(tokenLabel("atc", stateOf({ atc: ["A", "C", "H03"] }), lookups), "3 ATC classes");
+});
+
+// Owner decision 2026-09-29 (2): sidebar sections start collapsed; a collapsed one with an active
+// filter says what it holds after its title, so no filter is hidden.
+test("a collapsed section's summary names its one value, else counts them; none without a filter", () => {
+  const summary = (dimension, patch, more = {}) => sectionSummary(dimension, stateOf(patch), { ...lookups, ...more });
+  for (const dimension of ["type", "mod", "atc", "area", "mah", "status"]) assert.equal(summary(dimension, {}), null, dimension);
+  assert.equal(summary("type", { type: ["Biosimilar"] }), "Biosimilar");
+  assert.equal(summary("type", { type: ["Biosimilar", "Generic"] }), "2 selected");
+  assert.equal(summary("area", { area: ["C17"] }), "Skin and Connective Tissue Diseases");
+  assert.equal(summary("area", { area: ["C17", "Psoriasis", "Asthma"] }), "3 selected");
+  assert.equal(summary("atc", { atc: ["L04AC"] }), "L04AC Interleukin Inhibitors");
+  assert.equal(summary("atc", { atc: ["insulin"] }), "ATC classes matching “insulin”");
+  // Two classes are two sentence tokens; the section counts them as any other.
+  assert.equal(summary("atc", { atc: ["C", "H03"] }), "2 selected");
+  // A status by its label alone (the sentence's token says "status Authorized").
+  assert.equal(summary("status", { status: ["Authorised"] }), "Authorized");
+  assert.equal(summary("status", { status: ["Refused", "Withdrawn"] }), "2 selected");
+  assert.equal(summary("mod", { mod: ["antibody"] }, { modalityNames: new Map([["antibody", "Antibody"]]) }), "Antibody");
+  assert.equal(summary("mah", { mah: ["g.roche"] }, { mahName: (value) => (value === "g.roche" ? "Roche" : value) }), "Roche");
+  // One company under two groups (?mah=c.mylan loads as both rows' paths): the company, as the token.
+  const mylan = ["g.biocon/c.mylan", "g.viatris/c.mylan"];
+  assert.equal(summary("mah", { mah: mylan }, { mahSelection: (values) => (values.length === 2 ? "Mylan S.A.S." : null) }), "Mylan S.A.S.");
+  assert.equal(summary("mah", { mah: ["g.roche", "g.pfizer"] }), "2 selected");
 });
 
 const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `[${part.text}]`)).join("");

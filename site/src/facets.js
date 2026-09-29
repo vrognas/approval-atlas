@@ -223,6 +223,17 @@ export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahNa
   return values[0];
 }
 
+// A collapsed sidebar section's summary after its title (owner decision 2026-09-29 (2)), so no
+// active filter is hidden: its one value named as the sentence's token names it (a status by its
+// label alone), several rows of one company by that company (lookups.mahSelection), else how many
+// are selected; null without a filter. dimension: a filter key (type, mod, atc, area, mah, status).
+export function sectionSummary(dimension, state, lookups) {
+  const values = state[dimension];
+  if (values.length === 0) return null;
+  if (values.length === 1) return dimension === "status" ? statusLabel(values[0]) : tokenLabel(dimension, state, lookups);
+  return (dimension === "mah" ? lookups.mahSelection?.(values) : null) ?? UI.facets.selected(values.length);
+}
+
 function isActive(key, state) {
   if (key === "from" || key === "to") return state[key] !== null;
   return state[key].length > 0;

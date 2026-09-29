@@ -1102,18 +1102,93 @@ button {
   }
 }
 
-/* Facet sections: the desktop sidebar, or a sheet that borrows them. */
+/* Facet sections: the desktop sidebar, or a sheet that borrows them. Each heading is a disclosure
+   button (facet-sections.js; owner decision 2026-09-29 (2)): collapsed by default, so the sidebar
+   shows just the titles; a collapsed section with an active filter shows a summary pill after its
+   title, or on a line of its own below it when it does not fit there (review 2026-09-29: beside the
+   title a long one was a narrow pill of up to 5 lines at 260px); the chevron at the right of the
+   title's line points down when collapsed, up when open. */
 .facet {
-  padding: 16px 0;
+  padding: 4px 0;
   border-top: 1px solid var(--grid);
 }
 
 .facet-title {
-  margin: 0 0 8px;
-  color: var(--ink-secondary);
+  margin: 0;
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 600;
+}
+
+/* The lines start at the top, the title's centred at --title-y as in a one-line toggle, so the
+   chevron (absolute, room kept at the right) stays level with the title when the summary wraps
+   under it. */
+.facet-toggle {
+  --title-y: 18px;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 2px 8px;
+  width: calc(100% + 12px);
+  min-height: 36px;
+  margin: 0 -6px;
+  padding: calc(var(--title-y) - 10px) 26px 6px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.facet-toggle:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+/* Its centre 1.5px above the title's (down) or below it (up), as the "v" sits low in its box. */
+.facet-toggle::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--title-y) - 4.5px);
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.facet-toggle[aria-expanded="true"]::after {
+  top: calc(var(--title-y) - 1.5px);
+  transform: rotate(-135deg);
+}
+
+.facet-heading {
+  flex: none;
+}
+
+/* The active filter of a collapsed section (the count pill's colours): after the title when it
+   fits, else on its own line (the full width); a name longer than that line wraps. A transparent
+   border keeps its outline in forced colors. */
+.facet-summary {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  overflow-wrap: anywhere;
+}
+
+.facet-body {
+  padding: 4px 0 8px;
 }
 
 .facet-list {
@@ -1329,15 +1404,85 @@ input::placeholder {
   overflow-wrap: break-word;
 }
 
-/* The therapeutic area and modality trees have no badge to move under: the name stays beside the
-   checkbox and a word longer than the row breaks ("Otorhinolaryngologic"). */
-.area-tree .atc-text,
+/* The modality tree has no badge to move under: the name stays beside the checkbox and a word
+   longer than the row breaks. */
 .modality-tree .atc-text {
   flex-basis: 0;
   min-width: 0;
 }
 
-.area-tree .atc-text .facet-name,
+/* The therapeutic area tree's MeSH tree numbers (owner decision 2026-09-29) are badges as the ATC
+   codes, under the ATC tree's rule (review 2026-09-29: beside their badges branch names split
+   mid-word in the 320px sheet, "Musculoskel|etal"): name and count short of 7em or of their longest
+   word beside the badge move under it, so words never break inside. Unlike the ATC tree's they are
+   never wider than the row (terms too, so no level-5 exception): a word longer than the whole row
+   (a deep row in the sheet, "Polyradiculoneuropathy") still breaks, never overflows it. */
+.area-tree .atc-text,
+.area-tree .atc-check:has(.level-5) .atc-text {
+  flex: 1 1 auto;
+  width: min-content;
+  min-width: min(7em, 100%);
+  max-width: 100%;
+}
+
+/* The row's controls (expand, condition page link) are level with its checkbox line, the first
+   (review 2026-09-29: centred on a row whose name had moved under its badge, the chevron sat on the
+   name's line and the checkbox and badge read as a row of their own): that line (22px, the badge's)
+   starts at the top, centred as in a one-line row (32px; 48px in a sheet), and its items at its top,
+   so a badge wrapping onto two lines leaves the checkbox and a name beside it on the first. */
+.area-tree .atc-row {
+  align-items: start;
+}
+
+.area-tree .atc-check {
+  align-items: flex-start;
+  align-content: flex-start;
+  padding-top: 5px;
+}
+
+.area-tree .atc-check input {
+  margin-top: 3px;
+}
+
+.area-tree .atc-check .atc-text {
+  margin-top: 1px;
+}
+
+.area-tree .atc-row > .atc-expand {
+  margin-top: 2px;
+}
+
+.area-tree .atc-row > .cond-link {
+  margin-top: 4px;
+}
+
+/* A MeSH tree number (facet-tree.js setNumber()): a slate code badge shaded by depth, as the ATC
+   codes by level. A term's number runs to 35 characters ("C10.228.140.163.100.435.825.700.875"):
+   the badge keeps beside the checkbox (16px and the 8px gap; 20px in a sheet), shrinks to the row
+   and wraps after its dots only (<wbr>), never inside a part. */
+.code-badge.tree-number {
+  --hue-1: var(--slate-1);
+  --hue-2: var(--slate-2);
+  --hue-3: var(--slate-3);
+  --hue-4: var(--slate-4);
+  --hue-5: var(--slate-5);
+  --hue-text: var(--slate-text);
+  display: inline-block;
+  flex: 0 1 auto;
+  max-width: calc(100% - 24px);
+  padding: 3px 6px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.atc-check .tree-number {
+  height: auto;
+}
+
+.sheet .code-badge.tree-number {
+  max-width: calc(100% - 28px);
+}
+
 .modality-tree .atc-text .facet-name {
   overflow-wrap: anywhere;
   hyphens: auto;
@@ -1482,16 +1627,6 @@ input::placeholder {
   border-top: 0;
 }
 
-/* One section: the sheet's title already names it (the heading still names the group). */
-.sheet-body > .facet:only-child .facet-title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 .sheet-foot {
   flex: none;
   padding: 12px 16px max(12px, env(safe-area-inset-bottom));
@@ -1517,8 +1652,13 @@ input::placeholder {
 
 .sheet .facet-search,
 .sheet .text-button,
-.sheet .atc-path button {
+.sheet .atc-path button,
+.sheet .facet-toggle {
   min-height: 44px;
+}
+
+.sheet .facet-toggle {
+  --title-y: 22px;
 }
 
 .sheet .atc-row {
@@ -1539,6 +1679,25 @@ input::placeholder {
    per level in the sheet gives them 118px, more than the 108px before the categories. */
 .sheet .area-tree .atc-tree {
   padding-left: 8px;
+}
+
+/* The checkbox line centred as in a 48px row, level with the 44px controls (see .area-tree
+   .atc-row): a row whose name moved under its badge is 59px, not 48px with its controls astride
+   both lines. */
+.sheet .area-tree .atc-check {
+  padding-top: 13px;
+}
+
+.sheet .area-tree .atc-check input {
+  margin-top: 1px;
+}
+
+.sheet .area-tree .atc-check .atc-text {
+  margin-top: 0;
+}
+
+.sheet .area-tree .atc-row > :is(.atc-expand, .cond-link) {
+  margin-top: 2px;
 }
 
 .sheet .atc-static {
