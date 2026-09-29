@@ -92,7 +92,8 @@ export function headlineNodes(parts) {
 }
 
 // data-focus-key: re-renders (data arriving, status toggle) give focus back to the same control.
-const title = (content) => el("h2", { tabindex: "-1", "data-focus-key": "title" }, content);
+// The page's h1 while a result is open (the overview's heading below it is then an h2: main.js).
+const title = (content) => el("h1", { tabindex: "-1", "data-focus-key": "title" }, content);
 const kicker = (kind) => el("p", { class: "kicker" }, UI.kicker[kind]);
 
 // Dot and label in the status's hue; pill: on its light fill (answer strip). It explains the
@@ -138,8 +139,8 @@ function atcBadge(code) {
 }
 
 // Answer strip: [label, value, wide] items (null items are left out); the wide one spans a row on
-// narrow cards. In a size container, as its columns follow the strip's own width (the resizable
-// sidebar sets it), not the viewport's (step 3 review: four items, a medicine's protection cell;
+// narrow cards. In a size container, as its columns follow the strip's own width (the
+// page sets it), not the viewport's (step 3 review: four items, a medicine's protection cell;
 // step 4 review: three, a substance's "13 authorized" crossed the strip's border at 1024px).
 function strip(items) {
   const shown = items.filter(Boolean);
@@ -1345,7 +1346,7 @@ export function createLookup(panel, {
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
   function render(state, force = false) {
     lastState = state;
-    // The branch chips follow the area filter (the desktop sidebar can change it under a card; the
+    // The branch chips follow the area filter (a chip's popover can change it under a card; the
     // dashboard's arrival makes it known).
     markAreaChips(panel, areaFilter());
     const view = lookupView(state);
@@ -1393,7 +1394,7 @@ export function createLookup(panel, {
     }
     if (focusNext) {
       focusNext = false;
-      const heading = panel.querySelector("h2");
+      const heading = panel.querySelector("h1, h2");
       heading?.focus({ preventScroll: true });
       heading?.scrollIntoView({ block: "nearest" });
     } else if (focusKey) {

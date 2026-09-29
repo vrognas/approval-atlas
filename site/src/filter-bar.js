@@ -36,6 +36,20 @@ function element(tag, className, text) {
   return node;
 }
 
+// Pure: which edges of the chip row (phones: it scrolls sideways) have more chips beyond them, for a
+// fade there (review of phase 1: with 2 of 7 chips showing at 320px nothing said more followed).
+export function edgeFade(scrollLeft, scrollWidth, clientWidth) {
+  return { start: scrollLeft > 1, end: scrollLeft + clientWidth < scrollWidth - 1 };
+}
+
+// The row's fade classes (style.css), after a render, a scroll or a resize.
+function fadeEdges(row) {
+  const { start, end } = edgeFade(row.scrollLeft, row.scrollWidth, row.clientWidth);
+  row.classList.toggle("scroll-start", start);
+  row.classList.toggle("scroll-end", end);
+}
+const faded = new WeakSet();
+
 // row: the chips' container (#filter-chips). chips: filterChips(). openKey: the chip whose popover
 // is open (aria-expanded), or null. onOpen(key), onRemove(chip).
 export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
@@ -80,6 +94,12 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
     return pill;
   });
   row.replaceChildren(...nodes);
+  if (!faded.has(row)) {
+    faded.add(row);
+    row.addEventListener("scroll", () => fadeEdges(row), { passive: true });
+    new ResizeObserver(() => fadeEdges(row)).observe(row);
+  }
+  fadeEdges(row);
   if (!focused) return;
   const chipKey = focused.split(":")[0];
   (row.querySelector(`[data-focus-key="${focused}"]`) ?? row.querySelector(`[data-focus-key="${chipKey}:open"]`) ?? row.querySelector("button"))?.focus();

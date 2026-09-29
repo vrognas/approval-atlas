@@ -70,6 +70,15 @@ test("the intro shows on the untouched overview until closed, and wherever the v
   assert.equal(introVisible({ overview: true, closed: true, requested: true }), true);
 });
 
+// Review of F · Spacious phase 1: the first filter set in a chip's popover hid the card above the chip
+// bar, which moved up under the pointer with the popover. While a popover is open the card stays as
+// it was shown (held), until the popover closes; closing the card still hides it.
+test("the intro stays while a filter popover opened on it is open", () => {
+  assert.equal(introVisible({ overview: false, closed: false, requested: false, held: true }), true);
+  assert.equal(introVisible({ overview: false, closed: true, requested: false, held: true }), false);
+  assert.equal(introVisible({ overview: false, closed: false, requested: false, held: false }), false);
+});
+
 // Owner decision 2026-09-29: the cards' examples stand in for the Try line while the card shows; the
 // line is back once it is closed and on the filtered overview; a lookup hides it, as before.
 test("the Try line hides while the intro shows or a lookup is open", () => {

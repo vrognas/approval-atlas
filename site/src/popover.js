@@ -13,6 +13,19 @@ export function popoverLeft(anchorLeft, width, containerWidth) {
   return Math.max(0, Math.min(Math.round(anchorLeft), Math.round(containerWidth - width)));
 }
 
+// Pure: whether focus moving to target (focusout's relatedTarget), or a press on it (pointerdown),
+// leaves the popover: outside the dialog and not on its own chip (anchor), whose click toggles it
+// (review of phase 1: focus moving to the chip on mousedown closed it, and the click reopened it).
+// Focus lost to nothing (null: a row re-rendered, the sections going back) does not.
+export const leavesPopover = (target, dialog, anchor) => Boolean(target) && !dialog.contains(target) && !anchor?.contains(target);
+
+// Pure: the popover's max-height (review of phase 1: it ran below the fold): the room under its chip
+// (chipBottom, viewport px) less 24px, at most 70% of the viewport, at least 240px (the page then
+// scrolls it into view).
+export function popoverMaxHeight(chipBottom, viewportHeight) {
+  return Math.max(240, Math.floor(Math.min(viewportHeight * 0.7, viewportHeight - chipBottom - 24)));
+}
+
 // Pure: the chip whose popover is open after a click on chip key (open: the one open now, or null):
 // its own chip closes it, another chip opens its own.
 export const nextOpenChip = (open, key) => (open === key ? null : key);
@@ -42,6 +55,7 @@ export function createPopover(dialog, { onClear }) {
     const chip = anchor.getBoundingClientRect();
     dialog.style.setProperty("--popover-x", `${popoverLeft(chip.left - box.left, dialog.offsetWidth, container.clientWidth)}px`);
     dialog.style.setProperty("--popover-y", `${Math.round(chip.bottom - box.top + 8)}px`);
+    dialog.style.setProperty("--popover-max-h", `${popoverMaxHeight(chip.bottom, window.innerHeight)}px`);
   }
 
   // Puts the borrowed sections back (their markers keep their place) and closes the dialog.
@@ -64,15 +78,14 @@ export function createPopover(dialog, { onClear }) {
     event.preventDefault();
     close();
   });
-  // Tabbing out of it (focus moving to a control outside) closes it; focus lost to nothing (a row
-  // re-rendered, the sections going back) does not.
+  // Tabbing out of it (focus moving to a control outside, not its own chip) closes it.
   dialog.addEventListener("focusout", (event) => {
-    if (current && event.relatedTarget && !dialog.contains(event.relatedTarget)) close({ restoreFocus: false });
+    if (current && leavesPopover(event.relatedTarget, dialog, current.anchor())) close({ restoreFocus: false });
   });
   // A click outside it (not on its own chip, which toggles it) closes it; focus goes back to the chip
   // when the click moved it nowhere (a blank area).
   document.addEventListener("pointerdown", (event) => {
-    if (!current || dialog.contains(event.target) || current.anchor()?.contains(event.target)) return;
+    if (!current || !leavesPopover(event.target, dialog, current.anchor())) return;
     const { restore } = current;
     close({ restoreFocus: false });
     setTimeout(() => {
@@ -100,7 +113,9 @@ export function createPopover(dialog, { onClear }) {
       body.scrollTop = 0;
       dialog.show();
       place();
-      (focus?.() ?? title).focus();
+      (focus?.() ?? title).focus({ preventScroll: true });
+      // With little room under the chip (240px at least), the page scrolls so all of it shows.
+      if (dialog.getBoundingClientRect().bottom > window.innerHeight) dialog.scrollIntoView({ block: "nearest" });
     },
     close,
     // Follows its chip, which can move when the chips change (after every render).
