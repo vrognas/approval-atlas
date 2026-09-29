@@ -239,7 +239,7 @@ const DEK_STATUSES = 4;
 // Draft (loss-of-exclusivity calendar): the caveats of its captions (the medicine card's, shortened),
 // and "(est.)" after an orphan market exclusivity end the register does not publish (computed from
 // its link date, as the card's "(estimate)").
-const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance, or 11 with the possible extra year: each range spans both. Pediatric rewards and derogations are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
+const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance, or 11 with the possible extra year: each range spans both. Pediatric rewards other than a pediatric-use marketing authorization's own protection, and derogations, are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
 const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
 
 export const UI = {
@@ -1347,6 +1347,11 @@ export const UI = {
     countedFromReference: (reference, date) => `Counted from its reference medicine ${reference}'s first central approval: ${formatDate(date)}`,
     countedAsReference: (reference, substance, name, date) =>
       `Counted, as for its reference medicine ${reference}, from the first central EU approval of ${substance ?? "its active substance"}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
+    // 2026-09-29: a pediatric-use marketing authorization (basis paediatric_use,
+    // ema_curated_pumas.json) has protection of its own, counted from its own approval, not from
+    // its substance's first central approval (Alkindi 2018, hydrocortisone's Plenadren 2011); then
+    // a link to its public assessment report (copyEvidence).
+    paediatricUse: (date) => `A pediatric-use marketing authorization: protection counted from its own EU authorization, ${formatDate(date)}`,
     follows: (name) => `No protection of its own; follows ${name}`,
     // Backlog (step 4 review): a curated copy of a central reference says what it is (type: the
     // row's copy_type), then links the EMA page that says so (copyEvidence), as nationalReference.
@@ -1386,8 +1391,8 @@ export const UI = {
     caveatsTitle: "Caveats",
     caveats: [
       "Not legal advice.",
-      "Ignores earlier national authorizations, the possible extra year (shown as a range), pediatric rewards, orphan exclusivity reductions and derogations.",
-      "The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, checked by hand; copies not yet checked count as medicines of their own.",
+      "Ignores earlier national authorizations, the possible extra year (shown as a range), pediatric rewards other than a pediatric-use marketing authorization's own protection, orphan exclusivity reductions and derogations.",
+      "The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, and pediatric-use marketing authorizations from their EMA public assessment reports, checked by hand; copies not yet checked count as medicines of their own.",
       "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
     ],
   },

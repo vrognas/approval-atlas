@@ -1136,7 +1136,19 @@ test("protection copy: strip cell, basis note and the other-company reason", () 
 test("protection caveats: the legal basis comes from EMA flags and from copies checked by hand", () => {
   const { caveats } = labels.UI.protection;
   assert.ok(!caveats.includes("The legal basis is inferred from EMA flags."));
-  assert.ok(caveats.includes("The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, checked by hand; copies not yet checked count as medicines of their own."));
+  assert.ok(caveats.includes("The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, and pediatric-use marketing authorizations from their EMA public assessment reports, checked by hand; copies not yet checked count as medicines of their own."));
+});
+
+// 2026-09-29: a pediatric-use marketing authorization's own protection (Regulation (EC) No
+// 1901/2006, Art. 38) is a pediatric reward the estimate now counts, so no caveat says pediatric
+// rewards are ignored altogether.
+test("protection caveats: pediatric rewards are ignored except a pediatric-use marketing authorization's own protection", () => {
+  const { protection, protectionCalendar } = labels.UI;
+  for (const text of [...protection.caveats, protectionCalendar.note, protectionCalendar.company.note]) {
+    if (/pediatric rewards/i.test(text)) assert.match(text, /pediatric rewards other than a pediatric-use marketing authorization's own protection/i);
+  }
+  assert.ok(protection.caveats.some((caveat) => caveat.includes("pediatric rewards other than a pediatric-use marketing authorization's own protection")));
+  assert.equal(protection.paediatricUse("2018-02-09"), "A pediatric-use marketing authorization: protection counted from its own EU authorization, 9 Feb 2018");
 });
 
 test("breakdown notes say how many medicines have no value", () => {

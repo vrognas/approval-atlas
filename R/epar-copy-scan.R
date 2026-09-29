@@ -1,6 +1,6 @@
 # On demand, never in CI or the daily pipeline (scripts/scan-epar-copies.R):
 # reads the EPAR page of every Authorised medicine the protection estimate
-# counts as its own and protected, and lists the pages that call it a
+# counts as its own, protected or unclear, and lists the pages that call it a
 # hybrid, generic or biosimilar medicine, for review by hand before a row
 # joins curated_copy_medicines(). Nothing here changes the data. EMA
 # rate-limits, so pages are read at least 20 s apart, a budget per run, and
@@ -76,11 +76,15 @@ copy_types_of <- function(statements) {
   if (length(types) == 0) NA_character_ else paste(types, collapse = ", ")
 }
 
-# Authorised medicines counted as their own and protected, not yet curated
-# or checked, by product number.
+# Authorised medicines counted as their own, protected or unclear, not yet
+# curated or checked, by product number. A copy among them would follow its
+# reference, or have none found; an ended estimate is left out.
 plan_epar_copy_scan <- function(protection, medicines, copies, checks, budget) {
   protection |>
-    dplyr::filter(.data$basis == "own", .data$status == "protected") |>
+    dplyr::filter(
+      .data$basis == "own",
+      .data$status %in% c("protected", "unclear")
+    ) |>
     dplyr::select("ema_product_number") |>
     dplyr::inner_join(
       dplyr::select(
@@ -183,12 +187,15 @@ scan_epar_copy_pages <- function(plan,
   checks
 }
 
-# The checked pages that call a medicine not yet curated a copy.
-epar_copy_candidates <- function(checks, copies) {
+# The checked pages that call a medicine not yet curated a copy, nor a
+# paediatric-use marketing authorisation (which is no copy, though its page
+# can call it a hybrid).
+epar_copy_candidates <- function(checks, copies, pumas) {
   checks |>
     dplyr::filter(
       !is.na(.data$copy_types),
-      !.data$ema_product_number %in% copies$ema_product_number
+      !.data$ema_product_number %in% copies$ema_product_number,
+      !.data$ema_product_number %in% pumas$ema_product_number
     )
 }
 
@@ -215,7 +222,8 @@ run_epar_copy_scan <- function(data_directory = "site/public/data",
                                cache_directory =
                                  ".cache/downloads/ema-epar-copies",
                                budget = epar_scan_budget_from_env(),
-                               copies = curated_copy_medicines()) {
+                               copies = curated_copy_medicines(),
+                               pumas = curated_puma_medicines()) {
   protection <- jsonlite::fromJSON(
     file.path(data_directory, "ema_medicine_protection.json")
   )
@@ -234,7 +242,7 @@ run_epar_copy_scan <- function(data_directory = "site/public/data",
     budget = nrow(protection)
   ))
   report_epar_copy_candidates(
-    epar_copy_candidates(checks, copies),
+    epar_copy_candidates(checks, copies, pumas),
     checked = nrow(checks),
     left = left
   )

@@ -83,16 +83,19 @@ run_fixture_pipeline <- function(output_directory,
                                    seed_downloads_directory(),
                                  smpc_budget = 0L,
                                  equivalents = no_equivalents(),
-                                 copies = no_curated_copies()) {
+                                 copies = no_curated_copies(),
+                                 pumas = no_curated_pumas()) {
   # Read before the curated tables are mocked to return them.
   force(equivalents)
   force(copies)
+  force(pumas)
   testthat::local_mocked_bindings(
     fetch_whocc_index_page = function(page) {
       read_fixture_bytes(fixture_whocc_index_path("L04AC28"))
     },
     curated_substance_equivalents = function() equivalents,
-    curated_copy_medicines = function() copies
+    curated_copy_medicines = function() copies,
+    curated_puma_medicines = function() pumas
   )
   run_ema_pipeline(
     output_directory = output_directory,
@@ -109,9 +112,13 @@ no_equivalents <- function() {
   curated_substance_equivalents()[0, ]
 }
 
-# Nor are the curated copies.
+# Nor are the curated copies and paediatric-use marketing authorisations.
 no_curated_copies <- function() {
   curated_copy_medicines()[0, ]
+}
+
+no_curated_pumas <- function() {
+  curated_puma_medicines()[0, ]
 }
 
 output_stems <- c(
@@ -137,6 +144,7 @@ output_stems <- c(
   "ema_medicine_protection",
   "ema_substance_equivalents",
   "ema_curated_copies",
+  "ema_curated_pumas",
   "ema_medicine_modalities",
   "modalities"
 )
@@ -790,6 +798,47 @@ test_that("run_ema_pipeline applies, writes and credits the curated copies", {
   # The curated copies come before the three modality entries.
   last_source <- meta$sources[[length(meta$sources) - 3]]
   expect_match(last_source$name, "curated by approval-atlas from EMA EPAR")
+  expect_identical(last_source$version, "Checked 2026-09-29")
+})
+
+test_that("run_ema_pipeline applies, writes and credits the curated PUMAs", {
+  forbid_network()
+  # Tyruko, a biosimilar, stands in for a paediatric-use marketing
+  # authorisation.
+  pumas <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/005752",
+    evidence_url = paste0(
+      "https://www.ema.europa.eu/en/documents/assessment-report/",
+      "tyruko-epar-public-assessment-report_en.pdf"
+    ),
+    evidence_quote = "an application for a Paediatric Use marketing
+    authorisation",
+    checked_date = as.Date("2026-09-29"),
+    note = "Stand-in row"
+  )
+  output_directory <- file.path(tempfile(), "data")
+  tables <- suppressMessages(run_fixture_pipeline(
+    output_directory,
+    pumas = pumas
+  ))
+  protection <- tables$ema_medicine_protection
+  tyruko <- protection[protection$ema_product_number == "EMEA/H/C/005752", ]
+  expect_identical(tyruko$basis, "paediatric_use")
+  expect_identical(tyruko$copy_source, NA_character_)
+  expect_identical(tyruko$counted_from, as.Date("2023-09-22"))
+  expect_identical(tyruko$status, "protected")
+  written <- jsonlite::fromJSON(
+    file.path(output_directory, "ema_curated_pumas.json")
+  )
+  expect_identical(written$ema_product_number, "EMEA/H/C/005752")
+  expect_identical(written$checked_date, "2026-09-29")
+  expect_identical(written$source, "curated")
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  last_source <- meta$sources[[length(meta$sources) - 3]]
+  expect_match(last_source$name, "paediatric-use marketing authorisations")
   expect_identical(last_source$version, "Checked 2026-09-29")
 })
 

@@ -95,7 +95,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
       register_source,
       gleif_matches
     ), purrr::compact(list(
-      curated_copies_source_entry(tables$ema_curated_copies)
+      curated_copies_source_entry(tables$ema_curated_copies),
+      curated_pumas_source_entry(tables$ema_curated_pumas)
     )), modality_source_entries(chembl_matches, modality_run$curated))
   )
   write_ema_outputs(tables, meta, output_directory)
@@ -219,13 +220,14 @@ report_protection_summary <- function(protection) {
     paste(
       "Protection estimates: %s (%d follow a reference, %d reference not",
       "found, %d counted from another company's medicine; %d curated",
-      "copies)."
+      "copies, %d paediatric-use marketing authorisations)."
     ),
     protection_status_counts(protection),
     count_of("follows_reference"),
     count_of("reference_not_found"),
     count_of("other_company_reference"),
-    sum(protection$copy_source %in% "curated")
+    sum(protection$copy_source %in% "curated"),
+    count_of("paediatric_use")
   ))
 }
 
