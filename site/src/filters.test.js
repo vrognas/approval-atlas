@@ -61,6 +61,21 @@ test("mah matches a product's company group, company or EMA holder name", () => 
   assert.deepEqual(match(["Not stated"]), ["C4"]);
 });
 
+// Modality (M2 phase 2): groups and modalities, combined with OR (modalityKeys: modalities.js keysOf()).
+test("mod matches any selected group or modality of a product's substances", () => {
+  const classified = [
+    product("D1", { modalityKeys: ["antibody", "bispecific_antibody"] }),
+    product("D2", { modalityKeys: ["protein", "hormone_cytokine", "peptide"] }),
+    product("D3", { modalityKeys: ["small_molecule"] }),
+    product("D4", { modalityKeys: [] }),
+  ];
+  const match = (mod) => ids(filterProducts(classified, makePredicates({ ...structuredClone(DEFAULT_STATE), mod }, atcClasses)));
+  assert.deepEqual(match(["antibody"]), ["D1"]);
+  assert.deepEqual(match(["peptide", "small_molecule"]), ["D2", "D3"]);
+  assert.deepEqual(match(["sirna"]), []);
+  assert.deepEqual(Object.keys(makePredicates({ ...structuredClone(DEFAULT_STATE), mod: ["antibody"] }, atcClasses)), ["mod"]);
+});
+
 // A company tree row whose value also shows under another group (or company) selects by its path:
 // "group/company" or "group/company/EMA holder name", only the medicines that row counts.
 test("mah matches a row path: that group's medicines of the company (and EMA holder name)", () => {

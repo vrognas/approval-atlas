@@ -26,6 +26,7 @@ import { createFacetPanel } from "./facet-panel.js";
 import {
   FACET_VALUES,
   OTHER_KEY,
+  STACK_HUES,
   TYPE_ORDER,
   defaultSortDirection,
   facetCounts,
@@ -53,6 +54,8 @@ import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
 import { addMeshTip, areaNote, meshTip } from "./mesh-notes.js";
+import { NOT_CLASSIFIED, buildModalityTree, modalityBreakdownRows, modalityTip, modalityTipId, toggleModality } from "./modalities.js";
+import { createModalityTree, renderModalityPath } from "./modality-tree.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { createSearchBox } from "./search-box.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
@@ -91,11 +94,15 @@ const DASHBOARD_FILES = [
   "companies.json",
   "ema_medicine_companies.json",
 ];
+// Modality (M2 phase 2): with the dashboard's files (the filter and a link's mod values need them),
+// shared with the cards (lookup.need("modalities")); without them (older data files) the page
+// works and shows no modality.
+const MODALITY_FILES = ["modalities.json", "ema_medicine_modalities.json"];
 // Loaded after the dashboard's first render; shared with the medicine card (same loadFile promise),
 // as is the documents index (lookup.need("documents")).
 const REGISTER_FILE = "ema_medicine_register_status.json";
 // The filter each breakdown ignores and toggles.
-const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah" };
+const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah", mod: "mod" };
 // The facet sidebar from this width; below it, the sentence's tokens open bottom sheets.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
 // Facet sections (index.html #facet-{key}) each sheet shows, the sheet each sentence token
@@ -103,14 +110,15 @@ const DESKTOP = window.matchMedia("(min-width: 1024px)");
 // approval-years strip's thumbs (YEAR_THUMBS), which is in the main column at every width.
 const SHEET_SECTIONS = {
   type: ["type"],
+  mod: ["modality"],
   atc: ["atc"],
   mah: ["mah"],
   area: ["area"],
   status: ["status"],
-  all: ["type", "atc", "area", "mah", "status"],
+  all: ["type", "modality", "atc", "area", "mah", "status"],
 };
-const TOKEN_SHEETS = { type: "type", atc: "atc", mah: "mah", area: "area", status: "status" };
-const SECTION_KEYS = { type: ["type"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"] };
+const TOKEN_SHEETS = { type: "type", mod: "mod", atc: "atc", mah: "mah", area: "area", status: "status" };
+const SECTION_KEYS = { type: ["type"], modality: ["mod"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"] };
 const YEAR_THUMBS = { from: "start", to: "end", year: "start", years: "start" };
 // Desktop: the control each token focuses, the first one of its own section (the ATC, therapeutic
 // area and company trees: their first checked row, else their search: facet-tree.js focusTarget()).
@@ -128,14 +136,14 @@ const ACTIVITY_OTHER = "__other__";
 // The column of the medicines at the area itself (areas.js areaExactLabel()).
 const ACTIVITY_EXACT = "__exact__";
 // "Approvals per year" stacked by company group, or by the child classes of one ATC class: the top
-// ones, then Other on top. Child classes: damped hue mids, neighbouring hues far apart (1px gaps
-// separate the segments too); company groups: their own colours (badges.js companySeriesColors()).
-// Level-1 ATC groups: the top six, each in its own group's hue. Other:
+// ones, then Other on top. Child classes and modalities: damped hue mids (facets.js STACK_HUES),
+// neighbouring hues far apart (1px gaps separate the segments too); company groups: their own
+// colours (badges.js companySeriesColors()). Level-1 ATC groups: the top six, each in its own
+// group's hue. Other (and the modalities' Not classified and "not more specific"):
 // the raised fill with a --field-border outline (3:1, palette.test.js), so it does not outweigh
 // the named series. The medicines a mode cannot place: the same, hatched (chart.js), on top.
 const STACK_TOP = 8;
 const STACK_ATC_GROUPS = 6;
-const STACK_HUES = ["blue", "gold", "teal", "red", "indigo", "olive", "pink", "sky"];
 const STACK_OTHER = { color: "var(--raised)", stroke: "var(--field-border)" };
 const STACK_UNPLACED = { ...STACK_OTHER, hatch: true };
 
@@ -280,6 +288,9 @@ function renderFooter(meta) {
   d3.select("#credit-union-register").text(UI.footer.unionRegister);
   // Companies part 2: the curated company groups ("As of 2026-09-28") and GLEIF's LEI data.
   d3.select("#credit-companies").text(UI.footer.companies(versionOf(/company groups/i)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null));
+  // Modality (M2 phase 2): shown once the data credits WHO's INN stems (older data: none).
+  const innStems = meta.sources?.some((source) => /inn stems/i.test(source.name));
+  d3.select("#credit-modality").attr("hidden", innStems ? null : "").text(innStems ? UI.footer.modality(versionOf(/chembl molecules/i)) : "");
 }
 
 // The type and status explanations as hidden elements, which describe the focusable carriers (facet
@@ -289,6 +300,8 @@ function renderTypeTips() {
   const container = d3.select("body").append("div").attr("hidden", "");
   for (const [label, tip] of Object.entries(UI.typeTips)) container.append("p").attr("id", typeTipId(label)).text(tip);
   for (const [status, tip] of Object.entries(UI.statusTips)) container.append("p").attr("id", statusTipId(status)).text(tip);
+  // The modality explainers (M2 phase 2): tree rows, the sentence's token, breakdown bars.
+  for (const [key, tip] of Object.entries(UI.modalityTips)) container.append("p").attr("id", modalityTipId(key)).text(tip);
 }
 
 // The type and status tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides
@@ -428,14 +441,18 @@ function setupTips() {
     event.preventDefault();
     hide();
   }, true);
-  // Keyboard and scripted clicks (detail 0) have no position.
+  // Keyboard and scripted clicks (detail 0) have no position. On touch screens a tap on a carrier
+  // of a short tip (.tap-tip: the modalities') shows it, as a tap on a type or status carrier does:
+  // there a tip takes no taps (style.css), so it never stands in the way of the next one.
+  const touchScreen = window.matchMedia("(hover: none)");
   document.addEventListener("click", (event) => {
     const carrier = carrierOf(event.target);
     if (!carrier || event.detail === 0) return;
     const box = carrier.getBoundingClientRect();
     const at = { x: event.clientX, y: event.clientY };
     if (at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom) {
-      if (carrier.classList.contains("mesh-tip")) hide(at);
+      const tapShows = touchScreen.matches && carrier.classList.contains("tap-tip");
+      if (carrier.classList.contains("mesh-tip") && !tapShows) hide(at);
       return;
     }
     event.preventDefault();
@@ -677,18 +694,29 @@ function startLookup([meta, searchRows, entryTermRows]) {
   input.disabled = false;
   render();
 
-  Promise.all(DASHBOARD_FILES.map(loadFile)).then((rows) => startDashboard(meta, rows), showMissingData);
+  // The modality files are optional (null when missing), the others not.
+  const optional = (file) => loadFile(file).catch(() => null);
+  Promise.all([...DASHBOARD_FILES.map(loadFile), ...MODALITY_FILES.map(optional)]).then((rows) => startDashboard(meta, rows), showMissingData);
 }
 
-function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows, companyRows, medicineCompanyRows]) {
+function startDashboard(meta, [
+  medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows, companyRows, medicineCompanyRows, modalityTaxonomy, medicineModalityRows,
+]) {
   // The therapeutic area tree (phase 4f): MeSH branch › level 2 › level 3 › EMA's terms.
   const meshTree = buildAreaTree(branchRows, subtreeRows);
   // Companies part 2: company groups › companies › EMA holder names.
   const companies = buildCompanies(companyRows, medicineCompanyRows);
-  const products = buildProducts(medicines, { areaRows, branchRows, atcRows, companyRows: medicineCompanyRows, areaTree: meshTree });
+  // Modality (M2 phase 2): groups › modalities; null without the modality data (older data files):
+  // no tree, token, breakdown or stack then.
+  const modalityTree = modalityTaxonomy?.length && medicineModalityRows ? buildModalityTree(modalityTaxonomy) : null;
+  const products = buildProducts(medicines, {
+    areaRows, branchRows, atcRows, companyRows: medicineCompanyRows, areaTree: meshTree, modalityRows: modalityTree ? medicineModalityRows : [], modalityTree,
+  });
   const seriesDates = seriesRows.map((row) => row.date);
   const approvalYears = d3.extent(products, (product) => product.year);
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
+  // The filter sentence's modality token names (null without the modality data: no token).
+  const modalityNames = modalityTree ? new Map(modalityTree.keys.map((key) => [key, modalityTree.name(key)])) : null;
   const atcRetiredYears = new Map(atcClasses.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null]));
   const branchNamesByTerm = d3.rollup(
     branchRows.filter((row) => row.branch !== null),
@@ -738,7 +766,12 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     types: new Set(MEDICINE_TYPES),
     statuses: new Set(products.map((product) => product.medicine_status)),
     years: approvalYears,
+    // Modality groups and modalities (none without the modality data: a link's values are ignored).
+    modalities: new Set(modalityTree?.keys ?? []),
+    modalityAncestors: (key) => modalityTree?.ancestors(key) ?? new Set(),
   };
+  // Modality: the sidebar section, the breakdown and stack modes show once the data is there.
+  for (const selector of ["#facet-modality", '#breakdown-by [data-by="mod"]', '#chart-stack [data-stack="mod"]']) $(selector).hidden = !modalityTree;
 
   renderOverTimeLegend($("#over-time-legend"));
 
@@ -807,6 +840,14 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     return link;
   };
   const companyFacet = createCompanyTree($("#facet-mah"), { companies, onToggle: toggleCompanyValue, linkOf: companyRowLink });
+  // Modality (M2 phase 2): the tree adds or removes one group or modality (toggleModality());
+  // drill-downs, paths and "Up one level" show one alone (none: all). None without the data.
+  const toggleModalityKey = (key) => setState({ mod: toggleModality(modalityTree, state.mod, key) });
+  const openModality = (key) => setState({ mod: key === null ? [] : [key] });
+  // Exactly one modality value selected: the one the breakdown drills into and the per-year chart
+  // splits (a group into its modalities).
+  const drillModality = () => (modalityTree && state.mod.length === 1 && modalityTree.has(state.mod[0]) ? state.mod[0] : null);
+  const modalityFacet = modalityTree ? createModalityTree($("#facet-modality"), { tree: modalityTree, onToggle: toggleModalityKey }) : null;
   // The token whose sidebar section has focus (desktop): Escape goes back to it.
   let opener = null;
   // A sentence token (its key) or All filters ("all"): on desktop, the token's own section and
@@ -819,7 +860,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     const sheetKey = TOKEN_SHEETS[key] ?? key;
     const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
     if (DESKTOP.matches) {
-      const trees = { atc: atcTree, area: areaFacet, mah: companyFacet };
+      const trees = { atc: atcTree, area: areaFacet, mah: companyFacet, mod: modalityFacet };
       const target = (trees[key] ? trees[key].focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
       target.closest(".facet").scrollIntoView({ block: "start" });
       target.focus({ preventScroll: true });
@@ -1085,6 +1126,47 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     return { current, title: UI.breakdown.mah.titleLeaf(name), rows: members.length ? [{ ...self, static: true }] : [], isSelected: null, onToggle: openCompany };
   }
 
+  // Modality breakdown (M2 phase 2, as the area one): with exactly one value selected
+  // (drillModality()), a group's modalities, then its medicines no source names the modality of (a
+  // static row); a modality, or Small molecule, shows only itself. Otherwise the groups, then the
+  // medicines not classified (a static row); with several values selected the groups holding one
+  // are marked (toggles: a marked group removes its values, another is added). Bars are stacked by
+  // medicine type, as the ATC bars (the biosimilars among the antibodies). population: every filter
+  // but the modality one.
+  function modalityBreakdown(population) {
+    const current = drillModality();
+    const split = {
+      keys: typeSplit(population, (product) => product.modalityKeys),
+      exact: typeSplit(population, (product) => product.modalityExact),
+    };
+    const stacked = (row) => {
+      const types = (row.incomplete ? split.exact : split.keys).get(row.key);
+      const segments = TYPE_ORDER.filter((type) => types?.get(type)).map((type) => ({ type, count: types.get(type) }));
+      const text = UI.breakdown.typeSplit(segments.map((segment) => [segment.type, segment.count]));
+      return { ...row, segments, split: text, ariaLabel: row.static ? null : `${UI.modality.count(row.label, row.count)}: ${text}` };
+    };
+    const rows = modalityBreakdownRows(modalityTree, current, population).map(stacked);
+    if (current === null) {
+      const selected = state.mod;
+      const under = (group) => selected.filter((value) => value === group || modalityTree.parent(value) === group);
+      const marked = selected.length > 0;
+      return {
+        current,
+        title: UI.breakdown.mod.title,
+        rows,
+        isSelected: marked ? (group) => under(group).length > 0 : null,
+        onToggle: marked
+          ? (group) => (under(group).length ? setState({ mod: selected.filter((value) => !under(group).includes(value)) }) : toggleModalityKey(group))
+          : openModality,
+      };
+    }
+    const name = modalityTree.name(current);
+    if (rows.length) return { current, title: UI.breakdown.mod.titleIn(name), rows, isSelected: null, onToggle: openModality };
+    const count = population.filter((product) => product.modalityKeys.includes(current)).length;
+    const self = stacked({ key: current, label: name, count, static: true });
+    return { current, title: UI.breakdown.mod.titleLeaf(name), rows: count ? [self] : [], isSelected: null, onToggle: openModality };
+  }
+
   // Above the drilled-down ATC or area bars: "Up one level" and the path of levels (by: the mode).
   function renderBreakdownPath(by, current) {
     const container = $("#breakdown-path");
@@ -1100,11 +1182,13 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       .on("click", () => {
         if (by === "area") openArea(meshTree.parent(current));
         else if (by === "mah") openCompany(companies.parentOf(current));
+        else if (by === "mod") openModality(modalityTree.parent(current));
         else openAtc(atcPrefixes(current).at(-2) ?? null);
       });
     const path = container.appendChild(document.createElement("div"));
     if (by === "area") renderAreaPath(path, { tree: meshTree, current, onSelect: openArea });
     else if (by === "mah") renderCompanyPath(path, { companies, current, onSelect: openCompany });
+    else if (by === "mod") renderModalityPath(path, { tree: modalityTree, current, onSelect: openModality });
     else renderAtcPath(path, { current, names: atcNames, onSelect: openAtc, label: UI.atc.path });
     if (focused !== undefined) container.querySelector(`[data-focus-key="${CSS.escape(focused)}"]`)?.focus();
   }
@@ -1137,40 +1221,47 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     if (focused !== null) [...list.node().querySelectorAll("a")].find((link) => link.textContent === focused)?.focus();
   }
 
-  // The breakdown card over every matching medicine: ATC (stacked by type), areas or holders.
+  // The breakdown card over every matching medicine: ATC (stacked by type), areas, holders or
+  // modalities (stacked by type; the ATC classes until the modality data has loaded).
   function renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete) {
+    const by = state.by === "mod" && !modalityTree ? "atc" : state.by;
     d3.selectAll("#breakdown-by button").attr("aria-pressed", function pressed() {
-      return String(this.dataset.by === state.by);
+      return String(this.dataset.by === by);
     });
     d3.selectAll("#breakdown-sort button").each(function sortButton() {
       const { sort } = this.dataset;
-      // Areas by key: MeSH tree order ("MeSH, tree order"), not A to Z.
-      renderSortButton(this, sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[state.by], sort, breakdownSort, sort === "key" && state.by === "area" ? "tree" : sort);
+      // Areas and modalities by key: tree order ("MeSH, tree order"), not A to Z.
+      renderSortButton(this, sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[by], sort, breakdownSort, sort === "key" && (by === "area" || by === "mod") ? "tree" : sort);
     });
     const card = $("#breakdown").closest(".chart-card");
     const hadFocus = card.contains(document.activeElement);
-    const atcTypes = state.by === "atc"
+    const atcTypes = by === "atc"
       ? {
         prefix: typeSplit(withoutAtcFilter, (product) => product.atc.flatMap((row) => atcPrefixes(atcCode(row)))),
         exact: typeSplit(withoutAtcFilter, (product) => product.atc.map(atcCode).filter(atcLevel)),
       }
       : null;
     const atc = atcTypes ? atcBreakdown(atcCounts, atcExact, atcTypes, atcIncomplete) : null;
-    const population = filterProducts(products, predicates, BREAKDOWN_FILTER[state.by]);
-    // Every mode drills down (a tree each: ATC classes, therapeutic areas, companies).
-    const tree = atc ?? (state.by === "area" ? areaBreakdown(population) : companyBreakdown(population));
+    const population = filterProducts(products, predicates, BREAKDOWN_FILTER[by]);
+    // Every mode drills down (a tree each: ATC classes, therapeutic areas, companies, modalities).
+    const drill = { area: areaBreakdown, mah: companyBreakdown, mod: modalityBreakdown };
+    const tree = atc ?? drill[by](population);
     d3.select("#breakdown-title").text(tree.title);
-    d3.select("#breakdown-note").text(UI.breakdown[state.by].note).attr("hidden", UI.breakdown[state.by].note ? null : "");
-    // One legend per card: the medicine types the stacked ATC bars show.
-    const legendTypes = TYPE_ORDER.filter((type) => atc?.rows.some((row) => row.segments.some((segment) => segment.type === type)));
+    d3.select("#breakdown-note").text(UI.breakdown[by].note).attr("hidden", UI.breakdown[by].note ? null : "");
+    // One legend per card: the medicine types the stacked ATC or modality bars show.
+    const stacked = atc ?? (by === "mod" ? tree : null);
+    const legendTypes = TYPE_ORDER.filter((type) => stacked?.rows.some((row) => row.segments.some((segment) => segment.type === type)));
     renderLegend($("#breakdown-legend"), legendTypes);
     $("#breakdown-legend").hidden = legendTypes.length === 0;
-    renderBreakdownPath(state.by, tree.current);
-    const rows = sortBreakdownRows(tree.rows, breakdownSort.key, state.by, breakdownSort.direction);
+    renderBreakdownPath(by, tree.current);
+    const rows = sortBreakdownRows(tree.rows, breakdownSort.key, by, breakdownSort.direction);
     let options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink, tipOf: (row) => (row.incomplete ? null : areaTip(row.key)) };
     if (atc) options = { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) };
+    // Modalities: each bar explained on hover and focus (its explainer, the button's description),
+    // and on touch screens on a tap (short tips, as the modality tree's).
+    else if (by === "mod") options = { isSelected: tree.isSelected, onToggle: tree.onToggle, tipOf: (row) => (row.static ? null : modalityTip(row.key)), tapTip: true };
     // Company groups carry their monogram badge; groups and companies link to their page.
-    else if (state.by === "mah") {
+    else if (by === "mah") {
       options = {
         isSelected: tree.isSelected,
         onToggle: tree.onToggle,
@@ -1179,9 +1270,10 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       };
     }
     renderBreakdown($("#breakdown"), rows, options);
-    const { excluded } = UI.breakdown[state.by];
-    // Products without any ATC code, therapeutic area or holder matter at the top level only.
-    showCount("#breakdown-excluded", excluded && !tree.current ? breakdownExcluded(population, state.by) : 0, excluded);
+    const { excluded } = UI.breakdown[by];
+    // Products without any ATC code, therapeutic area or holder matter at the top level only (the
+    // modalities' not classified are a static row).
+    showCount("#breakdown-excluded", excluded && !tree.current ? breakdownExcluded(population, by) : 0, excluded);
     // Drilling down or going up rebuilds the controls: keep focus in the card.
     if (hadFocus && !card.contains(document.activeElement)) (card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"))?.focus();
   }
@@ -1305,6 +1397,35 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       : { key, label: labelOf(key), color: colorOf(key, index) }));
     const counted = (keys) => [keys.filter((key) => key !== OTHER_KEY).length, keys.includes(OTHER_KEY)];
     const unplacedSeries = (stack, label) => (stack.any ? [{ key: UNPLACED_KEY, label, ...STACK_UNPLACED }] : []);
+    // Modality (M2 phase 2): the groups in tree order, each in a STACK_HUES mid, then the medicines
+    // not classified; with exactly one group selected (drillModality()), its modalities, then its
+    // medicines no source names the modality of. Those last ones are low-key (STACK_OTHER); a
+    // medicine counts once in every group (or modality) it has; only the series present show, each
+    // explained in the legend.
+    if (stackMode === "mod" && modalityTree) {
+      const parent = drillModality();
+      const children = parent === null ? [] : modalityTree.children(parent);
+      const [shown, restKey, restLabel, restTip] = children.length
+        ? [children, parent, UI.modality.groupOnly(modalityTree.name(parent)), UI.modality.groupOnlyTip]
+        : [modalityTree.roots, NOT_CLASSIFIED, UI.modality.notClassified, UI.modality.notClassifiedTip];
+      const inShown = new Set(shown);
+      const keysOf = (product) => [
+        ...product.modalityKeys.filter((key) => inShown.has(key)),
+        ...(product.modalityExact.includes(restKey) ? [restKey] : []),
+      ];
+      const stack = withUnplaced(dated, keysOf);
+      const present = keyCounts(dated, keysOf);
+      const series = [
+        ...shown.map((key, index) => ({ key, label: modalityTree.name(key), color: `var(--${STACK_HUES[index % STACK_HUES.length]}-mid)`, tip: UI.modalityTips[key] ?? null })),
+        { key: restKey, label: restLabel, ...STACK_OTHER, tip: restTip },
+      ].filter((item) => present.has(item.key));
+      return {
+        keysOf: stack.keysOf,
+        series: [...series, ...unplacedSeries(stack, UI.years.unplaced.mod)],
+        by: children.length ? UI.years.by.modIn(modalityTree.name(parent)) : UI.years.by.mod,
+        counting: UI.years.counting.mod,
+      };
+    }
     // Company groups (companies part 2): each in its group's colour, or, too near a colour already
     // in the chart in either mode, its text shade or the nearest other hue (companySeriesColors()),
     // with its badge and, as the legend's
@@ -1393,7 +1514,9 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     // mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
     safely($("#year-strip"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
-    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, { years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName }), {
+    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, {
+      years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName, modalityNames,
+    }), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
       popup: !DESKTOP.matches,
@@ -1424,6 +1547,16 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
       selected: state.mah,
       counts: keyCounts(filterProducts(products, predicates, "mah"), companies.countKeys),
     }));
+    // Modality: medicines per group and modality, and in each static row (a group's medicines no
+    // source names the modality of; those not classified), matching every other filter.
+    if (modalityFacet) {
+      const withoutModalityFilter = filterProducts(products, predicates, "mod");
+      safely($("#facet-modality"), () => modalityFacet.render({
+        selected: state.mod,
+        counts: keyCounts(withoutModalityFilter, (product) => product.modalityKeys),
+        exact: keyCounts(withoutModalityFilter, (product) => product.modalityExact),
+      }));
+    }
 
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
     const authorizedNow = filtered.filter(isAuthorizedNow);

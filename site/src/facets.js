@@ -14,8 +14,15 @@ export const FACET_VALUES = {
   status: (product) => [product.medicine_status],
   // The therapeutic area tree (phase 4f): every branch, node and term a medicine touches.
   area: (product) => product.areaKeys,
+  // The modality tree (M2 phase 2): every group and modality of a medicine's substances.
+  mod: (product) => product.modalityKeys,
   date: (product) => (product.year === null ? [] : [product.year]),
 };
+
+// "Approvals per year" stacked by child ATC classes, modality groups or a group's modalities: the
+// damped hues' mids in this order, neighbouring hues far apart (1px gaps separate the segments too;
+// palette.test.js).
+export const STACK_HUES = ["blue", "gold", "teal", "red", "indigo", "olive", "pink", "sky"];
 
 // key -> products, each product once per distinct key (keysOf(product): its keys).
 export function keyCounts(products, keysOf) {
@@ -197,8 +204,9 @@ function atcValueText(value, atcNames, short) {
 // areaNames (therapeutic area tree key -> name; areas.js labels: a root tag "tagged Neoplasms"),
 // atcNames: Map, mahName(value): a company group's or company's name (companies part 2; EMA holder
 // names as they are), mahSelection(values): the name of several values that are one company's
-// rows (a company under two groups), or null }.
-export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahName = (value) => value, mahSelection = () => null }) {
+// rows (a company under two groups), or null; modalityNames: modality key -> name (null or left
+// out: the modality data has not loaded, and the sentence has no modality token) }.
+export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahName = (value) => value, mahSelection = () => null, modalityNames = null }) {
   const copy = UI.sentence;
   if (dimension === "from") return String(state.from ?? years[0]);
   if (dimension === "to") return String(state.to ?? years[1]);
@@ -211,6 +219,7 @@ export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahNa
   if (dimension === "area") return areaNames.get(values[0]) ?? values[0];
   if (dimension === "status") return copy.status(statusLabel(values[0]));
   if (dimension === "mah") return mahName(values[0]);
+  if (dimension === "mod") return modalityNames?.get(values[0]) ?? values[0];
   return values[0];
 }
 
@@ -219,11 +228,12 @@ function isActive(key, state) {
   return state[key].length > 0;
 }
 
-// "Showing [all medicine types] in [all ATC classes] from [all holders] in [all therapeutic
-// areas], approved [1995]–[2026], with [any status]." as strings and tokens { key, text, active,
-// clears: the state keys its remove button (or Clear) resets }. The type token naming one type also has tip: that type
+// "Showing [all medicine types] with [all modalities] in [all ATC classes] from [all holders] in
+// [all therapeutic areas], approved [1995]–[2026], with [any status]." as strings and tokens { key,
+// text, active, clears: the state keys its remove button (or Clear) resets }; the modality token
+// only once the modality data has loaded (lookups.modalityNames). The type token naming one type also has tip: that type
 // when it has an explanation (UI.typeTips), else null; so has the status token naming one status
-// (UI.statusTips). Two ATC classes are two tokens ("[C] and
+// (UI.statusTips) and the modality token naming one modality (its key). Two ATC classes are two tokens ("[C] and
 // [H03]") with value: the one class their remove button removes; more are one token. One
 // approval year (a year bar clicked) is one token, "approved in [2024]", clearing both ends.
 export function sentenceParts(state, lookups) {
@@ -233,6 +243,10 @@ export function sentenceParts(state, lookups) {
   const typeToken = { ...token("type"), tip: UI.typeTips[onlyType] ? onlyType : null };
   const [onlyStatus] = state.status.length === 1 ? state.status : [];
   const statusToken = { ...token("status"), tip: UI.statusTips[onlyStatus] ? onlyStatus : null };
+  const [onlyModality] = state.mod.length === 1 ? state.mod : [];
+  const modality = lookups.modalityNames
+    ? [words.withModality, { ...token("mod"), tip: UI.modalityTips[onlyModality] ? onlyModality : null }]
+    : [];
   const joined = (tokens) => tokens.flatMap((part, index) => (index ? [words.and, part] : [part]));
   const atc = state.atc.length === 2
     ? joined(state.atc.map((value) => ({ key: "atc", text: atcValueText(value, lookups.atcNames, true), active: true, clears: ["atc"], value })))
@@ -247,7 +261,7 @@ export function sentenceParts(state, lookups) {
   if (oneYear) years = [words.approvedIn, { key: "year", text: from, active: true, clears: ["from", "to"] }, words.undatedOut];
   else if (ranged) years = [words.approved, token("from"), words.to, token("to"), words.undatedOut];
   return [
-    words.showing, typeToken, words.in, ...atc, words.from, token("mah"), words.in, token("area"),
+    words.showing, typeToken, ...modality, words.in, ...atc, words.from, token("mah"), words.in, token("area"),
     ...years, words.with, statusToken, words.end,
   ];
 }

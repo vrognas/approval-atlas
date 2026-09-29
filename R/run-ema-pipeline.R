@@ -2,7 +2,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
                              cache_path = ".cache/ema/medicines.json",
                              downloads_directory = ".cache/downloads",
                              smpc_budget = smpc_budget_from_env(),
-                             gleif_path = gleif_matches_path) {
+                             gleif_path = gleif_matches_path,
+                             chembl_path = chembl_matches_path) {
   ema <- read_ema_json(download_ema_json(destination = cache_path))
   ema$data |>
     check_expected_columns() |>
@@ -32,6 +33,7 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   orphan_designations <- read_ema_orphan_designations(orphan_source$path)
   union_register <- read_union_register(register_source$path)
   gleif_matches <- read_gleif_matches(gleif_path)
+  chembl_matches <- read_chembl_matches(chembl_path, chembl_release)
   clean_medicines <- clean_ema_medicines(ema$data)
   atc_class_rows <- jsonlite::fromJSON(atc_class_path)
   atc_sources <- prepare_atc_sources(
@@ -64,6 +66,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   )
   tables <- c(tables, company_run$tables)
   tables <- c(tables, build_protection_tables(tables, snapshot_date))
+  modality_run <- build_modality_tables(tables, chembl_matches)
+  tables <- c(tables, modality_run$tables)
   previous_protection <- read_previous_protection(
     file.path(output_directory, "ema_medicine_protection.json")
   )
@@ -88,12 +92,13 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
       gleif_matches
     ), purrr::compact(list(
       curated_copies_source_entry(tables$ema_curated_copies)
-    )))
+    )), modality_source_entries(chembl_matches, modality_run$curated))
   )
   write_ema_outputs(tables, meta, output_directory)
   report_pipeline_summary(tables, snapshot_date)
   report_atc_summary(tables, atc_sources)
   report_company_summary(company_run, tables$ema_medicines)
+  report_modality_summary(modality_run, tables$ema_medicines)
   report_protection_changes(
     previous_protection,
     tables$ema_medicine_protection,

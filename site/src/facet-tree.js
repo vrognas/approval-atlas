@@ -19,6 +19,9 @@ const formatCount = d3.format(",");
 //   visible(model): the keys shown (a Set)
 //   children(parent, visible, model): the keys below parent (null: the top level), in order
 //   exact(parent, model): the medicines at parent itself (a static row after its children), or 0
+//   rootStatic: exact(null, model) is a static last row of the top level (the modalities' "Not
+//     classified"), shown even without rows above it; optional
+//   staticTip(parent, model): a static row's explainer (text), or null; optional
 //   search(visible, query, model): null for a blank query, else { matches, open: Set, shows(parent, key) }
 //   checkState(key, model), includedIn(key, model): the checked key above (for the row's name)
 //   levelsAbove(key): the keys to open above a newly selected one
@@ -29,6 +32,9 @@ const formatCount = d3.format(",");
 //   tip(key, model): { text, id } or null: the row's explainer (the therapeutic areas' MeSH notes,
 //     mesh-notes.js meshTip()), a tooltip on its row and the description (id) of its checkbox;
 //     optional
+//   tapTip: the tips are short (the modalities', at most 12 words), so a tap on a touch screen shows
+//     them, as the type and status tips (class tap-tip; the MeSH notes' long tips stay hidden on a
+//     tap, style.css); optional
 //   limit, more: the top-level rows shown at first and how many more each click of the section's
 //     .facet-more button shows (the company tree's hundreds of groups); rows whose checkbox is not
 //     unchecked always show, and during a search every match. Optional: without them every row
@@ -108,8 +114,8 @@ export function createFacetTree(section, spec, { onToggle }) {
       children = shown;
     }
     const rows = children.map((key) => ({ key, count: model.counts.get(key) ?? 0 }));
-    const exact = parent === null || found ? 0 : spec.exact(parent, model);
-    return children.length && exact ? [...rows, { key: `${parent}#static`, parent, count: exact, static: true }] : rows;
+    const exact = found || (parent === null && !spec.rootStatic) ? 0 : spec.exact(parent, model);
+    return (children.length || parent === null) && exact ? [...rows, { key: `${parent}#static`, parent, count: exact, static: true }] : rows;
   }
 
   function enterRow(enter) {
@@ -121,6 +127,8 @@ export function createFacetTree(section, spec, { onToggle }) {
         text.append("span").attr("class", "facet-name no-name");
         text.append("span").attr("class", "visually-hidden").text(", ");
         text.append("span").attr("class", "facet-count");
+        // Its explainer (spec.staticTip) for screen readers; shown as the row's tooltip.
+        text.append("span").attr("class", "visually-hidden static-tip");
         return;
       }
       line.append("button")
@@ -146,6 +154,14 @@ export function createFacetTree(section, spec, { onToggle }) {
     items.select(":scope > .atc-row .facet-count").text((row) => formatCount(row.count));
     items.filter((row) => row.static).select(":scope > .atc-row .facet-name")
       .text((row) => spec.copy.static(row.parent, model));
+    // A static row's explainer: a tooltip spanning the row on hover and, on touch screens, on a tap
+    // (it takes focus: tabindex -1, no tab stop, as the type badges); its text read after the count.
+    items.filter((row) => row.static).each(function explain(row) {
+      const tip = spec.staticTip?.(row.parent, model) ?? null;
+      const item = d3.select(this);
+      item.select(":scope > .atc-row .atc-static").attr("data-tip", tip).attr("tabindex", tip === null ? null : "-1");
+      item.select(":scope > .atc-row .static-tip").text(tip === null ? "" : `. ${tip}`);
+    });
     items.filter((row) => !row.static).each(function update(row) {
       const item = d3.select(this);
       const { text, missing } = spec.name(row.key, model);
@@ -170,7 +186,8 @@ export function createFacetTree(section, spec, { onToggle }) {
         .attr("aria-describedby", tip?.id ?? null);
       // Its explainer (the data can arrive later), on hover and keyboard focus: on the whole row, so
       // the tip's hover bridge beside the desktop sidebar never covers the row's link (style.css).
-      item.select(":scope > .atc-row").attr("data-tip", tip?.text ?? null).classed("mesh-tip", tip !== null);
+      item.select(":scope > .atc-row").attr("data-tip", tip?.text ?? null).classed("mesh-tip", tip !== null)
+        .classed("tap-tip", tip !== null && Boolean(spec.tapTip));
       item.select(":scope > .atc-row .facet-name").text(text).classed("no-name", missing);
       // Muted at 0 unless checked: checked rows sit on the accent wash, never muted (as facet-panel.js).
       item.select(":scope > .atc-row .facet-row").classed("empty", row.count === 0 && state !== "checked" && state !== "included");

@@ -16,6 +16,7 @@ import {
   sortBreakdownRows,
   statusDate,
 } from "./approvals.js";
+import { NOT_CLASSIFIED, buildModalityTree } from "./modalities.js";
 
 const medicines = [
   { ema_product_number: "EMEA/H/C/000001", name_of_medicine: "Alpha", medicine_status: "Authorised", marketing_authorisation_date: "2018-03-01", medicine_type: "Other" },
@@ -155,6 +156,32 @@ test("buildProducts: tree keys from the subtree rows, and the nodes a product's 
   });
   assert.deepEqual([...product.areaKeys].sort(), ["Breast Neoplasms", "C04", "C04.588", "C04.588.180"]);
   assert.deepEqual(product.areaExact, ["C04.588.180"]);
+});
+
+// Modality (M2 phase 2): a product's modality rows (per substance, for its card), its keys (every
+// group and modality: the filter, tree and charts) and its static rows' keys; none without the tree.
+test("buildProducts: each medicine's modalities, their keys and static rows", () => {
+  const modalityTree = buildModalityTree([
+    { key: "small_molecule", kind: "group", group_key: null, order: 1 },
+    { key: "protein", kind: "group", group_key: null, order: 2 },
+    { key: "peptide", kind: "modality", group_key: "protein", order: 3 },
+    { key: "hormone_cytokine", kind: "modality", group_key: "protein", order: 4 },
+  ]);
+  const modalityRows = [
+    { ema_product_number: "P1", substance_key: "insulin degludec", modality_group: "protein", modality: "hormone_cytokine" },
+    { ema_product_number: "P1", substance_key: "liraglutide", modality_group: "protein", modality: "peptide" },
+    { ema_product_number: "P2", substance_key: "x", modality_group: "protein", modality: null },
+  ];
+  const [p1, p2, p3] = buildProducts([medicine("P1"), medicine("P2"), medicine("P3")], { areaRows: [], branchRows: [], atcRows: [], modalityRows, modalityTree });
+  assert.deepEqual(p1.modalityRows, modalityRows.slice(0, 2));
+  assert.deepEqual([...p1.modalityKeys].sort(), ["hormone_cytokine", "peptide", "protein"]);
+  assert.deepEqual(p1.modalityExact, []);
+  assert.deepEqual([p2.modalityKeys, p2.modalityExact], [["protein"], ["protein"]]);
+  // No row: not classified.
+  assert.deepEqual([p3.modalityRows, p3.modalityKeys, p3.modalityExact], [[], [], [NOT_CLASSIFIED]]);
+  // Without the modality data (older data files): no keys at all.
+  const [bare] = buildProducts([medicine("P1")], { areaRows: [], branchRows: [], atcRows: [] });
+  assert.deepEqual([bare.modalityRows, bare.modalityKeys, bare.modalityExact], [[], [], []]);
 });
 
 test("statusDate picks the EMA date of the event behind the current status", () => {
@@ -313,4 +340,12 @@ test("sortBreakdownRows: count keeps the rows; key sorts ATC classes by code, ar
   assert.deepEqual(sortBreakdownRows(holders, "key", "mah", "desc").map((row) => row.label), ["Zeta", "Beta", "alpha", "Other"]);
   assert.deepEqual(sortBreakdownRows(atc, "key", "atc", "desc").map((row) => row.key), ["L04AC", "L04AB", "L04AA", "L04A"]);
   assert.equal(sortBreakdownRows(holders, "count", "mah", "desc"), holders);
+  // Modality (M2 phase 2): groups and modalities in tree order, as the areas; Not classified last.
+  const modalities = [
+    { key: "antibody", label: "Antibody", count: 300, rank: 2 },
+    { key: "small_molecule", label: "Small molecule", count: 1400, rank: 0 },
+    { key: "protein", label: "Protein and peptide", count: 350, rank: 1 },
+    { key: "__not_classified__", label: "Not classified", count: 40, static: true, incomplete: true },
+  ];
+  assert.deepEqual(sortBreakdownRows(modalities, "key", "mod").map((row) => row.key), ["small_molecule", "protein", "antibody", "__not_classified__"]);
 });

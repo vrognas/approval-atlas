@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { ATC_GROUP_HUES as ATC_GROUPS, BRAND_HUES, SERIES_DISTANCE, companySeriesColors, tokenDistance } from "./badges.js";
-import { OTHER_KEY, topWithOther } from "./facets.js";
+import { OTHER_KEY, STACK_HUES, topWithOther } from "./facets.js";
 
 // WCAG 2.2 contrast of the style.css tokens, light and dark: text >= 4.5:1 on every background
 // it is used on, chart marks >= 3:1. Status dots and the per-year chart's status stacks (Stack by
@@ -174,6 +174,30 @@ test(
     assert.deepEqual(failing, []);
   },
 );
+
+// "Approvals per year" stacked by modality (M2 phase 2): the groups (or one group's modalities) in
+// tree order take the STACK_HUES mids in order, so neighbouring segments differ by the series
+// distance in both modes and every mid reaches 3:1 on page and surface; Not classified and a
+// group's "not more specific" are the low-key --raised fill with a --field-border outline (checked
+// above).
+test("modality stacks: neighbouring stack hues differ by the series distance, each mark reaches 3:1", () => {
+  const tokensOf = (tokens) => Object.fromEntries(Object.keys(tokens).map((name) => [name, resolve(tokens, name)]));
+  const palette = { light: tokensOf(light), dark: tokensOf(dark) };
+  const failing = [];
+  for (const [mode, tokens] of Object.entries(palette)) {
+    for (const [index, hue] of STACK_HUES.entries()) {
+      for (const background of BACKGROUNDS) {
+        const ratio = contrast(tokens, `--${hue}-mid`, background);
+        if (ratio < 3) failing.push(`${mode}: --${hue}-mid on ${background} ${ratio.toFixed(2)}`);
+      }
+      const next = STACK_HUES[index + 1];
+      if (!next) continue;
+      const distance = tokenDistance({ light: tokens, dark: tokens }, `--${hue}-mid`, `--${next}-mid`);
+      if (distance < SERIES_DISTANCE) failing.push(`${mode}: ${hue} ~ ${next} (${distance.toFixed(3)})`);
+    }
+  }
+  assert.deepEqual(failing, []);
+});
 
 test("light tokens match the approved E · Sage palette", () => {
   const expected = {

@@ -65,6 +65,12 @@ export function makePredicates(state, atcClasses) {
     const selected = inSet(state.type);
     predicates.type = (product) => selected.has(product.medicine_type);
   }
+  // Modality (M2 phase 2): groups and modalities, each matching the products with a substance of
+  // it (product.modalityKeys: modalities.js keysOf()).
+  if (state.mod.length) {
+    const selected = inSet(state.mod);
+    predicates.mod = (product) => product.modalityKeys.some((key) => selected.has(key));
+  }
   if (state.status.length) {
     const selected = inSet(state.status);
     predicates.status = (product) => selected.has(product.medicine_status);

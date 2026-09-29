@@ -99,7 +99,8 @@ run_fixture_pipeline <- function(output_directory,
     cache_path = cache_path,
     downloads_directory = downloads_directory,
     smpc_budget = smpc_budget,
-    gleif_path = fixture_gleif_matches_path()
+    gleif_path = fixture_gleif_matches_path(),
+    chembl_path = fixture_chembl_matches_path()
   )
 }
 
@@ -135,7 +136,9 @@ output_stems <- c(
   "companies",
   "ema_medicine_protection",
   "ema_substance_equivalents",
-  "ema_curated_copies"
+  "ema_curated_copies",
+  "ema_medicine_modalities",
+  "modalities"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -465,7 +468,8 @@ test_that("run_ema_pipeline writes its outputs while WHOCC is unreachable", {
     c("whocc_updates", "whocc_alterations") %in% tables$atc_classes$source
   ))
   meta <- jsonlite::fromJSON(file.path(output_directory, "meta.json"))
-  expect_identical(nrow(meta$sources), 11L)
+  # The three modality entries after the others.
+  expect_identical(nrow(meta$sources), 14L)
   expect_identical(
     meta$sources$url[7:9],
     c(
@@ -523,6 +527,56 @@ test_that("run_ema_pipeline builds the company tables and credits them", {
   expect_identical(meta$sources[[14]]$retrieved, "2026-09-28")
   expect_match(messages, "Companies: [0-9]+ companies in", all = FALSE)
   expect_match(messages, "GLEIF: [0-9]+ matches applied", all = FALSE)
+})
+
+test_that("run_ema_pipeline classifies modalities and credits the sources", {
+  forbid_network()
+  output_directory <- file.path(tempfile(), "data")
+  messages <- testthat::capture_messages(
+    tables <- run_fixture_pipeline(output_directory)
+  )
+  modalities <- tables$ema_medicine_modalities
+  expect_setequal(
+    unique(modalities$ema_product_number),
+    tables$ema_medicines$ema_product_number
+  )
+  modality <- function(product_number) {
+    rows <- modalities[modalities$ema_product_number == product_number, ]
+    paste0(rows$modality_group, "/", rows$modality)
+  }
+  # Kymriah: the curated CAR-T row (EMA's ATMP flag names the group).
+  expect_identical(modality("EMEA/H/C/004090"), "cell_gene/car_t")
+  # Mounjaro: tirzepatide, a peptide by its INN stem.
+  expect_identical(modality("EMEA/H/C/005620"), "protein/peptide")
+  # Suboxone: two small molecules by ChEMBL.
+  expect_identical(
+    modality("EMEA/H/C/000697"),
+    rep("small_molecule/small_molecule", 2)
+  )
+  # Twinrix Adult: an inactivated vaccine by EMA's text.
+  expect_identical(modality("EMEA/H/C/000112"), "vaccine/inactivated_vaccine")
+  # Frehemgo: denecimig, "-mig".
+  expect_identical(modality("EMEA/H/C/006344"), "antibody/bispecific_antibody")
+  expect_identical(tables$modalities, modality_taxonomy())
+  written <- jsonlite::fromJSON(
+    file.path(output_directory, "ema_medicine_modalities.json")
+  )
+  expect_named(written, modality_row_columns)
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  names <- vapply(meta$sources, function(source) source$name, character(1))
+  expect_identical(
+    utils::tail(names, 3),
+    c(
+      "WHO INN stems",
+      "ChEMBL molecules",
+      "Curated modalities"
+    )
+  )
+  expect_identical(meta$row_counts$modalities, 38L)
+  expect_match(messages, "Modalities, medicines \\(Authorised\\)", all = FALSE)
 })
 
 test_that("run_ema_pipeline adds the authorization and substance columns", {
@@ -726,7 +780,8 @@ test_that("run_ema_pipeline applies, writes and credits the curated copies", {
     file.path(output_directory, "meta.json"),
     simplifyVector = FALSE
   )
-  last_source <- meta$sources[[length(meta$sources)]]
+  # The curated copies come before the three modality entries.
+  last_source <- meta$sources[[length(meta$sources) - 3]]
   expect_match(last_source$name, "curated by approval-atlas from EMA EPAR")
   expect_identical(last_source$version, "Checked 2026-09-29")
 })

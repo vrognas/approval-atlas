@@ -34,6 +34,12 @@ test("evidence links of company notes name their destination", () => {
   assert.deepEqual(destinationOf("https://www.gsk.com/en-gb/media/x/"), { name: "GSK website", host: "www.gsk.com" });
 });
 
+// A medicine's modality source (M2 phase 2): its ChEMBL record, a curated row's evidence.
+test("modality sources name their destination", () => {
+  assert.equal(destinationOf("https://www.ebi.ac.uk/chembl/explore/compound/CHEMBL941").name, "ChEMBL website");
+  assert.equal(destinationOf("https://pubmed.ncbi.nlm.nih.gov/38142486/").name, "PubMed");
+});
+
 // Links there are marked by main.js (markExternal()); the markup must already be safe.
 test("index.html links to other websites only over https, in a new tab, without opener or referrer", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
