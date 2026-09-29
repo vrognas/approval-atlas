@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { UI } from "./labels.js";
 import { destinationOf } from "./links.js";
 
 test("an external link's destination is named by its host, an unknown host by itself", () => {
@@ -40,16 +41,31 @@ test("modality sources name their destination", () => {
   assert.equal(destinationOf("https://pubmed.ncbi.nlm.nih.gov/38142486/").name, "PubMed");
 });
 
-// Links there are marked by main.js (markExternal()); the markup must already be safe.
+// Links there are marked by main.js (markExternal()); the markup must already be safe. Since the
+// legal review of 2026-09-30 the footer's links are built from labels.js (next test), so index.html
+// may hold none.
 test("index.html links to other websites only over https, in a new tab, without opener or referrer", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   // Same-site links (the wordmark's "/", phase 4c review; the dashboard's tabs and the Overview's
   // links to them, "?tab=…", F · Spacious, phase 2) stay in the tab.
   const anchors = (html.match(/<a\s[^>]*>/g) ?? []).filter((anchor) => !/href="[/?]/.test(anchor));
-  assert.ok(anchors.length >= 3);
   for (const anchor of anchors) {
     assert.match(anchor, /href="https:\/\//, anchor);
     assert.match(anchor, /target="_blank"/, anchor);
     assert.match(anchor, /rel="noopener noreferrer"/, anchor);
+  }
+});
+
+// The footer's and About's links (main.js renderFooter(): new tab, noopener noreferrer,
+// markExternal()): https only, each destination named (doi.org by the article it opens).
+test("the footer's and About's links are https and name their destination", () => {
+  const credits = { date: "2026-09-29", mesh: "MeSH 2026", chembl: "ChEMBL_37", explained: true, innStems: true };
+  const { footer, about } = UI;
+  const parts = [...footer.sources(credits), ...footer.licence, ...about.sources(credits).flat(), ...about.contact];
+  const urls = parts.filter((part) => typeof part !== "string").map((part) => part.url);
+  assert.ok(urls.length >= 15);
+  for (const url of urls) {
+    assert.match(url, /^https:\/\//, url);
+    assert.notEqual(destinationOf(url).name, destinationOf(url).host, url);
   }
 });
