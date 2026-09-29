@@ -4,7 +4,7 @@ import { UI, formatShare } from "./labels.js";
 // Compact tiles: the flag counts, labelled with their type badge's hue.
 const COMPACT_HUES = { orphan: "pink", biosimilar: "teal", generic: "gold", advancedTherapy: "purple" };
 
-// counts: countTiles() output. The four type tiles (2 x 2 beside "Authorized over time"; the
+// counts: countTiles() output. The four type tiles (under "Authorized over time"; the
 // headline states the medicines and those currently authorized, owner decision 2026-09-29), each
 // with its share of the medicines matching the filters and a meter, and in one line what it counts.
 // A tile explains its type on hover and keyboard focus (tabindex 0: a tab stop, as there is no

@@ -1811,12 +1811,13 @@ input::placeholder {
   font-size: 0.875rem;
 }
 
-/* The top row (owner decision 2026-09-29): "Authorized over time" at half the main column's width,
-   the four type tiles 2 x 2 beside it, filling the other half (the tiles as tall as the card), from
-   a main column of 800px, so the chart keeps at least 350px (a phone's); under it (phones, a 768px
-   tablet, a wide sidebar on a small desktop) the card, then the tiles. The frame is the size
-   container: the main column's width, which the resizable sidebar sets on desktop, not the
-   viewport's. */
+/* The top row (owner decision 2026-09-29, revised the same day): "Authorized over time" across the
+   main column, the four type tiles under it, as many to a row as keep the widest badge whole: a
+   tile needs about 158px ("Advanced therapy", 124px in Geist, plus 2 x 16px padding and the
+   border), so four from a main column of 672px (4 x 158 + 3 gaps of 12px = 668, rounded up), 2 x 2
+   from 328px (2 x 158 + 12; a 360px phone), else one per row (320px phones). Rows are as tall as
+   their tiles. The frame is the size container: the main column's width, which the resizable
+   sidebar sets on desktop, not the viewport's. */
 .top-row-frame {
   container-type: inline-size;
   margin: 16px 0 0;
@@ -1835,26 +1836,16 @@ input::placeholder {
 .tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
   gap: 12px;
 }
 
-@container (min-width: 800px) {
-  .top-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-  }
-
-  /* Tiles as tall as the card: a larger figure. */
-  .tiles .tile-compact .tile-value {
-    font-size: 2rem;
-    line-height: 2.5rem;
+@container (min-width: 672px) {
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
-/* Under 300px (320px phones): one tile per row, as two columns would cut the "Advanced therapy"
-   badge (121px in a 104px tile). */
-@container (max-width: 299px) {
+@container (max-width: 327px) {
   .tiles {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1888,11 +1879,6 @@ input::placeholder {
   color: var(--ink-secondary);
   font-size: 0.8125rem;
   line-height: 1.125rem;
-}
-
-/* A tile stretched to the card's height (side by side) keeps its caption at the bottom. */
-.tile .tile-caption {
-  margin-top: auto;
 }
 
 .tile-compact {
