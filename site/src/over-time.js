@@ -94,12 +94,12 @@ export function renderOverTime(container, series, { from, to }) {
     .attr("width", Math.max(0, width - MARGIN.left - MARGIN.right))
     .attr("height", HEIGHT - MARGIN.top - MARGIN.bottom)
     .on("pointermove", (event) => {
-      const [pointerX, pointerY] = d3.pointer(event, svg.node());
+      const [pointerX] = d3.pointer(event, svg.node());
       const index = bisect(dates, x.invert(pointerX));
       const row = series[index];
       crosshair.attr("x1", x(dates[index])).attr("x2", x(dates[index])).attr("display", null);
       const items = SERIES.map(({ key, label, color }) => ({ value: row[key], label, color }));
-      showTooltip(container, [x(dates[index]), pointerY], formatDate(row.date), items);
+      showTooltip(container, event, formatDate(row.date), items);
     })
     .on("pointerleave", () => {
       crosshair.attr("display", "none");

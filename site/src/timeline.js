@@ -2,6 +2,7 @@
 // medicine (dodged), thin lines joining a substance family. Hover or tap shows a tooltip; tapping
 // a dot pins it so its name link can be followed. The result list below is the non-visual equivalent.
 import * as d3 from "d3";
+import { placeTooltip } from "./chart.js";
 import { UI, formatDate, statusLabel } from "./labels.js";
 import { families, layoutLanes } from "./timeline-layout.js";
 
@@ -101,22 +102,27 @@ export function renderTimeline(container, items, { link }) {
     return Math.hypot(dot.x - px, dot.y - py) <= HIT_RADIUS ? dot : null;
   };
   let pinned = null;
+  let hovered = null; // the dot a mouse's hover shows
   const tip = root.append("div").attr("class", "timeline-tip").attr("hidden", "");
 
-  function show(dot, pin) {
+  // At the pointer on hover (event; owner decision 2026-09-29), following it; at the dot on a tap.
+  function show(dot, pin, event = null) {
     pinned = pin ? dot : null;
+    hovered = pin ? null : dot;
     circles.classed("active", (candidate) => candidate === dot);
     tip.attr("hidden", null).classed("pinned", pin).selectChildren().remove();
     tip.append("p").attr("class", "tip-name").append(() => link(dot));
     tip.append("p").text(`${formatDate(dot.date)} · ${statusLabel(dot.status)}`);
     if (dot.holder) tip.append("p").attr("class", "tip-holder").text(dot.holder);
     if (dot.mentioned) tip.append("p").attr("class", "tip-holder").text(UI.timeline.mentioned);
+    if (event) return placeTooltip(tip.node(), container, event);
     const tipWidth = tip.node().offsetWidth;
     const left = dot.x + 12 + tipWidth > width ? Math.max(0, dot.x - 12 - tipWidth) : dot.x + 12;
     tip.style("left", `${left}px`).style("top", `${dot.y + 10}px`);
   }
   function hide() {
     pinned = null;
+    hovered = null;
     circles.classed("active", false);
     tip.attr("hidden", "");
   }
@@ -124,15 +130,20 @@ export function renderTimeline(container, items, { link }) {
   svg.on("pointermove", (event) => {
     if (pinned || event.pointerType === "touch") return;
     const dot = nearest(event);
-    if (dot) show(dot, false);
+    if (dot) show(dot, false, event);
     else hide();
   });
   svg.on("pointerleave", () => {
     if (!pinned) hide();
   });
+  // A click on the dot the hover shows pins its tip where it is, so the pointer can reach its link.
   svg.on("click", (event) => {
     const dot = nearest(event);
-    if (dot && dot !== pinned) show(dot, true);
+    if (dot && dot === hovered) {
+      pinned = dot;
+      hovered = null;
+      tip.classed("pinned", true);
+    } else if (dot && dot !== pinned) show(dot, true);
     else hide();
   });
   tip.on("keydown", (event) => {

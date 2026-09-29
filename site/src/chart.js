@@ -1,6 +1,7 @@
 import * as d3 from "d3";
 import { companyBadge } from "./holders.js";
 import { UI } from "./labels.js";
+import { atPointer, tipBounds } from "./tips.js";
 import { attachYearBrush } from "./year-brush.js";
 
 const HEIGHT = 320;
@@ -71,8 +72,22 @@ function appendHatch(svg, item) {
     .style("stroke", item.stroke).style("stroke-width", "1.5px");
 }
 
-// One tooltip per chart container: the value leads, the series name follows, keyed by a short line.
-export function showTooltip(container, [left, top], title, items) {
+// A chart's tooltip (element, absolute in container, which is positioned) at the pointer (the
+// event's viewport position; owner decision 2026-09-29), as the data-tip tips: 12px below and right
+// of it inside the viewport, flipped above or left without room (atPointer()). It takes no pointer
+// events, so it follows the pointer.
+export function placeTooltip(element, container, event) {
+  const place = atPointer({ x: event.clientX, y: event.clientY }, { width: element.offsetWidth, height: element.offsetHeight },
+    tipBounds(document.documentElement.clientWidth, document.documentElement.clientHeight));
+  const box = container.getBoundingClientRect();
+  d3.select(element)
+    .style("left", `${place.left - box.left - container.clientLeft}px`)
+    .style("top", `${place.top - box.top - container.clientTop}px`);
+}
+
+// One tooltip per chart container, at the pointer (event): the value leads, the series name
+// follows, keyed by a short line.
+export function showTooltip(container, event, title, items) {
   const tooltip = d3.select(container).selectAll(".tooltip").data([null]).join("div").attr("class", "tooltip").attr("hidden", null);
   tooltip.selectChildren().remove();
   tooltip.append("p").attr("class", "tooltip-title").text(title);
@@ -80,9 +95,7 @@ export function showTooltip(container, [left, top], title, items) {
   rows.append("span").attr("class", "line-key").style("background", (item) => item.color).style("box-shadow", outline);
   rows.append("strong").text((item) => formatCount(item.value));
   rows.append("span").text((item) => item.label);
-  const width = tooltip.node().offsetWidth;
-  const flip = left + 16 + width > container.clientWidth;
-  tooltip.style("left", `${flip ? left - 16 - width : left + 16}px`).style("top", `${top}px`);
+  placeTooltip(tooltip.node(), container, event);
 }
 
 export function hideTooltip(container) {
@@ -204,7 +217,7 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
 
   // The brush overlay sits on top of the columns, so hover is resolved from the pointer's x.
   svg.on("pointermove", (event) => {
-    const [pointerX, pointerY] = d3.pointer(event);
+    const [pointerX] = d3.pointer(event);
     const index = Math.floor((pointerX - x.range()[0]) / x.step());
     const row = rows[index];
     hits.classed("hover", (candidate) => candidate === row);
@@ -214,7 +227,7 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
       .filter((item) => row.counts.get(item.key) > 0)
       // A 2px key's outline would cover its hatch: the hatched one reads as a dashed line instead.
       .map((item) => ({ value: row.counts.get(item.key), label: item.label, color: swatchOf(item), stroke: item.hatch ? null : item.stroke }));
-    showTooltip(container, [pointerX, pointerY], UI.years.tooltipTitle(row.year, row.total), items);
+    showTooltip(container, event, UI.years.tooltipTitle(row.year, row.total), items);
   });
   svg.on("pointerleave", () => {
     hits.classed("hover", false);
