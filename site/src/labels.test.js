@@ -505,6 +505,8 @@ test("the home dek names substances and flag counts with plurals and without zer
 test("lookup headlines answer whether it is authorized; 'not' and counts are toned", () => {
   const { headline } = labels.UI;
   assert.equal(plain(headline.medicine("Wegovy", "authorized")), "Wegovy is authorized in the EU.");
+  // F · Spacious, phase 4 (Von Restorff): the answer word is toned as the status is, "not" and "not yet" too.
+  assert.deepEqual(toned(headline.medicine("Wegovy", "authorized")), [["authorized", "authorized"]]);
   assert.equal(plain(headline.medicine("Acomplia", "ended")), "Acomplia is not authorized in the EU.");
   assert.deepEqual(toned(headline.medicine("Acomplia", "ended")), [["not", "negative"]]);
   assert.deepEqual(toned(headline.medicine("Grasustek", "refused")), [["not", "negative"]]);
@@ -787,6 +789,22 @@ test("the medicine card's document buttons", () => {
   });
   assert.equal(documents.productInformation, "Product information (SmPC)");
   assert.equal(documents.overview, "Summary for the public");
+});
+
+// F · Spacious, phase 4 (Miller's Law / chunking): the medicine card in three blocks, the rest behind
+// one "More details" at the end. Estimates only, never "patent".
+test("the medicine card's blocks and More details", () => {
+  const { card } = labels.UI;
+  assert.deepEqual(card.blocks, { status: "Status", protection: "Protection and copies", documents: "Documents" });
+  assert.equal(card.more.summary, "More details");
+  assert.equal(card.more.about, "About this medicine");
+  assert.equal(card.more.allDocuments, "All documents");
+  assert.equal(card.estimate, "(est.)");
+  assert.equal(card.since, "since");
+  assert.equal(card.approvedOn, "approved");
+  for (const text of [...Object.values(card.blocks), card.more.summary, card.more.hint, card.more.about, card.more.allDocuments]) {
+    assert.doesNotMatch(text, /patent|—/i);
+  }
 });
 
 test("filter chips, popover and sheet copy", () => {
@@ -1254,13 +1272,13 @@ test("substance card: another spelling of the same substance, with its medicines
 // counted from another company's is unclear. Estimates, never "patent".
 test("protection copy: strip cell, basis note and the other-company reason", () => {
   const { protection, card } = labels.UI;
-  assert.equal(card.strip.protection, "Protection (est.)");
+  assert.equal(card.estimate, "(est.)");
   assert.equal(protection.glance.until(2031, 2032), "Until 2031–2032");
   assert.equal(protection.glance.until(2031, 2031), "Until 2031");
   assert.equal(protection.glance.orphan(2033), "Orphan exclusivity until 2033");
   assert.equal(protection.basisNote, "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.");
   assert.ok(!protection.caveats.includes("Based only on EU central authorization dates."));
-  for (const text of [card.strip.protection, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {
+  for (const text of [card.estimate, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {
     assert.doesNotMatch(text, /patent/i);
   }
 });
@@ -1430,10 +1448,10 @@ test("an indication's lead: the whole text when short, else its first sentence, 
   assert.ok(long.startsWith(lead.slice(0, -1)), lead);
   assert.ok(!lead.slice(0, -1).endsWith(" "), lead);
   assert.equal(labels.UI.card.fullIndication, "Show full indication");
-  // Review 2026-09-29: on phones the card shows its first three conditions, the rest behind a button
-  // whose name ends in what it shows.
-  assert.deepEqual(labels.UI.card.moreAreas(7), { text: "Show 7 more", hidden: " therapeutic areas" });
-  assert.deepEqual(labels.UI.card.moreAreas(1), { text: "Show 1 more", hidden: " therapeutic area" });
+  // F · Spacious, phase 4: the Status block shows the first three conditions, the rest in More
+  // details, opened by a button whose name ends in what it shows.
+  assert.deepEqual(labels.UI.card.moreAreas(7), { text: "and 7 more", hidden: " therapeutic areas" });
+  assert.deepEqual(labels.UI.card.moreAreas(1), { text: "and 1 more", hidden: " therapeutic area" });
 });
 
 // Phase 4c review: the tab's title names the view (WCAG 2.4.2); the dashboard under a lookup result
@@ -1542,8 +1560,6 @@ test("companies: tree, company page, search and footer copy", () => {
   assert.equal(labels.UI.kicker.company, "Company");
   assert.equal(labels.UI.external.destinations["search.gleif.org"], "GLEIF website");
   assert.match(footer.companies("2026-09-28"), /^Company groups \(current owner as of 28 Sep 2026\) curated by Approval Atlas; LEI data from .*GLEIF.*CC0\. GLEIF does not provide or endorse this site\.$/);
-  // The answer strip leads with the company group, as the table's "Company · Holder" column.
-  assert.equal(card.strip.company, "Company");
   // F · Spacious, phase 2: the links land on the tab that shows what they count.
   assert.equal(companies.atcHint, "Each opens the overview's Classes and areas tab, filtered to this company and ATC group.");
   assert.equal(companies.namesHint, "Each lists its medicines in the overview's Medicines tab.");

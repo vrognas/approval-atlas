@@ -1,5 +1,5 @@
 // Lookup result panel: medicine card, substance card, condition / free-text results, each led by
-// a kicker, an answer headline and (medicine, substance) an answer strip.
+// a kicker, an answer headline and (medicine, substance) its blocks (F · Spacious, phase 4).
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
@@ -35,7 +35,7 @@ import {
 import { markExternal } from "./links.js";
 import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
 import { buildModalityTree, modalityLines, modalitySource } from "./modalities.js";
-import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
+import { espacenetUrl, isCopy, protectionGlance, protectionSummary } from "./protection.js";
 import { endingByYear, protectionEnding } from "./protection-calendar.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
@@ -43,7 +43,7 @@ import { toolbarKeydown } from "./toolbar.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
 
 const formatNumber = new Intl.NumberFormat("en-US").format;
-// The medicine card's therapeutic areas shown on phones before "Show n more" (areaLinks()).
+// The medicine card's therapeutic areas shown in its Status block before "and n more" (areaNames()).
 const CARD_AREAS = 3;
 
 function el(tag, props, ...children) {
@@ -96,7 +96,7 @@ export function headlineNodes(parts) {
 const title = (content) => el("h1", { tabindex: "-1", "data-focus-key": "title" }, content);
 const kicker = (kind) => el("p", { class: "kicker" }, UI.kicker[kind]);
 
-// Dot and label in the status's hue; pill: on its light fill (answer strip). It explains the
+// Dot and label in the status's hue; pill: on its light fill (the cards' Status blocks). It explains the
 // status on hover and on a tap (UI.statusTips; tabindex -1: focusable, no tab stop), as the type
 // badges do; label: the text shown instead of the status's (a substance's "3 authorized"); opinion:
 // EMA's opinion (a negative one has its own tip, statusTipText()).
@@ -138,15 +138,17 @@ function atcBadge(code) {
     atcSegments(code).map((segment) => el("span", { class: segment.level ? `atc-seg level-${segment.level}` : "atc-seg" }, segment.text)));
 }
 
-// Answer strip: [label, value, wide] items (null items are left out); the wide one spans a row on
-// narrow cards. In a size container, as its columns follow the strip's own width (the
-// page sets it), not the viewport's (step 3 review: four items, a medicine's protection cell;
-// step 4 review: three, a substance's "13 authorized" crossed the strip's border at 1024px).
-function strip(items) {
-  const shown = items.filter(Boolean);
-  return el("div", { class: "strip-frame" }, el("dl", { class: shown.length === 4 ? "strip strip-4" : "strip", "aria-label": UI.card.strip.label }, shown.map(([label, value, wide]) =>
-    el("div", { class: wide ? "strip-wide" : null }, el("dt", null, label), el("dd", null, value)))));
+// F · Spacious, phase 4 (Miller's Law / chunking, Law of Common Region): a medicine (or substance)
+// card block, a framed region named by its heading (UI.card.blocks: status, protection, documents).
+// They replaced the answer strip. Unnamed sections, as the cards' other sections: their headings
+// (h2, under the card's h1) are the way in, not more landmarks per card.
+function cardBlock(key, ...content) {
+  return el("section", { class: `card-block block-${key}` }, el("h2", { class: "block-title" }, UI.card.blocks[key]), content);
 }
+
+// A block's fact: its label over its value. Null without a value.
+const blockFact = (label, value, className = null) => (value === null || value === undefined ? null
+  : el("div", { class: className }, el("dt", null, label), el("dd", null, value)));
 
 // Step 4 (#9): an approval flag's chip (UI.card.flags) explaining itself on hover and on a tap
 // (UI.flagTips; tabindex -1: focusable, no tab stop, as the type badges) and, visually hidden, to
@@ -248,7 +250,6 @@ export function createLookup(panel, {
   let renderedKey = null;
   let showAll = false;
   let showAllKey = null; // the lookup view the "Show all statuses" choice belongs to
-  const expandedAreas = new Set(); // medicine cards whose areas beyond the first CARD_AREAS were shown (phones)
   let focusNext = false;
   let timeline = null;
   const resizeObserver = new ResizeObserver(() => {
@@ -435,7 +436,7 @@ export function createLookup(panel, {
     return lines.map((line) => modalityLineNodes(line, modalities.tree, atcNames, lines.length > 1));
   }
 
-  // The substance card's Modality line: the modality its medicines' rows for this substance give
+  // The substance card's Modality fact: the modality its medicines' rows for this substance give
   // most often (links, then its explainer); none without such rows or the data.
   function substanceModality(rows, key) {
     const modalities = need("modalities");
@@ -446,8 +447,7 @@ export function createLookup(panel, {
     const countOf = (line) => substanceRows.filter((item) => tree.groupOf(item) === line.group && tree.modalityOf(item) === line.modality).length;
     const [common] = modalityLines(tree, substanceRows).sort((a, b) => countOf(b) - countOf(a));
     const { name, tip } = modalityName(common, tree);
-    return el("dl", { class: "areas-line modality-summary" }, el("dt", null, UI.modality.label),
-      el("dd", null, name, tip ? [" ", el("span", { class: "muted" }, tip)] : null));
+    return [name, tip ? [" ", el("span", { class: "muted" }, tip)] : null];
   }
 
   // ATC ladder of one code: a row per level (badge, name, medicines currently authorized) linking to
@@ -504,39 +504,39 @@ export function createLookup(panel, {
     })));
     if (!code) return null;
     return el("section", { class: "card-section" },
-      el("div", { class: "ladder-title" }, el("h3", null, UI.card.atc), ladderHead(counts)),
+      el("div", { class: "ladder-title" }, el("h2", null, UI.card.atc), ladderHead(counts)),
       atcLadderList(code, atc.names, ready(counts) ? counts : null),
       others.map((other) => el("p", { class: "muted" }, UI.atc.classed(other.names, other.code))));
   }
 
-  // The medicine card's therapeutic areas with their branch chips. On phones the first CARD_AREAS,
-  // the rest (.term-extra) hidden by CSS behind "Show n more" (review 2026-09-29: with chips, a long
-  // list pushed the product information button below the first screen); a card whose rest was
-  // shown (expandedAreas) keeps it across re-renders.
+  // The medicine card's therapeutic areas in More details: every one, with its branch chips.
   function areaLinks(number, areas, conditions) {
     if (!ready(areas)) return pending(areas);
     const terms = (areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh);
-    const groups = termLinks(terms, conditions, { chips: true }).flat();
-    if (terms.length <= CARD_AREAS) return groups;
-    const extras = groups.filter((node) => node.classList?.contains("term")).slice(CARD_AREAS);
-    for (const group of extras) group.classList.add("term-extra");
-    const more = UI.card.moreAreas(extras.length);
-    const list = el("span", { class: expandedAreas.has(number) ? "card-areas areas-all" : "card-areas" }, groups, " ",
-      el("button", { type: "button", class: "toggle areas-more", onclick: () => {
-        expandedAreas.add(number);
-        list.classList.add("areas-all");
-        // The button goes: focus to the first condition it showed (its link, else its chips).
-        const target = extras[0].querySelector("a, button.area-chip[tabindex='0']") ?? extras[0];
-        if (target === extras[0]) target.tabIndex = -1;
-        target.focus();
-      } }, more.text, el("span", { class: "visually-hidden" }, more.hidden)));
-    return list;
+    return terms.length ? el("span", { class: "card-areas", id: "card-areas-all" }, termLinks(terms, conditions, { chips: true }).flat()) : null;
   }
 
-  // The documents list below the SmPC / EPAR buttons. groups: groupDocuments() output; rest: the
-  // groups without the button rows (primaryDocuments()). namesakeNote: the line naming the
+  // The Status block's therapeutic areas (F · Spacious, phase 4): the first CARD_AREAS as condition
+  // links, names only (their branch chips are in More details, so they neither compete with the
+  // answer nor push the product information below the first phone screen), then "and n more",
+  // which opens More details at the full list, focusing the first area it did not show. None
+  // without any.
+  function areaNames(number, areas, conditions) {
+    if (!ready(areas)) return pending(areas);
+    const terms = (areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh);
+    if (!terms.length) return null;
+    const rest = terms.length - CARD_AREAS;
+    if (rest <= 0) return termLinks(terms, conditions);
+    const more = UI.card.moreAreas(rest);
+    return [termLinks(terms.slice(0, CARD_AREAS), conditions), " ",
+      el("button", { type: "button", class: "toggle areas-more", onclick: () => openMore(`#card-areas-all > .term:nth-of-type(${CARD_AREAS + 1})`) }, more.text, el("span", { class: "visually-hidden" }, more.hidden))];
+  }
+
+  // The documents list: in More details under the SmPC / EPAR buttons, or, for a medicine without
+  // them (never authorized), in the Documents block itself. groups: groupDocuments() output; rest:
+  // the groups without the button rows (primaryDocuments()). namesakeNote: the line naming the
   // namesake's documents left out (or null).
-  function documentsSection(documents, groups, rest, medicine, namesakeNote) {
+  function documentsList(documents, groups, rest, medicine, namesakeNote) {
     const items = rest.flatMap((group) => (group.key === "variations"
       ? el("li", null, el("details", { "data-key": "variations" },
         el("summary", null, UI.documents.variations(group.rows.length)),
@@ -545,12 +545,12 @@ export function createLookup(panel, {
       : group.rows.map((row) => el("li", null,
         externalLink(row.ownTitle ? row.title : row.archive ? UI.documents.archive(UI.documents[group.key]) : UI.documents[group.key], row.url), row.last_updated_date ? [" ", el("span", { class: "muted" }, UI.card.updated(formatDate(row.last_updated_date)))] : null))));
     if (medicine?.medicine_url) items.push(el("li", null, externalLink(UI.card.medicinePage, medicine.medicine_url)));
-    return el("section", { class: "card-section" },
-      el("h3", null, UI.card.documents),
+    return [
       ready(documents) ? null : pending(documents),
       ready(documents) && groups.length === 0 ? el("p", { class: "muted" }, UI.card.noDocuments) : null,
       items.length ? el("ul", { class: "plain doc-list" }, items) : null,
-      namesakeNote);
+      namesakeNote,
+    ];
   }
 
   // Other medicines with the same name (folded): index rows.
@@ -574,7 +574,7 @@ export function createLookup(panel, {
       .sort((a, b) => a.marketing_authorisation_date.localeCompare(b.marketing_authorisation_date))[0] ?? null;
   }
 
-  // The indication's lead (indicationLead()) on the card's first screen, the full text behind a disclosure.
+  // The indication's lead (indicationLead()), the full text behind a disclosure.
   function indicationFact(text) {
     if (!text) return null;
     const { lead, more } = indicationLead(text);
@@ -584,11 +584,11 @@ export function createLookup(panel, {
     ]);
   }
 
-  // The section's heading is the target of the strip's "Protection (est.)" cell (focusable, kept
+  // The section's heading is the target of the protection lead (focusable, kept
   // focused across re-renders); the estimate's basis stands next to its chip (step 3, #7).
   function protectionSection(row) {
     const protection = need("protection");
-    const heading = (status) => el("h3", { id: "protection", tabindex: "-1", "data-focus-key": "protection" },
+    const heading = (status) => el("h2", { id: "protection", tabindex: "-1", "data-focus-key": "protection" },
       UI.protection.title, status ? [" ", el("span", { class: "chip" }, status)] : null);
     if (!ready(protection)) return el("section", { class: "card-section" }, heading(null), pending(protection));
     const names = row.substances ? row.substances.split("; ") : [];
@@ -620,10 +620,24 @@ export function createLookup(panel, {
         el("ul", null, UI.protection.caveats.map((caveat) => el("li", null, caveat)))));
   }
 
-  // A link within the card: focus and show the protection section's heading (not a hash change,
-  // which the page's URL state would keep). Data arriving later (the 5 MB documents index) renders
-  // above the section and would push it off screen: render() shows it again while the jump is
-  // pending, until the next view or the user scrolls or types.
+  // More details (F · Spacious, phase 4): open it and focus the element selector names (a link in
+  // it, else the element), for the Status block's "and n more" and the protection lead.
+  function openMore(selector) {
+    const details = panel.querySelector("details.more-details");
+    if (!details) return null;
+    details.open = true;
+    const target = panel.querySelector(selector);
+    const focusable = target?.matches("a, button, [tabindex]") ? target : target?.querySelector("a") ?? target;
+    if (focusable && !focusable.matches("a, button, [tabindex]")) focusable.tabIndex = -1;
+    focusable?.focus({ preventScroll: true });
+    focusable?.scrollIntoView({ block: "start" });
+    return focusable;
+  }
+
+  // A link within the card: open More details, focus and show the protection section's heading (not
+  // a hash change, which the page's URL state would keep). Data arriving later (the 5 MB documents
+  // index) renders above the section and would push it off screen: render() shows it again while
+  // the jump is pending, until the next view or the user scrolls or types.
   let pendingJump = false;
   const showProtection = () => panel.querySelector("#protection")?.closest("section")?.scrollIntoView({ block: "start" });
   for (const type of ["wheel", "touchstart", "keydown"]) {
@@ -635,25 +649,30 @@ export function createLookup(panel, {
     const heading = panel.querySelector("#protection");
     if (!heading) return;
     event.preventDefault();
+    heading.closest("details").open = true;
     heading.focus({ preventScroll: true });
     showProtection();
     pendingJump = true;
   }
 
-  // The strip's "Protection (est.)" cell (step 3, #7): the estimate's short form, a link to the
-  // section, then orphan exclusivity still running. Medicines never approved have no estimate.
-  function protectionCell(row) {
+  // The Protection and copies block's lead (F · Spacious, phase 4; the answer strip's "Protection
+  // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after the medicine's own,
+  // as a link to the estimate in More details, then, muted, a copy's reference's years and orphan
+  // exclusivity still running. Medicines never approved have no estimate (null).
+  function protectionLead(row) {
     if (!row.marketing_authorisation_date) return null;
     const protection = need("protection");
-    if (!ready(protection)) return [UI.card.strip.protection, pending(protection)];
-    const glance = protectionGlance(protection.byProduct.get(row.ema_product_number), protection.orphan.get(row.ema_product_number) ?? [], snapshotDate);
+    if (!ready(protection)) return pending(protection);
+    const protectionRow = protection.byProduct.get(row.ema_product_number);
+    const glance = protectionGlance(protectionRow, protection.orphan.get(row.ema_product_number) ?? [], snapshotDate);
     if (!glance) return null;
-    return [UI.card.strip.protection, [
-      el("a", { href: "#protection", class: "strip-link", onclick: jumpToProtection }, glance.value, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
+    return el("div", { class: "protection-lead" },
+      el("p", { class: "answer-value" },
+        el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection }, glance.value, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
+        isCopy(protectionRow) ? null : [" ", el("span", { class: "lead-estimate" }, UI.card.estimate)]),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
-      glance.reference ? el("span", { class: "strip-note" }, glance.reference) : null,
-      glance.orphan ? el("span", { class: "strip-note" }, glance.orphan) : null,
-    ]];
+      glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,
+      glance.orphan ? el("p", { class: "lead-note" }, glance.orphan) : null);
   }
 
   // The medicines of a medicine's substance set (setGroups(); equivalents: none while they load).
@@ -679,7 +698,7 @@ export function createLookup(panel, {
     return countedFromName(reference, firstOfSet(reference, referenceRow), referenceRow, referenceDate(referenceRow));
   }
 
-  // Under the strip (step 3, #7): the authorized generics and biosimilars of the medicine's
+  // In the Protection and copies block (step 3, #7): the authorized generics and biosimilars of the medicine's
   // substance set (medicines approved but not copies themselves; named as the substance's when this
   // medicine is not its first), then, on a copy's card (a hybrid's too) or when the set was first approved as
   // another medicine more than 30 days before (Wegovy: Ozempic; copiesLinePlan()), the set's other authorized medicines
@@ -765,52 +784,66 @@ export function createLookup(panel, {
       : null;
     // A negative opinion reads "not" authorized, not "not yet" (step 2, #11), once EMA's rows have loaded.
     const opinion = medicine?.opinion_status ?? null;
-    // Order for a talk or poster: the answer (with any namesake), holder, since when and status in
-    // the strip, what for (the therapeutic areas) right under it, and the SmPC / EPAR buttons on the
-    // first phone screen; then the indication's lead above the documents list.
-    return el("article", { class: "card" },
-      kicker("medicine"),
-      title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status), opinion))),
-      sentence ? el("p", { class: "dek" }, sentence) : null,
-      namesakeNotes(namesakes),
-      strip([
-        [UI.card.strip.company, holderOf(number, medicines) ?? pending(medicines), true],
-        // Never-approved medicines (refused, withdrawn applications) have no approval cell.
-        authorized || row.marketing_authorisation_date
-          ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(row.marketing_authorisation_date) ?? NOT_STATED]
-          : null,
-        [UI.card.strip.status, [
-          statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion),
-          besideStatus.length ? el("span", { class: "strip-flags" }, besideStatus.map(flagChip)) : null,
-        ]],
-        protectionCell(row),
-      ]),
-      copiesLines(row),
-      el("dl", { class: "areas-line" }, el("dt", null, UI.card.areas), el("dd", null, areaLinks(number, areas, conditions))),
+    // F · Spacious, phase 4 (Miller's Law / chunking; Peak-End; Von Restorff): the answer headline,
+    // then three blocks, Status (the status and its sentence, since, company, the first conditions),
+    // Protection and copies (the estimate's short form as its lead, the copies lines) and Documents
+    // (the product information, EPAR and overview buttons), which end the first phone screen; then
+    // one More details disclosure holding the rest (a disclosure per block would add a 44px row
+    // before the buttons for each). The answer's parts (authorized or not, since, protected until)
+    // are the card's strong type; its chips and badges are neutral.
+    // The Status block's lead: the status pill, then since when (approved when, once it ended) in
+    // the answer's type, then its qualifiers; never-approved medicines have no date.
+    const dated = authorized || row.marketing_authorisation_date;
+    const statusBlock = cardBlock("status",
+      el("p", { class: "status-lead" },
+        statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion),
+        dated ? [" ", el("span", { class: "status-since" }, authorized ? UI.card.since : UI.card.approvedOn, " ",
+          el("span", { class: "answer-value" }, formatDate(row.marketing_authorisation_date) ?? NOT_STATED))] : null,
+        besideStatus.length ? [" ", el("span", { class: "status-flags" }, besideStatus.map(flagChip))] : null),
+      sentence ? el("p", { class: "block-sentence" }, sentence) : null,
+      el("dl", { class: "block-facts" },
+        blockFact(UI.card.company, holderOf(number, medicines) ?? pending(medicines)),
+        blockFact(UI.card.areas, areaNames(number, areas, conditions))),
       registerDiffers
         ? el("p", null, el("span", { class: "chip warning" },
           externalLink(UI.register.chip(registerRow.register_status, registerRow.register_last_decision_date), registerRow.register_url)))
         : null,
-      registerDiffers ? el("p", { class: "muted" }, UI.register.note) : null,
-      primary.length ? el("div", { class: "doc-buttons" }, primary.map(documentButton)) : null,
-      el("dl", { class: "facts card-section what-for" },
-        ready(medicines) ? indicationFact(medicine?.therapeutic_indication) : fact(UI.card.indication, pending(medicines))),
-      documentsSection(documents, groups, rest, medicine, namesakeDocuments),
-      el("dl", { class: "facts card-section" },
-        fact(UI.card.substances, substances.map((link, position) => [link, position < substances.length - 1 ? "; " : ""])),
-        fact(UI.card.company, companyFact(number)),
-        // A type without a badge (Other) as text with its explanation.
-        fact(UI.card.type, [
-          typeBadges({ medicine_type: row.medicine_type }).length
-            ? null
-            : [el("span", { class: "type-explained" }, row.medicine_type, " ", el("span", { class: "muted" }, typeText)), " "],
-          explainedTypes(medicine ?? row, typeText),
-          flags.map((flag) => [" ", flagChip(flag)]),
-        ]),
-        fact(UI.modality.label, modalityFact(number, atc)),
-        ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null),
-      ),
-      protectionSection(row));
+      registerDiffers ? el("p", { class: "muted" }, UI.register.note) : null);
+    const [lead, copies] = [protectionLead(row), copiesLines(row)];
+    const protectionBlock = lead || copies?.length ? cardBlock("protection", lead, copies) : null;
+    // A medicine never authorized has no buttons: its documents (a refusal report) are the block.
+    const documentsBlock = cardBlock("documents", primary.length
+      ? el("div", { class: "doc-buttons" }, primary.map(documentButton))
+      : documentsList(documents, groups, rest, medicine, namesakeDocuments));
+    const more = el("details", { class: "more-details", "data-key": "more-details" },
+      el("summary", null, el("span", { class: "more-title" }, UI.card.more.summary), " ", el("span", { class: "more-hint" }, UI.card.more.hint)),
+      el("section", { class: "card-section" },
+        el("h2", null, UI.card.more.about),
+        el("dl", { class: "facts what-for" },
+          ready(medicines) ? indicationFact(medicine?.therapeutic_indication) : fact(UI.card.indication, pending(medicines)),
+          fact(UI.card.areas, areaLinks(number, areas, conditions)),
+          fact(UI.card.substances, substances.map((link, position) => [link, position < substances.length - 1 ? "; " : ""])),
+          fact(UI.card.company, companyFact(number)),
+          // A type without a badge (Other) as text with its explanation.
+          fact(UI.card.type, [
+            typeBadges({ medicine_type: row.medicine_type }).length
+              ? null
+              : [el("span", { class: "type-explained" }, row.medicine_type, " ", el("span", { class: "muted" }, typeText)), " "],
+            explainedTypes(medicine ?? row, typeText),
+            flags.map((flag) => [" ", flagChip(flag)]),
+          ]),
+          fact(UI.modality.label, modalityFact(number, atc)),
+          ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null))),
+      protectionSection(row),
+      primary.length
+        ? el("section", { class: "card-section" }, el("h2", null, UI.card.more.allDocuments), documentsList(documents, groups, rest, medicine, namesakeDocuments))
+        : null);
+    return el("article", { class: "card medicine-card" },
+      kicker("medicine"),
+      title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status), opinion))),
+      namesakeNotes(namesakes),
+      el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, statusBlock, protectionBlock, documentsBlock)),
+      more);
   }
 
   // A result row's ATC codes (atcCode()): display-only badges with the medicines table's tooltip
@@ -966,7 +999,7 @@ export function createLookup(panel, {
     const medicines = need("medicines");
     const rows = [...substance.products].sort(byDate(1));
     // Step 3 (#8): the same substance under another spelling in EMA's data (dasatinib: Sprycel is
-    // "dasatinib (anhydrous)"), each a link to its card. The answer (headline, dek, strip) is the
+    // "dasatinib (anhydrous)"), each a link to its card. The answer (headline, dek, Status block) is the
     // substance's under all its spellings (substanceGroup()), so its dates and counts agree; the
     // timeline and the list stay this spelling's.
     const siblings = siblingSubstances(key, index.substances, equivalentsNow() ?? NO_EQUIVALENTS);
@@ -1001,17 +1034,21 @@ export function createLookup(panel, {
       title(headlineNodes(UI.headline.substance(substance.name, authorized))),
       el("p", { class: "dek" }, UI.substance.firstApproval(first?.marketing_authorisation_date, first?.name_of_medicine)),
       siblingLines,
-      strip([
-        [UI.card.strip.company, holders ?? pending(companies), true],
-        first ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(first.marketing_authorisation_date)] : null,
-        // None authorized now: the statuses themselves (e.g. Withdrawn), which say more than "0 authorized".
-        [UI.card.strip.status, authorized > 0
-          ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
-          : el("span", { class: "badges" }, statusesByFrequency(groupRows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))))],
-      ]),
-      substanceModality(rows, key),
+      // Its Status block, as the medicine card's (F · Spacious, phase 4): the medicines authorized now
+      // (none: their statuses, which say more than "0 authorized") and since when, then its company
+      // and modality.
+      el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, cardBlock("status",
+        el("p", { class: "status-lead" },
+          authorized > 0
+            ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
+            : statusesByFrequency(groupRows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))),
+          first ? [" ", el("span", { class: "status-since" }, authorized ? UI.card.since : UI.card.approvedOn, " ",
+            el("span", { class: "answer-value" }, formatDate(first.marketing_authorisation_date)))] : null),
+        el("dl", { class: "block-facts" },
+          blockFact(UI.card.company, holders ?? pending(companies)),
+          blockFact(UI.modality.label, substanceModality(rows, key)))))),
       timelineBlock(rows, medicines),
-      el("h3", { id: "results-substance" }, siblings.length ? UI.substance.productsListed(rows.length, substance.name) : UI.substance.products(rows.length)),
+      el("h2", { id: "results-substance" }, siblings.length ? UI.substance.productsListed(rows.length, substance.name) : UI.substance.products(rows.length)),
       // What each medicine is for (its therapeutic areas); the substance line only where it differs.
       resultTable(rows.map((row) => ({ row })), medicines, "results-substance", {
         areas: true,

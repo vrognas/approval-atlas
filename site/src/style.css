@@ -771,6 +771,12 @@ button {
   color: var(--status-pending-text);
 }
 
+/* The "authorized" of an authorized medicine (F · Spacious, phase 4, Von Restorff: the answer is the
+   card's one strong colour, as "not" and "not yet" are). */
+.tone-authorized {
+  color: var(--status-authorized);
+}
+
 /* A qualifier closing a headline ("(national authorizations are not included)."): on its own line,
    in the dek's size and colour, so the answer stays short on a phone. */
 .tone-aside {
@@ -4254,22 +4260,21 @@ button.area-chip:focus-visible .area-chip-fill {
   outline-offset: 2px;
 }
 
-/* The medicine card on phones: the first three conditions, the rest behind "Show n more"
-   (lookup.js areaLinks(); review 2026-09-29), so the product information button stays near the
-   first screen. */
-.areas-more {
-  display: none;
+/* The medicine card's Status block: its first three conditions, then "and n more", a button that
+   reads as a link and opens More details at the full list (lookup.js areaNames(); F · Spacious,
+   phase 4). */
+.toggle.areas-more {
+  padding: 0;
+  color: var(--link);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
-@media (max-width: 720px) {
-  .card-areas:not(.areas-all) > .term-extra {
-    display: none;
-  }
-
-  .card-areas:not(.areas-all) > .areas-more {
-    display: inline-block;
-    min-height: 24px;
-  }
+.toggle.areas-more:hover {
+  color: var(--link-hover);
 }
 
 .toggle {
@@ -5107,7 +5112,9 @@ table.activity {
   outline: none;
 }
 
-.card h3 {
+/* A card's section headings: h2 under the medicine and substance cards' h1 (F · Spacious, phase 4),
+   h3 on the other lookup pages. */
+.card :is(h2, h3) {
   margin: 16px 0 4px;
   font-size: 1rem;
   font-weight: 600;
@@ -5133,159 +5140,238 @@ table.activity {
   background: var(--surface);
 }
 
-.card-section > h3:first-child {
+.card-section > :is(h2, h3):first-child {
   margin-top: 0;
 }
 
-/* Answer strip: Holder, Since, Status. Not clipped: the status's explanation shows below it. Two
-   columns on narrow cards (phones): the second (Status) at least as wide as its pill (a substance's "2 authorized"
-   crossed the strip's border at 320px), the date beside it wrapping if it must. */
-.strip {
+/* F · Spacious, phase 4 (Miller's Law / chunking, Law of Common Region): the medicine card's blocks,
+   Status, Protection and copies and Documents, each a framed region under its heading (lookup.js
+   cardBlock()). One column on phones; from a 720px frame (a size container, as the page's width,
+   not the viewport's, sets the card's) Status beside Protection, Documents across. */
+.card-blocks-frame {
+  container-type: inline-size;
+  margin: 16px 0 0;
+}
+
+.card-blocks {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(min-content, 1fr);
-  margin: 0;
+  gap: 12px;
+}
+
+@container (min-width: 720px) {
+  .card-blocks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Documents across; Status too when no Protection block follows it (never approved) or it is
+     the only block (the substance card). */
+  .card-blocks > .block-documents,
+  .card-blocks > .block-status:has(+ .block-documents),
+  .card-blocks > .card-block:only-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.card-block {
+  min-width: 0;
+  padding: 14px 16px 16px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
 }
 
-.strip > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px 14px;
-}
-
-/* 320px: room for a date beside a status pill ("20 Nov 2006" beside "2 authorized"). */
-@media (max-width: 360px) {
-  .strip > div {
-    padding-inline: 11px;
-  }
-}
-
-.strip-wide {
-  grid-column: 1 / -1;
-  border-bottom: 1px solid var(--grid);
-}
-
-.strip > div:not(.strip-wide):not(:last-child) {
-  border-right: 1px solid var(--grid);
-}
-
-.strip dt {
+.card .block-title {
+  margin: 0 0 10px;
+  line-height: 1.25rem;
   color: var(--ink-secondary);
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.strip dd {
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+.card .block-sentence {
+  margin: 0 0 12px;
+  color: var(--ink-secondary);
 }
 
-/* Every strip's frame is a size container, as the resizable sidebar, not the viewport, sets the
-   card's width (step 3 review; step 4 review: at 1024px with a 460px sidebar a substance's
-   "13 authorized" crossed the three-cell strip's border by 39px). Three cells in three columns
-   from a 560px frame, Status at least as wide as its pill. */
-.strip-frame {
-  container-type: inline-size;
-  margin: 16px 0;
-}
-
-@container (min-width: 560px) {
-  .strip {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(min-content, 1fr);
-  }
-
-  .strip-wide {
-    grid-column: auto;
-    border-bottom: 0;
-  }
-
-  .strip > div:not(:last-child) {
-    border-right: 1px solid var(--grid);
-  }
-}
-
-/* A medicine's strip with its protection cell (step 3): Company, then Since | Status, then
-   Protection across; four columns from 840px, where a small column holds the status pill (123px)
-   and "Until 2028–2033" (137px). The selectors outweigh the three-cell strip's rules. */
-.strip.strip-4 {
-  grid-template-columns: minmax(0, 1fr) minmax(min-content, 1fr);
-}
-
-.strip.strip-4 > .strip-wide {
-  grid-column: 1 / -1;
-  border-right: 0;
-  border-bottom: 1px solid var(--grid);
-}
-
-.strip.strip-4 > div:not(.strip-wide):nth-last-child(2) {
-  border-right: 0;
-}
-
-.strip.strip-4 > div:last-child {
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--grid);
-}
-
-@container (min-width: 840px) {
-  .strip.strip-4 {
-    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
-  }
-
-  .strip.strip-4 > .strip-wide {
-    grid-column: auto;
-    border-right: 1px solid var(--grid);
-    border-bottom: 0;
-  }
-
-  .strip.strip-4 > div:not(.strip-wide):nth-last-child(2) {
-    border-right: 1px solid var(--grid);
-  }
-
-  .strip.strip-4 > div:last-child {
-    grid-column: auto;
-    border-top: 0;
-  }
-}
-
-/* Step 4 (#9): the status's qualifiers (conditional, exceptional circumstances, additional
-   monitoring) as chips under its pill; their text wraps, so the widest word, not the chip, sets
-   the Status column's least width. */
-.strip-flags {
+/* The Status block's lead: the status pill, "since" and the date, then the qualifier chips, wrapping
+   as whole items. */
+.card .status-lead {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 12px;
 }
 
-.strip-flags .chip {
-  border-radius: 8px;
-  white-space: normal;
+.status-since {
+  color: var(--ink-secondary);
 }
 
-/* The protection cell: a link to the estimate below, then orphan exclusivity still running. */
-.strip-note {
-  display: block;
+.status-since .answer-value {
+  color: var(--ink);
+}
+
+/* A block's facts, the label over the value; side by side where each has 9rem (a 390px phone). */
+.block-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+}
+
+.block-facts > div {
+  min-width: 0;
+}
+
+.block-facts dt {
+  margin: 0 0 2px;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.block-facts dd {
+  margin: 0;
+}
+
+/* Von Restorff: the answer's parts (since when, protected until) in the card's strong type; the
+   headline's answer word in the status's colour (.tone-authorized, .tone-negative). */
+.answer-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.card p.answer-value {
+  margin: 0;
+}
+
+.lead-estimate {
   color: var(--ink-secondary);
   font-size: 0.875rem;
   font-weight: 400;
 }
 
-/* Copies of the medicine's substance and its first central approval, under the strip. */
-.card .copies {
-  margin: 8px 0 0;
+.card .lead-note {
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
 }
 
-.card .copies + .areas-line {
-  margin-top: 12px;
+/* Step 4 (#9): the status's qualifiers (conditional, exceptional circumstances, additional
+   monitoring) as chips beside its pill; neutral (a hairline, the secondary ink, no fill), so the
+   status stays the block's one colour (Von Restorff); their text wraps. */
+.status-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.status-flags .chip {
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-secondary);
+  font-size: 0.75rem;
+  white-space: normal;
+}
+
+/* A company monogram in a block: neutral (the slate hue), not its brand colour. */
+.card-block .company-badge {
+  --hue-1: var(--slate-1);
+  --hue-text: var(--slate-text);
+}
+
+.block-protection .copies {
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+}
+
+.card .block-protection .protection-lead + .copies {
+  margin-top: 10px;
+}
+
+.block-documents .doc-buttons {
+  margin: 0;
+}
+
+/* More details: one disclosure after the blocks, the rest of the card (its hint says what). */
+.more-details {
+  margin: 12px 0 0;
+}
+
+.more-details > summary {
+  padding: 12px 16px;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.more-details > summary:hover .more-title {
+  color: var(--link-hover);
+}
+
+.more-title {
+  color: var(--link);
+  font-weight: 600;
+}
+
+.more-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
+/* Phones: the product information and EPAR buttons end the first screen (Peak-End), so the blocks
+   are compact: tighter padding, the copies lines at 14px, the buttons' lines at 1.3. */
+@media (max-width: 720px) {
+  .card-blocks {
+    gap: 10px;
+  }
+
+  .card-block {
+    padding: 10px 14px 12px;
+  }
+
+  .card .block-title {
+    margin-bottom: 6px;
+  }
+
+  .card .status-lead {
+    margin-bottom: 10px;
+  }
+
+  .card .block-sentence {
+    margin-bottom: 10px;
+  }
+
+  .block-facts {
+    gap: 10px 12px;
+  }
+
+  .block-protection .copies {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .card .block-protection .protection-lead + .copies {
+    margin-top: 8px;
+  }
+
+  .block-documents .doc-button {
+    min-height: 48px;
+    padding: 6px 12px;
+    line-height: 1.3;
+  }
+}
+
+/* Copies of the medicine's substance and its first central approval (the Protection block). */
+.card .copies {
+  margin: 8px 0 0;
 }
 
 .card .protection-basis {
@@ -5544,29 +5630,7 @@ details > summary {
   font-weight: 600;
 }
 
-/* Medicine card: what the medicine is for, its therapeutic areas right under the answer strip,
-   then (after the SmPC / EPAR buttons) the indication's lead, the full text behind "Show full
-   indication". */
-.areas-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
-  margin: -4px 0 16px;
-}
-
-.areas-line dt {
-  color: var(--ink-secondary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.areas-line dd {
-  margin: 0;
-}
-
+/* Medicine card, More details: the indication's lead, the full text behind "Show full indication". */
 .card .indication-lead {
   margin: 0;
 }
@@ -5624,7 +5688,7 @@ details > summary {
   vertical-align: 1px;
 }
 
-.protection h3 .chip {
+.protection h2 .chip {
   max-width: 100%;
   margin-left: 4px;
   vertical-align: 1px;
@@ -6037,8 +6101,8 @@ mark {
     min-height: 44px;
   }
 
-  /* Companies: the company page's names, and the company links of holder displays (tables, answer
-     strip; the negative margin keeps the row's layout, as the medicine names'). */
+  /* Companies: the company page's names, and the company links of holder displays (tables, the
+     cards' Status blocks; the negative margin keeps the row's layout, as the medicine names'). */
   .company-names a {
     display: inline-flex;
     align-items: center;
@@ -6097,8 +6161,15 @@ mark {
     z-index: 5;
   }
 
-  /* The answer strip's "Protection (est.)" link (step 3). */
-  a.strip-link {
+  /* The medicine card's Status block: "and n more" (F · Spacious, phase 4). */
+  .toggle.areas-more {
+    display: inline-block;
+    margin: -10px 0;
+    padding: 10px 0;
+  }
+
+  /* The medicine card's protection lead (step 3; F · Spacious, phase 4). */
+  a.lead-link {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
