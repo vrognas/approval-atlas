@@ -98,7 +98,8 @@ export function createThemeToggle(button, { onChange = () => {} } = {}) {
     const shown = shownScheme(theme, device.matches);
     button.replaceChildren(themeIcon(shown));
     button.setAttribute("aria-label", UI.theme.button(shown));
-    button.title = UI.theme.hint(theme, shown);
+    // "(remembered on this device)" only when the press stores a choice (back to Auto removes it).
+    button.title = UI.theme.hint(theme, shown, nextTheme(theme, device.matches) !== "auto");
   }
 
   button.addEventListener("click", () => {
