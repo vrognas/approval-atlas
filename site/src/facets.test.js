@@ -1,11 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { buildProducts } from "./approvals.js";
+import { equivalentSetKey, substanceEquivalents, substanceSetCount } from "./copies.js";
+import { buildConditions } from "./search.js";
 import { DEFAULT_STATE } from "./url.js";
 import { atcClassesAt } from "./atc.js";
 import { makePredicates } from "./filters.js";
 import {
   FACET_VALUES,
   OTHER_KEY,
+  conditionRows,
+  conditionsCardState,
   STACK_HUES,
   TYPE_ORDER,
   defaultSortDirection,
@@ -20,7 +26,6 @@ import {
   sortActivityRows,
   statusBreakdown,
   tokenLabel,
-  topAreas,
   topKeys,
   topWithOther,
   typeSplit,
@@ -344,35 +349,178 @@ test("stack hues: eight damped hues, neighbours far apart", () => {
   assert.deepEqual(STACK_HUES, ["blue", "gold", "teal", "red", "indigo", "olive", "pink", "sky"]);
 });
 
-test("the most common conditions: areas by products, with the MeSH descriptor when known", () => {
-  const descriptorOf = new Map([["Psoriasis", "D011565"]]);
-  assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf), [
-    { term: "Psoriasis", count: 3, authorized: 3, descriptorUi: "D011565" },
-    { term: "Arthritis, Psoriatic", count: 1, authorized: 1, descriptorUi: null },
+// The conditions card (redesign 2026-09-29; review 2026-09-29: counted as the condition page each
+// row opens counts, lookup.js conditionResults()): one row per MeSH descriptor of an EMA term (its
+// spellings one row: Cancer and Neoplasms), its medicines those buildConditions() gives it (tagged
+// with it or a narrower EMA term) among the medicines shown: every status (count), those with
+// status Authorised (authorized) and their distinct substance sets (treatments; step 4, #10;
+// setKeyOf: a product's set, equivalent spellings joined). A term without a descriptor counts alone.
+const conditionProduct = (id, areas, set, status = "Authorised") => product(id, { areas, medicine_status: status, set });
+const conditionProducts = [
+  conditionProduct("A1", ["Psoriasis"], "ustekinumab"),
+  conditionProduct("A2", ["Arthritis, Psoriatic"], "apremilast"),
+  conditionProduct("A3", ["Cancer"], "s3"),
+  conditionProduct("A4", ["Neoplasms"], "s4", "Withdrawn"),
+  conditionProduct("A5", ["Breast Neoplasms"], "s5"),
+  conditionProduct("A6", ["Unmatched term"], "s6"),
+];
+const conditionDescriptorOf = new Map([
+  ["Psoriasis", "D1"], ["Arthritis, Psoriatic", "D2"], ["Cancer", "D3"], ["Neoplasms", "D3"], ["Breast Neoplasms", "D4"], ["Unmatched term", null],
+]);
+// buildConditions() descriptors: Psoriasis counts Arthritis, Psoriatic (narrower in MeSH), Neoplasms
+// Breast Neoplasms.
+const conditionDescriptors = new Map([
+  ["D1", { name: "Psoriasis", products: new Set(["A1", "A2"]) }],
+  ["D2", { name: "Arthritis, Psoriatic", products: new Set(["A2"]) }],
+  ["D3", { name: "Neoplasms", products: new Set(["A3", "A4", "A5"]) }],
+  ["D4", { name: "Breast Neoplasms", products: new Set(["A5"]) }],
+]);
+const conditionOptions = { descriptorOf: conditionDescriptorOf, descriptors: conditionDescriptors, setKeyOf: (item) => item.set };
+
+test("condition rows: per MeSH descriptor as its condition page counts, with its narrower conditions", () => {
+  // Withdrawn A4 counts among Neoplasms' medicines, not as authorized nor as a treatment; ties
+  // (Neoplasms and Psoriasis, then the three with one) by name.
+  assert.deepEqual(conditionRows(conditionProducts, conditionOptions), {
+    rows: [
+      { key: "D3", name: "Neoplasms", term: "Neoplasms", descriptorUi: "D3", count: 3, authorized: 2, treatments: 2 },
+      { key: "D1", name: "Psoriasis", term: "Psoriasis", descriptorUi: "D1", count: 2, authorized: 2, treatments: 2 },
+      { key: "D2", name: "Arthritis, Psoriatic", term: "Arthritis, Psoriatic", descriptorUi: "D2", count: 1, authorized: 1, treatments: 1 },
+      { key: "D4", name: "Breast Neoplasms", term: "Breast Neoplasms", descriptorUi: "D4", count: 1, authorized: 1, treatments: 1 },
+      { key: "Unmatched term", name: "Unmatched term", term: "Unmatched term", descriptorUi: null, count: 1, authorized: 1, treatments: 1 },
+    ],
+    total: 5,
+    unlisted: 0,
+    anyAuthorized: true,
+  });
+  // Only the medicines shown: without A5, Neoplasms has 2 (1 authorized) and Breast Neoplasms none.
+  const shown = conditionRows(conditionProducts.filter((item) => item.ema_product_number !== "A5"), conditionOptions).rows;
+  assert.deepEqual(shown.map((row) => [row.name, row.count, row.authorized]), [
+    ["Psoriasis", 2, 2], ["Arthritis, Psoriatic", 1, 1], ["Neoplasms", 2, 1], ["Unmatched term", 1, 1],
   ]);
-  // Phase 4c review: every status counts, and how many are authorized is kept (the condition page
-  // opens with those): the withdrawn P4 counts, but not as authorized.
-  assert.deepEqual(topAreas(products.slice(0, 4), descriptorOf)[0], { term: "Psoriasis", count: 4, authorized: 3, descriptorUi: "D011565" });
-  assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf, 1).map((row) => row.term), ["Psoriasis"]);
-  assert.deepEqual(topAreas([], descriptorOf), []);
-  // Phase 4f: with a therapeutic area filter, only the terms within it (within(term)).
-  assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf, 8, (term) => term !== "Psoriasis").map((row) => row.term), ["Arthritis, Psoriatic"]);
+  // A descriptor named by one of its terms only: the chips' term is that one (Cancer).
+  const cancerOnly = new Map([...conditionDescriptorOf].filter(([term]) => term !== "Neoplasms"));
+  const [cancer] = conditionRows([conditionProducts[2]], { ...conditionOptions, descriptorOf: cancerOnly }).rows;
+  assert.deepEqual([cancer.name, cancer.term], ["Neoplasms", "Cancer"]);
+  // A medicine without substances adds no treatment.
+  assert.equal(conditionRows(conditionProducts, { ...conditionOptions, setKeyOf: () => null }).rows[0].treatments, 0);
+  assert.deepEqual(conditionRows([], conditionOptions), { rows: [], total: 0, unlisted: 0, anyAuthorized: false });
+  // Phase 4f: with a therapeutic area filter, only the conditions with a term within it (within(term)).
+  const within = (term) => term !== "Psoriasis" && term !== "Neoplasms";
+  assert.deepEqual(conditionRows(conditionProducts, { ...conditionOptions, within }).rows.map((row) => row.name), [
+    "Neoplasms", "Arthritis, Psoriatic", "Breast Neoplasms", "Unmatched term",
+  ]);
 });
 
-// Step 4 (#10): how many distinct treatments, not only marketing authorizations (Giant Cell Tumor
-// of Bone: 15 medicines, 1 substance). setKeyOf: a product's substance set (equivalent spellings
-// joined); counted over the authorized ones, as the count beside it.
-test("the most common conditions: distinct substance sets of the authorized medicines", () => {
-  const descriptorOf = new Map();
-  const sets = new Map([["P1", "ustekinumab"], ["P2", "ustekinumab"], ["P3", "apremilast"], ["P4", "efalizumab"]]);
-  const setKeyOf = (product) => sets.get(product.ema_product_number) ?? null;
-  const [psoriasis, arthritis] = topAreas(products.slice(0, 4), descriptorOf, 8, null, setKeyOf);
-  // Withdrawn P4 (efalizumab) counts among the medicines, not among the substances.
-  assert.deepEqual(psoriasis, { term: "Psoriasis", count: 4, authorized: 3, substances: 2, descriptorUi: null });
-  assert.deepEqual(arthritis, { term: "Arthritis, Psoriatic", count: 1, authorized: 1, substances: 1, descriptorUi: null });
-  // A medicine without substances adds none.
-  assert.equal(topAreas(products.slice(0, 3), descriptorOf, 8, null, () => null)[0].substances, 0);
+// No authorized medicine among the conditions: nothing to rank.
+test("condition rows: anyAuthorized says whether some condition has an authorized medicine", () => {
+  const withdrawn = conditionProducts.map((item) => ({ ...item, medicine_status: "Withdrawn" }));
+  const result = conditionRows(withdrawn, conditionOptions);
+  assert.equal(result.anyAuthorized, false);
+  assert.equal(result.total, 5);
+  assert.equal(conditionRows(withdrawn, { ...conditionOptions, direction: "asc" }).unlisted, 5);
 });
+
+// What the card shows: a line when there is no condition, or when none has an authorized medicine
+// (review 2026-09-29: the ranking then carried no information, A to Z under "the most treatments"),
+// else the table, its header (the sort buttons) kept even when fewest first lists no row (review
+// 2026-09-29: hiding it left no way back to most first).
+test("the conditions card shows the table, a line when nothing is ranked, or its empty line", () => {
+  assert.equal(conditionsCardState({ total: 0, unlisted: 0, anyAuthorized: false }), "none");
+  assert.equal(conditionsCardState({ total: 5, unlisted: 0, anyAuthorized: false }), "unranked");
+  assert.equal(conditionsCardState({ total: 0, unlisted: 5, anyAuthorized: false }), "unranked");
+  assert.equal(conditionsCardState({ total: 0, unlisted: 5, anyAuthorized: true }), "table");
+  assert.equal(conditionsCardState({ total: 5, unlisted: 0, anyAuthorized: true }), "table");
+});
+
+test("condition rows: by treatments or authorized medicines, most or fewest first; ties by the other count, then name", () => {
+  const descriptorOf = new Map();
+  const row = (id, areas, set, status = "Authorised") => product(id, { areas, medicine_status: status, set });
+  const rows = [
+    // A: 2 treatments, 3 authorized; B: 2 treatments, 2 authorized; C: 1 treatment, 3 authorized;
+    // D: 1 treatment, 3 authorized (C and D tie on both: by name); W: withdrawn only, 0 of both.
+    row("1", ["A", "C", "D"], "s1"), row("2", ["A", "C", "D"], "s1"), row("3", ["A", "B"], "s2"),
+    row("4", ["B"], "s3"), row("5", ["C", "D"], "s1"), row("6", ["W"], "s4", "Withdrawn"),
+  ];
+  const setKeyOf = (item) => item.set;
+  const order = (options) => conditionRows(rows, { descriptorOf, setKeyOf, ...options }).rows.map((item) => item.name);
+  // Default: treatments, most first; ties by authorized medicines (most first), then by name.
+  assert.deepEqual(order({}), ["A", "B", "C", "D", "W"]);
+  assert.deepEqual(order({ sort: "treatments", direction: "desc" }), ["A", "B", "C", "D", "W"]);
+  // Authorized medicines, most first: A, C, D have 3 (A has more treatments), then B.
+  assert.deepEqual(order({ sort: "medicines", direction: "desc" }), ["A", "C", "D", "B", "W"]);
+  // Fewest first: the other count fewest first too, names still A to Z; a condition without an
+  // authorized treatment (W) is never listed as having the fewest.
+  assert.deepEqual(order({ sort: "treatments", direction: "asc" }), ["C", "D", "B", "A"]);
+  assert.deepEqual(order({ sort: "medicines", direction: "asc" }), ["B", "C", "D", "A"]);
+  assert.deepEqual(conditionRows(rows, { descriptorOf, setKeyOf, direction: "asc" }).unlisted, 1);
+  // limit: the first rows; total: every row listed in that order.
+  assert.deepEqual(conditionRows(rows, { descriptorOf, setKeyOf, limit: 2 }), {
+    rows: conditionRows(rows, { descriptorOf, setKeyOf }).rows.slice(0, 2),
+    total: 5,
+    unlisted: 0,
+    anyAuthorized: true,
+  });
+  assert.equal(conditionRows(rows, { descriptorOf, setKeyOf, direction: "asc", limit: 2 }).total, 4);
+});
+
+// The conditions card on the real data: every row's counts are its condition page's (buildConditions(),
+// lookup.js conditionResults(): its medicines tagged with it or a narrower condition, those
+// authorized and their distinct substance sets; review 2026-09-29: counting the term alone, 182 of
+// 659 rows disagreed with their page, and fewest first opened with broad terms such as Infections,
+// 1 treatment against its page's 158), one row per descriptor (review 2026-09-29: Cancer and
+// Neoplasms, Infection and Infections were two rows each). AGENTS.md: Arthritis, Rheumatoid, 47
+// authorized medicines of 16 active substances or combinations (2026-09-28 data).
+const dataDir = new URL("../public/data/", import.meta.url);
+const read = (file) => JSON.parse(readFileSync(new URL(file, dataDir), "utf8"));
+test(
+  "condition rows on the real data: the condition page's counts, one row per descriptor; the fewest never a condition without an authorized treatment",
+  { skip: existsSync(new URL("ema_medicines.json", dataDir)) ? false : "site/public/data not found: run the pipeline first" },
+  () => {
+    const branchRows = read("ema_therapeutic_area_branches.json");
+    const areaRows = read("ema_medicine_therapeutic_areas.json");
+    const real = buildProducts(read("ema_medicines.json"), { areaRows, branchRows, subtreeRows: read("ema_therapeutic_area_subtree.json"), atcRows: [] });
+    const byNumber = new Map(read("ema_search_index.json").map((row) => [row.ema_product_number, row]));
+    const conditions = buildConditions({ byNumber, entryTerms: [] }, { descriptorAreaRows: read("mesh_descriptor_areas.json"), areaRows, branchRows });
+    const equivalents = substanceEquivalents(read("ema_substance_equivalents.json"));
+    const descriptorOf = new Map(branchRows.map((row) => [row.therapeutic_area_mesh, row.mesh_descriptor_ui]));
+    const setKeyOf = (item) => equivalentSetKey(item.substance_set_key?.split("|"), equivalents);
+    const options = { descriptorOf, descriptors: conditions.descriptors, setKeyOf };
+    const { rows } = conditionRows(real, options);
+    // The page's counts: its headline's authorized medicines, the dek's substances, every status.
+    const page = (ui) => {
+      const descriptor = conditions.descriptors.get(ui);
+      const authorized = [...descriptor.products].map((number) => byNumber.get(number)).filter((row) => row?.medicine_status === "Authorised");
+      return { name: descriptor.name, count: descriptor.products.size, authorized: authorized.length, treatments: substanceSetCount(authorized.map((row) => row.substance_keys), equivalents) };
+    };
+    for (const row of rows) {
+      const { name, count, authorized, treatments } = row;
+      assert.deepEqual({ name, count, authorized, treatments }, page(row.descriptorUi), name);
+    }
+    assert.equal(new Set(rows.map((row) => row.descriptorUi)).size, rows.length);
+    const rowOf = new Map(rows.map((row) => [row.name, row]));
+    // Conditions without a narrower EMA term, and some with (their pages count those too).
+    assert.deepEqual(rowOf.get("Arthritis, Rheumatoid"), { key: "D001172", name: "Arthritis, Rheumatoid", term: "Arthritis, Rheumatoid", descriptorUi: "D001172", count: 64, authorized: 47, treatments: 16 });
+    const counts = (name) => [rowOf.get(name).treatments, rowOf.get(name).authorized, rowOf.get(name).count];
+    assert.deepEqual(counts("Abdominal Neoplasms"), [4, 11, 16]);
+    assert.deepEqual(counts("Neoplasms"), [260, 386, 549]);
+    assert.deepEqual(counts("Infections"), [158, 213, 351]);
+    // Its spellings one row, named by the descriptor (EMA's Cancer and Neoplasms, Infection and Infections).
+    assert.ok(!rowOf.has("Cancer") && !rowOf.has("Infection"));
+    // Each row after the one before: by treatments, then authorized medicines (most first, or both
+    // fewest first), then name A to Z.
+    const before = (a, b, sign) => sign * (a.treatments - b.treatments) || sign * (a.authorized - b.authorized) || a.name.localeCompare(b.name);
+    for (const [index, row] of rows.entries()) if (index) assert.ok(before(rows[index - 1], row, -1) < 0, row.name);
+    const fewest = conditionRows(real, { ...options, direction: "asc" });
+    assert.deepEqual(fewest.rows.filter((row) => row.treatments < 1 || row.authorized < 1), []);
+    for (const [index, row] of fewest.rows.entries()) if (index) assert.ok(before(fewest.rows[index - 1], row, 1) < 0, row.name);
+    assert.ok(fewest.unlisted > 0);
+    assert.equal(fewest.total + fewest.unlisted, rows.length);
+    // Fewest first no longer opens with a broad condition counted by its own tag alone.
+    assert.ok(!fewest.rows.slice(0, 40).some((row) => ["Infections", "Metabolic Diseases", "Skin Diseases", "Abdominal Neoplasms"].includes(row.name)));
+    const byMedicines = conditionRows(real, { ...options, sort: "medicines", direction: "asc" });
+    assert.deepEqual(byMedicines.rows.filter((row) => row.authorized < 1), []);
+  },
+);
 
 test("type split: products per key and medicine type, each product once per key", () => {
   const split = typeSplit(products.slice(0, 5), (row) => row.branches.concat(row.branches));

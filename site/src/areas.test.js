@@ -420,6 +420,33 @@ test("branch chips: at most two, the rest behind +n", () => {
   assert.deepEqual(branchChips([]), { shown: [], rest: [] });
 });
 
+// Chips review 2026-09-29: a selected branch behind "+n" showed no pressed chip (?area=C18:
+// Adrenoleukodystrophy read [C10] [C16] +2, both unpressed). A branch within the selection (selected
+// itself, then one included through its selected category) is shown among the two, in code order.
+test("branch chips: a selected branch behind +n is shown among the two, in code order", () => {
+  const codes = ["C10", "C16", "C18", "C19"];
+  assert.deepEqual(branchChips(codes, ["C18"]), { shown: ["C10", "C18"], rest: ["C16", "C19"] });
+  assert.deepEqual(branchChips(codes, ["C19"]), { shown: ["C10", "C19"], rest: ["C16", "C18"] });
+  assert.deepEqual(branchChips(codes, ["C18", "C19"]), { shown: ["C18", "C19"], rest: ["C10", "C16"] });
+  assert.deepEqual(branchChips(codes, ["C04", "C19"]), { shown: ["C10", "C19"], rest: ["C16", "C18"] });
+  // Shown already, or nothing within the selection: the first two.
+  assert.deepEqual(branchChips(codes, ["C16"]), { shown: ["C10", "C16"], rest: ["C18", "C19"] });
+  assert.deepEqual(branchChips(codes, ["C04"]), { shown: ["C10", "C16"], rest: ["C18", "C19"] });
+  assert.deepEqual(branchChips(codes, []), { shown: ["C10", "C16"], rest: ["C18", "C19"] });
+  // An area under a branch does not select the whole branch (as branchSelected()).
+  assert.deepEqual(branchChips(codes, ["C18.452"]), { shown: ["C10", "C16"], rest: ["C18", "C19"] });
+  // Included through its selected category (pressed, disabled): shown too.
+  assert.deepEqual(branchChips(["C10", "C16", "F03"], ["F"]), { shown: ["C10", "F03"], rest: ["C16"] });
+  assert.deepEqual(branchChips(codes, ["C"]), { shown: ["C10", "C16"], rest: ["C18", "C19"] });
+  // A branch selected itself before those only included.
+  assert.deepEqual(branchChips(["C10", "C16", "F03"], ["C", "F03"]), { shown: ["C10", "F03"], rest: ["C16"] });
+  // Every shown chip pressed while any of the rest is.
+  for (const selected of [["C10"], ["C16"], ["C18"], ["C19"], ["C16", "C19"], ["C18", "C19"], ["C"], ["C", "F03"], ["F"]]) {
+    const { shown, rest } = branchChips(["C10", "C16", "C18", "C19", "F03"], selected);
+    if (rest.some((code) => branchSelected(selected, code))) assert.ok(shown.every((code) => branchSelected(selected, code)), String(selected));
+  }
+});
+
 test("branch chips: pressed when the branch or its category is selected, as inAreas()", () => {
   assert.equal(branchSelected(["C17"], "C17"), true);
   assert.equal(branchSelected(["C04", "C17"], "C17"), true);
@@ -636,6 +663,7 @@ test(
     const chips = termBranches(branches);
     assert.deepEqual(chips.of("Adrenoleukodystrophy"), ["C10", "C16", "C18", "C19"]);
     assert.deepEqual(branchChips(chips.of("Adrenoleukodystrophy")).rest, ["C18", "C19"]);
+    assert.deepEqual(branchChips(chips.of("Adrenoleukodystrophy"), ["C18"]), { shown: ["C10", "C18"], rest: ["C16", "C19"] });
     assert.deepEqual(chips.of("Cancer"), ["C04"]);
     // Every term's chips are the branches above it in the tree.
     const terms = [...new Set(branches.map((row) => row.therapeutic_area_mesh))];

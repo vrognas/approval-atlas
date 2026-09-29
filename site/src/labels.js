@@ -619,25 +619,46 @@ export const UI = {
     // A stacked ATC bar's medicine types: [[type, count]] in stack order.
     typeSplit: (entries) => entries.map(([type, count]) => `${formatCount(count)} ${type}`).join(", "),
   },
-  // The therapeutic areas of the medicines shown (all of them without a filter); each opens its
-  // condition page (a lookup, ?cond=) where its MeSH descriptor is known.
+  // The conditions card (redesign 2026-09-29; conditions-card.js): the therapeutic areas of the
+  // medicines shown (all of them without a filter) as a table ranked by treatments or authorized
+  // medicines, most or fewest first; each opens its condition page (a lookup, ?cond=) where its MeSH
+  // descriptor is known. The title says the ranking (a proposal for the owner).
   conditions: {
-    title: "Most common conditions",
-    // Each row counts every status, then the authorized ones (the list a condition page opens with)
-    // and their distinct active substances (step 4, #10: substance sets, so a combination counts on
-    // its own and the copy says so; review of step 4: HIV Infections has 40 sets of 27 substances).
-    // within: a therapeutic area filter is set, and only the terms within it are listed.
+    title: (sort, direction) => `Conditions with the ${direction === "asc" ? "fewest" : "most"} ${sort === "medicines" ? "authorized medicines" : "treatments"}`,
+    // Each condition counted as its condition page counts, with its narrower ones (review
+    // 2026-09-29). Treatments: the authorized medicines' distinct active substances (step 4, #10:
+    // substance sets, so a combination counts on its own and the copy says so; review of step 4: HIV
+    // Infections has 40 sets of 27 substances). within: a therapeutic area filter is set, and only
+    // the conditions within it are listed. Kept short (review 2026-09-29: at 1024px it took 3 lines).
     subtitle: (count, filtered, within = false) => `${filtered
-      ? `Therapeutic areas of the ${plural(count, "medicine", "medicines")} matching the filters`
-      : `Therapeutic areas of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}: medicines of every status, then those authorized and their active substances or combinations`,
-    authorized: (count) => `${formatCount(count)} authorized`,
+      ? `Conditions of the ${plural(count, "medicine", "medicines")} matching the filters`
+      : `Conditions of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.`,
+    headers: { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" },
+    // The sort buttons in the headers (UI.sortOrder.name() adds the order to the pressed one's).
+    sortBy: { treatments: "Sort by treatments", medicines: "Sort by authorized medicines" },
+    // A medicines cell: the authorized, then (muted) of every status, visually hidden what that
+    // counts (review 2026-09-29: "47 of 64" did not say); its tooltip says both.
+    of: (count) => `of ${formatCount(count)}`,
+    everyStatus: (count) => ` ${count === 1 ? "medicine" : "medicines"} of every status`,
+    medicinesTip: (authorized, count) => `${formatCount(authorized)} authorized of ${plural(count, "medicine", "medicines")} of every status`,
+    // Phones (the header hidden): after each number, what it counts (aria-hidden: the header says it).
+    treatmentsUnit: (count) => (count === 1 ? "treatment" : "treatments"),
+    authorizedUnit: "authorized",
+    showMore: (count) => `Show ${formatCount(count)} more`,
+    // Fewest first leaves out the conditions without an authorized treatment.
+    unlisted: (count) => `${plural(count, "condition", "conditions")} without an authorized treatment ${count === 1 ? "is" : "are"} not listed.`,
+    // A condition page's count of the tagged medicines' substance sets (UI.condition.counts()).
     substances: (count) => plural(count, "active substance or combination", "active substances or combinations"),
-    hint: "Open a condition to see its approval timeline.",
     // count: the medicines shown, none of which has a therapeutic area.
     empty: (count) => {
       if (count === 0) return "No medicines match the current filters.";
       return count === 1 ? "No therapeutic area is listed for this medicine." : "No therapeutic areas are listed for these medicines.";
     },
+    // count: the conditions of the medicines shown, none with an authorized medicine (e.g. only
+    // withdrawn ones shown): no ranking (review 2026-09-29).
+    noneAuthorized: (count) => (count === 1
+      ? "The one condition of these medicines has no authorized medicine, so it is not ranked."
+      : `None of the ${formatCount(count)} conditions of these medicines has an authorized medicine, so they are not ranked.`),
     // Condition page links beside a therapeutic area group or term (breakdown, sidebar).
     open: (name) => `Open condition page: ${name}`,
   },

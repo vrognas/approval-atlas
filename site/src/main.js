@@ -22,6 +22,7 @@ import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart.js";
 import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, suggestCompanies, toggleCompany } from "./companies.js";
 import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
+import { createConditionsCard } from "./conditions-card.js";
 import { equivalentSetKey } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
 import { FAILED } from "./datasets.js";
@@ -42,7 +43,6 @@ import {
   sentenceParts,
   sortActivityRows,
   statusBreakdown,
-  topAreas,
   topKeys,
   topWithOther,
   typeSplit,
@@ -58,7 +58,7 @@ import { createIntro } from "./intro.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
-import { addMeshTip, areaNote, describedTip, meshTip } from "./mesh-notes.js";
+import { areaNote, describedTip, meshTip } from "./mesh-notes.js";
 import { NOT_CLASSIFIED, buildModalityTree, modalityBreakdownRows, modalityTip, modalityTipId, toggleModality } from "./modalities.js";
 import { createModalityTree, renderModalityPath } from "./modality-tree.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
@@ -811,9 +811,12 @@ function startLookup([meta, searchRows, entryTermRows]) {
     meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null,
     decision: days(medianDays) ? { median: medianDays, p90: days(p90Days) } : null,
     // A card's branch chip (owner decision 2026-09-29): its branch toggled in the area filter, as in
-    // the table, and the overview it filters shown (one history entry; before the dashboard's data
-    // has loaded, the branch alone).
-    onAreaChip: (branch) => navigate({ area: dashboard ? dashboard.toggleArea(branch) : [branch] }),
+    // the table, and the overview it filters shown (one history entry). Before the dashboard's data
+    // has loaded the filter is unknown (the URL's filters are kept verbatim: pendingFilters), so the
+    // chips are inert and unpressed until then (chips review 2026-09-29: a click set the branch alone,
+    // replacing the link's area values, and its pressed state could disagree).
+    areaFilter: () => (dashboard ? state.area : null),
+    onAreaChip: (branch) => navigate({ area: dashboard.toggleArea(branch) }),
   });
   addSearchIcon();
   renderTryLinks();
@@ -1163,6 +1166,7 @@ function startDashboard(meta, [
     });
 
   const substanceIndex = buildSubstanceIndex(substanceRows);
+  const areaBranches = termBranches(branchRows);
   const table = createTable($("#medicines-table"), $("#table-more"), $("#table-caption"), {
     substanceIndex,
     atcNames,
@@ -1179,8 +1183,17 @@ function startDashboard(meta, [
     focusFallback: focusAtcFilter,
     // A term's branch chip adds its branch to the area filter (as the tree: toggleArea()); pressed
     // again, it removes it (owner decision 2026-09-29).
-    branches: termBranches(branchRows),
+    branches: areaBranches,
     onAreaSelect: toggleAreaKey,
+    focusAreaFallback: focusAreaFilter,
+  });
+  // The conditions card (redesign 2026-09-29): each condition opens its condition page; its branch
+  // chips toggle the area filter as the table's do.
+  const conditionsCard = createConditionsCard($("#conditions"), {
+    link: (term, ui) => lookup.link(term, { cond: ui }),
+    noteOf: (ui) => lookup.meshNotes()?.byUi.get(ui) ?? null,
+    branches: areaBranches,
+    onAreaChip: toggleAreaKey,
     focusAreaFallback: focusAreaFilter,
   });
   // "Download CSV" (#18): every medicine the table lists (all that match the filters, not only the
@@ -1426,37 +1439,26 @@ function startDashboard(meta, [
   }
 
   // Always shown (phase 4c; it used to show only with a filter): the therapeutic areas of the
-  // medicines shown, as links to their condition page where the MeSH descriptor is known, with a
-  // hint that the pages exist; a line instead when none of the medicines has one. With a therapeutic
-  // area filter, only the terms within it (phase 4f). Rebuilt on every render: a focused link keeps
-  // its focus.
-  // Step 4 (#10): each row adds its authorized medicines' distinct active substances (substance
-  // sets, equivalent spellings joined once they have loaded).
+  // medicines shown, as a table ranked by treatments or authorized medicines (redesign 2026-09-29,
+  // conditions-card.js); a line instead when none of the medicines has one. With a therapeutic area
+  // filter, only the terms within it (phase 4f). Each row counts as its condition page (review
+  // 2026-09-29: the lookup's conditions dataset, asked for when the lookup starts; a line until it
+  // has loaded). Treatments (step 4, #10): the authorized medicines' distinct substance sets,
+  // equivalent spellings joined once they have loaded.
   const NO_EQUIVALENTS = new Map();
   function renderConditions(filtered, anyFilter) {
-    const within = state.area.length ? (term) => inAreas(meshTree, state.area, term) : null;
     const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
-    const setKeyOf = (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents);
-    const rows = topAreas(filtered, descriptorOf, 8, within, setKeyOf);
-    d3.select("#conditions-title").text(UI.conditions.title);
-    d3.select("#conditions-subtitle").text(UI.conditions.subtitle(filtered.length, anyFilter, within !== null));
-    d3.select("#conditions-hint").text(rows.some((row) => row.descriptorUi) ? UI.conditions.hint : "");
-    d3.select("#conditions-empty").text(rows.length ? "" : UI.conditions.empty(filtered.length));
-    const list = d3.select("#conditions-list").attr("hidden", rows.length ? null : "");
-    const focused = list.node().contains(document.activeElement) ? document.activeElement.textContent : null;
-    list.selectChildren().remove();
-    for (const row of rows) {
-      const item = list.append("li");
-      if (row.descriptorUi) item.append(() => addMeshTip(lookup.link(row.term, { cond: row.descriptorUi }), lookup.meshNotes()?.byUi.get(row.descriptorUi) ?? null));
-      else item.append("span").text(row.term);
-      item.append("span").attr("class", "bar-track").attr("aria-hidden", "true")
-        .append("span").attr("class", "bar-fill").style("width", `${(100 * row.count) / rows[0].count}%`);
-      const value = item.append("span").attr("class", "bar-value");
-      value.append("span").text(d3.format(",")(row.count));
-      value.append("span").attr("class", "bar-authorized").text(UI.conditions.authorized(row.authorized));
-      if (row.authorized) value.append("span").attr("class", "bar-substances").text(UI.conditions.substances(row.substances));
-    }
-    if (focused !== null) [...list.node().querySelectorAll("a")].find((link) => link.textContent === focused)?.focus();
+    const conditions = lookup.need("conditions");
+    conditionsCard.render({
+      products: filtered,
+      anyFilter,
+      within: state.area.length ? (term) => inAreas(meshTree, state.area, term) : null,
+      descriptorOf,
+      descriptors: conditions === FAILED ? FAILED : conditions?.descriptors,
+      setKeyOf: (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents),
+      selectedArea: state.area,
+      filterKey: JSON.stringify(FILTER_KEYS.map((key) => state[key])),
+    });
   }
 
   // The breakdown card over every matching medicine: ATC (stacked by type), areas, holders or
@@ -1872,7 +1874,7 @@ function startDashboard(meta, [
     safely(cardOf("#activity-table"), () => renderActivityCard(filtered));
     safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
     safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, activeCount > 0));
-    safely(cardOf("#conditions-list"), () => renderConditions(filtered, activeCount > 0));
+    safely($("#conditions"), () => renderConditions(filtered, activeCount > 0));
 
     const undated = filtered.filter((product) => product.year === null).length;
     tableRows = newestFirst(filtered);
