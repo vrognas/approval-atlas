@@ -140,7 +140,10 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
     return;
   }
 
+  // No width yet (laid out at 0, as while the page is hidden): nothing to draw, and the brush's extent
+  // would be negative; the container's ResizeObserver (main.js) draws it once it has one.
   const width = container.clientWidth;
+  if (width <= MARGIN.left + MARGIN.right) return;
   const years = rows.map((row) => row.year);
   // paddingOuter = paddingInner / 2 makes the bands tile the range, so the brush snaps to years.
   const x = d3.scaleBand(years, [MARGIN.left, width - MARGIN.right]).paddingInner(0.2).paddingOuter(0.1);
