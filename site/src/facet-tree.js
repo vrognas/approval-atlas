@@ -48,9 +48,10 @@ function setNumber(badge, number) {
 //   tip(key, model): { text, id } or null: the row's explainer (the therapeutic areas' MeSH notes,
 //     mesh-notes.js meshTip(); the ATC classes', atc.js atcClassTip()), a tooltip on its row and
 //     the description (id) of its checkbox; optional
-//   tapTip: the tips are short (the modalities', at most 12 words), so a tap on a touch screen shows
-//     them, as the type and status tips (class tap-tip; the MeSH notes' long tips stay hidden on a
-//     tap, style.css); optional
+//   tapTip: true, or tapTip(key, model) for some rows only: the tips are short enough that a tap on
+//     a touch screen shows them while it checks the row, as the type and status tips (class tap-tip;
+//     the modalities', the ATC classes' and the MeSH categories', owner decision 2026-09-29; the
+//     MeSH notes' long tips stay hidden on a tap, style.css); optional
 //   limit, more: the top-level rows shown at first and how many more each click of the section's
 //     .facet-more button shows (the company tree's hundreds of groups); rows whose checkbox is not
 //     unchecked always show, and during a search every match. Optional: without them every row
@@ -198,6 +199,7 @@ export function createFacetTree(section, spec, { onToggle }) {
       const state = spec.checkState(row.key, model);
       const ancestor = state === "included" ? spec.includedIn(row.key, model) : null;
       const tip = spec.tip?.(row.key, model) ?? null;
+      const tapTip = typeof spec.tapTip === "function" ? spec.tapTip(row.key, model) : spec.tapTip;
       item.select(":scope > .atc-row input")
         .property("checked", state === "checked" || state === "included")
         .property("indeterminate", state === "mixed")
@@ -208,7 +210,7 @@ export function createFacetTree(section, spec, { onToggle }) {
       // Its explainer (the data can arrive later), on hover and keyboard focus: on the whole row, so
       // the tip's hover bridge beside the desktop sidebar never covers the row's link (style.css).
       item.select(":scope > .atc-row").attr("data-tip", tip?.text ?? null).classed("mesh-tip", tip !== null)
-        .classed("tap-tip", tip !== null && Boolean(spec.tapTip));
+        .classed("tap-tip", tip !== null && Boolean(tapTip));
       item.select(":scope > .atc-row .facet-name").text(text).classed("no-name", missing);
       // Muted at 0 unless checked: checked rows sit on the accent wash, never muted (as facet-panel.js).
       item.select(":scope > .atc-row .facet-row").classed("empty", row.count === 0 && state !== "checked" && state !== "included");

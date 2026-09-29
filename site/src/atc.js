@@ -76,15 +76,15 @@ export function atcBadgeTip(row, names, years) {
 }
 
 // An ATC tree row's explainer (owner feedback 2026-09-29): the class, its level and what WHO calls
-// that level, the class above it, and whether WHO retired it (and what replaced it) or lists it as
-// temporary. classes: code -> atc_classes.json row ({ name, status, replaced_by, changed_year }).
-// Null for a malformed code.
+// that level, the class above it by its code only (owner decision 2026-09-29: shorter tips; the
+// tree shows its name), and whether WHO retired it (and what replaced it) or lists it as temporary.
+// classes: code -> atc_classes.json row ({ name, status, replaced_by, changed_year }). Null for a
+// malformed code.
 export function atcClassTip(code, classes) {
   const level = atcLevel(code);
   if (!level) return null;
-  const label = (key) => atcClassLabel(key, classes.get(key)?.name ?? null);
   const parent = atcPrefixes(code).at(-2) ?? null;
-  const tip = UI.atc.classTip(label(code), level, parent && label(parent));
+  const tip = UI.atc.classTip(atcClassLabel(code, classes.get(code)?.name ?? null), level, parent);
   const entry = classes.get(code);
   if (entry?.status === "retired") return `${tip} ${UI.atc.retired(entry.changed_year ?? null, entry.replaced_by ?? null)}`;
   if (entry?.status === "temporary") return `${tip} ${UI.atc.temporary}`;
