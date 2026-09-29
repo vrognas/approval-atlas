@@ -819,6 +819,100 @@ test_that("a curated code completes an incomplete SmPC-only code", {
   )
 })
 
+test_that("curated codes not used beside an incomplete SmPC code: rejected", {
+  # No EMA code; two curated codes compete for the SmPC's L04AG, so it stays:
+  # neither "smpc" (L04AG is not at its final level) nor "ema_complete".
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = "P",
+    atc_code_human = NA_character_
+  )
+  checks <- smpc_check("P", "L04AG", status = "incomplete")
+  curated <- curated_code("P", c("L04AG03", "L04AG05"))
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes(),
+    curated
+  )
+  expect_identical(atc_codes$atc_code, "L04AG")
+  expect_identical(
+    judge_curated_atc_codes(atc_codes, curated)$verdict,
+    c("rejected", "rejected")
+  )
+})
+
+test_that("a curated code replaces an SmPC code not at its final level", {
+  # LeukoScan (EMEA/H/C/000111): EMA publishes the malformed VO4D, its SmPC
+  # V04D (no WHO class), WHO's index V09HA04. V04D did not complete EMA's
+  # code, so the curated code is judged against EMA's code as if the SmPC
+  # gave none: it fits VO4D's valid start (V) and goes deeper. L (made up,
+  # modelled on Strimvelis's EMA L03 and SmPC L03AX): its SmPC's L03AX stays
+  # when two curated codes compete for EMA's L03. M and N: an SmPC code at
+  # its final level (B03AC, which WHO no longer subdivides, and N03AX26)
+  # still blocks the curated code.
+  clean_medicines <- dplyr::tibble(
+    ema_product_number = c("EMEA/H/C/000111", "L", "M", "N"),
+    atc_code_human = c("VO4D", "L03", "B03", "N03")
+  )
+  checks <- dplyr::bind_rows(
+    smpc_check("EMEA/H/C/000111", "V04D", status = "incomplete"),
+    smpc_check("L", "L03AX", status = "incomplete"),
+    smpc_check("M", "B03AC"),
+    smpc_check("N", "N03AX26")
+  )
+  curated <- dplyr::bind_rows(
+    curated_code("EMEA/H/C/000111", "V09HA04"),
+    curated_code("L", c("L03AX16", "L03AX19")),
+    curated_code("M", "B03XA01"),
+    curated_code("N", "N03AX14")
+  )
+  atc_codes <- build_atc_codes_table(
+    clean_medicines,
+    checks,
+    fixture_retired_codes(),
+    curated
+  )
+  expect_identical(atc_codes$atc_code_human, c("VO4D", "L03", "B03", "N03"))
+  expect_identical(
+    atc_codes$atc_code,
+    c("V09HA04", "L03AX", "B03AC", "N03AX26")
+  )
+  expect_identical(
+    atc_codes$atc_code_source,
+    c("curated", "ema_smpc", "ema_smpc", "ema_smpc")
+  )
+  expect_identical(atc_codes$source, rep("ema", 4))
+  expect_identical(atc_codes$atc_code_conflict, rep(FALSE, 4))
+  expect_identical(atc_codes$atc_final_level, c(TRUE, FALSE, TRUE, TRUE))
+  expect_identical(atc_codes$atc_incomplete, rep(TRUE, 4))
+  expect_identical(atc_codes$atc_code_document_url[1], whocc_index_url("V09HA"))
+  expect_identical(atc_codes$atc_code_document_date[1], as.Date("2026-09-27"))
+  expect_identical(
+    judge_curated_atc_codes(atc_codes, curated),
+    dplyr::tibble(
+      ema_product_number = curated$ema_product_number,
+      atc_code = curated$atc_code,
+      verdict = c("used", "rejected", "rejected", "smpc", "smpc"),
+      in_use = c("V09HA04", "L03AX", "L03AX", "B03AC", "N03AX26")
+    )
+  )
+  expect_identical(
+    judge_smpc_atc_codes(atc_codes, checks, fixture_retired_codes())$verdict,
+    c("curated", "imputed", "imputed", "imputed")
+  )
+  expect_match(
+    testthat::capture_messages(report_curated_atc_codes(
+      judge_curated_atc_codes(atc_codes, curated)
+    )),
+    paste(
+      "Curated ATC codes: 1 used \\(0 although EMA's code does not fit\\),",
+      "not used: 2 SmPC code used, 0 EMA code complete, 2 rejected, 0 not in",
+      "the EMA data\\."
+    ),
+    all = FALSE
+  )
+})
+
 test_that("judge_curated_atc_codes says why a curated code is not used", {
   atc_codes <- build_atc_codes_table(
     curation_medicines(),
@@ -852,6 +946,12 @@ test_that("the curated ATC codes are valid and checked", {
   )
   expect_false(anyNA(curated))
   expect_false(anyNA(atc_code_level(curated$atc_code)))
+  # Complete codes only: a curated code can replace an SmPC code that is not
+  # at its final level, so a less specific one could replace a deeper one.
+  # Level 5, or B03AC, the one level-4 code WHO no longer subdivides.
+  is_final <- atc_code_level(curated$atc_code) == 5L |
+    curated$atc_code == "B03AC"
+  expect_identical(curated$atc_code[!is_final], character())
   expect_in(
     curated$evidence_source,
     c("whocc_index", "whocc_temporary", "ema_smpc_text")
