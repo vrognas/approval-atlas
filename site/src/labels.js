@@ -236,6 +236,11 @@ const STATUS_PHRASES = {
 const statusCount = ({ status, count }) => `${formatCount(count)} ${STATUS_PHRASES[status]?.(count) ?? statusLabel(status).toLowerCase()}`;
 // The dek lists this many statuses; the rest are summed up.
 const DEK_STATUSES = 4;
+// Draft (loss-of-exclusivity calendar): the caveats of its captions (the medicine card's, shortened),
+// and "(est.)" after an orphan market exclusivity end the register does not publish (computed from
+// its link date, as the card's "(estimate)").
+const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from approval, or 11 with the possible extra year: each range spans both. Pediatric rewards and derogations are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
+const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
 
 export const UI = {
   // Under the wordmark, always shown (landing, user-approved design 2026-09-28): what the site is for.
@@ -1385,6 +1390,56 @@ export const UI = {
       "The legal basis is inferred from EMA's generic and biosimilar flags and, for copies EMA does not flag (such as hybrids), from their EPAR pages, checked by hand; copies not yet checked count as medicines of their own.",
       "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
     ],
+  },
+
+  // Draft (loss-of-exclusivity calendar, 2026-09-29; protection-calendar.js): the dashboard card
+  // "Estimated protection ending" and the company page's list. Estimates only, never "patent".
+  protectionCalendar: {
+    title: "Estimated protection ending",
+    note: `Currently authorized medicines whose EU market protection is estimated to be still running, counted in the year it ends at the earliest. Select a year to list its medicines. ${CALENDAR_CAVEATS}`,
+    loading: "Loading estimates…",
+    summary: (running, authorized, filtered) =>
+      `${plural(running, "medicine", "medicines")} of the ${formatCount(authorized)} currently authorized${filtered ? " matching the filters" : ""} ${running === 1 ? "has" : "have"} estimated market protection running.`,
+    none: (filtered) => `No currently authorized medicine${filtered ? " matching the filters" : ""} has estimated market protection running.`,
+    // The two segments of a year's bar: what they differ in (both end that year at the earliest).
+    legend: { protection: "No later orphan market exclusivity", orphan: "Orphan market exclusivity (est.) runs later" },
+    bars: "Medicines by the year their estimated market protection ends at the earliest",
+    // The later bar spans several years: drawn broken when longer than the widest single year's.
+    clamped: "Bars are to the scale of the busiest single year; the broken bar, which spans several years, is cut to fit.",
+    yearLabel: (bucket) => (bucket.key === "later" ? `${bucket.year} or later` : String(bucket.year)),
+    // A year button's name: its visible year and count first (WCAG 2.5.3).
+    yearName: (label, count, orphan) =>
+      `${label}: ${plural(count, "medicine", "medicines")}${orphan ? `, ${formatCount(orphan)} with orphan market exclusivity (est.) running later` : ""}`,
+    // Under the year: its medicines with orphan market exclusivity running later, the pink segment
+    // (so the split is not told by colour alone).
+    yearOrphan: (count) => `${formatCount(count)} orphan`,
+    // Never mixed into the years: the earliest end passed, the latest not (year: the latest of them).
+    unclear: (count, year) => {
+      const their = count === 1 ? "its" : "their";
+      return `${plural(count, "more medicine", "more medicines")} may lose market protection${year ? ` by ${year}` : ""}: ${their} earliest estimated end has passed, ${their} latest has not. Not counted above.`;
+    },
+    // Estimates ended or unclear, orphan market exclusivity still running after them: a line under
+    // the bars (first and last: the years it ends), its toggle and list.
+    orphanOnlyLine: (count, first, last) =>
+      `${plural(count, "more medicine has", "more medicines have")} orphan market exclusivity (est.) running after ${count === 1 ? "its" : "their"} estimated market protection, ending ${first === last ? first : `${first}–${last}`}. Not counted above.`,
+    orphanOnlyToggle: "List them",
+    orphanOnlyTitle: (count) => `Orphan market exclusivity (est.) after market protection: ${plural(count, "medicine", "medicines")}`,
+    orphanOnlyUntil: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} until ${formatDate(orphanEnd.end)}`,
+    listTitle: (label, count) => `Earliest estimated end of market protection in ${label}: ${plural(count, "medicine", "medicines")}`,
+    empty: (label, filtered) => `No medicine${filtered ? " matching the filters" : ""} counted here has its earliest estimated end in ${label}.`,
+    range: (min, max) => `Market protection ends (est.) ${formatDate(min)}${max && max !== min ? ` – ${formatDate(max)}` : ""}`,
+    ended: (date) => `Market protection ended (est.) ${formatDate(date)}`,
+    orphan: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} runs later, until ${formatDate(orphanEnd.end)}`,
+    showAll: (count) => `Show all ${formatCount(count)}`,
+    // The company page (?co=): its currently authorized medicines by end year (orphan-only ones by
+    // the year their orphan market exclusivity ends); unclear ones as the dashboard's line.
+    company: {
+      title: "Protection ending (est.)",
+      note: `Its currently authorized medicines by the year their estimated EU market protection ends at the earliest, or their orphan market exclusivity where only that runs on. ${CALENDAR_CAVEATS}`,
+      none: "None of its currently authorized medicines has estimated market protection or orphan market exclusivity running.",
+      orphan: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} until ${orphanEnd.end.slice(0, 4)}`,
+      orphanOnly: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} only`,
+    },
   },
 
   substance: {

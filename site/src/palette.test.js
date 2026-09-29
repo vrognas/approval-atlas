@@ -124,6 +124,13 @@ for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
     const failing = others.map((hue) => [hue, contrast(tokens, "--status-authorized", `--${hue}-mid`)]).filter(([, ratio]) => ratio < 1.5);
     assert.deepEqual(failing, []);
   });
+
+  // WCAG 1.4.1 (draft, loss-of-exclusivity calendar): a year's bar is --bar, then its medicines with
+  // orphan market exclusivity running later in --pink-mid beside it (1px apart): they differ in
+  // lightness too, not in hue alone.
+  test(`${mode} the calendar's orphan segment differs in lightness from the bar beside it (1.5:1)`, () => {
+    assert.ok(contrast(tokens, "--bar", "--pink-mid") >= 1.5, `--bar ~ --pink-mid ${contrast(tokens, "--bar", "--pink-mid").toFixed(2)}`);
+  });
 }
 
 // Checked facet rows sit on the accent wash, where --muted is under 4.5:1: a tree row's muted name
