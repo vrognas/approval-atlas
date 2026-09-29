@@ -69,6 +69,36 @@ test("protectionEnding: copies are left out, protected or unclear", () => {
   assert.equal(unclearLatest, 2026);
 });
 
+// Orphan market exclusivity belongs to the product itself, so a copy with its own still running is
+// listed apart (morning QA 2026-09-29: Hyftor, a hybrid, and Kinpeygo were missing), with no market
+// protection dates of its own; a copy without one stays out.
+test("protectionEnding: a copy with its own orphan market exclusivity running is listed apart, without dates", () => {
+  const products = [product("1", "Hyftor"), product("2", "Kinpeygo"), product("3", "Plain generic")];
+  const protection = protectionOf([
+    protectionRow("1", "ended", "2021-01-01", "2022-01-01", "follows_reference"),
+    protectionRow("2", "unclear", null, null, "reference_not_found"),
+    protectionRow("3", "protected", "2027-01-01", "2028-01-01", "follows_reference"),
+  ], [
+    { ema_product_number: "1", exclusivity_end: "2033-05-26", end_source: "computed" },
+    { ema_product_number: "2", exclusivity_end: "2032-07-18", end_source: "register" },
+  ]);
+  const { rows, unclear, orphanOnly } = protectionEnding(products, protection, TODAY);
+  assert.deepEqual(rows, []);
+  assert.equal(unclear, 0);
+  assert.deepEqual(orphanOnly.map((entry) => [entry.product.name_of_medicine, entry.status, entry.min, entry.max, entry.orphanEnd.end]), [
+    ["Kinpeygo", "copy", null, null, "2032-07-18"],
+    ["Hyftor", "copy", null, null, "2033-05-26"],
+  ]);
+});
+
+// Morning QA 2026-09-29: "10 years from approval" read as the medicine's own approval.
+test("the caveat counts market protection from the substance's first central approval; a copy row says it has none", () => {
+  const copy = UI.protectionCalendar;
+  assert.match(copy.company.note, /10 years from the first central EU approval of the active substance/);
+  assert.doesNotMatch(copy.company.note, /years from approval/);
+  assert.equal(copy.copyNoOwn, "No market protection of its own (a copy)");
+});
+
 // Orphan market exclusivity still running after the market protection estimate has ended, or after
 // its latest end where that end has not passed yet (unclear): listed apart, never in the years nor
 // in the unclear count.
@@ -230,7 +260,8 @@ test("the real data: every protected estimate of a currently authorized medicine
   const [index, protectionRows, orphanRows, meta] = files.map((file) => JSON.parse(readFileSync(dataFile(file), "utf8")));
   const authorized = index.filter((row) => row.medicine_status === "Authorised" && row.marketing_authorisation_date);
   const numbers = new Set(authorized.map((row) => row.ema_product_number));
-  const own = protectionRows.filter((row) => numbers.has(row.ema_product_number) && row.basis === "own");
+  // Every estimate of its own: basis own or other_company_reference (copies follow a reference).
+  const own = protectionRows.filter((row) => numbers.has(row.ema_product_number) && !["follows_reference", "reference_not_found"].includes(row.basis));
   const expected = own.filter((row) => row.status === "protected");
   const { rows, unclear, orphanOnly } = protectionEnding(authorized, protectionOf(protectionRows, orphanRows), meta.snapshot_date);
   assert.equal(rows.length, expected.length);

@@ -239,7 +239,7 @@ const DEK_STATUSES = 4;
 // Draft (loss-of-exclusivity calendar): the caveats of its captions (the medicine card's, shortened),
 // and "(est.)" after an orphan market exclusivity end the register does not publish (computed from
 // its link date, as the card's "(estimate)").
-const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from approval, or 11 with the possible extra year: each range spans both. Pediatric rewards and derogations are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
+const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance, or 11 with the possible extra year: each range spans both. Pediatric rewards and derogations are not taken into account, and copies not yet checked by hand count as medicines of their own. Not legal advice.";
 const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
 
 export const UI = {
@@ -1429,6 +1429,8 @@ export const UI = {
     empty: (label, filtered) => `No medicine${filtered ? " matching the filters" : ""} counted here has its earliest estimated end in ${label}.`,
     range: (min, max) => `Market protection ends (est.) ${formatDate(min)}${max && max !== min ? ` – ${formatDate(max)}` : ""}`,
     ended: (date) => `Market protection ended (est.) ${formatDate(date)}`,
+    // A copy (generic, biosimilar, hybrid) with its own orphan market exclusivity (morning QA 2026-09-29).
+    copyNoOwn: "No market protection of its own (a copy)",
     orphan: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} runs later, until ${formatDate(orphanEnd.end)}`,
     showAll: (count) => `Show all ${formatCount(count)}`,
     // The company page (?co=): its currently authorized medicines by end year (orphan-only ones by

@@ -114,7 +114,7 @@ function medicineList(list, bucket, showAll, filtered, actions) {
 // estimate (ended, or its range) and the orphan end.
 function orphanOnlyList(list, orphanOnly, showAll, actions) {
   listOf(list, COPY.orphanOnlyTitle(orphanOnly.length), orphanOnly, showAll, actions, (entry) => [
-    node("span", "pc-item-range", entry.status === "ended" ? COPY.ended(entry.max) : COPY.range(entry.min, entry.max)),
+    node("span", "pc-item-range", entry.status === "copy" ? COPY.copyNoOwn : entry.status === "ended" ? COPY.ended(entry.max) : COPY.range(entry.min, entry.max)),
     node("span", "pc-item-orphan", COPY.orphanOnlyUntil(entry.orphanEnd)),
   ]);
 }

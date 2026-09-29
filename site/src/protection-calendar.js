@@ -29,8 +29,10 @@ const byName = (a, b) => a.product.name_of_medicine.localeCompare(b.product.name
 // Returns the protected ones as rows { product, min, max, orphanEnd } by earliest end, latest end,
 // then name; orphanOnly: those whose estimate has ended or is unclear but whose orphan market
 // exclusivity runs after today and after the estimate's latest end, as { product, status, min,
-// max, orphanEnd } by orphan end, then name; unclear: how many other estimates are unclear (the
-// earliest end passed, the latest not), and unclearLatest: the year of their latest end (or null).
+// max, orphanEnd } by orphan end, then name (a copy, whose market protection is its reference's,
+// with its own orphan market exclusivity running after today: status "copy", min and max null);
+// unclear: how many other estimates are unclear (the earliest end passed, the latest not), and
+// unclearLatest: the year of their latest end (or null).
 export function protectionEnding(products, protection, today) {
   const rows = [];
   const orphanOnly = [];
@@ -38,8 +40,13 @@ export function protectionEnding(products, protection, today) {
   let unclearLatest = null;
   for (const product of products) {
     const row = protection.byProduct.get(product.ema_product_number);
-    if (!row || COPY_BASES.has(row.basis)) continue;
+    if (!row) continue;
     const orphanRows = protection.orphan.get(product.ema_product_number) ?? [];
+    if (COPY_BASES.has(row.basis)) {
+      const orphanEnd = orphanLater(orphanRows, today);
+      if (orphanEnd) orphanOnly.push({ product, status: "copy", min: null, max: null, orphanEnd });
+      continue;
+    }
     const min = row.market_protection_end_min;
     const max = row.market_protection_end_max ?? min;
     if (row.status === "protected" && min) {
