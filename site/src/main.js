@@ -165,8 +165,10 @@ createThemeToggle($("#theme-toggle"), { onChange: () => lookup && scheduleRender
 // Desktop: the sidebar's width, the viewer's stored one set now, before the first render, so the
 // layout does not jump. The charts wait for a drag's end to follow the new width (resizeObserver).
 const sidebar = createSidebarResize($("#sidebar-resize"), { label: UI.sidebar.resize, hint: UI.sidebar.hint, onDragEnd: () => scheduleRender() });
-// The landing intro card: shown or hidden on every render (the untouched overview, until closed).
-const intro = createIntro($("#intro"), $("#intro-link"));
+// The landing intro card: shown or hidden on every render (the untouched overview, until closed),
+// and the Try line with it (hidden while the card shows). Its examples are lookup links (pushState,
+// as the Try line's), made on the first render.
+const intro = createIntro($("#intro"), $("#intro-link"), { link: (...args) => lookup.link(...args), tryLine: $("#lookup-try") });
 
 const files = new Map();
 function loadFile(file) {
@@ -253,11 +255,11 @@ function updateTitle() {
 function render() {
   lookup.render(state);
   const lookupOpen = lookupView(state).kind !== null;
-  $("#lookup-try").hidden = lookupOpen; // home state only
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
   // Below a lookup result, the dashboard is the overview of every medicine, under its own heading.
   $("#explore").hidden = !lookupOpen;
-  // Before the dashboard's data has loaded, the URL's filters are still verbatim (pendingFilters).
+  // The intro card, and the Try line with it. Before the dashboard's data has loaded, the URL's
+  // filters are still verbatim (pendingFilters).
   intro.render(state, dashboard ? null : pendingFilters);
   dashboard?.render();
   updateTitle();

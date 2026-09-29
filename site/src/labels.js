@@ -257,24 +257,38 @@ export const UI = {
     title: "What is this?",
     close: "Close the introduction",
     closeHint: "Close; “What is this?” at the top brings it back",
-    lookupLead: "Look up a drug or active ingredient to see:",
-    lookup: [
-      "whether it's approved in the EU and since when",
-      "what it's approved for",
-      "which company owns it",
-      "how long its market protection runs (an estimate, not patents)",
-      "its official product information and EMA assessment report",
+    // Owner decision 2026-09-29: three onboarding cards, each an icon on its hue's tint (hue: a .hue-*
+    // class; icon: intro.js ICONS), a bold title, one plain sentence and an example to try: a medicine
+    // card (patch, ids checked against the data), or the overview filtered to one therapeutic area
+    // alone (area: a MeSH branch; url.js areaState()).
+    cards: [
+      {
+        hue: "green",
+        icon: "lookup",
+        title: "Look up any drug",
+        text: "Type a brand or active ingredient: is it approved in the EU, since when, and who owns it?",
+        action: "Try Keytruda",
+        patch: { med: "EMEA/H/C/003820" },
+      },
+      {
+        hue: "gold",
+        icon: "shield",
+        title: "Protection and copies",
+        text: "See roughly how long market protection runs, and whether generics or biosimilars exist yet.",
+        action: "Try Humira",
+        patch: { med: "EMEA/H/C/000481" },
+      },
+      {
+        hue: "blue",
+        icon: "chart",
+        title: "Explore the landscape",
+        text: "Which conditions have the most treatments, which companies work where, how approvals change over time.",
+        action: "Explore cancer medicines",
+        area: "C04",
+      },
     ],
-    // Phones: the summary of a disclosure holding the list below (intro.js).
-    exploreLead: "Or explore all EMA medicines:",
-    explore: [
-      "which companies have which kinds of drugs",
-      "which conditions have the most, or the fewest, approved treatments",
-      "how approvals changed over the years, by drug class, condition or company",
-    ],
-    scope: "Only medicines authorized EU-wide through the European Medicines Agency (EMA) are included. Many older or common medicines, such as paracetamol, are authorized country by country and are not here.",
-    authorized: "Authorized means it may be marketed in the EU, Iceland, Liechtenstein and Norway; whether it is sold or reimbursed in your country is decided nationally.",
-    smallPrint: "Data from EMA, updated daily. For information only, not medical advice.",
+    // One quiet line under the cards: the scope (step 2, #1) and the intended use.
+    scope: "Covers medicines authorized EU-wide through the European Medicines Agency (EMA); many older ones (e.g. paracetamol) are authorized country by country and aren't here. For information only, not medical advice.",
   },
   // The tab's title: the view's name (a medicine, substance, condition, search or drug class) first.
   pageTitle: (name) => (name ? `${name} · Approval Atlas` : "Approval Atlas"),

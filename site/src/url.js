@@ -166,6 +166,10 @@ export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [
 // alone, broken down by modality (a group's bars are its modalities).
 export const modalityState = (key) => ({ ...structuredClone(DEFAULT_STATE), mod: [key], by: "mod" });
 
+// A therapeutic area opened from the intro card (owner decision 2026-09-29): the overview filtered to
+// it alone, broken down by therapeutic area (its bars are the areas under it).
+export const areaState = (key) => ({ ...structuredClone(DEFAULT_STATE), area: [key], by: "area" });
+
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI, company group or
 // company key (companies part 2). Kept verbatim: an unknown value shows a "not found" result
 // instead of being dropped.
