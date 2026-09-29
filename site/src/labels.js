@@ -813,8 +813,8 @@ export const UI = {
     // A tree row's explainer (owner feedback 2026-09-29; atc.js atcClassTip()): the class, its level
     // with WHO's meaning for it (WHOCC, ATC structure and principles: 2nd levels pharmacological or
     // therapeutic groups, 3rd and 4th chemical, pharmacological or therapeutic subgroups), the class
-    // above it, and a retired (atc_classes.json replaced_by, changed_year; now null: deleted) or
-    // temporary code's status.
+    // above it by its code (owner decision 2026-09-29: shorter tips), and a retired (atc_classes.json
+    // replaced_by, changed_year; now null: deleted) or temporary code's status.
     levels: {
       1: "anatomical main group",
       2: "pharmacological or therapeutic subgroup",
@@ -822,7 +822,7 @@ export const UI = {
       4: "chemical, pharmacological or therapeutic subgroup",
       5: "chemical substance",
     },
-    classTip: (label, level, parentLabel) => `${label}: ATC level ${level}, ${UI.atc.levels[level]}${parentLabel ? `, in ${parentLabel}` : ""}.`,
+    classTip: (label, level, parentCode) => `${label}: ATC level ${level}, ${UI.atc.levels[level]}${parentCode ? `, in ${parentCode}` : ""}.`,
     retired: (year, now) => `Retired${year ? ` ${year}` : ""}, ${now ? `now ${now}` : "with no successor"}.`,
     temporary: "On WHO's temporary list: it can still change.",
     note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives a complete one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.",

@@ -47,6 +47,9 @@ export function createAtcTree(section, { onToggle }) {
     decorate: (label, code) => appendCodeBadge(label, code),
     note: (model) => (model.names.length ? UI.atc.nameQueries(model.names) : ""),
     tip: (code, model) => describedTip(`atc-tip-${code}`, atcClassTip(code, model.classes), "atc-tips"),
+    // Short enough that a tap on a touch screen shows it while it checks the row (owner decision
+    // 2026-09-29), as the modality tree's.
+    tapTip: true,
     staticTip: (parent, model) => (model.incompleteAt.has(parent) ? UI.atc.incompleteTip : UI.atc.codedHereTip),
   }, { onToggle });
 }

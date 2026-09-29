@@ -51,6 +51,9 @@ export function createAreaTree(section, { tree, onToggle, linkOf, tipOf = () => 
     name: (key) => ({ text: tree.name(key), missing: false }),
     link: linkOf,
     tip: tipOf,
+    // A category's explainer is short (areaCategoryTip()): a tap on a touch screen shows it while it
+    // checks the row (owner decision 2026-09-29); the other rows' MeSH notes stay hidden on a tap.
+    tapTip: (key) => tree.isCategory(key),
     // A selected root tag (older links) has no row of its own: its branch is only indeterminate.
     note: (model) => {
       const tags = model.selected.filter(tree.isRootTag);

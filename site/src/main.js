@@ -574,7 +574,8 @@ function setupTips() {
     hide();
   }, true);
   // Keyboard and scripted clicks (detail 0) have no position. On touch screens a tap on a carrier
-  // of a short tip (.tap-tip: the modalities') shows it, as a tap on a type or status carrier does:
+  // of a short tip (.tap-tip: the modalities', the ATC classes', the MeSH categories') shows it, as
+  // a tap on a type or status carrier does:
   // there a tip takes no taps (style.css), so it never stands in the way of the next one. A tip at
   // the pointer can lie over its own carrier: a click on it is told apart by where it shows, and
   // where it lies over the carrier the click is meant for the control under it (review 2026-09-29:

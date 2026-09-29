@@ -341,17 +341,18 @@ test("atcBadgeTip: the level names one per line, then why the code is incomplete
   assert.equal(atcBadgeTip({ atc_code_human: "L04AC", source: "ema" }, new Map(), new Map()), [UI.table.incompleteTitle, "Source: EMA"].join("\n"));
 });
 
-// Owner feedback 2026-09-29: every ATC tree row explains its class, as the therapeutic area rows do.
-test("atcClassTip: the class, its ATC level and what WHO calls that level, its parent, and a retired or temporary status", () => {
+// Owner feedback 2026-09-29: every ATC tree row explains its class, as the therapeutic area rows do;
+// its parent by its code only (owner decision 2026-09-29: shorter tips).
+test("atcClassTip: the class, its ATC level and what WHO calls that level, its parent's code, and a retired or temporary status", () => {
   assert.equal(atcClassTip("L", atcClasses), "L Antineoplastic and Immunomodulating Agents: ATC level 1, anatomical main group.");
-  assert.equal(atcClassTip("L04", atcClasses), "L04 Immunosuppressants: ATC level 2, pharmacological or therapeutic subgroup, in L Antineoplastic and Immunomodulating Agents.");
-  assert.equal(atcClassTip("L01F", atcClasses), "L01F Monoclonal Antibodies and Antibody Drug Conjugates: ATC level 3, chemical, pharmacological or therapeutic subgroup, in L01 Antineoplastic Agents.");
-  assert.equal(atcClassTip("L04AC", atcClasses), "L04AC Interleukin Inhibitors: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A Immunosuppressants.");
-  assert.equal(atcClassTip("L01FA01", atcClasses), "L01FA01 Rituximab: ATC level 5, chemical substance, in L01FA CD20 (Clusters of Differentiation 20) Inhibitors.");
+  assert.equal(atcClassTip("L04", atcClasses), "L04 Immunosuppressants: ATC level 2, pharmacological or therapeutic subgroup, in L.");
+  assert.equal(atcClassTip("L01F", atcClasses), "L01F Monoclonal Antibodies and Antibody Drug Conjugates: ATC level 3, chemical, pharmacological or therapeutic subgroup, in L01.");
+  assert.equal(atcClassTip("L04AC", atcClasses), "L04AC Interleukin Inhibitors: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A.");
+  assert.equal(atcClassTip("L01FA01", atcClasses), "L01FA01 Rituximab: ATC level 5, chemical substance, in L01FA.");
   // Retired (atc_classes.json status, replaced_by, changed_year) and temporary codes say so.
-  assert.equal(atcClassTip("L01XC02", atcClasses), "L01XC02 Rituximab: ATC level 5, chemical substance, in L01XC Monoclonal Antibodies. Retired 2022, now L01FA01.");
-  assert.equal(atcClassTip("L01XC", atcClasses), "L01XC Monoclonal Antibodies: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X Other Antineoplastic Agents. Retired 2022, now L01F.");
-  assert.equal(atcClassTip("C10AX21", atcClasses), "C10AX21 Olezarsen: ATC level 5, chemical substance, in C10AX Other Lipid Modifying Agents. On WHO's temporary list: it can still change.");
+  assert.equal(atcClassTip("L01XC02", atcClasses), "L01XC02 Rituximab: ATC level 5, chemical substance, in L01XC. Retired 2022, now L01FA01.");
+  assert.equal(atcClassTip("L01XC", atcClasses), "L01XC Monoclonal Antibodies: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X. Retired 2022, now L01F.");
+  assert.equal(atcClassTip("C10AX21", atcClasses), "C10AX21 Olezarsen: ATC level 5, chemical substance, in C10AX. On WHO's temporary list: it can still change.");
   const deleted = new Map([["J07BX99", atcClass("J07BX99", "example vaccines", "retired", null, 2023)]]);
   assert.equal(atcClassTip("J07BX99", deleted), "J07BX99 Example Vaccines: ATC level 5, chemical substance, in J07BX. Retired 2023, with no successor.");
   // No WHO name (EMA's B06C): the code alone; a malformed code has no explainer.
