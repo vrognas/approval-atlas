@@ -32,7 +32,10 @@ export function groupDocuments(rows) {
   return groups.filter((group) => !(hasEpar && group.key === "scientificDiscussion"));
 }
 
-const PRIMARY = ["productInformation", "epar"];
+// Step 4 (#15): EMA's plain-language overview (for the public) is the card's third button; rows
+// (quickDocuments()) keep the compact SmPC and EPAR links only.
+const PRIMARY = ["productInformation", "epar", "overview"];
+const QUICK = ["productInformation", "epar"];
 const REFUSAL = /refusal/i;
 
 // A group's primary row for a medicine with this EMA status. A medicine never authorized (refused,
@@ -47,8 +50,8 @@ function primaryRow(group, status) {
   return group.rows.find((row) => row.ownTitle && !row.archive && REFUSAL.test(row.title)) ?? group.rows.find(current);
 }
 
-// groupDocuments() output -> the newest current SmPC and standard EPAR (shown as buttons) and the
-// remaining groups (the list), without those two rows. status: the medicine's EMA status
+// groupDocuments() output -> the newest current SmPC, standard EPAR and overview (shown as buttons)
+// and the remaining groups (the list), without those rows. status: the medicine's EMA status
 // (primaryRow(); none: both links, as for an authorized one).
 export function primaryDocuments(groups, status) {
   const primary = [];
@@ -74,5 +77,7 @@ export function splitNamesakeDocuments(rows, since) {
 // One medicine's document rows and EMA status -> { productInformation, epar }: the URLs of its
 // primary documents (primaryDocuments()), a key only where there is one; the "PI" and "EPAR" row links.
 export function quickDocuments(rows, status) {
-  return Object.fromEntries(primaryDocuments(groupDocuments(rows), status).primary.map(({ key, row }) => [key, row.url]));
+  return Object.fromEntries(primaryDocuments(groupDocuments(rows), status).primary
+    .filter(({ key }) => QUICK.includes(key))
+    .map(({ key, row }) => [key, row.url]));
 }

@@ -103,6 +103,15 @@ test_that("write_json_table writes an empty table as an empty array", {
   expect_identical(jsonlite::fromJSON(path, simplifyVector = FALSE), list())
 })
 
+example_opinion_to_decision <- function() {
+  list(
+    median_days = 57L,
+    p90_days = NA_integer_,
+    medicines = 1L,
+    opinions_from = "2021-09-26"
+  )
+}
+
 example_sources <- function() {
   list(
     list(name = "EMA", version = "2026-09-26T06:02:29Z"),
@@ -119,13 +128,14 @@ test_that("build_meta records source, timestamp, row counts and attribution", {
       ema_medicine_atc_codes = dplyr::tibble(x = 1:2)
     ),
     snapshot_date = as.Date("2026-09-26"),
+    opinion_to_decision = example_opinion_to_decision(),
     sources = example_sources()
   )
   expect_named(
     meta,
     c(
       "source_url", "source_timestamp", "row_counts", "attribution",
-      "snapshot_date", "sources", "licence"
+      "snapshot_date", "opinion_to_decision", "sources", "licence"
     )
   )
   expect_identical(meta$source_timestamp, "2026-09-26T06:02:29Z")
@@ -150,9 +160,11 @@ test_that("build_meta adds the snapshot date, sources and data licence", {
     source_timestamp = "2026-09-26T06:02:29Z",
     tables = list(ema_medicines = dplyr::tibble(x = 1:3)),
     snapshot_date = as.Date("2026-09-26"),
+    opinion_to_decision = example_opinion_to_decision(),
     sources = example_sources()
   )
   expect_identical(meta$snapshot_date, "2026-09-26")
+  expect_identical(meta$opinion_to_decision, example_opinion_to_decision())
   expect_identical(meta$sources, example_sources())
   expect_identical(
     meta$licence,
@@ -181,6 +193,7 @@ test_that("write_meta_json writes a JSON object with unboxed scalars", {
     source_timestamp = "2026-09-26T06:02:29Z",
     tables = list(ema_medicines = dplyr::tibble(x = 1:3)),
     snapshot_date = as.Date("2026-09-26"),
+    opinion_to_decision = example_opinion_to_decision(),
     sources = example_sources()
   )
   path <- tempfile(fileext = ".json")
@@ -191,6 +204,12 @@ test_that("write_meta_json writes a JSON object with unboxed scalars", {
   expect_identical(written$row_counts, list(ema_medicines = 3L))
   expect_identical(written$attribution, meta$attribution)
   expect_identical(written$snapshot_date, "2026-09-26")
+  expect_identical(written$opinion_to_decision, list(
+    median_days = 57L,
+    p90_days = NULL,
+    medicines = 1L,
+    opinions_from = "2021-09-26"
+  ))
   expect_identical(written$sources[[1]], list(
     name = "EMA",
     version = "2026-09-26T06:02:29Z"

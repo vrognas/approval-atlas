@@ -30,6 +30,12 @@ export function equivalentSetKey(keys, equivalents) {
   return [...new Set(keys.map((key) => representative(key, equivalents)))].sort().join("|");
 }
 
+// Step 4 (#10): how many distinct treatments, not marketing authorizations: the distinct substance
+// sets of medicines' substance keys (lists; none: not counted), equivalent spellings joined.
+export function substanceSetCount(keyLists, equivalents) {
+  return new Set(keyLists.map((keys) => equivalentSetKey(keys, equivalents)).filter((key) => key !== null)).size;
+}
+
 // Search-index rows -> Map set key -> rows (input order); rows without substances are left out.
 // R names a medicine's substances by its active substance field where EMA's INN field repeats the
 // medicine's name (Vysribli is denosumab in the search index), so its set is the estimate's.

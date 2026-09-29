@@ -51,6 +51,18 @@ export function typeBadges(row) {
   return badges;
 }
 
+// Step 4 (#9): the EMA flags that qualify a current authorization, shown beside its status (the
+// medicine card's strip, result tables): a conditional one or one under exceptional circumstances,
+// then additional monitoring (the black triangle). row: a search-index row (the flags since step
+// 4) or an ema_medicines row; none while unknown, and none for another status (an ended
+// authorization keeps them among the card's facts).
+export const STATUS_FLAGS = ["conditional_approval", "exceptional_circumstances", "additional_monitoring"];
+
+export function statusFlags(status, row) {
+  if (status !== "Authorised" || !row) return [];
+  return STATUS_FLAGS.filter((flag) => row[flag] === true);
+}
+
 // Each EMA status in its own damped hue (dots, pills, the stacked approval-years strip); the two
 // pending opinions share gold, withdrawn applications and rolling reviews slate, as do unknown ones.
 const STATUS_HUES = {

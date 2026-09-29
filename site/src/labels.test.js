@@ -247,6 +247,93 @@ test("a medicine that is not authorized gets a status sentence built from EMA's 
   assert.equal(labels.statusSentence("Opinion under re-examination", null, null), "Opinion under re-examination; not yet authorized.");
 });
 
+// Step 4 (#12): 21 positive opinions await the Commission's decision, which usually follows about
+// 2 months later (meta.json opinion_to_decision: median 57 days, 90th percentile 69). decision:
+// those figures; asOf: the data's date, from which the days waited so far are counted.
+test("a positive opinion says how long the EU decision usually takes, when the data has the figure", () => {
+  const { statusSentence } = labels;
+  const decision = { median: 57, p90: 69 };
+  const usually = "The EU decision usually comes about 57 days after the opinion.";
+  // Zeydovio: 11 days since its opinion, within the usual time.
+  assert.equal(statusSentence("Opinion", "2026-09-17", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 17 Sep 2026; not yet authorized. ${usually}`);
+  // Pebrilzo: positive, no opinion date.
+  assert.equal(statusSentence("Opinion", null, "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion; not yet authorized. ${usually}`);
+  // No figure (older meta.json): as before.
+  assert.equal(statusSentence("Opinion", "2026-09-17", "Positive", { decision: null, asOf: "2026-09-28" }), "Positive opinion on 17 Sep 2026; not yet authorized.");
+  // A negative opinion, an unknown one, a re-examination: no expectation.
+  assert.equal(statusSentence("Opinion", "2025-05-22", "Negative", { decision, asOf: "2026-09-28" }), "Negative opinion on 22 May 2025.");
+  assert.equal(statusSentence("Opinion", null, null, { decision, asOf: "2026-09-28" }), "Opinion adopted; not yet authorized.");
+  assert.equal(statusSentence("Opinion under re-examination", null, "Positive", { decision, asOf: "2026-09-28" }), "Opinion under re-examination; not yet authorized.");
+});
+
+// Review of step 4: 9 of the 21 are past the median, Nylaspeg and Onswik (95 days) past the 90th
+// percentile; "usually comes about 57 days after" alone read as "any day now" or as stale data.
+test("a positive opinion past the usual time says how long it has waited", () => {
+  const { statusSentence } = labels;
+  const decision = { median: 57, p90: 69 };
+  const usually = "The EU decision usually comes about 57 days after the opinion.";
+  // Lynavoy: 67 days, past the median.
+  assert.equal(statusSentence("Opinion", "2026-07-23", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 23 Jul 2026; not yet authorized. ${usually} This one has waited 67 days so far.`);
+  // Nylaspeg: 95 days, past 9 in 10.
+  assert.equal(
+    statusSentence("Opinion", "2026-06-25", "Positive", { decision, asOf: "2026-09-28" }),
+    `Positive opinion on 25 Jun 2026; not yet authorized. ${usually} This one has waited 95 days so far, longer than 9 in 10 decisions of the last 5 years took.`,
+  );
+  // At the median: not past it.
+  assert.equal(statusSentence("Opinion", "2026-08-02", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 2 Aug 2026; not yet authorized. ${usually}`);
+  // No 90th percentile, or no data date: the median alone, and only what can be counted.
+  assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision: { median: 57, p90: null }, asOf: "2026-09-28" }), `Positive opinion on 25 Jun 2026; not yet authorized. ${usually} This one has waited 95 days so far.`);
+  assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision, asOf: null }), `Positive opinion on 25 Jun 2026; not yet authorized. ${usually}`);
+});
+
+// Step 4 (#9): of the authorized medicines 45 are conditional and 45 authorized under exceptional
+// circumstances; "X is authorized in the EU." alone leaves that out. flags: a search-index or
+// ema_medicines row. Review of step 4: one short clause (the longer sentences took 4 lines at
+// 320px and pushed the product information a screen down); the chip's tooltip has the detail.
+test("an authorized medicine's dek names a conditional authorization or exceptional circumstances", () => {
+  const { statusSentence } = labels;
+  assert.equal(
+    statusSentence("Authorised", "2020-12-14", null, { flags: { conditional_approval: true, exceptional_circumstances: false } }),
+    "Conditionally authorized: renewed yearly until full data are provided.",
+  );
+  assert.equal(
+    statusSentence("Authorised", "2006-01-08", null, { flags: { conditional_approval: false, exceptional_circumstances: true } }),
+    "Authorized under exceptional circumstances: reviewed yearly.",
+  );
+  for (const sentence of Object.values(labels.UI.card.qualifiers)) assert.ok(sentence.split(" ").length <= 10, sentence);
+  // Additional monitoring alone is a chip beside the status, not a sentence.
+  assert.equal(statusSentence("Authorised", "2022-01-06", null, { flags: { additional_monitoring: true } }), null);
+  // Flags not known yet, or an ended authorization: none.
+  assert.equal(statusSentence("Authorised", "2020-12-14", null, { flags: null }), null);
+  assert.equal(statusSentence("Withdrawn", "2023-01-01", null, { flags: { conditional_approval: true } }), "Withdrawn on 1 Jan 2023.");
+});
+
+// Step 4 (#9): the flags' explanations (the chips beside the status, the result tables' markers,
+// the card's other flags), on hover and tap as the type and status tips.
+test("each approval flag has an explanation of at most 12 words", () => {
+  const { flagTips, flagMarkers, card } = labels.UI;
+  assert.deepEqual(flagTips, {
+    conditional_approval: "Approved on less complete data for an unmet need; renewed yearly.",
+    exceptional_circumstances: "Full data cannot be collected, e.g. very rare disease; reviewed yearly.",
+    additional_monitoring: "Black triangle ▼: monitored more closely; report any suspected side effects.",
+    prime_priority_medicine: "EMA's priority medicines scheme: early support for an unmet need.",
+    accelerated_assessment: "Assessed in 150 days instead of the usual 210.",
+  });
+  for (const tip of Object.values(flagTips)) assert.ok(tip.split(" ").length <= 12, tip);
+  // Every flag chip but Orphan (a type badge) has one.
+  assert.deepEqual(Object.keys(card.flags).filter((flag) => !flagTips[flag]), ["orphan_medicine"]);
+  // The result tables' compact markers: visible text, and the full name read instead. Review of
+  // step 4: each shows a word, as the tip needs a mouse or a tap (a bare "▼" meant nothing to a
+  // keyboard user or a lay reader).
+  assert.deepEqual(flagMarkers, {
+    conditional_approval: { text: "Conditional", name: "Conditional approval" },
+    exceptional_circumstances: { text: "Exceptional", name: "Exceptional circumstances" },
+    additional_monitoring: { text: "▼ Additional monitoring", name: "Additional monitoring" },
+  });
+  for (const { text } of Object.values(flagMarkers)) assert.match(text, /[A-Za-z]{4,}/);
+  assert.equal(card.blackTriangle, "▼");
+});
+
 // Step 2 (#11): a negative opinion is not "pending" in the search's meta line or the answer strip.
 test("a negative opinion is labeled as such; other statuses keep their label", () => {
   assert.equal(labels.statusOpinionLabel("Opinion", "Negative"), "Opinion (negative)");
@@ -418,6 +505,12 @@ test("a condition page marks the medicines only mentioned in the indication, and
   assert.equal(condition.counts(0, 3, false), "Authorized: 0 medicines tagged by EMA and 3 mentioned in the indication text.");
   // The indication texts still loading.
   assert.equal(condition.counts(5, null, false), "Authorized: 5 medicines tagged by EMA.");
+  // Step 4 (#10): the tagged medicines' distinct substance sets (Arthritis, Rheumatoid: 47, 16).
+  // Review of step 4: a combination counts on its own (HIV Infections: 40 sets of 27 substances),
+  // so the copy names combinations.
+  assert.equal(condition.counts(47, 5, false, 16), "Authorized: 47 medicines tagged by EMA (16 active substances or combinations) and 5 more mentioned in the indication text.");
+  assert.equal(condition.counts(15, null, true, 1), "Every status: 15 medicines tagged by EMA (1 active substance or combination).");
+  assert.equal(condition.counts(0, 3, false, 0), "Authorized: 0 medicines tagged by EMA and 3 mentioned in the indication text.");
 });
 
 // Phase 4f: one therapeutic area tree (MeSH branch › level 2 › level 3 › EMA's terms).
@@ -449,7 +542,7 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(labels.UI.activity.otherTitle, "Other therapeutic areas");
   assert.equal(
     labels.UI.conditions.subtitle(33, true, true),
-    "Therapeutic areas of the 33 medicines matching the filters, within the selected areas: medicines of every status, then those authorized",
+    "Therapeutic areas of the 33 medicines matching the filters, within the selected areas: medicines of every status, then those authorized and their active substances or combinations",
   );
 });
 
@@ -610,6 +703,19 @@ test("quick document links: PI and EPAR, named with the medicine", () => {
   assert.equal(documentLinks.epar.label("Wegovy"), "EPAR public assessment report PDF for Wegovy");
 });
 
+// Step 4 (#15): the medicine card's buttons say what the product information holds and add EMA's
+// plain-language overview; the documents list keeps its names.
+test("the medicine card's document buttons", () => {
+  const { card, documents } = labels.UI;
+  assert.deepEqual(card.buttons, {
+    productInformation: "Product information (SmPC and package leaflet)",
+    epar: "EPAR public assessment report",
+    overview: "Plain-language overview",
+  });
+  assert.equal(documents.productInformation, "Product information (SmPC)");
+  assert.equal(documents.overview, "Summary for the public");
+});
+
 test("filter sentence, sidebar and sheet copy", () => {
   const { sentence, facets, sheet } = labels.UI;
   // Tokens: the visible text first (WCAG 2.5.3), then the filter they belong to.
@@ -680,7 +786,7 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
   const { years } = labels.UI;
   assert.equal(years.stack.modes.status, "Status");
   assert.equal(years.by.status, "current status");
-  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.");
+  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.");
   // The legend states the stack order, so position identifies a segment, not only its colour.
   assert.equal(years.legendLead, "Bottom to top:");
   assert.equal(years.undatedStatuses(366), "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart.");
@@ -696,11 +802,14 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
 test("the most common conditions card names the medicines it covers and how to open a condition", () => {
   const { conditions } = labels.UI;
   assert.equal(conditions.title, "Most common conditions");
-  // Phase 4c review: each row counts every status, then the authorized ones (the condition page's list).
-  assert.equal(conditions.subtitle(2351, false), "Therapeutic areas of all 2,351 medicines in the EMA data: medicines of every status, then those authorized");
-  assert.equal(conditions.subtitle(33, true), "Therapeutic areas of the 33 medicines matching the filters: medicines of every status, then those authorized");
-  assert.equal(conditions.subtitle(1, true), "Therapeutic areas of the 1 medicine matching the filters: medicines of every status, then those authorized");
+  // Phase 4c review: each row counts every status, then the authorized ones (the condition page's
+  // list); step 4 (#10): and their distinct substance sets, a combination on its own (review).
+  assert.equal(conditions.subtitle(2351, false), "Therapeutic areas of all 2,351 medicines in the EMA data: medicines of every status, then those authorized and their active substances or combinations");
+  assert.equal(conditions.subtitle(33, true), "Therapeutic areas of the 33 medicines matching the filters: medicines of every status, then those authorized and their active substances or combinations");
+  assert.equal(conditions.subtitle(1, true), "Therapeutic areas of the 1 medicine matching the filters: medicines of every status, then those authorized and their active substances or combinations");
   assert.equal(conditions.authorized(48), "48 authorized");
+  assert.equal(conditions.substances(16), "16 active substances or combinations");
+  assert.equal(conditions.substances(1), "1 active substance or combination");
   assert.equal(conditions.hint, "Open a condition to see its approval timeline.");
   assert.equal(conditions.empty(0), "No medicines match the current filters.");
   assert.equal(conditions.empty(1), "No therapeutic area is listed for this medicine.");
@@ -729,6 +838,15 @@ test("the results timeline explains its dots and lines", () => {
   // Phase 4f: condition pages name both kinds of dot in a legend.
   assert.deepEqual(timeline.legend, { tagged: "Tagged by EMA", mentioned: "Mentioned in the indication" });
   assert.equal(timeline.mentioned, "Only mentioned in the indication text");
+  // Step 4 (#17): on condition and indication-text pages a dot is not the date the use was added
+  // (review: "this use", as an indication-text search is not a condition).
+  assert.equal(timeline.firstApproval, "Dots show each medicine's first approval, not when this use was added to its indication.");
+});
+
+// Step 4 (#17): the per-year totals differ from EMA's annual reports, which count CHMP opinions.
+test("the approvals per year note says why its totals differ from EMA's annual reports", () => {
+  const { years } = labels.UI;
+  assert.match(years.note(years.counting.type), /^Year of EU marketing authorization; each medicine counted once\. EMA's annual reports count CHMP opinions instead, so their yearly totals differ\. Click a year/);
 });
 
 test("the medicines table lists every matching medicine, undated ones last", () => {
@@ -1071,7 +1189,7 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   // Modality (M2 phase 2): groups, or one group's modalities; a medicine counts in each it has.
   assert.equal(years.by.mod, "modality group");
   assert.equal(years.by.modIn("Antibody"), "modality in Antibody");
-  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`);
+  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`);
   assert.equal(
     years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
     "Stacked column chart of EMA approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",
@@ -1079,7 +1197,7 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   assert.equal(years.by.atcIn("L04 Immunosuppressants"), "ATC class in L04 Immunosuppressants");
   assert.equal(years.by.atc, "ATC group");
   assert.equal(years.by.mah, "company");
-  const howTo = "Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.";
+  const howTo = "EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.";
   assert.equal(years.note(years.counting.type), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
   assert.equal(years.note(years.counting.atc(6, false)), `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each. ${howTo}`);
   // Phase 4c review: the top classes or holders and Other only when there is an Other segment.

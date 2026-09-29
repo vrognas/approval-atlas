@@ -2123,6 +2123,13 @@ td.result-holder .holder-main .company-badge {
   font-size: 0.8125rem;
 }
 
+/* Step 4 (#10): the authorized medicines' distinct active substances, on a line of their own. */
+.bar-substances {
+  display: block;
+  color: var(--ink-secondary);
+  font-size: 0.8125rem;
+}
+
 /* Phones: the label takes its own line above the bar. */
 @media (max-width: 600px) {
   .bar-row {
@@ -2307,8 +2314,12 @@ td.result-holder .holder-main .company-badge {
   font-size: 0.875rem;
 }
 
-.table-card > h2 {
-  margin: 0 20px 4px;
+.table-card > .card-head {
+  margin: 0 20px 8px;
+}
+
+.table-card > .card-head h2 {
+  margin: 0;
 }
 
 .table-card > .more {
@@ -2935,6 +2946,21 @@ td.atc .code + .code {
 .status-cell .flag {
   display: inline-block;
   margin-top: 4px;
+}
+
+/* Step 4 (#9): a result row's markers beside an authorized status: "Conditional", "Exceptional",
+   the black triangle of additional monitoring (each explained on hover and on a tap); in line with
+   the status's label and date (after its dot). */
+.flag-markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 14px;
+}
+
+.status-cell .flag-markers .flag {
+  margin-top: 0;
 }
 
 /* MeSH terms wrap at spaces, and hyphenate where the browser can (lang="en"); long single words
@@ -3759,6 +3785,21 @@ table.activity {
   }
 }
 
+/* Step 4 (#9): the status's qualifiers (conditional, exceptional circumstances, additional
+   monitoring) as chips under its pill; their text wraps, so the widest word, not the chip, sets
+   the Status column's least width. */
+.strip-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.strip-flags .chip {
+  border-radius: 8px;
+  white-space: normal;
+}
+
 /* The protection cell: a link to the estimate below, then orphan exclusivity still running. */
 .strip-note {
   display: block;
@@ -3793,7 +3834,8 @@ table.activity {
   font-weight: 600;
 }
 
-/* The SmPC and EPAR as full-width secondary buttons. */
+/* The SmPC, EPAR and plain-language overview (step 4, #15) as full-width secondary buttons; side
+   by side from 721px, as many as fit at 13rem each. */
 .doc-buttons {
   display: grid;
   gap: 8px;
@@ -3802,7 +3844,7 @@ table.activity {
 
 @media (min-width: 721px) {
   .doc-buttons {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   }
 }
 

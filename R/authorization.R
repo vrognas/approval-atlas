@@ -67,6 +67,34 @@ is_authorized_now <- function(medicines) {
   medicines$medicine_status == "Authorised" & !is.na(medicines$authorized_from)
 }
 
+# Days from the CHMP opinion to the EC decision granting the marketing
+# authorisation (both EMA dates), for opinions of the five years before the
+# snapshot, so the figures follow current practice. An opinion dated after
+# the authorisation is a later one (e.g. an extension), not the one that led
+# to it.
+summarise_opinion_to_decision <- function(medicines, snapshot_date) {
+  opinions_from <- seq(snapshot_date, length.out = 2, by = "-5 years")[[2]]
+  days <- medicines |>
+    dplyr::filter(
+      !.data$medicine_status %in% never_authorized_statuses,
+      .data$opinion_adopted_date >= opinions_from,
+      .data$opinion_adopted_date <= .data$marketing_authorisation_date
+    ) |>
+    dplyr::mutate(
+      days = as.integer(
+        .data$marketing_authorisation_date - .data$opinion_adopted_date
+      )
+    ) |>
+    dplyr::pull("days")
+  quantiles <- round(stats::quantile(days, c(0.5, 0.9), names = FALSE))
+  list(
+    median_days = as.integer(quantiles[[1]]),
+    p90_days = as.integer(quantiles[[2]]),
+    medicines = length(days),
+    opinions_from = format(opinions_from)
+  )
+}
+
 build_authorized_series <- function(medicines, snapshot_date) {
   series <- purrr::map(series_dates(snapshot_date), function(date) {
     is_counted <- is_counted_in_series(medicines, date)

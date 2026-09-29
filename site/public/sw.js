@@ -1,5 +1,6 @@
 // Offline support (registered only in production builds). Hashed /assets/* are cache-first;
-// the page, manifest, icon and data files are network-first with the cache as fallback. Cross-origin
+// the page, manifest, icon and data files are network-first with the cache as fallback, and but for
+// the page the cache answers when the network is slow (NETWORK_TIMEOUT_MS). Cross-origin
 // requests (EMA PDFs, links) are never intercepted or cached. A cache failure never breaks a
 // network response.
 const CACHE_PREFIX = "approval-atlas-";
@@ -37,14 +38,24 @@ async function cacheFirst(event) {
   return (await cached(event.request)) ?? remember(event, await fetch(event.request), ASSET_CACHE);
 }
 
+// Conference Wi-Fi: with a cached copy at hand, a network answer slower than this (or a failed
+// request) is not waited for; the request goes on and updates the cache for the next load. Without
+// one, the network is awaited however long it takes. Files answered from the cache can be older than
+// those the network answered in time (as offline, when a card's files were cached on a later visit).
+const NETWORK_TIMEOUT_MS = 3000;
+
 async function networkFirst(event) {
-  try {
-    return remember(event, await fetch(event.request), DATA_CACHE);
-  } catch (error) {
-    const hit = await cached(event.request);
-    if (hit) return hit;
-    throw error;
-  }
+  const network = fetch(event.request).then((response) => remember(event, response, DATA_CACHE));
+  // Keeps the worker alive until the request ends, also when the cached copy answered first.
+  event.waitUntil(network.catch(() => {}));
+  const hit = await cached(event.request);
+  if (!hit) return network;
+  // The page only when the network fails: a cached page can be an older build's, whose hashed
+  // assets a new worker has deleted and the server no longer has (a blank page, and a blank page
+  // offline later, as the new worker cannot fetch them).
+  if (event.request.mode === "navigate") return network.catch(() => hit);
+  const slow = new Promise((resolve) => setTimeout(() => resolve(hit), NETWORK_TIMEOUT_MS));
+  return Promise.race([network, slow]).catch(() => hit);
 }
 
 const isSameOrigin = (url) => url.origin === self.location.origin;

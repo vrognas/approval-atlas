@@ -270,14 +270,34 @@ export function sentenceParts(state, lookups) {
 // EMA status Authorised (the condition page lists those first); descriptorOf: EMA term -> MeSH
 // descriptor UI, so a term can open its condition lookup (null when unknown). within(term): only
 // the terms within the therapeutic area filter (phase 4f; areas.js inAreas()), or null for all.
-export function topAreas(products, descriptorOf, n = 8, within = null) {
+// setKeyOf(product): its substance set (step 4, #10: equivalent spellings joined), when given each
+// row also counts the distinct sets of its authorized medicines (substances).
+export function topAreas(products, descriptorOf, n = 8, within = null, setKeyOf = null) {
   const termsOf = (product) => (within ? product.areas.filter(within) : product.areas);
   const counts = keyCounts(products, termsOf);
-  const authorized = keyCounts(products.filter((product) => product.medicine_status === "Authorised"), termsOf);
+  const authorizedProducts = products.filter((product) => product.medicine_status === "Authorised");
+  const authorized = keyCounts(authorizedProducts, termsOf);
+  const sets = new Map();
+  if (setKeyOf) {
+    for (const product of authorizedProducts) {
+      const key = setKeyOf(product);
+      if (key === null) continue;
+      for (const term of termsOf(product)) {
+        if (!sets.has(term)) sets.set(term, new Set());
+        sets.get(term).add(key);
+      }
+    }
+  }
   return [...counts]
     .sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b))
     .slice(0, n)
-    .map(([term, count]) => ({ term, count, authorized: authorized.get(term) ?? 0, descriptorUi: descriptorOf.get(term) ?? null }));
+    .map(([term, count]) => ({
+      term,
+      count,
+      authorized: authorized.get(term) ?? 0,
+      ...(setKeyOf ? { substances: sets.get(term)?.size ?? 0 } : {}),
+      descriptorUi: descriptorOf.get(term) ?? null,
+    }));
 }
 
 // key -> (medicine type -> products), each product once per distinct key (keysOf(product)).

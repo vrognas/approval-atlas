@@ -95,6 +95,7 @@ build_meta <- function(source_url,
                        source_timestamp,
                        tables,
                        snapshot_date,
+                       opinion_to_decision,
                        sources) {
   list(
     source_url = source_url,
@@ -102,6 +103,7 @@ build_meta <- function(source_url,
     row_counts = lapply(tables, nrow),
     attribution = ema_attribution,
     snapshot_date = format(snapshot_date),
+    opinion_to_decision = opinion_to_decision,
     sources = sources,
     licence = data_licence
   )

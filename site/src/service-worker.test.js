@@ -16,10 +16,13 @@ function stamp(fileNames) {
   return readFileSync(join(dir, "sw.js"), "utf8").match(/const ASSET_CACHE = `\$\{CACHE_PREFIX\}assets-(.*)`;/)[1];
 }
 
-// Loads public/sw.js (stamped "current") with fake caches; returns its listeners and the calls made.
-function loadWorker(cacheNames) {
+// Loads public/sw.js (stamped "current") with fake caches, network and timers; returns its
+// listeners, the calls made and the timers set. stored: cached responses by key (a page's path, else
+// the request's URL); fetch: the network (offline by default).
+function loadWorker(cacheNames, { stored = new Map(), fetch = async () => { throw new TypeError("offline"); } } = {}) {
   const listeners = {};
-  const calls = { deleted: [], added: [] };
+  const calls = { deleted: [], added: [], put: [], fetched: [] };
+  const timers = [];
   const worker = {
     addEventListener: (type, listener) => {
       listeners[type] = listener;
@@ -27,13 +30,48 @@ function loadWorker(cacheNames) {
     clients: { claim: async () => {} },
     location: { origin: "https://example.org" },
   };
+  const keyOf = (key) => (typeof key === "string" ? key : key.url);
   const caches = {
     keys: async () => cacheNames,
     delete: async (name) => calls.deleted.push(name),
-    open: async (name) => ({ add: async (url) => calls.added.push([name, url]) }),
+    match: async (key) => stored.get(keyOf(key)),
+    open: async (name) => ({
+      add: async (url) => calls.added.push([name, url]),
+      put: async (key, response) => calls.put.push([name, keyOf(key), response.body]),
+    }),
   };
-  vm.runInNewContext(readFileSync(WORKER, "utf8").replace("__BUILD_VERSION__", "current"), { self: worker, caches, URL });
-  return { listeners, calls };
+  const network = (request) => {
+    calls.fetched.push(request.url);
+    return fetch(request);
+  };
+  const setTimeout = (callback, ms) => timers.push({ callback, ms });
+  vm.runInNewContext(readFileSync(WORKER, "utf8").replace("__BUILD_VERSION__", "current"), { self: worker, caches, URL, fetch: network, setTimeout });
+  return { listeners, calls, timers };
+}
+
+const response = (body) => ({ body, ok: true, clone: () => response(body) });
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+// Lets the worker's pending promise callbacks run.
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+// A GET request for url (mode "navigate" for a page); returns the response promise and a function
+// resolving once every waitUntil promise, later ones included, has settled.
+function fetchEvent(listener, url, mode = "cors") {
+  const extended = [];
+  let responded;
+  listener({ request: { method: "GET", url, mode }, respondWith: (promise) => (responded = promise), waitUntil: (promise) => extended.push(promise) });
+  const settled = async () => {
+    for (let index = 0; index < extended.length; index += 1) await extended[index];
+  };
+  return { response: responded, settled };
 }
 
 // Resolves once the handler's waitUntil promise settles.
@@ -79,4 +117,95 @@ test("URLs sent by the page go to the asset cache or the data cache", async () =
     ["approval-atlas-data", "https://example.org/"],
     ["approval-atlas-data", "https://example.org/data/ema_search_index.json"],
   ]);
+});
+
+// Conference Wi-Fi (#13): a slow network must not hang the page when a copy is at hand.
+const META = "https://example.org/data/meta.json";
+
+test("with a cached copy, a network slower than 3 seconds serves that copy, and its answer updates the cache", async () => {
+  const network = deferred();
+  const { listeners, calls, timers } = loadWorker([], { stored: new Map([[META, response("cached")]]), fetch: () => network.promise });
+  const event = fetchEvent(listeners.fetch, META);
+  await tick();
+  assert.deepEqual(timers.map((timer) => timer.ms), [3000]);
+  timers[0].callback();
+  assert.equal((await event.response).body, "cached");
+  network.resolve(response("fresh"));
+  await event.settled();
+  assert.deepEqual(calls.put, [["approval-atlas-data", META, "fresh"]]);
+});
+
+test("with a cached copy, a network answer within 3 seconds is served and cached", async () => {
+  const { listeners, calls } = loadWorker([], { stored: new Map([[META, response("cached")]]), fetch: async () => response("fresh") });
+  const event = fetchEvent(listeners.fetch, META);
+  assert.equal((await event.response).body, "fresh");
+  await event.settled();
+  assert.deepEqual(calls.put, [["approval-atlas-data", META, "fresh"]]);
+});
+
+test("with a cached copy, a failed network serves that copy without waiting", async () => {
+  const { listeners } = loadWorker([], { stored: new Map([[META, response("cached")]]) });
+  const event = fetchEvent(listeners.fetch, META);
+  assert.equal((await event.response).body, "cached"); // no timer fired
+  await event.settled();
+});
+
+test("without a cached copy, the network is awaited however long it takes", async () => {
+  const network = deferred();
+  const { listeners, calls, timers } = loadWorker([], { fetch: () => network.promise });
+  const event = fetchEvent(listeners.fetch, META);
+  await tick();
+  assert.deepEqual(timers, []);
+  network.resolve(response("fresh"));
+  assert.equal((await event.response).body, "fresh");
+  await event.settled();
+  assert.deepEqual(calls.put, [["approval-atlas-data", META, "fresh"]]);
+});
+
+test("without a cached copy, a failed network fails the request", async () => {
+  const { listeners } = loadWorker([]);
+  const event = fetchEvent(listeners.fetch, META);
+  await assert.rejects(event.response, /offline/);
+  await event.settled();
+});
+
+// Review of step 4: a page is never answered from the cache while the network works. The cached page
+// can be an older build's, whose hashed assets a new worker has deleted and the server no longer has
+// (a blank page; its asset URLs, posted to the new worker, fail, so the next offline visit is blank
+// too). The page is small (index.html, about 4.5 KB gzipped); the data files keep the race.
+test("the page: a slow network is awaited even with a cached copy, as that copy's assets can be gone", async () => {
+  const network = deferred();
+  const { listeners, calls, timers } = loadWorker([], { stored: new Map([["/", response("cached page")]]), fetch: () => network.promise });
+  const event = fetchEvent(listeners.fetch, "https://example.org/?med=EMEA%2FH%2FC%2F004174", "navigate");
+  let answered = false;
+  event.response.then(() => (answered = true));
+  await tick();
+  assert.deepEqual(timers, []);
+  assert.equal(answered, false);
+  network.resolve(response("fresh page"));
+  assert.equal((await event.response).body, "fresh page");
+  await event.settled();
+  assert.deepEqual(calls.put, [["approval-atlas-data", "/", "fresh page"]]);
+});
+
+test("the page: offline, the one cached copy answers every lookup address", async () => {
+  const { listeners, timers } = loadWorker([], { stored: new Map([["/", response("cached page")]]) });
+  const event = fetchEvent(listeners.fetch, "https://example.org/?med=EMEA%2FH%2FC%2F004174", "navigate");
+  assert.equal((await event.response).body, "cached page");
+  assert.deepEqual(timers, []);
+  await event.settled();
+});
+
+test("hashed assets stay cache-first: a cached copy is served with no network request or timer", async () => {
+  const asset = "https://example.org/assets/index-a1.js";
+  const { listeners, calls, timers } = loadWorker([], { stored: new Map([[asset, response("cached asset")]]), fetch: async () => response("fresh asset") });
+  const event = fetchEvent(listeners.fetch, asset);
+  assert.equal((await event.response).body, "cached asset");
+  assert.deepEqual([calls.fetched, timers], [[], []]);
+});
+
+test("requests to other sites are never answered by the worker", () => {
+  const { listeners } = loadWorker([]);
+  const event = fetchEvent(listeners.fetch, "https://www.ema.europa.eu/en/documents/x.pdf");
+  assert.equal(event.response, undefined);
 });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
+import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup, substanceSetCount } from "./copies.js";
 
 // ema_substance_equivalents.json rows (hand-checked pairs; both directions in the file).
 const pair = (substance_key, equivalent_key) => ({
@@ -64,6 +64,19 @@ test("equivalentSetKey: a medicine's substance set with each substance named onc
   assert.equal(equivalentSetKey(["adalimumab"], new Map()), "adalimumab");
   assert.equal(equivalentSetKey([], equivalents), null);
   assert.equal(equivalentSetKey(undefined, equivalents), null);
+});
+
+// Step 4 (#10): "N medicines, K active substances or combinations" per condition (Giant Cell Tumor
+// of Bone: 15 medicines, 1 substance; a combination counts on its own, so the copy names it).
+test("substanceSetCount: distinct substance sets, salts of one substance once, combinations apart", () => {
+  const equivalents = substanceEquivalents(EQUIVALENT_ROWS);
+  const keys = [SPRYCEL, DASATINIB_ACCORD_HEALTHCARE, OZEMPIC, WEGOVY, KYINSU, FYZOCLAD].map((row) => row.substance_keys);
+  // dasatinib, semaglutide, insulin icodec|semaglutide, adalimumab.
+  assert.equal(substanceSetCount(keys, equivalents), 4);
+  // Without the pair table the salt spelling counts apart.
+  assert.equal(substanceSetCount(keys, new Map()), 5);
+  // Medicines without substances are not counted.
+  assert.equal(substanceSetCount([null, [], undefined], equivalents), 0);
 });
 
 test("setGroups: medicines by substance set, salts of one substance together, combinations apart", () => {

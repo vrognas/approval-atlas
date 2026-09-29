@@ -199,7 +199,11 @@
         </section>
 
         <section class="chart-card table-card" aria-labelledby="table-title">
-          <h2 id="table-title">Medicines</h2>
+          <!-- "Download CSV" (main.js, csv.js): every medicine the table lists; the caption says which. -->
+          <div class="card-head">
+            <h2 id="table-title">Medicines</h2>
+            <button id="table-download" class="more" type="button" aria-describedby="table-caption"></button>
+          </div>
           <p id="table-caption" class="table-caption"></p>
           <div class="table-scroll">
             <table id="medicines-table"></table>

@@ -101,7 +101,10 @@ test_that("the search index keys a named INN by its active substance", {
     medicine_status = "Authorised",
     marketing_authorisation_date = as.Date(c("2011-09-05", "2025-09-15")),
     medicine_type = c("Other", "Biosimilar"),
-    orphan_medicine = FALSE
+    orphan_medicine = FALSE,
+    conditional_approval = FALSE,
+    exceptional_circumstances = FALSE,
+    additional_monitoring = FALSE
   )
   index <- build_search_index(
     medicines,

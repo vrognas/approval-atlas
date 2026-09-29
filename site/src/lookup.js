@@ -4,9 +4,12 @@
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
 import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
-import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
+import { atcHue, atcSegments, statusFlags, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
-import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
+import {
+  copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup,
+  substanceSetCount,
+} from "./copies.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import {
@@ -127,11 +130,31 @@ function strip(items) {
     el("div", { class: wide ? "strip-wide" : null }, el("dt", null, label), el("dd", null, value)))));
 }
 
-// SmPC / EPAR as a full-width secondary button: document name (with the external-link icon), then
-// "PDF · updated {date}".
+// Step 4 (#9): an approval flag's chip (UI.card.flags) explaining itself on hover and on a tap
+// (UI.flagTips; tabindex -1: focusable, no tab stop, as the type badges) and, visually hidden, to
+// screen readers (the card has room, as for its type explanations); additional monitoring leads
+// with EMA's black triangle (aria-hidden).
+function flagChip(flag) {
+  const tip = UI.flagTips[flag] ?? null;
+  return el("span", { class: "chip flag-chip", "data-tip": tip, tabindex: tip ? "-1" : null },
+    flag === "additional_monitoring" ? [el("span", { class: "black-triangle", "aria-hidden": "true" }, UI.card.blackTriangle), " "] : null,
+    UI.card.flags[flag],
+    tip ? el("span", { class: "visually-hidden" }, `: ${tip}`) : null);
+}
+
+// The result tables' compact markers beside an authorized medicine's status (statusFlags()): the
+// short text shown (aria-hidden), the full name read, the explanation on hover and on a tap.
+function flagMarker(flag) {
+  const marker = UI.flagMarkers[flag];
+  return el("span", { class: "flag flag-marker", "data-tip": UI.flagTips[flag], tabindex: "-1" },
+    el("span", { "aria-hidden": "true" }, marker.text), el("span", { class: "visually-hidden" }, marker.name));
+}
+
+// SmPC / EPAR / overview as a full-width secondary button: document name (with the external-link
+// icon), then "PDF · updated {date}".
 function documentButton({ key, row }) {
   if (!row.url?.startsWith("https://")) return null;
-  const heading = el("span", { class: "doc-button-title" }, UI.documents[key]);
+  const heading = el("span", { class: "doc-button-title" }, UI.card.buttons[key] ?? UI.documents[key]);
   return markExternal(el("a", { class: "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
     heading,
     el("span", { class: "doc-button-meta" }, UI.card.documentMeta(PDF_URL.test(row.url), formatDate(row.last_updated_date)))), heading);
@@ -147,7 +170,9 @@ const byDate = (direction) => (a, b) => {
 const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substance_keys)].sort().join("|") : null);
 
 // meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
-export function createLookup(panel, { index, loadFile, navigate, snapshotDate, meshVersion = null }) {
+// decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
+// opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
+export function createLookup(panel, { index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
     // Rows without a code to use (atcCode()) are left out.
@@ -647,8 +672,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     const medicine = ready(medicines) ? medicines.get(number) : null;
     const [atc, atcCounts, areas, conditions, documents] = [need("atc"), need("atcCounts"), need("areas"), need("conditions"), need("documents")];
     const authorized = statusKind(row.medicine_status) === "authorized";
-    // Orphan shows as a type badge; the other flags as neutral chips.
-    const flags = Object.entries(UI.card.flags).filter(([flag]) => flag !== "orphan_medicine" && (medicine ?? row)[flag] === true);
+    // Step 4 (#9): EMA's flags from the search index (since step 4), else once ema_medicines.json
+    // has loaded. Those qualifying a current authorization (conditional, exceptional
+    // circumstances, additional monitoring) sit beside its status; orphan shows as a type badge;
+    // the others as chips among the facts, each explained.
+    const flagRow = medicine ?? (row.additional_monitoring === undefined ? null : row);
+    const besideStatus = statusFlags(row.medicine_status, flagRow);
+    const flags = Object.keys(UI.card.flags).filter((flag) => flag !== "orphan_medicine" && !besideStatus.includes(flag) && flagRow?.[flag] === true);
     const substances = (row.substances ? row.substances.split("; ") : []).map((name) => {
       const key = row.substance_keys.find((candidate) => candidate === name.toLowerCase());
       return key ? internalLink(name, { sub: key }) : name;
@@ -666,7 +696,11 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       ? el("p", { class: "muted" }, UI.card.namesake.documents(split.namesake.length),
         internalLink(UI.card.namesake.documentsLink(later.name_of_medicine), { med: later.ema_product_number }), ".")
       : null;
-    const sentence = medicine ? statusSentence(row.medicine_status, statusDate(medicine), medicine.opinion_status) : null;
+    // An authorized medicine's sentence needs only its flags (a qualifier, #9); a positive opinion's
+    // says when the EU decision usually comes (#12) and, past that, how long it has waited by the data's date.
+    const sentence = medicine || authorized
+      ? statusSentence(row.medicine_status, medicine ? statusDate(medicine) : null, medicine?.opinion_status ?? null, { decision, asOf: snapshotDate, flags: flagRow })
+      : null;
     // A negative opinion reads "not" authorized, not "not yet" (step 2, #11), once EMA's rows have loaded.
     const opinion = medicine?.opinion_status ?? null;
     // Order for a talk or poster: the answer (with any namesake), holder, since when and status in
@@ -683,7 +717,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
         authorized || row.marketing_authorisation_date
           ? [authorized ? UI.card.strip.since : UI.card.strip.approved, formatDate(row.marketing_authorisation_date) ?? NOT_STATED]
           : null,
-        [UI.card.strip.status, statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion)],
+        [UI.card.strip.status, [
+          statusBadge(row.medicine_status, true, statusOpinionLabel(row.medicine_status, opinion), opinion),
+          besideStatus.length ? el("span", { class: "strip-flags" }, besideStatus.map(flagChip)) : null,
+        ]],
         protectionCell(row),
       ]),
       copiesLines(row),
@@ -706,7 +743,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
             ? null
             : [el("span", { class: "type-explained" }, row.medicine_type, " ", el("span", { class: "muted" }, UI.typeTips[row.medicine_type] ?? "")), " "],
           explainedTypes(medicine ?? row),
-          flags.map(([, label]) => [" ", el("span", { class: "chip" }, label)]),
+          flags.map((flag) => [" ", flagChip(flag)]),
         ]),
         fact(UI.modality.label, modalityFact(number, atc)),
         ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null),
@@ -776,6 +813,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       const medicine = ready(medicines) ? medicines.get(row.ema_product_number) : null;
       const dates = statusDateLine(row.medicine_status, row.marketing_authorisation_date, medicine?.authorized_until ?? null);
       const urls = ready(documents) ? quickDocuments(documents.get(row.ema_product_number) ?? [], row.medicine_status) : null;
+      // Step 4 (#9): conditional, exceptional circumstances, additional monitoring (search index,
+      // else ema_medicines once loaded).
+      const markers = statusFlags(row.medicine_status, medicine ?? (row.additional_monitoring === undefined ? null : row));
       return el("tbody", { role: "rowgroup" },
         el("tr", { role: "row" },
           cell("result-medicine",
@@ -788,7 +828,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
             ? cell("result-areas", ready(areaRows) ? termLinks((areaRows.get(row.ema_product_number) ?? []).map((item) => item.therapeutic_area_mesh), conditions) : null)
             : null,
           cell("result-atc", atcCodes(row.ema_product_number, atc)),
-          cell("status-cell", statusBadge(row.medicine_status, false, undefined, medicine?.opinion_status ?? null), dates ? el("span", { class: "status-date" }, dates) : null),
+          cell("status-cell", statusBadge(row.medicine_status, false, undefined, medicine?.opinion_status ?? null), dates ? el("span", { class: "status-date" }, dates) : null,
+            markers.length ? el("span", { class: "flag-markers" }, markers.map(flagMarker)) : null),
           cell("type-cell", typeBadgeList(row)),
           cell("result-holder", holderOf(row.ema_product_number, medicines))),
         snippet
@@ -806,8 +847,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
 
   // A surface block holding the timeline and its caption; none with fewer than TIMELINE_MIN dated
   // rows. mentioned: product numbers found only in indication texts (hollow dots; a legend then
-  // names the dots of each kind present: tagged by EMA, filled; mentioned, hollow).
-  function timelineBlock(rows, medicines, mentioned = new Set()) {
+  // names the dots of each kind present: tagged by EMA, filled; mentioned, hollow). caveat: a
+  // sentence after the caption (condition and indication-text pages: the dots are first approvals;
+  // step 4, #17).
+  function timelineBlock(rows, medicines, mentioned = new Set(), caveat = null) {
     if (rows.filter((row) => row.marketing_authorisation_date).length < TIMELINE_MIN) return null;
     const container = el("div", { class: "timeline chart" });
     const companies = need("companies");
@@ -835,7 +878,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
         el("li", null, el("span", { class: "dot-key hollow", "aria-hidden": "true" }), UI.timeline.legend.mentioned))
       : null;
     return el("div", { class: "card-section" },
-      el("p", { class: "muted timeline-caption" }, UI.timeline.caption),
+      el("p", { class: "muted timeline-caption" }, UI.timeline.caption, caveat ? [" ", caveat] : null),
       legend,
       container);
   }
@@ -1010,6 +1053,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       } }),
       " ", UI.condition.showAll);
     const mentionedRows = (mentioned ?? []).map((entry) => entry.row);
+    // Step 4 (#10): the tagged medicines' distinct active substances (equivalent spellings joined),
+    // once the equivalents have loaded (or failed: EMA's spellings).
+    const equivalents = equivalentsNow();
+    const substances = descriptor && equivalents !== undefined ? substanceSetCount(taggedShown.map((row) => row.substance_keys), equivalents) : null;
     return el("article", { class: "card" },
       kicker(ui ? "condition" : "text"),
       title(heading),
@@ -1017,13 +1064,13 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       // Step 2 (#19): "aspirin" also searches for "acetylsalicylic acid".
       variant ? el("p", { class: "dek" }, UI.condition.alsoSearched(variant)) : null,
       // Both counts of the lists below (phase 4f): tagged by EMA, and only mentioned in the indication.
-      descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll)) : null,
+      descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll, substances)) : null,
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
         related.map((condition) => [conditionLink(condition.name, condition.ui), " "])) : null,
       // What the condition is: NLM's scope note (owner request 2026-09-28).
       descriptor ? meshDefinition(ui) : null,
       toggle,
-      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined),
+      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined, UI.timeline.firstApproval),
       descriptor
         ? [el("h3", { id: "results-tagged" }, UI.condition.taggedOwn(descriptor.name, own.length)), resultTable(own.map((row) => ({ row })), medicines, "results-tagged")]
         : null,
@@ -1276,6 +1323,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
     // MeSH scope notes (buildMeshNotes()): null until need("meshNotes") has loaded them (or failed).
     meshNotes: () => (ready(values.get("meshNotes")) ? values.get("meshNotes") : null),
+    // Substance equivalents (substanceEquivalents()): null until need("equivalents") has loaded them
+    // (none when that failed: older data).
+    equivalents: () => (ready(values.get("equivalents")) ? values.get("equivalents") : null),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [values.get("atc"), values.get("atcCounts")];

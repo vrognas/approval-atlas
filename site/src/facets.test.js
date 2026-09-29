@@ -322,6 +322,21 @@ test("the most common conditions: areas by products, with the MeSH descriptor wh
   assert.deepEqual(topAreas(products.slice(0, 3), descriptorOf, 8, (term) => term !== "Psoriasis").map((row) => row.term), ["Arthritis, Psoriatic"]);
 });
 
+// Step 4 (#10): how many distinct treatments, not only marketing authorizations (Giant Cell Tumor
+// of Bone: 15 medicines, 1 substance). setKeyOf: a product's substance set (equivalent spellings
+// joined); counted over the authorized ones, as the count beside it.
+test("the most common conditions: distinct substance sets of the authorized medicines", () => {
+  const descriptorOf = new Map();
+  const sets = new Map([["P1", "ustekinumab"], ["P2", "ustekinumab"], ["P3", "apremilast"], ["P4", "efalizumab"]]);
+  const setKeyOf = (product) => sets.get(product.ema_product_number) ?? null;
+  const [psoriasis, arthritis] = topAreas(products.slice(0, 4), descriptorOf, 8, null, setKeyOf);
+  // Withdrawn P4 (efalizumab) counts among the medicines, not among the substances.
+  assert.deepEqual(psoriasis, { term: "Psoriasis", count: 4, authorized: 3, substances: 2, descriptorUi: null });
+  assert.deepEqual(arthritis, { term: "Arthritis, Psoriatic", count: 1, authorized: 1, substances: 1, descriptorUi: null });
+  // A medicine without substances adds none.
+  assert.equal(topAreas(products.slice(0, 3), descriptorOf, 8, null, () => null)[0].substances, 0);
+});
+
 test("type split: products per key and medicine type, each product once per key", () => {
   const split = typeSplit(products.slice(0, 5), (row) => row.branches.concat(row.branches));
   assert.deepEqual(Object.fromEntries([...split].map(([key, types]) => [key, Object.fromEntries(types)])), {
