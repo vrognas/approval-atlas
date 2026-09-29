@@ -44,8 +44,10 @@ function renderNameCell(cell, product, substances, documents, medicineLink) {
 // Segmented ATC badge in the group's hue: one button per level that filters by that prefix; a
 // malformed code stays one plain segment. No whitespace between segments: copied, the badge
 // reads as the plain code. The buttons form a toolbar with one tab stop (markPressed(); arrow
-// keys move between them).
-function appendAtcBadge(parent, code, atcNames) {
+// keys move between them). classTip(code): a segment's class explanation as a hidden description
+// ({ text, id }; levels 1-4), or null: read when the segment has focus (review of the ATC class
+// explanations: the badge's tip shows it, but a data-tip never reaches a screen reader).
+function appendAtcBadge(parent, code, atcNames, classTip = () => null) {
   const segments = atcSegments(code);
   const badge = parent.append("span").attr("class", `atc-badge hue-${atcHue(code)}`);
   if (segments.some((segment) => segment.level)) badge.attr("role", "toolbar").attr("aria-label", UI.atc.toolbar(code));
@@ -57,26 +59,28 @@ function appendAtcBadge(parent, code, atcNames) {
     .filter((segment) => segment.level)
     .attr("type", "button")
     .attr("data-code", (segment) => segment.code)
-    .attr("aria-label", (segment) => UI.atc.filterBy(segment.level, segment.code, atcNames.get(segment.code)));
+    .attr("aria-label", (segment) => UI.atc.filterBy(segment.level, segment.code, atcNames.get(segment.code)))
+    .attr("aria-describedby", (segment) => classTip(segment.code)?.id ?? null);
   return badge;
 }
 
 // One badge per code to use (atcCode(); rows without one are skipped), flagged when incomplete
 // (atcRowIncomplete(): atc_final_level, so B03AC is not; phase 4e) or
 // when it differs from EMA's published code (atcOrigin(): a short flag, the sentence in the tooltip
-// and for screen readers). The tooltip (atcBadgeTip(): level names, origin, source) is a data-tip
-// as the type badges' (owner feedback 2026-09-29: it was a native title, which looked and behaved
+// and for screen readers). The tooltip (atcBadgeTip(): the explanation of its deepest class at
+// levels 1-4, level names, origin, source) is a data-tip as the type badges' (owner feedback
+// 2026-09-29: it was a native title, which looked and behaved
 // otherwise); a tap shows it (tabindex -1, no tab stop), a tap on a segment once it has filtered
 // (the table puts focus back on the segment; review of PR #15: most badges are all segments, so a
 // tap had nowhere else to show it), and keyboard focus on a segment.
-function renderAtcCell(cell, product, atcNames, retiredYears) {
+function renderAtcCell(cell, product, atcNames, retiredYears, explanations, classTip) {
   const rows = product.atc.filter((row) => atcCode(row) !== null);
   const codes = cell.selectAll("span.code").data(rows).join("span").attr("class", "code tip-lines")
-    .attr("data-tip", (row) => atcBadgeTip(row, atcNames, retiredYears))
+    .attr("data-tip", (row) => atcBadgeTip(row, atcNames, retiredYears, explanations))
     .attr("tabindex", "-1");
   codes.each(function badge(row) {
     const code = d3.select(this);
-    appendAtcBadge(code, atcCode(row), atcNames);
+    appendAtcBadge(code, atcCode(row), atcNames, classTip);
     // The level names for screen readers (the tooltip is left out of accessible names).
     const names = atcLevelNames(atcCode(row), atcNames);
     if (names.length) code.append("span").attr("class", "visually-hidden").text(` (${names.join("; ")})`);
@@ -160,8 +164,10 @@ function explainTerms(cell, branchNamesByTerm, termTip) {
 }
 
 // lookups: substanceIndex (product -> EMA active substances), atcNames (code -> name),
-// atcRetiredYears (retired code -> the year WHO retired it), branchNamesByTerm (MeSH term ->
-// branch names). medicineLink(product): the name as a link to its
+// atcRetiredYears (retired code -> the year WHO retired it), atcExplanations (code -> our
+// plain-language explanation, atc.js buildAtcExplanations(): it leads the badge tips), atcClassTip
+// (code -> that explanation as a hidden description, { text, id } or null: describes each segment),
+// branchNamesByTerm (MeSH term -> branch names). medicineLink(product): the name as a link to its
 // medicine card; conditionLink(term): a link to the term's condition page, or null; termTip(term):
 // its MeSH explainer ({ text, id }), or null (none, or the notes still load).
 // holderOf(product): its Company · Holder cell's content (holders.js holderDisplay(); companies
@@ -171,7 +177,7 @@ function explainTerms(cell, branchNamesByTerm, termTip) {
 // focusAreaFallback(): as focusFallback() for a chip.
 // All text goes through .text() or text nodes: decoded indications contain literal "<" and ">".
 export function createTable(table, moreButton, captionNode, {
-  substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, termTip = () => null, holderOf, onAtcSelect, focusFallback,
+  substanceIndex, atcNames, atcRetiredYears, atcExplanations = new Map(), atcClassTip = () => null, branchNamesByTerm, medicineLink, conditionLink, termTip = () => null, holderOf, onAtcSelect, focusFallback,
   branches, onAreaSelect, focusAreaFallback,
 }) {
   let current = null;
@@ -247,7 +253,7 @@ export function createTable(table, moreButton, captionNode, {
       renderTypeCell(d3.select(this), product);
     });
     rows.append("td").attr("class", "atc").each(function atcCell(product) {
-      renderAtcCell(d3.select(this), product, atcNames, atcRetiredYears);
+      renderAtcCell(d3.select(this), product, atcNames, atcRetiredYears, atcExplanations, atcClassTip);
     });
     rows.append("td").attr("class", "area").each(function areaCell(product) {
       renderAreaCell(d3.select(this), product, branchNamesByTerm, conditionLink, termTip, branches, current.selectedArea);

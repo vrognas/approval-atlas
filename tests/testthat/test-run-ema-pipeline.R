@@ -103,7 +103,8 @@ run_fixture_pipeline <- function(output_directory,
     downloads_directory = downloads_directory,
     smpc_budget = smpc_budget,
     gleif_path = fixture_gleif_matches_path(),
-    chembl_path = fixture_chembl_matches_path()
+    chembl_path = fixture_chembl_matches_path(),
+    explanations_path = fixture_atc_explanations_path()
   )
 }
 
@@ -146,7 +147,8 @@ output_stems <- c(
   "ema_curated_copies",
   "ema_curated_pumas",
   "ema_medicine_modalities",
-  "modalities"
+  "modalities",
+  "atc_class_explanations"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -357,12 +359,16 @@ test_that("run_ema_pipeline completes an incomplete code from the SmPC", {
   )
   downloads_directory <- seed_downloads_directory()
   output_directory <- file.path(tempfile(), "data")
-  messages <- testthat::capture_messages(
-    tables <- run_fixture_pipeline(
-      output_directory,
-      downloads_directory = downloads_directory,
-      smpc_budget = 5L
-    )
+  # The completed code brings classes the explanations fixture lacks.
+  expect_warning(
+    messages <- testthat::capture_messages(
+      tables <- run_fixture_pipeline(
+        output_directory,
+        downloads_directory = downloads_directory,
+        smpc_budget = 5L
+      )
+    ),
+    "no explanation.*N03A.*N03AX"
   )
   expect_length(pdf_urls$requested, 1)
   expect_match(pdf_urls$requested, "fintepla", fixed = TRUE)
@@ -404,11 +410,14 @@ test_that("run_ema_pipeline completes an incomplete code from the SmPC", {
 
   pdf_urls$requested <- character()
   unlink(file.path(downloads_directory, "ema-smpc"), recursive = TRUE)
-  again <- suppressMessages(run_fixture_pipeline(
-    output_directory,
-    downloads_directory = downloads_directory,
-    smpc_budget = 5L
-  ))
+  expect_warning(
+    again <- suppressMessages(run_fixture_pipeline(
+      output_directory,
+      downloads_directory = downloads_directory,
+      smpc_budget = 5L
+    )),
+    "no explanation"
+  )
   expect_length(pdf_urls$requested, 0)
   expect_identical(again$ema_medicine_smpc_atc, tables$ema_medicine_smpc_atc)
 })
@@ -483,13 +492,18 @@ test_that("run_ema_pipeline writes its outputs while WHOCC is unreachable", {
     c("whocc_updates", "whocc_alterations") %in% tables$atc_classes$source
   ))
   meta <- jsonlite::fromJSON(file.path(output_directory, "meta.json"))
-  # The three modality entries after the others.
-  expect_identical(nrow(meta$sources), 14L)
+  # The ATC class explanations after the ATC sources, the three modality
+  # entries after the others.
+  expect_identical(nrow(meta$sources), 15L)
   expect_identical(
-    meta$sources$url[7:9],
+    meta$sources$url[7:10],
     c(
       "https://atcddd.fhi.no/atc_ddd_index/",
       "https://www.ema.europa.eu/en/medicines",
+      paste0(
+        "https://github.com/vrognas/approval-atlas/blob/main/",
+        atc_explanations_path
+      ),
       union_register_url
     )
   )
@@ -529,7 +543,7 @@ test_that("run_ema_pipeline builds the company tables and credits them", {
     simplifyVector = FALSE
   )
   expect_identical(
-    vapply(meta$sources[13:15], function(source) source$name, character(1)),
+    vapply(meta$sources[14:16], function(source) source$name, character(1)),
     c(
       paste(
         "Union Register of medicinal products (European Commission):",
@@ -539,9 +553,40 @@ test_that("run_ema_pipeline builds the company tables and credits them", {
       "Company groups (curated by approval-atlas)"
     )
   )
-  expect_identical(meta$sources[[14]]$retrieved, "2026-09-28")
+  expect_identical(meta$sources[[15]]$retrieved, "2026-09-28")
   expect_match(messages, "Companies: [0-9]+ companies in", all = FALSE)
   expect_match(messages, "GLEIF: [0-9]+ matches applied", all = FALSE)
+})
+
+test_that("run_ema_pipeline writes and credits the ATC class explanations", {
+  forbid_network()
+  output_directory <- file.path(tempfile(), "data")
+  # The fixture holds an explanation for every class the fixture data uses.
+  expect_no_warning(
+    suppressMessages(tables <- run_fixture_pipeline(output_directory)),
+    message = "ATC class"
+  )
+  written <- jsonlite::fromJSON(
+    file.path(output_directory, "atc_class_explanations.json")
+  )
+  expect_named(
+    written,
+    c("atc_code", "level", "explanation", "checked_date", "source")
+  )
+  expect_identical(nrow(written), 46L)
+  expect_identical(
+    written$atc_code,
+    atc_explained_classes_in_use(tables$ema_medicine_atc_codes)
+  )
+  expect_identical(unique(written$source), "approval_atlas")
+  expect_type(written$level, "integer")
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  expect_identical(meta$sources[[13]]$name, "ATC class explanations")
+  expect_identical(meta$sources[[13]]$version, "Checked 2026-09-29")
+  expect_match(meta$licence, "own plain-language summaries", fixed = TRUE)
 })
 
 test_that("run_ema_pipeline classifies modalities and credits the sources", {

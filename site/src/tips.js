@@ -16,10 +16,20 @@ const EDGE = 8;
 
 // The shift (px, 0 or less) that keeps a tip starting at start and width wide inside limit: the
 // viewport's right edge less 16px, or its scroll box's less 8px (step 4 review: the medicines
-// table's box ended 17px before the viewport's limit, cutting every line of a tip).
-export function tipShift(start, width, limit) {
+// table's box ended 17px before the viewport's limit, cutting every line of a tip), and never so
+// far that it starts left of min (its scroll box's left edge plus 8px; review of the ATC class
+// explanations: a header tip wider than the activity table's box on a narrow window started left of
+// the box, which cut about 52px off every line; its width is capped to the box too, tipMaxWidth()).
+export function tipShift(start, width, limit, min = -Infinity) {
   const overflow = start + width - limit;
-  return overflow > 0 ? -Math.ceil(overflow) : 0;
+  const shift = overflow > 0 ? -Math.ceil(overflow) : 0;
+  return Math.min(0, Math.max(shift, Math.ceil(min - start)));
+}
+
+// The widest a tip in a scroll box (clip: its visible area) may be, px: the box less EDGE on each
+// side (--tip-max, style.css).
+export function tipMaxWidth(clip) {
+  return Math.max(0, Math.floor(clip.right - clip.left - 2 * EDGE));
 }
 
 // Whether a tip goes above its carrier: it does not fit below it inside clip (its scroll box,

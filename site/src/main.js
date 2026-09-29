@@ -14,7 +14,9 @@ import {
 import { appendSortIcon, renderActivity } from "./activity.js";
 import { createAreaTree, renderAreaPath } from "./area-tree.js";
 import { areaBreakdownRows, areaCategoryTip, areaDrillVia, areaExactLabel, areaUpLevel, buildAreaTree, inAreas, termBranches, toggleArea } from "./areas.js";
-import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
+import {
+  atcChildren, atcClassesAt, atcClassTip, atcCode, atcExactCounts, atcExplanation, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, buildAtcExplanations, toggleAtcCode,
+} from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
 import { atcHue, companySeriesColors, statusColor, statusTipId, typeTipId } from "./badges.js";
@@ -69,7 +71,7 @@ import { createSheet } from "./sheet.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
+import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -106,6 +108,10 @@ const DASHBOARD_FILES = [
 // shared with the cards (lookup.need("modalities")); without them (older data files) the page
 // works and shows no modality.
 const MODALITY_FILES = ["modalities.json", "ema_medicine_modalities.json"];
+// The ATC class explanations (owner decisions 2026-09-29): with the dashboard's files, optional as
+// the modality files (without them the ATC tips are as before), shared with the lookup's result
+// tables (lookup.need("atc")).
+const ATC_EXPLANATION_FILES = ["atc_class_explanations.json"];
 // Loaded after the dashboard's first render; shared with the medicine card (same loadFile promise),
 // as is the documents index (lookup.need("documents")).
 const REGISTER_FILE = "ema_medicine_register_status.json";
@@ -321,7 +327,7 @@ function renderFooter(meta) {
   d3.select("#attribution").text(meta.attribution);
   d3.select("#credit-mesh").text(UI.footer.mesh(versionOf(/mesh/i)));
   d3.select("#credit-chembl").text(UI.footer.chembl(versionOf(/chembl/i)));
-  d3.select("#credit-atc").text(UI.footer.atc);
+  d3.select("#credit-atc").text(UI.footer.atc(meta.sources?.some((source) => /atc class explanations/i.test(source.name)) ?? false));
   d3.select("#credit-union-register").text(UI.footer.unionRegister);
   // Companies part 2: the curated company groups ("As of 2026-09-28") and GLEIF's LEI data.
   d3.select("#credit-companies").text(UI.footer.companies(versionOf(/company groups/i)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null));
@@ -396,6 +402,12 @@ function setupTips() {
     clickedAt = at;
     root.classList.add("tips-hidden");
   }
+  // A tip in a scroll box (clip) is no wider than the box (--tip-max, style.css), else as wide as
+  // its style allows.
+  function capWidth(carrier, clip) {
+    if (clip) carrier.style.setProperty("--tip-max", `${tipMaxWidth(clip)}px`);
+    else carrier.style.removeProperty("--tip-max");
+  }
   // Keyboard focus and touch taps: the tip at its carrier.
   function anchor(carrier) {
     carrier.classList.remove("tip-at-pointer");
@@ -406,6 +418,10 @@ function setupTips() {
     }
     carrier.style.removeProperty("--tip-left");
     carrier.classList.remove("tip-above");
+    // In a scroll box, no wider than the box (--tip-max; review of the ATC class explanations).
+    const scroller = carrier.closest(".table-scroll, .activity-scroll");
+    const clip = scroller ? scrollArea(scroller) : null;
+    capWidth(carrier, clip);
     // Its width once shown (a tip spanning its carrier, as on tiles and facet rows, never moves),
     // else the widest it can be (its style.css max-width: wider for the MeSH explainers).
     const tip = getComputedStyle(carrier, "::after");
@@ -415,11 +431,9 @@ function setupTips() {
       : Number.isFinite(widest) ? widest : Math.min(16 * parseFloat(getComputedStyle(root).fontSize), root.clientWidth - 32);
     // It starts where the carrier's first line does (a link wrapping in a narrow cell) and stays
     // inside the scroll box that clips it, within its scrollbars (step 4 review: the medicines
-    // table's ended 17px before the viewport's limit).
-    const scroller = carrier.closest(".table-scroll, .activity-scroll");
-    const clip = scroller ? scrollArea(scroller) : null;
+    // table's ended 17px before the viewport's limit), never starting left of it.
     const start = (carrier.getClientRects()[0] ?? carrier.getBoundingClientRect()).left;
-    const shift = tipShift(start, width, Math.min(root.clientWidth - 16, clip ? clip.right - 8 : Infinity));
+    const shift = tipShift(start, width, Math.min(root.clientWidth - 16, clip ? clip.right - 8 : Infinity), clip ? clip.left + 8 : -Infinity);
     if (shift) carrier.style.setProperty("--tip-left", `${shift}px`);
     if (!clip) return;
     const measuredHeight = parseFloat(tip.height);
@@ -476,7 +490,9 @@ function setupTips() {
     carrier.classList.remove("tip-above");
     carrier.classList.add("tip-at-pointer");
     const scroller = carrier.closest(".table-scroll, .activity-scroll");
-    pointed = { carrier, size: tipSize(carrier), origin: fixedOrigin(carrier), clip: scroller ? scrollArea(scroller) : null };
+    const clip = scroller ? scrollArea(scroller) : null;
+    capWidth(carrier, clip);
+    pointed = { carrier, size: tipSize(carrier), origin: fixedOrigin(carrier), clip };
     moveTip(point);
     if (pointed.size.measured) return;
     requestAnimationFrame(() => {
@@ -849,13 +865,15 @@ function startLookup([meta, searchRows, entryTermRows]) {
   input.disabled = false;
   render();
 
-  // The modality files are optional (null when missing), the others not.
+  // The modality and ATC explanation files are optional (null when missing), the others not.
   const optional = (file) => loadFile(file).catch(() => null);
-  Promise.all([...DASHBOARD_FILES.map(loadFile), ...MODALITY_FILES.map(optional)]).then((rows) => startDashboard(meta, rows), showMissingData);
+  Promise.all([...DASHBOARD_FILES.map(loadFile), ...MODALITY_FILES.map(optional), ...ATC_EXPLANATION_FILES.map(optional)])
+    .then((rows) => startDashboard(meta, rows), showMissingData);
 }
 
 function startDashboard(meta, [
   medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows, companyRows, medicineCompanyRows, modalityTaxonomy, medicineModalityRows,
+  atcExplanationRows,
 ]) {
   // The therapeutic area tree (phase 4f): MeSH category › branch › level 2 › level 3 › EMA's terms.
   const meshTree = buildAreaTree(branchRows, subtreeRows);
@@ -872,6 +890,13 @@ function startDashboard(meta, [
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
   // The ATC tree rows' explainers read a code's status too (atcClassTip()).
   const atcClassRows = new Map(atcClasses.map((row) => [row.atc_code, row]));
+  // Our plain-language explanations of the classes at levels 1-4 (empty without the file): they
+  // lead the ATC tips (tree rows, breakdown bars, activity columns, the per-year legend, badges).
+  const atcExplanations = buildAtcExplanations(atcExplanationRows);
+  // An ATC class's explainer as the tree rows' ({ text, id }: one hidden description per class).
+  const atcTip = (code) => describedTip(`atc-tip-${code}`, atcClassTip(code, atcClassRows, atcExplanations), "atc-tips");
+  // A class's explanation alone, as a description beside a control's own (activity columns).
+  const atcExplanationTip = (code) => describedTip(`atc-explanation-${code}`, atcExplanation(code, atcExplanations), "atc-tips");
   // The filter chips' modality names (null without the modality data: no modality chip).
   const modalityNames = modalityTree ? new Map(modalityTree.keys.map((key) => [key, modalityTree.name(key)])) : null;
   const atcRetiredYears = new Map(atcClasses.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null]));
@@ -1144,6 +1169,9 @@ function startDashboard(meta, [
     substanceIndex,
     atcNames,
     atcRetiredYears,
+    atcExplanations,
+    // Each badge segment is described by its class's explanation (levels 1-4).
+    atcClassTip: atcExplanationTip,
     branchNamesByTerm,
     // Names open the medicine card (EMA's page is linked from there), terms their condition page,
     // company groups their company page.
@@ -1493,7 +1521,17 @@ function startDashboard(meta, [
     renderBreakdownPath(by, tree.current);
     const rows = sortBreakdownRows(tree.rows, breakdownSort.key, by, breakdownSort.direction);
     let options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink, tipOf: (row) => (row.incomplete ? null : areaTip(row.key)) };
-    if (atc) options = { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) };
+    // ATC classes: each bar explained as its tree row (atcClassTip(): its explanation, then its
+    // level), on a tap too (short tips, as the tree's).
+    if (atc) {
+      options = {
+        isSelected: atc.isSelected,
+        onToggle: atc.onToggle,
+        badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }),
+        tipOf: (row) => (row.incomplete ? null : atcTip(row.key)),
+        tapTip: true,
+      };
+    }
     // Modalities: each bar explained on hover and focus (its explainer, the button's description),
     // and on touch screens on a tap (short tips, as the modality tree's).
     else if (by === "mod") options = { isSelected: tree.isSelected, onToggle: tree.onToggle, tipOf: (row) => (row.static ? null : modalityTip(row.key)), tapTip: true };
@@ -1535,12 +1573,16 @@ function startDashboard(meta, [
       // The class split into its children: a toggle above the table that clears it again.
       if (parent !== null) {
         const name = atcNames.get(parent);
-        parentClass = { key: parent, badge: parent, label: atcClassLabel(parent, name), name: atcName(name), filter: { atc: [parent] } };
+        parentClass = {
+          key: parent, badge: parent, label: atcClassLabel(parent, name), name: atcName(name), filter: { atc: [parent] }, explanation: atcExplanationTip(parent),
+        };
       }
-      // A product's classes at the column level (the leaf itself when parent is level 5).
+      // A product's classes at the column level (the leaf itself when parent is level 5), each
+      // explained in its header's tip (levels 1-4).
       keysOf = (product) => atcClassesAt(product, parent);
       columns = [...keyCounts(filtered, keysOf).keys()].map((code) => ({
         key: code, badge: code, label: atcClassLabel(code, atcNames.get(code)), title: atcClassLabel(code, atcNames.get(code)), filter: { atc: [code] },
+        explanation: atcExplanationTip(code),
       }));
     } else {
       // The MeSH branches (owner decision 2026-09-29: not the categories), or with one area selected
@@ -1696,7 +1738,8 @@ function startDashboard(meta, [
     return {
       keysOf: stack.keysOf,
       series: [
-        ...topSeries(keys, colorOf, label, UI.years.other.atc),
+        // Each class explained in the legend (its explanation, levels 1-4), as the modalities.
+        ...topSeries(keys, colorOf, label, UI.years.other.atc).map((item) => ({ ...item, tip: atcExplanation(item.key, atcExplanations) })),
         ...unplacedSeries(stack, parent === null ? UI.years.unplaced.atc : UI.years.unplaced.atcIn(parent)),
       ],
       by: parent === null ? UI.years.by.atc : UI.years.by.atcIn(label(parent)),
@@ -1834,7 +1877,7 @@ function startDashboard(meta, [
     const atcExact = atcExactCounts(withoutAtcFilter);
     const atcIncomplete = atcIncompleteAt(withoutAtcFilter);
     const { codes: atcCodes, names: atcQueries } = atcSelection();
-    safely($("#facet-atc"), () => atcTree.render({ selected: atcCodes, names: atcQueries, counts: atcCounts, exact: atcExact, incompleteAt: atcIncomplete, classNames: atcNames, classes: atcClassRows }));
+    safely($("#facet-atc"), () => atcTree.render({ selected: atcCodes, names: atcQueries, counts: atcCounts, exact: atcExact, incompleteAt: atcIncomplete, classNames: atcNames, classes: atcClassRows, explanations: atcExplanations }));
     // Therapeutic areas: medicines per tree key, and in each key's static row (tagged at a node itself,
     // only at a branch's root), matching every other filter.
     const withoutAreaFilter = filterProducts(products, predicates, "area");

@@ -11,9 +11,11 @@ import { describedTip } from "./mesh-notes.js";
 // ATC codes (splitAtcValues() codes), names: the class-name queries (older links), counts, exact:
 // atcPrefixCounts() and atcExactCounts() of the medicines matching every other filter,
 // incompleteAt: the classes some of those medicines are coded at with an incomplete code
-// (atcIncompleteAt()), classNames: code -> WHO name, classes: code -> atc_classes.json row }.
+// (atcIncompleteAt()), classNames: code -> WHO name, classes: code -> atc_classes.json row,
+// explanations: code -> our plain-language explanation (buildAtcExplanations()) }.
 // Each row explains its class (owner feedback 2026-09-29: atcClassTip(), as the therapeutic area
-// rows their MeSH notes), its checkbox described by the same text; so do the static rows.
+// rows their MeSH notes; led by its explanation at levels 1-4, owner decisions 2026-09-29), its
+// checkbox described by the same text; so do the static rows.
 export function createAtcTree(section, { onToggle }) {
   section.querySelector(".atc-note").textContent = UI.atc.note;
   return createFacetTree(section, {
@@ -46,7 +48,7 @@ export function createAtcTree(section, { onToggle }) {
     },
     decorate: (label, code) => appendCodeBadge(label, code),
     note: (model) => (model.names.length ? UI.atc.nameQueries(model.names) : ""),
-    tip: (code, model) => describedTip(`atc-tip-${code}`, atcClassTip(code, model.classes), "atc-tips"),
+    tip: (code, model) => describedTip(`atc-tip-${code}`, atcClassTip(code, model.classes, model.explanations), "atc-tips"),
     // Short enough that a tap on a touch screen shows it while it checks the row (owner decision
     // 2026-09-29), as the modality tree's.
     tapTip: true,
