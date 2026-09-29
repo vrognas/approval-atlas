@@ -825,9 +825,29 @@ export const UI = {
     classed: (names, code) => `${listing(names)} ${names.length === 1 ? "is" : "are"} classed ${code}.`,
   },
 
-  // The therapeutic-area tree (phase 4f; areas.js, area-tree.js): MeSH branch › level 2 › level 3 ›
-  // EMA's terms, in the sidebar, the breakdown's path and the activity card.
+  // The therapeutic-area tree (phase 4f; areas.js, area-tree.js): MeSH category › branch › level 2 ›
+  // level 3 › EMA's terms, in the sidebar, the breakdown's path and the activity card.
   areas: {
+    // The MeSH categories, the tree's top level (owner decision 2026-09-29), by a branch code's
+    // letter: NLM's names verbatim, from the MeSH Tree Structures (https://meshb.nlm.nih.gov/treeView).
+    categories: {
+      A: "Anatomy",
+      B: "Organisms",
+      C: "Diseases",
+      D: "Chemicals and Drugs",
+      E: "Analytical, Diagnostic and Therapeutic Techniques, and Equipment",
+      F: "Psychiatry and Psychology",
+      G: "Phenomena and Processes",
+      H: "Disciplines and Occupations",
+      I: "Anthropology, Education, Sociology, and Social Phenomena",
+      J: "Technology, Industry, and Agriculture",
+      K: "Humanities",
+      L: "Information Science",
+      M: "Named Groups",
+      N: "Health Care",
+      V: "Publication Characteristics",
+      Z: "Geographicals",
+    },
     find: "Find a therapeutic area",
     tree: "Therapeutic areas",
     expand: (name) => `Areas in ${name}`,
@@ -848,7 +868,7 @@ export const UI = {
     // and the tree's note, as its branch row is only indeterminate.
     tag: (name) => `tagged ${name}`,
     tagNote: (tags) => `Also filtering by the ${tags.length === 1 ? "tag" : "tags"} ${tags.map((tag) => `“${tag}”`).join(" or ")}.`,
-    note: "MeSH branches and their first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
+    note: "MeSH categories, their branches and the branches' first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",
   },

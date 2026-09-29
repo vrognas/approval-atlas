@@ -13,7 +13,7 @@ import {
 } from "./approvals.js";
 import { appendSortIcon, renderActivity } from "./activity.js";
 import { createAreaTree, renderAreaPath } from "./area-tree.js";
-import { areaBreakdownRows, areaExactLabel, buildAreaTree, inAreas, toggleArea } from "./areas.js";
+import { areaBreakdownRows, areaDrillVia, areaExactLabel, areaUpLevel, buildAreaTree, inAreas, toggleArea } from "./areas.js";
 import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
@@ -739,7 +739,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
 function startDashboard(meta, [
   medicines, areaRows, substanceRows, atcRows, atcClasses, branchRows, seriesRows, subtreeRows, companyRows, medicineCompanyRows, modalityTaxonomy, medicineModalityRows,
 ]) {
-  // The therapeutic area tree (phase 4f): MeSH branch › level 2 › level 3 › EMA's terms.
+  // The therapeutic area tree (phase 4f): MeSH category › branch › level 2 › level 3 › EMA's terms.
   const meshTree = buildAreaTree(branchRows, subtreeRows);
   // Companies part 2: company groups › companies › EMA holder names.
   const companies = buildCompanies(companyRows, medicineCompanyRows);
@@ -815,8 +815,10 @@ function startDashboard(meta, [
   // Every filter key reset to its default (the sentence's remove buttons, Clear, Reset).
   const cleared = (keys) => Object.fromEntries(keys.map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
   // A therapeutic area's condition page: a term's descriptor, else (branches and tree nodes) the
-  // descriptor of that name, known once the lookup's conditions data has loaded; null otherwise.
-  const areaDescriptor = (key) => (meshTree.isTerm(key) ? descriptorOf.get(key) : lookup.conditions()?.uiByName.get(meshTree.name(key))) ?? null;
+  // descriptor of that name, known once the lookup's conditions data has loaded; null otherwise,
+  // and for a MeSH category (no descriptor: owner decision 2026-09-29).
+  const areaDescriptor = (key) => (meshTree.isCategory(key) ? null
+    : (meshTree.isTerm(key) ? descriptorOf.get(key) : lookup.conditions()?.uiByName.get(meshTree.name(key))) ?? null);
   // Tree rows link to their condition page; followed from a sheet, the sheet closes (the page's
   // heading takes focus, not the token that opened the sheet).
   const areaRowLink = (key) => {
@@ -861,6 +863,11 @@ function startDashboard(meta, [
   const openArea = (key) => setState({ area: key === null ? [] : meshTree.canonical(key) });
   // Exactly one area selected: the area the breakdown drills into and the activity card splits.
   const drillArea = () => (state.area.length === 1 && meshTree.has(state.area[0]) ? state.area[0] : null);
+  // The charts start at the branches (owner decision 2026-09-29): the breakdown's "Up one level" from
+  // a branch goes to its category only when the branch was opened from it (UI state, areas.js
+  // areaDrillVia(), followed on every render), else to all areas.
+  let areaShown = null;
+  let areaVia = null;
   const areaFacet = createAreaTree($("#facet-area"), { tree: meshTree, onToggle: toggleAreaKey, linkOf: areaRowLink, tipOf: areaTip });
   // Companies (companies part 2): the tree adds or removes one value (toggleCompany()); drill-downs,
   // paths and "Up one level" show one value alone (none: all), as the tree selects it (canonical()).
@@ -1112,15 +1119,16 @@ function startDashboard(meta, [
   // Therapeutic area breakdown (phase 4f, as the ATC one): with exactly one area selected
   // (drillArea()), the areas one level below it, then the medicines tagged with it itself (a static
   // row; a branch's: tagged only at its root, phase 4g); an area without children shows only
-  // itself. Otherwise the MeSH branches; with several areas selected, the branches holding one are
-  // marked (toggles: a marked branch removes its areas, another is added). population: every
-  // filter but the area one.
+  // itself. Otherwise the MeSH branches (the charts start there, owner decision 2026-09-29; one
+  // category selected: its branches); with several areas selected, the branches holding one or
+  // under a selected category are marked (toggles: a marked branch removes the areas that mark it,
+  // another is added). population: every filter but the area one.
   function areaBreakdown(population) {
     const current = drillArea();
     const rows = areaBreakdownRows(meshTree, current, population);
     if (current === null) {
       const selected = state.area;
-      const under = (branch) => selected.filter((value) => value === branch || meshTree.ancestors(value).has(branch));
+      const under = (branch) => selected.filter((value) => value === branch || meshTree.ancestors(value).has(branch) || meshTree.ancestors(branch).has(value));
       const marked = selected.length > 0;
       return {
         current,
@@ -1232,7 +1240,7 @@ function startDashboard(meta, [
       .attr("data-focus-key", "up")
       .text(UI.atc.up)
       .on("click", () => {
-        if (by === "area") openArea(meshTree.parent(current));
+        if (by === "area") openArea(areaUpLevel(meshTree, current, areaVia));
         else if (by === "mah") openCompany(companies.parentOf(current));
         else if (by === "mod") openModality(modalityTree.parent(current));
         else openAtc(atcPrefixes(current).at(-2) ?? null);
@@ -1364,14 +1372,15 @@ function startDashboard(meta, [
         key: code, badge: code, label: atcClassLabel(code, atcNames.get(code)), title: atcClassLabel(code, atcNames.get(code)), filter: { atc: [code] },
       }));
     } else {
-      // The MeSH branches, or with one area selected (drillArea()) the areas one level below it, a
-      // leaf itself; that area is a toggle above the table (phase 4f, as the ATC classes).
+      // The MeSH branches (owner decision 2026-09-29: not the categories), or with one area selected
+      // (drillArea()) the areas one level below it (a category's: its branches), a leaf itself; that
+      // area is a toggle above the table (phase 4f, as the ATC classes).
       const parent = drillArea();
       if (parent !== null) {
         const name = meshTree.label(parent);
         parentClass = { key: parent, badge: null, label: name, name, lead: UI.activity.parentLeadArea, filter: { area: [parent] } };
       }
-      const children = parent === null ? meshTree.roots : meshTree.children(parent);
+      const children = parent === null ? meshTree.branches : meshTree.children(parent);
       const level = new Set(children.length ? children : [parent]);
       const inLevel = (product) => product.areaKeys.filter((key) => level.has(key));
       const top = topKeys(keyCounts(filtered, inLevel), ACTIVITY_AREAS);
@@ -1560,6 +1569,9 @@ function startDashboard(meta, [
 
   function renderDashboard() {
     showReadout(state.from ?? approvalYears[0], state.to ?? approvalYears[1]);
+    const areaNow = drillArea();
+    areaVia = areaDrillVia(meshTree, areaVia, areaShown, areaNow);
+    areaShown = areaNow;
 
     const predicates = makePredicates(state, atcClasses);
     const activeCount = Object.keys(predicates).length;
