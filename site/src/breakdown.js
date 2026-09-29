@@ -16,8 +16,9 @@ import { UI } from "./labels.js";
 // muted label (the products coded only down to the parent class). linkOf(row): a link shown after
 // the row (therapeutic area groups: their condition page), or null. tipOf(row): a bar's explainer
 // ({ text, id }: the therapeutic areas' MeSH notes, mesh-notes.js meshTip()), or null: a tooltip on
-// the bar, its text the button's description.
-export function renderBreakdown(container, rows, { isSelected = null, onToggle, badgeOf = () => null, linkOf = () => null, tipOf = () => null }) {
+// the bar, its text the button's description. tapTip: the tips are short (the modalities'), so a
+// tap on a touch screen shows them too (class tap-tip, as facet-tree.js's spec.tapTip).
+export function renderBreakdown(container, rows, { isSelected = null, onToggle, badgeOf = () => null, linkOf = () => null, tipOf = () => null, tapTip = false }) {
   const root = d3.select(container);
   // Rebuilt on every render; keep keyboard focus on the same value's row or link.
   const active = container.contains(document.activeElement) ? document.activeElement : null;
@@ -48,7 +49,7 @@ export function renderBreakdown(container, rows, { isSelected = null, onToggle, 
     .on("click", (event, row) => onToggle(row.key))
     .each(function explain(row) {
       const tip = tipOf(row);
-      if (tip) d3.select(this).attr("data-tip", tip.text).attr("aria-describedby", tip.id).classed("mesh-tip", true);
+      if (tip) d3.select(this).attr("data-tip", tip.text).attr("aria-describedby", tip.id).classed("mesh-tip", true).classed("tap-tip", tapTip);
     });
   const labels = items.append("span").attr("class", "bar-label");
   labels.filter((row) => !row.other && badgeOf(row)).each(function badge(row) {

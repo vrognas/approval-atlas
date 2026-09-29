@@ -57,8 +57,13 @@ function groupRows(rows, keyOf, valueOf) {
 // (the nodes its terms are, the branches it is tagged only at the root of; areas.js exactOf()).
 // companyRows: ema_medicine_companies.json (companies part 2): a product's company and group
 // (null without a holder), how its holder was decided and the Union Register's holder; mah stays
-// EMA's holder name (older links filter by it).
-export function buildProducts(medicines, { areaRows, branchRows, atcRows, companyRows = [], subtreeRows = [], areaTree = buildAreaTree(branchRows, subtreeRows) }) {
+// EMA's holder name (older links filter by it). modalityRows: ema_medicine_modalities.json (M2
+// phase 2), modalityTree: buildModalityTree() of modalities.json (null: the modality data is
+// missing, no keys): a product's rows (per substance), its keys (every group and modality of its
+// substances) and its static rows' keys (modalities.js exactOf()).
+export function buildProducts(medicines, {
+  areaRows, branchRows, atcRows, companyRows = [], subtreeRows = [], areaTree = buildAreaTree(branchRows, subtreeRows), modalityRows = [], modalityTree = null,
+}) {
   const areasByProduct = groupRows(areaRows, (row) => row.ema_product_number, (row) => row.therapeutic_area_mesh);
   const branchesByTerm = groupRows(
     branchRows.filter((row) => row.branch !== null),
@@ -67,9 +72,11 @@ export function buildProducts(medicines, { areaRows, branchRows, atcRows, compan
   );
   const atcByProduct = groupRows(atcRows, (row) => row.ema_product_number, (row) => row);
   const companyByProduct = new Map(companyRows.map((row) => [row.ema_product_number, row]));
+  const modalitiesByProduct = groupRows(modalityRows, (row) => row.ema_product_number, (row) => row);
   return medicines.map((medicine) => {
     const areas = areasByProduct.get(medicine.ema_product_number) ?? [];
     const company = companyByProduct.get(medicine.ema_product_number);
+    const modalities = modalitiesByProduct.get(medicine.ema_product_number) ?? [];
     return {
       ...medicine,
       mah: medicine.marketing_authorisation_developer_applicant_holder ?? NOT_STATED,
@@ -84,6 +91,9 @@ export function buildProducts(medicines, { areaRows, branchRows, atcRows, compan
       areaKeys: areaTree.keysOf(areas),
       areaExact: areaTree.exactOf(areas),
       atc: atcByProduct.get(medicine.ema_product_number) ?? [],
+      modalityRows: modalities,
+      modalityKeys: modalityTree ? modalityTree.keysOf(modalities) : [],
+      modalityExact: modalityTree ? modalityTree.exactOf(modalities) : [],
     };
   });
 }
@@ -179,15 +189,15 @@ export function breakdownExcluded(products, by) {
 // ATC classes) in the Sort control's order: "count"
 // as computed (most first) or, direction "asc", fewest first (ties keep their order); "key" ATC
 // classes by code, areas in MeSH tree order (their rank, areaBreakdownRows(); owner request
-// 2026-09-28) and holders by name, A-Z or, direction "desc", Z-A. The Other row and the
-// incomplete-code row stay last.
+// 2026-09-28), modalities in tree order (their rank, modalityBreakdownRows()) and holders by name,
+// A-Z or, direction "desc", Z-A. The Other row and the incomplete-code row stay last.
 export function sortBreakdownRows(rows, order, by, direction = order === "key" ? "asc" : "desc") {
   if (order !== "key" && direction === "desc") return rows;
   const last = (row) => Boolean(row.other || row.incomplete);
   const sign = direction === "asc" ? 1 : -1;
   const byLabel = (a, b) => a.label.localeCompare(b.label);
   const byKey = by === "atc" ? (a, b) => a.key.localeCompare(b.key)
-    : by === "area" ? (a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity) || byLabel(a, b)
+    : by === "area" || by === "mod" ? (a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity) || byLabel(a, b)
       : byLabel;
   const compare = order === "key" ? (a, b) => sign * byKey(a, b) : (a, b) => a.count - b.count;
   return [...rows.filter((row) => !last(row)).sort(compare), ...rows.filter(last)];

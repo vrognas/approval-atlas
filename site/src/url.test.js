@@ -11,6 +11,7 @@ import {
   encodeState,
   encodeUrl,
   lookupView,
+  modalityState,
   normalizeYearRange,
   patchFilterParams,
   patchIsSet,
@@ -147,6 +148,36 @@ test("companies: older holder links still load, keys load as the tree selects th
   assert.deepEqual(load("mah=c.genzyme-europe&mah=Genzyme+Europe+B.V.&mah=g.nobody").state.mah, ["c.genzyme-europe"]);
   assert.deepEqual(load("mah=g.nobody").dropped, [{ key: "mah", value: "g.nobody" }]);
   assert.equal(encodeState(load("mah=c.roche").state).toString(), "mah=g.roche");
+});
+
+// Modality (M2 phase 2): group and modality keys in one list, combined with OR; a modality under a
+// selected group is dropped (as toggleModality()); unknown values are dropped and reported.
+test("modalities: repeated keys, a modality under a selected group dropped, unknown values reported", () => {
+  const modalities = {
+    ...domain,
+    modalities: new Set(["antibody", "bispecific_antibody", "adc", "nucleic_acid", "sirna", "small_molecule"]),
+    modalityAncestors: (key) => new Map([
+      ["bispecific_antibody", new Set(["antibody"])],
+      ["adc", new Set(["antibody"])],
+      ["sirna", new Set(["nucleic_acid"])],
+    ]).get(key) ?? new Set(),
+  };
+  const load = (search) => decodeState(new URLSearchParams(search), modalities);
+  assert.deepEqual(load("mod=sirna&mod=bispecific_antibody"), { state: { ...structuredClone(DEFAULT_STATE), mod: ["bispecific_antibody", "sirna"] }, dropped: [] });
+  assert.deepEqual(load("mod=adc&mod=antibody&mod=small_molecule").state.mod, ["antibody", "small_molecule"]);
+  assert.deepEqual(load("mod=peptoid&mod=sirna"), { state: { ...structuredClone(DEFAULT_STATE), mod: ["sirna"] }, dropped: [{ key: "mod", value: "peptoid" }] });
+  // Without the modality data (older data files) every value is reported.
+  assert.deepEqual(decode("mod=sirna").dropped, [{ key: "mod", value: "sirna" }]);
+  assert.equal(encode({ mod: ["sirna", "antibody", "sirna"], type: ["Other"], status: ["Authorised"] }), "type=Other&mod=antibody&mod=sirna&status=Authorised");
+  // The breakdown by modality.
+  assert.equal(load("by=mod").state.by, "mod");
+  assert.equal(encode({ by: "mod" }), "by=mod");
+});
+
+// A modality opened from a card: the overview filtered to it alone, broken down by modality.
+test("a modality opened from a card is the overview filtered to it alone, by modality", () => {
+  assert.deepEqual(modalityState("antibody"), { ...structuredClone(DEFAULT_STATE), mod: ["antibody"], by: "mod" });
+  assert.equal(encodeState(modalityState("sirna")).toString(), "mod=sirna&by=mod");
 });
 
 // The "Authorized now" / "Approvals per year" tabs (view=years) are gone: one dashboard (phase 4a).

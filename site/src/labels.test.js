@@ -642,6 +642,26 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(sheet.close, "Close filters");
 });
 
+// Modality (M2 phase 2): the sentence's token, the tree, the breakdown and the card's source line.
+test("modality copy: sentence token, tree rows, static rows, breakdown and sources", () => {
+  const { sentence, modality, breakdown, footer } = labels.UI;
+  assert.equal(sentence.tokenName("mod", "all modalities"), "all modalities, modality filter");
+  assert.equal(sentence.remove("mod", "siRNA"), "Remove modality filter: siRNA");
+  assert.equal(sentence.many.mod(2), "2 modalities");
+  assert.equal(sentence.words.withModality, " with ");
+  assert.equal(modality.count("Antibody", 312), "Antibody, 312 medicines");
+  assert.equal(modality.included("Bispecific antibody", 1, "Antibody"), "Bispecific antibody, 1 medicine, included in Antibody");
+  assert.equal(modality.expand("Antibody"), "Kinds of Antibody");
+  assert.equal(modality.groupOnly("Vaccine"), "Vaccine, not more specific");
+  assert.equal(modality.notClassified, "Not classified");
+  assert.equal(breakdown.mod.titleIn("Antibody"), "Medicines in Antibody by modality");
+  assert.equal(modality.sources.stem("-siran"), "WHO INN stem “-siran”");
+  assert.equal(modality.sources.chembl("CHEMBL941", "ChEMBL_37"), "ChEMBL CHEMBL941 (ChEMBL_37)");
+  assert.equal(modality.sources.radionuclide("177Lu"), "Radionuclide in its INN (177Lu)");
+  assert.equal(modality.documents.pubmed("38142486"), "PubMed 38142486");
+  assert.equal(footer.modality("ChEMBL_37"), "Modalities from WHO INN stems (WHO Stem book 2024, CC BY-NC-SA 3.0 IGO), ChEMBL molecule types (ChEMBL_37) and EMA data, some checked by hand.");
+});
+
 // Phase 4f: the strip is a slim one-colour year filter; its status stacks, legend and undated note
 // moved to "Approvals per year" (Stack by Status).
 test("approval-years strip copy: slider names and the summary of its bars", () => {
@@ -1004,7 +1024,8 @@ test("the breakdown sorts by count or by code (ATC), MeSH tree order (areas) and
   assert.equal(sort.label, "Sort");
   assert.equal(sort.count, "Count");
   // Owner request 2026-09-28: the areas as the tree orders them, so not "Name".
-  assert.deepEqual(sort.key, { atc: "Code", area: "MeSH", mah: "Name" });
+  // Modality (M2 phase 2): the tree's order, as the areas.
+  assert.deepEqual(sort.key, { atc: "Code", area: "MeSH", mah: "Name", mod: "Tree" });
   assert.equal(labels.UI.sortOrder.name("MeSH", "tree", "asc"), "MeSH, tree order");
   assert.equal(labels.UI.sortOrder.name("MeSH", "tree", "desc"), "MeSH, tree order reversed");
 });
@@ -1046,7 +1067,11 @@ test("the holder activity card: sort buttons, column order and row names with th
 test("approvals per year: stack modes, the summary and the counting note per mode", () => {
   const { years } = labels.UI;
   assert.equal(years.stack.label, "Stack by");
-  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status" });
+  assert.deepEqual(years.stack.modes, { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status", mod: "Modality" });
+  // Modality (M2 phase 2): groups, or one group's modalities; a medicine counts in each it has.
+  assert.equal(years.by.mod, "modality group");
+  assert.equal(years.by.modIn("Antibody"), "modality in Antibody");
+  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`);
   assert.equal(
     years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
     "Stacked column chart of EMA approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",

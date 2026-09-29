@@ -6,6 +6,7 @@ import { makePredicates } from "./filters.js";
 import {
   FACET_VALUES,
   OTHER_KEY,
+  STACK_HUES,
   TYPE_ORDER,
   defaultSortDirection,
   facetCounts,
@@ -266,6 +267,44 @@ test("the filter sentence: a status token naming one status with an explanation 
   assert.equal(statusToken(["Something new"]).tip, null);
   assert.equal(statusToken(["Refused", "Withdrawn"]).tip, null);
   assert.equal(statusToken([]).tip, null);
+});
+
+// Modality (M2 phase 2): "with [all modalities]" after the type token, once the modality data has
+// loaded (lookups.modalityNames); one modality by its name, carrying its explainer; several counted.
+test("the filter sentence: the modality token names one modality with its explainer, or counts several", () => {
+  const withModalities = { ...lookups, modalityNames: new Map([["antibody", "Antibody"], ["sirna", "siRNA"]]) };
+  assert.equal(
+    text(sentenceParts(stateOf({}), withModalities)),
+    "Showing [all medicine types] with [all modalities] in [all ATC classes] from [all companies] in [all therapeutic areas], approved in [any year], with [any status].",
+  );
+  const token = (mod) => sentenceParts(stateOf({ mod }), withModalities).find((part) => part.key === "mod");
+  assert.deepEqual(token(["sirna"]), { key: "mod", text: "siRNA", active: true, clears: ["mod"], tip: "sirna" });
+  assert.deepEqual(token(["antibody", "sirna"]), { key: "mod", text: "2 modalities", active: true, clears: ["mod"], tip: null });
+  assert.deepEqual(token([]), { key: "mod", text: "all modalities", active: false, clears: ["mod"], tip: null });
+  assert.equal(tokenLabel("mod", stateOf({ mod: ["unknown"] }), withModalities), "unknown");
+  // Without the modality data the sentence has no modality token.
+  assert.equal(sentenceParts(stateOf({}), lookups).some((part) => part.key === "mod"), false);
+});
+
+test("modality facet counts: a medicine counts once in every group and modality it has, by the facet rule", () => {
+  const classified = [
+    { medicine_type: "Other", modalityKeys: ["antibody", "bispecific_antibody"] },
+    { medicine_type: "Biosimilar", modalityKeys: ["antibody", "monoclonal_antibody"] },
+    { medicine_type: "Other", modalityKeys: ["protein", "hormone_cytokine", "peptide"] },
+    { medicine_type: "Other", modalityKeys: [] },
+  ];
+  const predicates = {
+    type: (product) => product.medicine_type === "Other",
+    mod: (product) => product.modalityKeys.includes("antibody"),
+  };
+  const counts = facetCounts(classified, predicates, "mod", FACET_VALUES.mod);
+  assert.deepEqual(Object.fromEntries(counts), { antibody: 1, bispecific_antibody: 1, protein: 1, hormone_cytokine: 1, peptide: 1 });
+});
+
+// "Approvals per year" stacks (child ATC classes, company groups, modality groups): neighbouring
+// hues far apart.
+test("stack hues: eight damped hues, neighbours far apart", () => {
+  assert.deepEqual(STACK_HUES, ["blue", "gold", "teal", "red", "indigo", "olive", "pink", "sky"]);
 });
 
 test("the most common conditions: areas by products, with the MeSH descriptor when known", () => {

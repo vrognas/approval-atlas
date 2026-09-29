@@ -28,10 +28,11 @@ import {
 } from "./labels.js";
 import { markExternal } from "./links.js";
 import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
+import { buildModalityTree, modalityLines, modalitySource } from "./modalities.js";
 import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
-import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView } from "./url.js";
+import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
 
 const FAILED = Symbol("failed");
 const formatNumber = new Intl.NumberFormat("en-US").format;
@@ -183,6 +184,11 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     companies: [["companies.json", "ema_medicine_companies.json"], (rows, medicineRows) => buildCompanies(rows, medicineRows, {
       isAuthorized: (number) => index.byNumber.get(number)?.medicine_status === "Authorised",
     })],
+    // Modality (M2 phase 2; the dashboard loads the same files): the tree and each medicine's rows;
+    // null when a file is missing (older data: the cards show no modality).
+    modalities: [[{ optional: "modalities.json" }, { optional: "ema_medicine_modalities.json" }], (taxonomy, rows) => (taxonomy?.length && rows
+      ? { tree: buildModalityTree(taxonomy), byProduct: groupBy(rows, "ema_product_number") }
+      : null)],
   };
   const values = new Map();
   const listeners = [];
@@ -305,6 +311,87 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       group = noteLine(UI.companies.note(entry.groupNote), entry.groupNote, entry.groupEvidenceUrl, UI.companies.noteSummary, "company-note");
     }
     return [holderDisplay(entry, { link: companyLink }), sponsor, group, el("p", { class: "muted company-as-of" }, UI.companies.asOfShort(entry.group.as_of))];
+  }
+
+  // Modality (M2 phase 2): a group's or modality's name as a link to the overview filtered to it
+  // alone (modalityState(): broken down by modality; pushState, as every lookup link).
+  const modalityLink = (tree, key) => internalLink(tree.name(key), modalityState(key), "modality-link");
+
+  // A curated row's evidence named by its document (modalities.js evidenceDocument()).
+  function evidenceName(document) {
+    const copy = UI.modality.documents;
+    if (document?.kind === "pubmed") return copy.pubmed(document.id);
+    if (document?.kind === "chembl") return copy.chembl(document.id);
+    return copy[document?.kind] ?? document?.host ?? UI.atc.evidenceLink.other;
+  }
+
+  // A classification's source (modalities.js modalitySource()) as text, with a link where it has
+  // one (a ChEMBL record, a curated row's evidence); atcNames: WHO names of the ATC classes (null
+  // while they load: the code alone).
+  function modalitySourceNodes(source, atcNames) {
+    const copy = UI.modality.sources;
+    if (source.kind === "stem") return copy.stem(source.stem);
+    if (source.kind === "innGroup") return copy.innGroup(source.name);
+    if (source.kind === "radionuclide") return copy.radionuclide(source.nuclide);
+    if (source.kind === "greek") return copy.greek(source.letter);
+    if (source.kind === "chembl") return source.id ? externalLink(copy.chembl(source.id, source.release), source.url) : copy.chemblType(source.type ?? "");
+    if (source.kind === "atc") return copy.atc(atcClassLabel(source.code, atcNames?.get(source.code)));
+    if (source.kind === "atmp") return copy.atmp;
+    if (source.kind === "text") return copy.text(source.detail);
+    if (source.kind === "curated") return source.url ? [externalLink(evidenceName(source.document), source.url), copy.curated] : copy.curatedNoLink;
+    return source.detail ?? "";
+  }
+
+  // A modality line's name (modalities.js modalityLines()): "{Group} › {Modality}" (links), a group
+  // without a named modality "{Group}, not more specific", none classified "Not classified"; and
+  // its explainer.
+  function modalityName(line, tree) {
+    const copy = UI.modality;
+    if (line.group === null) return { name: copy.notClassified, tip: copy.notClassifiedTip };
+    if (line.modality === null) return { name: [modalityLink(tree, line.group), ", ", copy.notMoreSpecific], tip: `${UI.modalityTips[line.group]} ${copy.groupOnlyTip}` };
+    if (line.modality === line.group) return { name: modalityLink(tree, line.group), tip: UI.modalityTips[line.group] };
+    return { name: [modalityLink(tree, line.group), " › ", modalityLink(tree, line.modality)], tip: UI.modalityTips[line.modality] };
+  }
+
+  // One modality line: the substances when the medicine has several modalities, its name, its
+  // explainer, then its source and, when another source named the modality, that one ("; kind from
+  // …").
+  function modalityLineNodes(line, tree, atcNames, several) {
+    const copy = UI.modality;
+    const { name, tip } = modalityName(line, tree);
+    const source = modalitySource(line.row?.source, line.row?.rule, line.row?.evidence);
+    const kindSource = modalitySource(line.row?.leaf_source, line.row?.leaf_rule);
+    return el("div", { class: "modality-line" },
+      el("p", { class: "modality-name" }, several && line.substances.length ? `${line.substances.join(" + ")}: ` : null, name),
+      tip ? el("p", { class: "muted modality-explainer" }, tip) : null,
+      source ? el("p", { class: "muted modality-source" }, copy.source, modalitySourceNodes(source, atcNames),
+        kindSource ? [copy.kindFrom, modalitySourceNodes(kindSource, atcNames)] : null) : null);
+  }
+
+  // The medicine card's Modality fact: one line per distinct modality of its substances. Loading…
+  // while the data loads; none without it (older data files).
+  function modalityFact(number, atc) {
+    const modalities = need("modalities");
+    if (!ready(modalities)) return modalities === undefined ? pending(modalities) : null;
+    if (modalities === null) return null;
+    const lines = modalityLines(modalities.tree, modalities.byProduct.get(number) ?? []);
+    const atcNames = ready(atc) ? atc.names : null;
+    return lines.map((line) => modalityLineNodes(line, modalities.tree, atcNames, lines.length > 1));
+  }
+
+  // The substance card's Modality line: the modality its medicines' rows for this substance give
+  // most often (links, then its explainer); none without such rows or the data.
+  function substanceModality(rows, key) {
+    const modalities = need("modalities");
+    if (!ready(modalities) || modalities === null) return null;
+    const substanceRows = rows.flatMap((row) => (modalities.byProduct.get(row.ema_product_number) ?? []).filter((item) => item.substance_key === key));
+    if (!substanceRows.length) return null;
+    const { tree } = modalities;
+    const countOf = (line) => substanceRows.filter((item) => tree.groupOf(item) === line.group && tree.modalityOf(item) === line.modality).length;
+    const [common] = modalityLines(tree, substanceRows).sort((a, b) => countOf(b) - countOf(a));
+    const { name, tip } = modalityName(common, tree);
+    return el("dl", { class: "areas-line modality-summary" }, el("dt", null, UI.modality.label),
+      el("dd", null, name, tip ? [" ", el("span", { class: "muted" }, tip)] : null));
   }
 
   // ATC ladder of one code: a row per level (badge, name, medicines currently authorized) linking to
@@ -621,6 +708,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
           explainedTypes(medicine ?? row),
           flags.map(([, label]) => [" ", el("span", { class: "chip" }, label)]),
         ]),
+        fact(UI.modality.label, modalityFact(number, atc)),
         ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null),
       ),
       protectionSection(row));
@@ -806,6 +894,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
           ? statusBadge("Authorised", true, UI.substance.authorized(authorized))
           : el("span", { class: "badges" }, statusesByFrequency(groupRows.map((row) => row.medicine_status)).map((status) => statusBadge(status, true, undefined, opinionOf(status))))],
       ]),
+      substanceModality(rows, key),
       timelineBlock(rows, medicines),
       el("h3", { id: "results-substance" }, siblings.length ? UI.substance.productsListed(rows.length, substance.name) : UI.substance.products(rows.length)),
       // What each medicine is for (its therapeutic areas); the substance line only where it differs.

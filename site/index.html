@@ -117,6 +117,7 @@
               <button type="button" data-by="atc">ATC</button>
               <button type="button" data-by="area">Therapeutic area</button>
               <button type="button" data-by="mah">Company</button>
+              <button type="button" data-by="mod" hidden>Modality</button>
             </div>
           </div>
           <p id="breakdown-note" class="muted"></p>
@@ -156,7 +157,7 @@
           <p id="activity-note" class="muted"></p>
         </section>
 
-        <!-- Approvals per year, stacked by medicine type, ATC class, company group or status (UI state). -->
+        <!-- Approvals per year, stacked by medicine type, ATC class, company group, status or modality (UI state). -->
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
             <h2 id="chart-title">Approvals per year</h2>
@@ -167,6 +168,7 @@
                 <button type="button" data-stack="atc"></button>
                 <button type="button" data-stack="mah"></button>
                 <button type="button" data-stack="status"></button>
+                <button type="button" data-stack="mod" hidden></button>
               </div>
             </div>
           </div>
@@ -231,6 +233,16 @@
         <h3 id="facet-type-title" class="facet-title">Medicine type</h3>
         <ul class="facet-list"></ul>
       </div>
+      <!-- One tree (M2 phase 2): modality group › modality (modality-tree.js); shown once the
+           modality data has loaded. -->
+      <div id="facet-modality" class="facet" role="group" aria-labelledby="facet-modality-title" hidden>
+        <h3 id="facet-modality-title" class="facet-title">Modality</h3>
+        <input id="modality-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <ul id="modality-tree" class="atc-tree modality-tree"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <p class="muted atc-note tree-note"></p>
+      </div>
       <div id="facet-atc" class="facet" role="group" aria-labelledby="facet-atc-title">
         <h3 id="facet-atc-title" class="facet-title">ATC class</h3>
         <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
@@ -294,6 +306,7 @@
       <p id="credit-atc"></p>
       <p id="credit-union-register"></p>
       <p id="credit-companies"></p>
+      <p id="credit-modality" hidden></p>
       <p>
         Data files: a compilation licensed
         <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener noreferrer" target="_blank">CC BY-SA 4.0</a>;

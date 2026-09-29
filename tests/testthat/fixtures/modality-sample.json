@@ -1,0 +1,867 @@
+{
+  "ema_medicines": [
+    {
+      "ema_product_number": "EMEA/H/C/000253",
+      "name_of_medicine": "Tractocile",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Other gynecologicals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000445",
+      "name_of_medicine": "Theryttrex",
+      "medicine_status": "Withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Diagnostic radiopharmaceuticals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000547",
+      "name_of_medicine": "Zevalin",
+      "medicine_status": "Lapsed",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Therapeutic radiopharmaceuticals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000653",
+      "name_of_medicine": "Scintimun",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000859",
+      "name_of_medicine": "Emerflu",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000885",
+      "name_of_medicine": "Bridion",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "All other therapeutic products"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/001045",
+      "name_of_medicine": "Scintimun",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Diagnostic radiopharmaceuticals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002085",
+      "name_of_medicine": "Lymphoseek",
+      "medicine_status": "Withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Tumour detection;Diagnostic radiopharmaceuticals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002299",
+      "name_of_medicine": "Fluad Paediatric",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002647",
+      "name_of_medicine": "Xultophy",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Drugs used in diabetes"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002825",
+      "name_of_medicine": "Trulicity",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Drugs used in diabetes;Blood glucose lowering drugs, excl. insulins"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003790",
+      "name_of_medicine": "Kyprolis",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Antineoplastic agents"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003846",
+      "name_of_medicine": "Kyndrisa",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003847",
+      "name_of_medicine": "Adlumiz",
+      "medicine_status": "Refused",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "All other therapeutic products"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003918",
+      "name_of_medicine": "Qarziba (previously Dinutuximab beta EUSA and Dinutuximab beta Apeiron)",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Antineoplastic agents"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004123",
+      "name_of_medicine": "Lutathera",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Other therapeutic radiopharmaceuticals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004235",
+      "name_of_medicine": "Cokiera",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Antivirals for systemic use"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004346",
+      "name_of_medicine": "Ogivri",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": true,
+      "pharmacotherapeutic_group_human": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004457",
+      "name_of_medicine": "Zemdri",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004660",
+      "name_of_medicine": "Ghryvelin (previously Macimorelin Aeterna Zentaris)",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "macimorelin"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004749",
+      "name_of_medicine": "Roctavian",
+      "medicine_status": "Application withdrawn",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Antihemorrhagics"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004827",
+      "name_of_medicine": "Hemgenix",
+      "medicine_status": "Authorised",
+      "advanced_therapy": true,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Blood coagulation factors"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004916",
+      "name_of_medicine": "Ogivri",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": true,
+      "pharmacotherapeutic_group_human": "Antineoplastic agents"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005030",
+      "name_of_medicine": "Sogroya",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Pituitary and hypothalamic hormones and analogues"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005035",
+      "name_of_medicine": "Filsuvez",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Preparations for treatment of wounds and ulcers"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005321",
+      "name_of_medicine": "Libmeldy",
+      "medicine_status": "Authorised",
+      "advanced_therapy": true,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Other nervous system drugs"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005352",
+      "name_of_medicine": "Upstaza",
+      "medicine_status": "Authorised",
+      "advanced_therapy": true,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Other alimentary tract and metabolism products;Enzymes"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005353",
+      "name_of_medicine": "Orgovyx",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Endocrine therapy"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005483",
+      "name_of_medicine": "Pluvicto",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Therapeutic radiopharmaceuticals"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005626",
+      "name_of_medicine": "Elucirem",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Paramagnetic contrast media"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005735",
+      "name_of_medicine": "Comirnaty",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Vaccines"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005830",
+      "name_of_medicine": "Roctavian",
+      "medicine_status": "Authorised",
+      "advanced_therapy": true,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Antihemorrhagics"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/006636",
+      "name_of_medicine": "Palsonify",
+      "medicine_status": "Authorised",
+      "advanced_therapy": false,
+      "biosimilar": false,
+      "pharmacotherapeutic_group_human": "Pituitary and hypothalamic hormones and analogues"
+    }
+  ],
+  "ema_medicine_substances": [
+    {
+      "ema_product_number": "EMEA/H/C/000253",
+      "substance": "atosiban",
+      "substance_key": "atosiban"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000445",
+      "substance": "yttrium [90Y] chloride",
+      "substance_key": "yttrium [90y] chloride"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000547",
+      "substance": "ibritumomab tiuxetan",
+      "substance_key": "ibritumomab tiuxetan"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000653",
+      "substance": "besilesomab",
+      "substance_key": "besilesomab"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000885",
+      "substance": "sugammadex",
+      "substance_key": "sugammadex"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/001045",
+      "substance": "besilesomab",
+      "substance_key": "besilesomab"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002085",
+      "substance": "tilmanocept",
+      "substance_key": "tilmanocept"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002647",
+      "substance": "insulin degludec",
+      "substance_key": "insulin degludec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002647",
+      "substance": "liraglutide",
+      "substance_key": "liraglutide"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002825",
+      "substance": "dulaglutide",
+      "substance_key": "dulaglutide"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003790",
+      "substance": "carfilzomib",
+      "substance_key": "carfilzomib"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003847",
+      "substance": "anamorelin",
+      "substance_key": "anamorelin"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003918",
+      "substance": "dinutuximab beta",
+      "substance_key": "dinutuximab beta"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004123",
+      "substance": "lutetium (177Lu) oxodotreotide",
+      "substance_key": "lutetium (177lu) oxodotreotide"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004660",
+      "substance": "macimorelin",
+      "substance_key": "macimorelin"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004749",
+      "substance": "valoctocogene roxaparvovec",
+      "substance_key": "valoctocogene roxaparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004827",
+      "substance": "etranacogene dezaparvovec",
+      "substance_key": "etranacogene dezaparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004916",
+      "substance": "trastuzumab",
+      "substance_key": "trastuzumab"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005030",
+      "substance": "somapacitan",
+      "substance_key": "somapacitan"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005035",
+      "substance": "birch bark extract",
+      "substance_key": "birch bark extract"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005321",
+      "substance": "autologous CD34+ cells encoding ARSA gene",
+      "substance_key": "autologous cd34+ cells encoding arsa gene"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005352",
+      "substance": "eladocagene exuparvovec",
+      "substance_key": "eladocagene exuparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005353",
+      "substance": "relugolix",
+      "substance_key": "relugolix"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005483",
+      "substance": "lutetium (177Lu) vipivotide tetraxetan",
+      "substance_key": "lutetium (177lu) vipivotide tetraxetan"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005626",
+      "substance": "gadopiclenol",
+      "substance_key": "gadopiclenol"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005735",
+      "substance": "COVID-19 mRNA vaccine",
+      "substance_key": "covid-19 mrna vaccine"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005830",
+      "substance": "valoctocogene roxaparvovec",
+      "substance_key": "valoctocogene roxaparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/006636",
+      "substance": "paltusotine",
+      "substance_key": "paltusotine"
+    }
+  ],
+  "ema_medicine_active_substances": [
+    {
+      "ema_product_number": "EMEA/H/C/000253",
+      "active_substance": "atosiban (as acetate)"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000445",
+      "active_substance": "yttrium (90Y) chloride"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000547",
+      "active_substance": "ibritumomab tiuxetan"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000653",
+      "active_substance": "besilesomab"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000885",
+      "active_substance": "sugammadex"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/001045",
+      "active_substance": "besilesomab"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002085",
+      "active_substance": "tilmanocept"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002647",
+      "active_substance": "insulin degludec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002647",
+      "active_substance": "liraglutide"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002825",
+      "active_substance": "dulaglutide"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003790",
+      "active_substance": "carfilzomib"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003847",
+      "active_substance": "anamorelin hydrochloride"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003918",
+      "active_substance": "dinutuximab beta"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004123",
+      "active_substance": "lutetium (177Lu) oxodotreotide"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004457",
+      "active_substance": "Plazomicin (sulfate)"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004660",
+      "active_substance": "macimorelin acetate"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004749",
+      "active_substance": "valoctocogene roxaparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004827",
+      "active_substance": "Etranacogene dezaparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004916",
+      "active_substance": "trastuzumab"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005030",
+      "active_substance": "somapacitan"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005035",
+      "active_substance": "dry extract from birch bark (DER 5-10 : 1), extraction solvent n-heptane 95% (w/w)"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005321",
+      "active_substance": "atidarsagene autotemcel"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005352",
+      "active_substance": "Eladocagene exuparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005353",
+      "active_substance": "relugolix"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005483",
+      "active_substance": "lutetium (177Lu) vipivotide tetraxetan"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005626",
+      "active_substance": "Gadopiclenol"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005735",
+      "active_substance": "single-stranded, 5’-capped messenger RNA produced using a cell-free in vitro transcription from the corresponding DNA templates, encoding the viral spike (S) protein of SARS-CoV-2"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005830",
+      "active_substance": "valoctocogene roxaparvovec"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/006636",
+      "active_substance": "paltusotine hydrochloride"
+    }
+  ],
+  "ema_medicine_atc_codes": [
+    {
+      "ema_product_number": "EMEA/H/C/000253",
+      "atc_code_human": "G02CX01",
+      "atc_code": "G02CX01",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000445",
+      "atc_code_human": "V09",
+      "atc_code": "V09",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000547",
+      "atc_code_human": "V10XX02",
+      "atc_code": "V10XX02",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000859",
+      "atc_code_human": "J07BB",
+      "atc_code": "J07BB",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/000885",
+      "atc_code_human": "V03AB35",
+      "atc_code": "V03AB35",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/001045",
+      "atc_code_human": "V09HA03",
+      "atc_code": "V09HA03",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002085",
+      "atc_code_human": "V09IA09",
+      "atc_code": "V09IA09",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002299",
+      "atc_code_human": "J07BB02",
+      "atc_code": "J07BB02",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002647",
+      "atc_code_human": "A10AE56",
+      "atc_code": "A10AE56",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/002825",
+      "atc_code_human": "A10BJ05",
+      "atc_code": "A10BJ05",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003790",
+      "atc_code_human": "L01XX45",
+      "atc_code": "L01XX45",
+      "current_atc_code": "L01XG02"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003846",
+      "atc_code_human": "M09AX04",
+      "atc_code": "M09AX04",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003847",
+      "atc_code_human": "V03",
+      "atc_code": "V03",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/003918",
+      "atc_code_human": "L01FX06",
+      "atc_code": "L01FX06",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004123",
+      "atc_code_human": "V10XX04",
+      "atc_code": "V10XX04",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004235",
+      "atc_code_human": "J05AX66",
+      "atc_code": "J05AX66",
+      "current_atc_code": "J05AP52"
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004660",
+      "atc_code_human": "V04CD06",
+      "atc_code": "V04CD06",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004749",
+      "atc_code_human": null,
+      "atc_code": "B02BD15",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004827",
+      "atc_code_human": "B02BD",
+      "atc_code": "B02BD16",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/004916",
+      "atc_code_human": "L01FD01",
+      "atc_code": "L01FD01",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005030",
+      "atc_code_human": "H01AC07",
+      "atc_code": "H01AC07",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005035",
+      "atc_code_human": "D03AX13",
+      "atc_code": "D03AX13",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005321",
+      "atc_code_human": "N07",
+      "atc_code": "A16AB21",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005352",
+      "atc_code_human": "A16AB26",
+      "atc_code": "A16AB26",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005353",
+      "atc_code_human": "L02BX",
+      "atc_code": "L02BX04",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005483",
+      "atc_code_human": "V10XX",
+      "atc_code": "V10XX05",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005626",
+      "atc_code_human": "V08CA12",
+      "atc_code": "V08CA12",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005735",
+      "atc_code_human": "J07BN01",
+      "atc_code": "J07BN01",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/005830",
+      "atc_code_human": "B02BD15",
+      "atc_code": "B02BD15",
+      "current_atc_code": null
+    },
+    {
+      "ema_product_number": "EMEA/H/C/006636",
+      "atc_code_human": "H01CB06",
+      "atc_code": "H01CB06",
+      "current_atc_code": null
+    }
+  ],
+  "atc_classes": [
+    {
+      "atc_code": "A10AE56",
+      "level": 5,
+      "name": "insulin degludec and liraglutide"
+    },
+    {
+      "atc_code": "A10BJ05",
+      "level": 5,
+      "name": "dulaglutide"
+    },
+    {
+      "atc_code": "A16AB21",
+      "level": 5,
+      "name": "atidarsagene autotemcel"
+    },
+    {
+      "atc_code": "A16AB26",
+      "level": 5,
+      "name": "eladocagene exuparvovec"
+    },
+    {
+      "atc_code": "B02BD15",
+      "level": 5,
+      "name": "valoctocogene roxaparvovec"
+    },
+    {
+      "atc_code": "B02BD16",
+      "level": 5,
+      "name": "etranacogene dezaparvovec"
+    },
+    {
+      "atc_code": "D03AX13",
+      "level": 5,
+      "name": "Betulae cortex"
+    },
+    {
+      "atc_code": "G02CX01",
+      "level": 5,
+      "name": "atosiban"
+    },
+    {
+      "atc_code": "H01AC07",
+      "level": 5,
+      "name": "somapacitan"
+    },
+    {
+      "atc_code": "H01CB06",
+      "level": 5,
+      "name": "paltusotine"
+    },
+    {
+      "atc_code": "J05AP52",
+      "level": 5,
+      "name": "dasabuvir, ombitasvir, paritaprevir and ritonavir"
+    },
+    {
+      "atc_code": "J05AX66",
+      "level": 5,
+      "name": "dasabuvir, ombitasvir, paritaprevir and ritonavir"
+    },
+    {
+      "atc_code": "J07BB",
+      "level": 4,
+      "name": "Influenza vaccines"
+    },
+    {
+      "atc_code": "J07BB02",
+      "level": 5,
+      "name": "influenza, inactivated, split virus or surface antigen"
+    },
+    {
+      "atc_code": "J07BN01",
+      "level": 5,
+      "name": "covid-19, RNA-based vaccine"
+    },
+    {
+      "atc_code": "L01FD01",
+      "level": 5,
+      "name": "trastuzumab"
+    },
+    {
+      "atc_code": "L01FX06",
+      "level": 5,
+      "name": "dinutuximab beta"
+    },
+    {
+      "atc_code": "L01XG02",
+      "level": 5,
+      "name": "carfilzomib"
+    },
+    {
+      "atc_code": "L01XX45",
+      "level": 5,
+      "name": "carfilzomib"
+    },
+    {
+      "atc_code": "L02BX04",
+      "level": 5,
+      "name": "relugolix"
+    },
+    {
+      "atc_code": "M09AX04",
+      "level": 5,
+      "name": "drisapersen"
+    },
+    {
+      "atc_code": "V03",
+      "level": 2,
+      "name": "ALL OTHER THERAPEUTIC PRODUCTS"
+    },
+    {
+      "atc_code": "V03AB35",
+      "level": 5,
+      "name": "sugammadex"
+    },
+    {
+      "atc_code": "V04CD06",
+      "level": 5,
+      "name": "macimorelin"
+    },
+    {
+      "atc_code": "V08CA12",
+      "level": 5,
+      "name": "gadopiclenol"
+    },
+    {
+      "atc_code": "V09",
+      "level": 2,
+      "name": "DIAGNOSTIC RADIOPHARMACEUTICALS"
+    },
+    {
+      "atc_code": "V09HA03",
+      "level": 5,
+      "name": "technetium (99mTc) antigranulocyte antibody"
+    },
+    {
+      "atc_code": "V09IA09",
+      "level": 5,
+      "name": "technetium (99mTc) tilmanocept"
+    },
+    {
+      "atc_code": "V10XX02",
+      "level": 5,
+      "name": "ibritumomab tiuxetan (90Y)"
+    },
+    {
+      "atc_code": "V10XX04",
+      "level": 5,
+      "name": "lutetium (177Lu) oxodotreotide"
+    },
+    {
+      "atc_code": "V10XX05",
+      "level": 5,
+      "name": "lutetium (177Lu) vipivotide tetraxetan"
+    }
+  ]
+}

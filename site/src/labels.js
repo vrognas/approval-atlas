@@ -270,6 +270,8 @@ export const UI = {
   sentence: {
     words: {
       showing: "Showing ", in: " in ", from: " from ", and: " and ", approved: ", approved ", approvedIn: ", approved in ", to: "–", with: ", with ", end: ".",
+      // Before the modality token (M2 phase 2): "Showing [all medicine types] with [all modalities] in …".
+      withModality: " with ",
       // After a year range: the medicines never approved are no longer counted.
       undatedOut: " (medicines without an approval date left out)",
     },
@@ -281,9 +283,11 @@ export const UI = {
       mah: "all companies",
       area: "all therapeutic areas",
       status: "any status",
+      mod: "all modalities",
     },
     many: {
       type: (count) => plural(count, "medicine type", "medicine types"),
+      mod: (count) => plural(count, "modality", "modalities"),
       atc: (count) => plural(count, "ATC class", "ATC classes"),
       mah: (count) => plural(count, "company", "companies"),
       area: (count) => plural(count, "therapeutic area", "therapeutic areas"),
@@ -303,6 +307,7 @@ export const UI = {
       // One approval year: a single token for both ends.
       year: "approval year",
       status: "status",
+      mod: "modality",
     },
     // The visible text first, so speech input can use it (WCAG 2.5.3).
     tokenName: (key, text) => `${text}, ${UI.sentence.dimensions[key]} filter`,
@@ -471,6 +476,9 @@ export const UI = {
       "creativecommons.org": "Creative Commons website",
       "atcddd.fhi.no": "WHOCC website",
       "search.gleif.org": "GLEIF website",
+      // A medicine's modality source (M2 phase 2): its ChEMBL record, a curated row's PubMed evidence.
+      "www.ebi.ac.uk": "ChEMBL website",
+      "pubmed.ncbi.nlm.nih.gov": "PubMed",
       // Evidence of the companies' ownership, sponsor and group notes (companies provenance; every
       // host in companies.json, ema_medicine_companies.json and R/curated-companies.R on 2026-09-28,
       // and Business Wire).
@@ -558,10 +566,19 @@ export const UI = {
       note: "Companies by current owner; each bar lists the holder names EMA publishes in its tooltip.",
       excluded: (count) => `${plural(count, "medicine", "medicines")} without a holder ${count === 1 ? "is" : "are"} not shown.`,
     },
+    // Modality (M2 phase 2): the groups (the medicines not classified a static last row), a group's
+    // modalities (its medicines no source names the modality of a static last row); a modality, or
+    // Small molecule, shows only itself.
+    mod: {
+      title: "Medicines by modality group",
+      titleIn: (name) => `Medicines in ${name} by modality`,
+      titleLeaf: (name) => `Medicines in ${name}`,
+      note: "A medicine whose substances have several modalities appears in each.",
+    },
     empty: "No medicines match the current filters.",
     // Bar order (UI state): most first, or ATC classes by code, areas in MeSH tree order (owner
-    // request 2026-09-28, as the tree) and holders by name.
-    sort: { label: "Sort", count: "Count", key: { atc: "Code", area: "MeSH", mah: "Name" } },
+    // request 2026-09-28, as the tree), modalities in tree order and holders by name.
+    sort: { label: "Sort", count: "Count", key: { atc: "Code", area: "MeSH", mah: "Name", mod: "Tree" } },
     // A stacked ATC bar's medicine types: [[type, count]] in stack order.
     typeSplit: (entries) => entries.map(([type, count]) => `${formatCount(count)} ${type}`).join(", "),
   },
@@ -636,9 +653,13 @@ export const UI = {
       `Stacked column chart of EMA approvals per year by ${by}, ${first} to ${last}: ` +
       `${formatCount(total)} medicines in total, most in ${peakYear} (${formatCount(peakCount)}).`,
     tooltipTitle: (year, total) => `${year}: ${plural(total, "approval", "approvals")}`,
-    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status" } },
-    // label: atcClassLabel() of the one ATC class selected, whose child classes the columns stack.
-    by: { type: "medicine type", atc: "ATC group", atcIn: (label) => `ATC class in ${label}`, mah: "company", status: "current status" },
+    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status", mod: "Modality" } },
+    // label: atcClassLabel() of the one ATC class selected, whose child classes the columns stack;
+    // name: the one modality group selected, whose modalities the columns stack.
+    by: {
+      type: "medicine type", atc: "ATC group", atcIn: (label) => `ATC class in ${label}`, mah: "company", status: "current status",
+      mod: "modality group", modIn: (name) => `modality in ${name}`,
+    },
     // How a medicine is counted in each mode (the card's note); count: the top classes or holders
     // stacked, named only when the rest are an Other segment (other).
     counting: {
@@ -650,6 +671,7 @@ export const UI = {
         ? `: the ${plural(count, "company", "companies")} with the most matching medicines, the rest as Other companies`
         : ""}`,
       status: "each medicine counted once, by its current status",
+      mod: "a medicine whose substances have several modalities is counted in each",
     },
     note: (counting) =>
       `Year of EU marketing authorization; ${counting}. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
@@ -657,7 +679,7 @@ export const UI = {
     other: { atc: "Other classes", mah: "Other companies" },
     // The segment on top for the medicines a mode cannot place, so every mode gives the same yearly
     // totals: no ATC code; with one ATC class selected, coded only down to it; no company.
-    unplaced: { atc: "No ATC code", atcIn: (code) => `Coded only as ${code}`, mah: "No company" },
+    unplaced: { atc: "No ATC code", atcIn: (code) => `Coded only as ${code}`, mah: "No company", mod: "No modality" },
   },
 
   overTime: {
@@ -788,6 +810,144 @@ export const UI = {
     note: "MeSH branches and their first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",
+  },
+
+  // Modality (M2 phase 2, spec 2026-09-29; modalities.js): group › modality. Names (U.S. spelling;
+  // "kind", as "type" is the medicine type) and explainers of at most 12 words, keyed by the
+  // taxonomy's keys (modalities.json); the peptide explainer has no amino-acid limit (user decision
+  // 2026-09-29).
+  modalities: {
+    small_molecule: "Small molecule",
+    protein: "Protein and peptide",
+    peptide: "Peptide",
+    hormone_cytokine: "Hormone, cytokine or growth factor",
+    enzyme: "Enzyme",
+    coagulation_factor: "Coagulation factor",
+    fusion_protein: "Fusion protein",
+    other_protein: "Other protein",
+    antibody: "Antibody",
+    monoclonal_antibody: "Monoclonal antibody",
+    adc: "Antibody-drug conjugate",
+    bispecific_antibody: "Bispecific antibody",
+    antibody_fragment: "Antibody fragment",
+    polyclonal_immunoglobulin: "Polyclonal immunoglobulin",
+    nucleic_acid: "Nucleic acid",
+    mrna: "mRNA",
+    sirna: "siRNA",
+    antisense: "Antisense oligonucleotide",
+    aptamer: "Aptamer",
+    other_oligonucleotide: "Other oligonucleotide",
+    cell_gene: "Cell and gene therapy",
+    car_t: "CAR-T cell therapy",
+    gene_modified_cells: "Gene-modified cell therapy",
+    gene_therapy: "Gene therapy",
+    other_cell_therapy: "Other cell therapy",
+    tissue_engineered: "Tissue-engineered product",
+    vaccine: "Vaccine",
+    live_vaccine: "Live attenuated vaccine",
+    inactivated_vaccine: "Inactivated or subunit vaccine",
+    vector_vaccine: "Viral vector vaccine",
+    radiopharmaceutical: "Radiopharmaceutical",
+    diagnostic_radiopharmaceutical: "Diagnostic radiopharmaceutical",
+    therapeutic_radiopharmaceutical: "Therapeutic radiopharmaceutical",
+    other: "Other",
+    allergen: "Allergen extract",
+    polysaccharide: "Heparin or polysaccharide",
+    plant_extract: "Plant extract",
+    polymer: "Polymer",
+  },
+  modalityTips: {
+    small_molecule: "Chemically made drug with a small, well-defined structure.",
+    protein: "Chain of amino acids, made by living cells or synthesis.",
+    peptide: "Short chain of amino acids, often made by synthesis, such as semaglutide.",
+    hormone_cytokine: "Natural signaling protein made in the lab, such as insulin.",
+    enzyme: "Protein that speeds up a chemical reaction, often replacing a missing one.",
+    coagulation_factor: "Blood-clotting protein, such as factor VIII or fibrinogen.",
+    fusion_protein: "Two proteins joined into one, often with an antibody part.",
+    other_protein: "Protein medicine that fits none of the kinds above.",
+    antibody: "Immune protein that binds a precise target.",
+    monoclonal_antibody: "Lab-made antibody that binds one target.",
+    adc: "Antibody that carries a cell-killing drug or toxin to its target.",
+    bispecific_antibody: "Antibody built to bind two different targets at once.",
+    antibody_fragment: "Smaller piece of an antibody that still binds its target.",
+    polyclonal_immunoglobulin: "Mix of many antibodies purified from human or animal blood.",
+    nucleic_acid: "Strand of RNA or DNA that changes which proteins cells make.",
+    mrna: "Messenger RNA that instructs cells to make a protein.",
+    sirna: "Short double-stranded RNA that silences one gene.",
+    antisense: "Short single strand that binds one RNA to block or fix it.",
+    aptamer: "Folded nucleic acid strand that binds a target like an antibody.",
+    other_oligonucleotide: "Nucleic acid medicine that fits none of the kinds above.",
+    cell_gene: "Advanced therapy made from living cells, tissue or genes.",
+    car_t: "Patient's T cells engineered to find and kill cancer cells.",
+    gene_modified_cells: "Cells given a new or edited gene outside the body.",
+    gene_therapy: "Virus or DNA that carries a working gene into the body.",
+    other_cell_therapy: "Living cells, not genetically modified, given as a treatment.",
+    tissue_engineered: "Cells grown into tissue that repairs or replaces damaged tissue.",
+    vaccine: "Trains the immune system against a germ; mRNA vaccines are under mRNA.",
+    live_vaccine: "Weakened live germ that trains immunity without causing disease.",
+    inactivated_vaccine: "Killed germ or purified germ parts; cannot cause the infection.",
+    vector_vaccine: "Harmless virus carrying a gene for one of the germ's proteins.",
+    radiopharmaceutical: "Medicine with a radioactive atom, used for scans or treatment.",
+    diagnostic_radiopharmaceutical: "Radioactive tracer that shows disease on a scan.",
+    therapeutic_radiopharmaceutical: "Carries radiation to diseased cells to destroy them.",
+    other: "Kinds outside the groups above, such as allergen extracts.",
+    allergen: "Allergen given in rising doses to calm an allergy.",
+    polysaccharide: "Chain of sugar units, such as heparin.",
+    plant_extract: "Extract of a plant, such as birch bark.",
+    polymer: "Large synthetic chain of repeating units, such as sevelamer.",
+  },
+  // The modality tree (sidebar, sheet; modality-tree.js), the breakdown's path and the medicine and
+  // substance cards' Modality line.
+  modality: {
+    label: "Modality",
+    find: "Find a modality",
+    tree: "Modalities",
+    expand: (name) => `Kinds of ${name}`,
+    // Rows, path items: the group or modality and its count of medicines.
+    count: (name, count) => `${name}, ${plural(count, "medicine", "medicines")}`,
+    included: (name, count, group) => `${UI.modality.count(name, count)}, included in ${group}`,
+    noMatches: "No matching modalities",
+    // Static rows (count only, user decision 2026-09-29): a group's medicines no source names the
+    // modality of, and the medicines no source classifies; each with its explainer.
+    notMoreSpecific: "not more specific",
+    groupOnly: (name) => `${name}, not more specific`,
+    groupOnlyTip: "Our sources name the group, not the exact modality.",
+    notClassified: "Not classified",
+    notClassifiedTip: "No source we use states its modality yet.",
+    note: "Groups, then the kinds in each, from WHO INN stems, ChEMBL, EMA data and checks by hand. A medicine counts in every modality of its substances.",
+    all: "All modalities",
+    path: "Modality path",
+    // The card's source line: the group's source, then the kind's when another source named it.
+    source: "Source: ",
+    kindFrom: "; kind from ",
+    sources: {
+      stem: (stem) => `WHO INN stem “${stem}”`,
+      innGroup: (name) => `WHO INN group “${name}”`,
+      radionuclide: (nuclide) => `Radionuclide in its INN (${nuclide})`,
+      // A Greek letter as the INN's second word (ATryn's "antithrombin alfa"): WHO names proteins so.
+      greek: (letter) => `WHO INN naming of proteins (Greek letter “${letter}”)`,
+      chembl: (id, release) => `ChEMBL ${id}${release ? ` (${release})` : ""}`,
+      chemblType: (type) => `ChEMBL molecule type “${type}”`,
+      atc: (label) => `WHO ATC class ${label}`,
+      atmp: "EMA: advanced therapy medicinal product",
+      text: (detail) => `EMA text “${detail}”`,
+      // After the evidence's link: "Source: EPAR public assessment report (checked by hand)".
+      curated: " (checked by hand)",
+      curatedNoLink: "Checked by hand",
+    },
+    // A curated row's evidence, by the document its link opens (modalities.js evidenceDocument()).
+    documents: {
+      productInformation: "Product information (SmPC)",
+      epar: "EPAR public assessment report",
+      refusal: "Refusal assessment report",
+      withdrawalReport: "Withdrawal assessment report",
+      scientificDiscussion: "Scientific discussion",
+      questionsAnswers: "EMA questions and answers",
+      summaryOfOpinion: "CHMP summary of opinion",
+      medicinePage: "EMA medicine page",
+      pubmed: (id) => `PubMed ${id}`,
+      chembl: (id) => `ChEMBL ${id}`,
+    },
   },
 
   // MeSH explainers of the therapeutic areas (owner request 2026-09-28; mesh-notes.js): a tooltip
@@ -1212,6 +1372,9 @@ export const UI = {
     unionRegister: "Orphan exclusivity, EU register status and holders: © European Union, Union Register, CC BY 4.0, modified.",
     // date: the company groups' curation date.
     companies: (date) => `Company groups (current owner${date ? ` as of ${formatDate(date)}` : ""}) curated by Approval Atlas; LEI data from the Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site.`,
+    // Modality (M2 phase 2): WHO INN stems (Stem book 2024, CC BY-NC-SA 3.0 IGO: credited, no
+    // endorsement), ChEMBL molecule types (release: ChEMBL's in meta.json) and EMA data.
+    modality: (release) => `Modalities from WHO INN stems (WHO Stem book 2024, CC BY-NC-SA 3.0 IGO), ChEMBL molecule types${release ? ` (${release})` : ""} and EMA data, some checked by hand.`,
   },
 
   about: {

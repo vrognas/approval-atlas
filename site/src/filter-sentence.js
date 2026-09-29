@@ -5,6 +5,10 @@
 import * as d3 from "d3";
 import { statusTip, typeTip } from "./badges.js";
 import { UI } from "./labels.js";
+import { modalityTip } from "./modalities.js";
+
+// The explanation of a token naming one value (part.tip), by its filter.
+const TIPS = { type: typeTip, status: statusTip, mod: modalityTip };
 
 // sheetOf(key): the filter a token opens (tokens opening the same one share it; none for the year
 // tokens, which focus the approval-years slider); popup: tokens with a sheet open a dialog (the
@@ -32,8 +36,9 @@ export function renderSentence(container, parts, { anyActive, sheetOf, popup, on
     if (typeof part === "string") {
       parent.node().append(part);
     } else if (part.active) {
-      // A type's or status's explanation (part.tip) on hover and focus, and as the token's description.
-      const tip = part.tip ? (part.key === "status" ? statusTip : typeTip)(part.tip) : null;
+      // A type's, status's or modality's explanation (part.tip) on hover and focus, and as the
+      // token's description.
+      const tip = part.tip ? TIPS[part.key]?.(part.tip) ?? null : null;
       const pill = parent.append("span").attr("class", "token-pill").attr("data-tip", tip?.text ?? null);
       tokenButton(pill, part).attr("aria-describedby", tip?.id ?? null);
       pill.append("button")

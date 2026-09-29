@@ -1,7 +1,7 @@
 // Filter and lookup state <-> URL query string. Encode/decode are pure; the writer touches history.
 import { splitAtcValues } from "./filters.js";
 
-export const BREAKDOWNS = ["atc", "area", "mah"];
+export const BREAKDOWNS = ["atc", "area", "mah", "mod"];
 // The longest ATC value a link may carry (a class-name query); the longest ATC class name is 113.
 export const ATC_QUERY_MAX = 120;
 
@@ -16,6 +16,9 @@ export const DEFAULT_STATE = Object.freeze({
   area: [],
   atc: [], // ATC codes at any level, or class-name queries (older links), combined with OR
   type: [],
+  // Modality (M2 phase 2): group and modality keys (modalities.json) in one list, combined with OR;
+  // none covers another.
+  mod: [],
   status: [], // empty = all statuses
   by: "atc",
 });
@@ -50,6 +53,7 @@ export function encodeState(state) {
   appendAll("area");
   appendAll("atc", atcValues(state.atc));
   appendAll("type");
+  appendAll("mod");
   appendAll("status");
   if (state.by !== DEFAULT_STATE.by) params.set("by", state.by);
   return params;
@@ -67,8 +71,9 @@ export function normalizeYearRange(from, to, [minYear, maxYear]) {
 // areaAncestors(key): the branches and nodes above a tree key (a Set; optional), areaCanonical(key):
 // the keys a value is selected as (a term that is a branch or node: that key; optional),
 // mahAncestors(value), mahCanonical(value): the same for companies (companies.js ancestors(),
-// canonical(); optional) }. Invalid values are dropped and returned so the page can say how many
-// were ignored.
+// canonical(); optional), modalities: the modality tree's keys and modalityAncestors(key): a
+// modality's group (modalities.js; optional: without them every modality value is dropped) }.
+// Invalid values are dropped and returned so the page can say how many were ignored.
 export function decodeState(params, domain) {
   const state = structuredClone(DEFAULT_STATE);
   const dropped = [];
@@ -122,6 +127,15 @@ export function decodeState(params, domain) {
   }
   state.mah = sortedDistinct(mahs).filter((value) => !mahs.some((other) => mahAbove(value).has(other)));
 
+  // Modalities (M2 phase 2): a modality under a selected group is dropped, as toggleModality().
+  const modAbove = domain.modalityAncestors ?? (() => new Set());
+  const mods = [];
+  for (const value of sortedDistinct(params.getAll("mod"))) {
+    if (domain.modalities?.has(value)) mods.push(value);
+    else dropped.push({ key: "mod", value });
+  }
+  state.mod = mods.filter((value) => !mods.some((other) => modAbove(value).has(other)));
+
   // One value (links from before phase 4a) or several; a value too long for a class name is dropped.
   const atc = params.getAll("atc");
   for (const value of atc.filter((item) => item.trim().length > ATC_QUERY_MAX)) dropped.push({ key: "atc", value });
@@ -147,6 +161,10 @@ export function togglePatch(state, patch) {
 // A drug class opened from a suggestion, a card ladder or a Try link: the class alone (other
 // filters cleared, ATC breakdown), so the link's href and its click agree.
 export const classState = (code) => ({ ...structuredClone(DEFAULT_STATE), atc: [code] });
+
+// A modality opened from a medicine or substance card (M2 phase 2): the overview filtered to it
+// alone, broken down by modality (a group's bars are its modalities).
+export const modalityState = (key) => ({ ...structuredClone(DEFAULT_STATE), mod: [key], by: "mod" });
 
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI, company group or
 // company key (companies part 2). Kept verbatim: an unknown value shows a "not found" result

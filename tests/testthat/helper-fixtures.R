@@ -42,6 +42,21 @@ fixture_gleif_matches_path <- function() {
   testthat::test_path("fixtures", "gleif-holder-matches-sample.json")
 }
 
+# Real rows of data-raw/chembl-substance-matches.json (ChEMBL_37) for the
+# keys of the modality and EMA fixtures.
+fixture_chembl_matches_path <- function() {
+  testthat::test_path("fixtures", "chembl-substance-matches-sample.json")
+}
+
+# Real rows of the site's data files (2026-09-28) for 33 medicines whose
+# modality the tests check.
+read_fixture_modality_tables <- function() {
+  tables <- jsonlite::fromJSON(
+    testthat::test_path("fixtures", "modality-sample.json")
+  )
+  purrr::map(tables, dplyr::as_tibble)
+}
+
 fixture_whocc_updates_path <- function(year = 2026) {
   testthat::test_path(
     "fixtures",
