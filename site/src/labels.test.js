@@ -937,7 +937,7 @@ test("the ATC breakdown copy counts medicines of every status", () => {
   assert.equal(labels.UI.breakdown.empty, "No medicines match the current filters.");
   // Phase 4c review: retired and incomplete codes are mapped (atcCode()), so the note says how.
   // Phase 4e: curated codes (checked by hand) complete the rest.
-  assert.equal(atc.note, "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.");
+  assert.equal(atc.note, "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives a complete one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.");
   assert.equal(atc.incomplete, "code incomplete");
   assert.equal(atc.codedHere, "coded at this level");
 });

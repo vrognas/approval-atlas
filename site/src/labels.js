@@ -806,7 +806,7 @@ export const UI = {
     // The same when their codes are complete there (phase 4e, atc_final_level: B03AC, which WHO
     // does not subdivide; J07BX03, which WHO moved up to J07BN).
     codedHere: "coded at this level",
-    note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.",
+    note: "Retired codes count under the class WHO moved them to; codes EMA left incomplete are completed from the product information (SmPC) where it gives a complete one, else from WHO's ATC index, WHO's temporary list or the SmPC text, checked by hand.",
     // A code shown that differs from EMA's (atcOriginText(), atcOriginFlag()).
     origin: {
       retired: (label, year, now) => `${label}: retired${year ? ` ${year}` : ""}, now ${now}.`,
