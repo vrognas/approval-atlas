@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
+import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -127,17 +127,6 @@ test("tipAbove: above the carrier only when it does not fit below inside its box
   // Neither fits: the side with more room.
   assert.equal(tipAbove({ top: 60, bottom: 80 }, 500, clip), false);
   assert.equal(tipAbove({ top: 300, bottom: 320 }, 500, clip), true);
-});
-
-// Step 4 review: the area tree's tips covered the next rows, and as a tip is hoverable a pointer
-// moving down stayed in it. With keyboard focus in the desktop sidebar they go beside it, level with
-// the row (a mouse's hover opens them at the pointer since 2026-09-29).
-test("besidePanel: right of the panel, level with its row", () => {
-  const row = { top: 200, bottom: 232, right: 288, height: 32 };
-  assert.deepEqual(besidePanel(row, 320, 900), { x: 336, top: 200, bottom: null });
-  // In the lower half of the viewport it grows up from the row's bottom, so it stays on screen.
-  const low = { top: 700, bottom: 732, right: 288, height: 32 };
-  assert.deepEqual(besidePanel(low, 320.4, 900), { x: 336, top: null, bottom: 168 });
 });
 
 test("tipHeightEstimate: lines of about half an em per character, with padding and border", () => {

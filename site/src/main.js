@@ -27,7 +27,6 @@ import { equivalentSetKey } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
 import { FAILED } from "./datasets.js";
 import { createFacetPanel } from "./facet-panel.js";
-import { createFacetSections } from "./facet-sections.js";
 import {
   FACET_VALUES,
   OTHER_KEY,
@@ -35,12 +34,11 @@ import {
   TYPE_ORDER,
   defaultSortDirection,
   facetCounts,
+  filterChips,
   holderActivity,
   keyCounts,
   nextSort,
   orderActivityColumns,
-  sectionSummary,
-  sentenceParts,
   sortActivityRows,
   statusBreakdown,
   topKeys,
@@ -51,7 +49,7 @@ import {
   yearHistogram,
   yearStacks,
 } from "./facets.js";
-import { renderSentence } from "./filter-sentence.js";
+import { renderFilterChips, renderFilterSummary } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
@@ -66,12 +64,12 @@ import { renderProtectionCalendar } from "./protection-calendar-card.js";
 import { calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
+import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
-import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
+import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -113,37 +111,18 @@ const MODALITY_FILES = ["modalities.json", "ema_medicine_modalities.json"];
 const REGISTER_FILE = "ema_medicine_register_status.json";
 // The filter each breakdown ignores and toggles.
 const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah", mod: "mod" };
-// The facet sidebar from this width; below it, the sentence's tokens open bottom sheets.
+// Desktop from this width: a chip opens its popover; below it, a bottom sheet.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
-// Facet sections (index.html #facet-{key}) each sheet shows, the sheet each sentence token
-// opens, and the filter keys each section sets. The year tokens open the approval year section
-// (owner decision 2026-09-29: back in the sidebar, the main column's strip removed).
-const SHEET_SECTIONS = {
-  type: ["type"],
-  mod: ["modality"],
-  atc: ["atc"],
-  mah: ["mah"],
-  area: ["area"],
-  status: ["status"],
-  years: ["years"],
-  all: ["type", "modality", "atc", "area", "mah", "status", "years"],
-};
-const TOKEN_SHEETS = {
-  type: "type", mod: "mod", atc: "atc", mah: "mah", area: "area", status: "status", from: "years", to: "years", year: "years", years: "years",
-};
-const SECTION_KEYS = { type: ["type"], modality: ["mod"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"], years: ["from", "to"] };
-// The dimension a collapsed section's summary names (facets.js sectionSummary()): its filter key,
-// the approval years both ends at once.
-const SECTION_SUMMARIES = { years: "years" };
-// Desktop: the control each token focuses, the first one of its own section (the ATC, therapeutic
-// area and company trees: their first checked row, else their search: facet-tree.js focusTarget();
-// the year tokens: the slider's Start or End thumb).
-const TOKEN_TARGETS = {
+// The facet section (index.html #facet-{id}) each filter chip opens, and the filter keys it sets.
+const CHIP_SECTIONS = { type: "type", mod: "modality", atc: "atc", area: "area", mah: "mah", status: "status", years: "years" };
+const CHIP_KEYS = { type: ["type"], mod: ["mod"], atc: ["atc"], area: ["area"], mah: ["mah"], status: ["status"], years: ["from", "to"] };
+// The trees need a wider popover.
+const WIDE_CHIPS = new Set(["atc", "area", "mah", "mod"]);
+// Desktop: the control a popover focuses when it opens (the trees: their first checked row, else
+// their search: facet-tree.js focusTarget(); the years: the slider's Start thumb).
+const FOCUS_TARGETS = {
   type: "#facet-type input",
   status: "#facet-status input",
-  from: "#year-start",
-  to: "#year-end",
-  year: "#year-start",
   years: "#year-start",
 };
 // The checklist sections (facet-panel.js); the ATC classes, therapeutic areas and companies are trees.
@@ -174,9 +153,6 @@ const $ = (selector) => document.querySelector(selector);
 // (none before the search's data has loaded).
 createThemeToggle($("#theme-toggle"), { onChange: () => lookup && scheduleRender() });
 
-// Desktop: the sidebar's width, the viewer's stored one set now, before the first render, so the
-// layout does not jump. The charts wait for a drag's end to follow the new width (resizeObserver).
-const sidebar = createSidebarResize($("#sidebar-resize"), { label: UI.sidebar.resize, hint: UI.sidebar.hint, onDragEnd: () => scheduleRender() });
 // The landing intro card: shown or hidden on every render (the untouched overview, until closed),
 // and the Try line with it (hidden while the card shows). Its examples are lookup links (pushState,
 // as the Try line's), made on the first render.
@@ -265,11 +241,14 @@ function updateTitle() {
 }
 
 function render() {
+  placeTopbar();
   lookup.render(state);
   const lookupOpen = lookupView(state).kind !== null;
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
-  // Below a lookup result, the dashboard is the overview of every medicine, under its own heading.
-  $("#explore").hidden = !lookupOpen;
+  // Below a lookup result, the dashboard is the overview of every medicine: its heading says so and
+  // a note replaces the lead.
+  $("#page-title").textContent = lookupOpen ? UI.explore.title : UI.page.title;
+  $("#explore-note").hidden = !lookupOpen;
   // The intro card, and the Try line with it. Before the dashboard's data has loaded, the URL's
   // filters are still verbatim (pendingFilters).
   intro.render(state, dashboard ? null : pendingFilters);
@@ -340,18 +319,18 @@ function renderFooter(meta) {
 }
 
 // The type and status explanations as hidden elements, which describe the focusable carriers (facet
-// rows, the sentence's type and status tokens) through aria-describedby (a hidden element still
+// rows, the filter chips' type, status and modality values) through aria-describedby (a hidden element still
 // gives its text).
 function renderTypeTips() {
   const container = d3.select("body").append("div").attr("hidden", "");
   for (const [label, tip] of Object.entries(UI.typeTips)) container.append("p").attr("id", typeTipId(label)).text(tip);
   for (const [status, tip] of Object.entries(UI.statusTips)) container.append("p").attr("id", statusTipId(status)).text(tip);
-  // The modality explainers (M2 phase 2): tree rows, the sentence's token, breakdown bars.
+  // The modality explainers (M2 phase 2): tree rows, a filter chip, breakdown bars.
   for (const [key, tip] of Object.entries(UI.modalityTips)) container.append("p").attr("id", modalityTipId(key)).text(tip);
 }
 
 // The tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides them (and does
-// nothing else, so the sidebar's Escape waits for the next press) until the pointer reaches another
+// nothing else, so a popover's Escape waits for the next press) until the pointer reaches another
 // carrier or focus moves; a pointer click on a tip only hides it, as it lies over other controls,
 // and a pointer click on a MeSH explainer's carrier hides it too (step 4 review: it covered the next
 // rows, so checking one row and moving to the next took two clicks). On mouse hover (owner decision
@@ -360,8 +339,8 @@ function renderTypeTips() {
 // rests when its pause ends, flipped above or left without room (atPointer()); it stays put, and
 // leaving the carrier toward it holds it, so the pointer can move onto it. Keyboard focus and touch
 // taps anchor it to its carrier: a carrier whose tip is anchored to its row (static: lookup rows, the
-// sentence, the area tree in a sheet) puts the tip under its own line (--tip-top); the area tree's
-// rows in the desktop sidebar put it beside the sidebar (fixed; besidePanel()); a tip starting at
+// ATC, area and modality trees in a popover or sheet) puts the tip under its own line (--tip-top); a
+// tip starting at
 // its carrier that would cross the viewport's right edge (a status near the right of a phone) or its
 // scroll box's (the medicines table) moves left (--tip-left), and goes above it where the box has no
 // room below (.tip-above).
@@ -375,7 +354,6 @@ function setupTips() {
   const carrierOf = (target) => (target instanceof Element ? target.closest("[data-tip]") : null);
   const showing = () => [...document.querySelectorAll("[data-tip]:is(:hover, :focus-within, .tip-hold)")]
     .some((carrier) => getComputedStyle(carrier, "::after").content !== "none");
-  const fixed = (carrier) => getComputedStyle(carrier, "::after").position === "fixed";
   const pointAt = (event) => ({ x: event.clientX, y: event.clientY });
   // Touch screens (phones) and touch input anchor tips to their carriers, as before.
   const touchScreen = window.matchMedia("(hover: none)");
@@ -406,22 +384,10 @@ function setupTips() {
     clickedAt = at;
     root.classList.add("tips-hidden");
   }
-  function placeBeside(carrier) {
-    const panel = carrier.closest(".facets") ?? carrier;
-    const place = besidePanel(carrier.getBoundingClientRect(), panel.getBoundingClientRect().right, root.clientHeight);
-    const set = (name, value) => carrier.style.setProperty(name, value === null ? "auto" : `${value}px`);
-    set("--tip-x", place.x);
-    set("--tip-y", place.top);
-    set("--tip-y-end", place.bottom);
-  }
   // Keyboard focus and touch taps: the tip at its carrier.
   function anchor(carrier) {
     carrier.classList.remove("tip-at-pointer");
     if (pointed?.carrier === carrier) pointed = null;
-    if (fixed(carrier)) {
-      placeBeside(carrier);
-      return;
-    }
     if (getComputedStyle(carrier).position === "static") {
       carrier.style.setProperty("--tip-top", `${carrier.offsetTop + carrier.offsetHeight}px`);
       return;
@@ -623,21 +589,16 @@ function setupTips() {
     target.closest(FOCUSABLE)?.focus({ preventScroll: true, focusVisible: false });
     target.dispatchEvent(new MouseEvent("click", event));
   }, true);
-  // A sidebar scrolled under a focused row moves the row away from its tip beside the sidebar
-  // (not while the tip is at the pointer: style.css).
-  document.addEventListener("scroll", () => {
-    const carrier = document.querySelector(".mesh-tip:has(:focus-visible):not(.tip-at-pointer:is(:hover, .tip-hold))");
-    if (carrier && fixed(carrier)) placeBeside(carrier);
-  }, { capture: true, passive: true });
 }
 
-// Filled before any data loads, so it shows even when the data files are missing: the header's
-// tagline and scope line (the data's date follows with meta.json), the search field's name and
-// placeholder, and the About disclosure. The footer's links to other websites are marked as such
-// (after their text is set).
+// Filled before any data loads, so it shows even when the data files are missing: the top bar's
+// source line (the data's date follows with meta.json), the search field's name and placeholder, the
+// page heading, the filter bar's name and the About disclosure. The footer's links to other
+// websites are marked as such (after their text is set).
 function renderAbout() {
-  d3.select("#tagline").text(UI.tagline);
-  d3.select("#data-date").text(UI.scopeLine);
+  d3.select("#data-date").text(UI.dataDate(null));
+  d3.select("#page-title").text(UI.page.title);
+  d3.select("#filter-bar-label").text(UI.filters.label);
   d3.select("#lookup-label").text(UI.lookup.label);
   d3.select("#lookup-input").attr("placeholder", UI.lookup.placeholder);
   d3.select("#about-summary").text(UI.about.summary);
@@ -860,7 +821,6 @@ function startLookup([meta, searchRows, entryTermRows]) {
     searchBox.setText("");
     navigate(structuredClone(DEFAULT_STATE));
   });
-  d3.select("#explore-title").text(UI.explore.title);
   d3.select("#explore-note").text(UI.explore.note);
   // medicines: the dashboard loads the same file (one request, loadFile()).
   for (const name of ["conditions", "atc", "atcCounts", "companies", "medicines"]) lookup.need(name);
@@ -890,7 +850,7 @@ function startDashboard(meta, [
   // Companies part 2: company groups › companies › EMA holder names.
   const companies = buildCompanies(companyRows, medicineCompanyRows);
   // Modality (M2 phase 2): groups › modalities; null without the modality data (older data files):
-  // no tree, token, breakdown or stack then.
+  // no tree, chip, breakdown or stack then.
   const modalityTree = modalityTaxonomy?.length && medicineModalityRows ? buildModalityTree(modalityTaxonomy) : null;
   const products = buildProducts(medicines, {
     areaRows, branchRows, atcRows, companyRows: medicineCompanyRows, areaTree: meshTree, modalityRows: modalityTree ? medicineModalityRows : [], modalityTree,
@@ -900,7 +860,7 @@ function startDashboard(meta, [
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
   // The ATC tree rows' explainers read a code's status too (atcClassTip()).
   const atcClassRows = new Map(atcClasses.map((row) => [row.atc_code, row]));
-  // The filter sentence's modality token names (null without the modality data: no token).
+  // The filter chips' modality names (null without the modality data: no modality chip).
   const modalityNames = modalityTree ? new Map(modalityTree.keys.map((key) => [key, modalityTree.name(key)])) : null;
   const atcRetiredYears = new Map(atcClasses.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null]));
   const branchNamesByTerm = d3.rollup(
@@ -921,7 +881,7 @@ function startDashboard(meta, [
   const areaTip = (key) => (meshTree.isCategory(key)
     ? describedTip(`mesh-category-tip-${key}`, areaCategoryTip(meshTree, key))
     : meshTip(areaNote(lookup.meshNotes(), key, (term) => descriptorOf.get(term))));
-  // A small icon link to a condition page (ui: its descriptor) after a row: sidebar area rows,
+  // A small icon link to a condition page (ui: its descriptor) after a row: area tree rows,
   // therapeutic area group bars. name: the condition, for its accessible name and tooltip (a tree
   // row with an explainer drops the tooltip: facet-tree.js).
   const conditionIconLink = (ui, name) => {
@@ -959,33 +919,37 @@ function startDashboard(meta, [
     modalities: new Set(modalityTree?.keys ?? []),
     modalityAncestors: (key) => modalityTree?.ancestors(key) ?? new Set(),
   };
-  // Modality: the sidebar section, the breakdown and stack modes show once the data is there.
-  for (const selector of ["#facet-modality", '#breakdown-by [data-by="mod"]', '#chart-stack [data-stack="mod"]']) $(selector).hidden = !modalityTree;
+  // Modality: the breakdown and stack modes (and the chip, filterChips()) show once the data is there.
+  for (const selector of ['#breakdown-by [data-by="mod"]', '#chart-stack [data-stack="mod"]']) $(selector).hidden = !modalityTree;
 
   renderOverTimeLegend($("#over-time-legend"));
   $("#over-time-subtitle").textContent = UI.overTime.subtitle;
 
-  // Every filter key reset to its default (the sentence's remove buttons, Clear, Reset).
+  // Every filter key reset to its default (a chip's remove button, Clear, Clear filters).
   const cleared = (keys) => Object.fromEntries(keys.map((key) => [key, structuredClone(DEFAULT_STATE[key])]));
   // A therapeutic area's condition page: a term's descriptor, else (branches and tree nodes) the
   // descriptor of that name, known once the lookup's conditions data has loaded; null otherwise,
   // and for a MeSH category (no descriptor: owner decision 2026-09-29).
   const areaDescriptor = (key) => (meshTree.isCategory(key) ? null
     : (meshTree.isTerm(key) ? descriptorOf.get(key) : lookup.conditions()?.uiByName.get(meshTree.name(key))) ?? null);
-  // Tree rows link to their condition page; followed from a sheet, the sheet closes (the page's
-  // heading takes focus, not the token that opened the sheet).
+  // Tree rows link to their condition page; followed from a popover or sheet, it closes (the page's
+  // heading takes focus, not the chip that opened it).
   const areaRowLink = (key) => {
     const ui = areaDescriptor(key);
     if (!ui) return null;
     const link = conditionIconLink(ui, meshTree.name(key));
     link.addEventListener("click", (event) => {
-      if (event.defaultPrevented) sheet.close({ restoreFocus: false }); // a plain click: opened here
+      if (event.defaultPrevented) closeFilters(); // a plain click: opened here
     });
     return link;
   };
-  const facetPanel = createFacetPanel($("#facets"), { onChange: (patch) => setState(patch) });
-  // Under the default headline: include the medicines of every status (owner decision 2026-09-29);
-  // the line goes, so focus goes to the headline, which then counts them.
+  const facetPanel = createFacetPanel({ onChange: (patch) => setState(patch) });
+  // A chip's controls: a popover under it (desktop) or a bottom sheet (below 1024px); each borrows
+  // the chip's section from the hidden store. Clear resets the chip's filter keys.
+  const popover = createPopover($("#filter-popover"), { onClear: (keys) => setState(cleared(keys)) });
+  // In the headline's lead (owner decision 2026-09-29, "Authorized by default"; inline after the
+  // headline, F · Spacious): include the medicines of every status; the control goes, so focus goes
+  // to the headline, which then counts them.
   const includeEveryStatus = $("#status-include");
   includeEveryStatus.textContent = UI.statusScope.include;
   includeEveryStatus.setAttribute("aria-label", UI.statusScope.includeLabel);
@@ -993,20 +957,21 @@ function startDashboard(meta, [
     setState({ status: [] });
     $("#headline").focus();
   });
-  // Collapsible sections (owner decision 2026-09-29 (2)): collapsed by default, each viewer's open
-  // ones remembered; Reset all leaves them as they are.
-  const facetSections = createFacetSections();
-  $("#reset-all").addEventListener("click", () => {
-    setState(cleared(FILTER_KEYS));
-    $("#facets-title").focus(); // the button is disabled now
-  });
   const sheet = createSheet($("#sheet"), { onClear: (keys) => setState(cleared(keys)) });
+  // A link followed from a popover or sheet (a condition or company page): it closes without handing
+  // focus back to the chip (the page's heading takes it).
+  const closeFilters = () => {
+    popover.close({ restoreFocus: false });
+    sheet.close({ restoreFocus: false });
+  };
   DESKTOP.addEventListener("change", () => {
-    if (DESKTOP.matches) sheet.close(); // its sections go back to the sidebar
-    scheduleRender(); // tokens open a dialog only below 1024px
+    // A chip opens a popover from 1024px, a sheet below: the other one closes.
+    if (DESKTOP.matches) sheet.close();
+    else popover.close({ restoreFocus: false });
+    scheduleRender();
   });
-  // Approval years: the sidebar's last section (histogram + two-thumb slider); the per-year chart's
-  // brush also sets the range, and both follow state.from/to.
+  // Approval years (histogram + two-thumb slider, the Approval year chip's section); the per-year
+  // chart's brush also sets the range, and both follow state.from/to.
   const yearStrip = createYearStrip($("#facet-years"), { years: approvalYears, onRange: (range) => setState(range) });
   // The ATC selection: codes (any level) and, from older links, class-name queries, with OR.
   const atcSelection = () => splitAtcValues(state.atc);
@@ -1040,11 +1005,11 @@ function startDashboard(meta, [
   const openCompany = (value) => setState({ mah: value === null ? [] : companies.canonical(value) });
   // Exactly one company value selected: the value the company breakdown drills into.
   const drillCompany = () => (state.mah.length === 1 && companies.has(state.mah[0]) ? state.mah[0] : null);
-  // Tree rows link to their company page; followed from a sheet, the sheet closes (as area rows).
+  // Tree rows link to their company page; followed from a popover or sheet, it closes (as area rows).
   const companyRowLink = (value) => {
     const link = companyIconLink(value);
     link.addEventListener("click", (event) => {
-      if (event.defaultPrevented) sheet.close({ restoreFocus: false });
+      if (event.defaultPrevented) closeFilters();
     });
     return link;
   };
@@ -1057,62 +1022,45 @@ function startDashboard(meta, [
   // splits (a group into its modalities).
   const drillModality = () => (modalityTree && state.mod.length === 1 && modalityTree.has(state.mod[0]) ? state.mod[0] : null);
   const modalityFacet = modalityTree ? createModalityTree($("#facet-modality"), { tree: modalityTree, onToggle: toggleModalityKey }) : null;
-  // The token that opened a filter (its focus key, looked up again as tokens are rebuilt), else a
-  // token opening the same sheet (the range's other year, the other ATC pill), else null.
-  const openerToken = ({ focusKey, sheetKey }) => $(`#filter-sentence [data-focus-key="${CSS.escape(focusKey)}"]`)
-    ?? $(`#filter-sentence [data-sheet="${CSS.escape(sheetKey)}"]`);
-  // The token whose sidebar section has focus (desktop): Escape goes back to it.
-  let opener = null;
-  // A sentence token (its key and focus key) or All filters ("all"): on desktop, the token's own
-  // section and control (the year tokens: a thumb of the approval year slider); below that, a
-  // sheet with its sections. Focus goes back to the token that opened it (WCAG 2.4.3).
-  function openFilters(key, focusKey = `${key}:open`) {
-    const sheetKey = TOKEN_SHEETS[key] ?? key;
-    const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
-    if (DESKTOP.matches) {
-      // A collapsed section opens first: its control cannot take focus while hidden.
-      facetSections.reveal(SHEET_SECTIONS[sheetKey][0]);
-      const trees = { atc: atcTree, area: areaFacet, mah: companyFacet, mod: modalityFacet };
-      const target = (trees[key] ? trees[key].focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
-      target.closest(".facet").scrollIntoView({ block: "start" });
-      target.focus({ preventScroll: true });
-      opener = { focusKey, sheetKey };
+  // A chip's open button (chips are rebuilt on every render: looked up again by its key).
+  const chipButton = (key) => $(`#filter-chips [data-focus-key="${key}:open"]`);
+  // A chip opens its section: on desktop in a popover under it, focus on its first checked row
+  // (the trees), its first checkbox or the Start thumb, a click on the same chip closing it again;
+  // below 1024px in a bottom sheet, focus on the sheet's title. Focus goes back to the chip when it
+  // closes (WCAG 2.4.3).
+  function openChip(key) {
+    const section = $(`#facet-${CHIP_SECTIONS[key]}`);
+    const options = {
+      title: DESKTOP.matches ? UI.filters.popoverTitle(key) : UI.filters.names[key],
+      sections: [section],
+      clears: CHIP_KEYS[key],
+      restore: () => chipButton(key),
+    };
+    if (!DESKTOP.matches) {
+      sheet.open(options);
       return;
     }
-    // One section: shown open, its heading hidden (the sheet's title names it); All filters: the
-    // sections' headings as in the sidebar, the open ones as the viewer left them.
-    const solo = sections.length === 1 ? SHEET_SECTIONS[sheetKey][0] : null;
-    sheet.open({
-      title: UI.sheet.titles[sheetKey] ?? sections[0].querySelector(".facet-heading").textContent,
-      sections,
-      // All filters clears every filter, the years too (as the sidebar's Reset all).
-      clears: sheetKey === "all" ? FILTER_KEYS : SHEET_SECTIONS[sheetKey].flatMap((section) => SECTION_KEYS[section]),
-      restore: () => openerToken({ focusKey, sheetKey }) ?? $("#all-filters"),
-      onOpen: () => facetSections.solo(solo),
-      onClose: () => facetSections.solo(null),
+    if (nextOpenChip(popover.openKey(), key) === null) {
+      popover.close();
+      scheduleRender();
+      return;
+    }
+    const trees = { atc: atcTree, area: areaFacet, mah: companyFacet, mod: modalityFacet };
+    popover.open({
+      ...options,
+      key,
+      wide: WIDE_CHIPS.has(key),
+      anchor: () => chipButton(key),
+      focus: () => (trees[key] ? trees[key].focusTarget() : $(FOCUS_TARGETS[key])),
+      onClose: () => scheduleRender(), // the chip's aria-expanded
     });
+    scheduleRender();
   }
-  // Escape in the sidebar returns to the results: the token that led there, else the headline.
-  // A search with text clears first (the browser's own Escape).
-  $("#facets").addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || event.defaultPrevented || (event.target.type === "search" && event.target.value)) return;
-    ((opener && openerToken(opener)) ?? $("#headline")).focus();
-  });
-  const allFilters = $("#all-filters");
-  allFilters.textContent = UI.sentence.allFilters;
-  allFilters.addEventListener("click", () => openFilters("all"));
 
-  // The first checked class in the tree (sidebar, its section opened first), or the sentence's ATC
-  // token (phones, tablets).
-  const focusAtcFilter = () => {
-    if (DESKTOP.matches) facetSections.reveal("atc");
-    (DESKTOP.matches ? atcTree.focusTarget() : $('#filter-sentence [data-sheet="atc"]'))?.focus();
-  };
-  // The same for the therapeutic area tree (a clicked branch chip whose row is gone).
-  const focusAreaFilter = () => {
-    if (DESKTOP.matches) facetSections.reveal("area");
-    (DESKTOP.matches ? areaFacet.focusTarget() : $('#filter-sentence [data-sheet="area"]'))?.focus();
-  };
+  // A table's ATC segment, or a branch chip, whose control is gone after a re-render: focus goes to
+  // the ATC class or Therapeutic area filter chip.
+  const focusAtcFilter = () => chipButton("atc")?.focus();
+  const focusAreaFilter = () => chipButton("area")?.focus();
 
   const readout = $("#year-readout");
   const showReadout = (from, to) => {
@@ -1209,19 +1157,21 @@ function startDashboard(meta, [
     focusAreaFallback: focusAreaFilter,
   });
   // "Download CSV" (#18): every medicine the table lists (all that match the filters, not only the
-  // pages shown), in its order, named by the data's date.
+  // pages shown), in its order, named by the data's date. Two buttons (F · Spacious, phase 1): the
+  // page header's, at the right of the heading, and the table card's.
   let tableRows = [];
   const dataDate = meta.snapshot_date ?? meta.source_timestamp.slice(0, 10);
-  const download = $("#table-download");
-  download.textContent = UI.csv.button;
-  download.addEventListener("click", () => {
+  const downloadCsv = () => {
     const text = medicinesCsv(tableRows, {
       substancesOf: (product) => substanceIndex.get(product.ema_product_number) ?? [],
       groupNameOf: (product) => (product.group_key ? companies.name(product.group_key) : null),
       dataDate,
     });
     saveFile(text, csvFileName(dataDate), "text/csv;charset=utf-8");
-  });
+  };
+  $("#table-download").textContent = UI.csv.button;
+  $("#page-download-text").textContent = UI.csv.button;
+  for (const button of [$("#table-download"), $("#page-download")]) button.addEventListener("click", downloadCsv);
 
   // After a therapeutic area's bar: its condition page (areaDescriptor(): for a branch or tree node
   // found by name once the lookup's conditions data has loaded; the card re-renders then). None
@@ -1830,39 +1780,40 @@ function startDashboard(meta, [
     areaShown = areaNow;
 
     const predicates = makePredicates(state, atcClasses);
-    // The filters set: the default status (authorized; owner decision 2026-09-29) is none, every
-    // status or a choice of statuses is one.
+    // The filters set (url.js activeFilterCount()): the default status (authorized; owner decision
+    // 2026-09-29) is none, every status or a choice of statuses is one; the chip bar counts the same.
     const activeCount = activeFilterCount(state);
     // Whether the medicines shown are fewer than the default overview's or every medicine's: the
     // cards that say "all … medicines" (conditions, protection calendar) say "matching the filters".
     const narrowed = activeFilterCount(state, "status") > 0 || (!isDefaultStatus(state.status) && state.status.length > 0);
-    // The names the filter sentence and the collapsed sections' summaries give the selections.
+    // The names the filter chips give the selections (facets.js filterChips()).
     const selectionNames = {
       years: approvalYears, areaNames: meshTree.labels, atcNames, mahName: companies.label, mahSelection: companies.selectionName, modalityNames,
     };
-    safely($("#facets"), () => {
-      facetPanel.render({
-        state,
-        counts: Object.fromEntries(FACETS.map((dimension) => [dimension, facetCounts(products, predicates, dimension, FACET_VALUES[dimension])])),
-        activeCount,
-      });
-      facetSections.summarize(Object.fromEntries(Object.entries(SECTION_KEYS).map(([section, [dimension]]) => [
-        section, sectionSummary(SECTION_SUMMARIES[section] ?? dimension, state, selectionNames),
-      ])));
-    });
+    safely($("#facet-type"), () => facetPanel.render({
+      state,
+      counts: Object.fromEntries(FACETS.map((dimension) => [dimension, facetCounts(products, predicates, dimension, FACET_VALUES[dimension])])),
+    }));
     // The per-year chart, the year filter's bars and the over-time line ignore the approval-year
     // filter and mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
-    safely($("#facet-years-body"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
-    safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, selectionNames), {
-      anyActive: activeCount > 0,
-      sheetOf: (key) => TOKEN_SHEETS[key],
-      popup: !DESKTOP.matches,
-      onOpen: openFilters,
-      // One of two ATC pills removes its class only.
-      onRemove: (token) => setState(token.value === undefined ? cleared(token.clears) : { atc: state.atc.filter((value) => value !== token.value) }),
-      onReset: () => setState(cleared(FILTER_KEYS)),
-    }));
+    safely($("#facet-years"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
+    // The filter chips, then "[n] active filters · Clear filters" (F · Spacious, phase 1).
+    safely($(".filter-bar"), () => {
+      const chips = filterChips(state, selectionNames);
+      renderFilterChips($("#filter-chips"), chips, {
+        openKey: popover.openKey(),
+        onOpen: openChip,
+        onRemove: (chip) => setState(cleared(chip.clears)),
+      });
+      renderFilterSummary($("#filter-summary"), activeCount, {
+        onClear: () => {
+          setState(cleared(FILTER_KEYS));
+          $("#filter-chips button")?.focus(); // the button goes with the last filter
+        },
+      });
+      popover.place();
+    });
     // ATC counts per prefix (and per exact code, for the products coded only down to an
     // incomplete level) of the medicines matching every other filter: tree, breakdown, class path.
     const withoutAtcFilter = filterProducts(products, predicates, "atc");
@@ -1933,13 +1884,8 @@ function startDashboard(meta, [
   scheduleUrlWrite(state); // canonical form, invalid values removed
   d3.select("#app-loading").attr("hidden", "");
   d3.select("#app").attr("hidden", null);
-  d3.select("#facets").attr("hidden", null);
-  d3.select("#sidebar-resize").attr("hidden", null);
-  // The charts follow their width; while the sidebar is dragged they wait for its release (a
-  // render per frame would stutter the drag).
-  const resizeObserver = new ResizeObserver(() => {
-    if (!sidebar.dragging()) scheduleRender();
-  });
+  // The charts follow their width (the year bars: their popover's or sheet's, once shown there).
+  const resizeObserver = new ResizeObserver(() => scheduleRender());
   for (const selector of ["#chart", "#over-time", "#year-hist"]) resizeObserver.observe($(selector));
   render();
   loadFile(REGISTER_FILE).then((rows) => {
@@ -1970,10 +1916,20 @@ function startDashboard(meta, [
   }, { rootMargin: "400px 0px" }).observe(cardOf("#pc-body"));
 }
 
-// Desktop: the sidebar starts below the fixed header, whose height follows its text (the offline
-// note, user text spacing).
-const header = $("header");
-new ResizeObserver(() => document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`)).observe(header);
+// Below 1024px the top bar is sticky with its first row (wordmark, "What is this?", theme) scrolling
+// away, so the search stays at the top (style.css): --topbar-hide is how far it scrolls before it
+// sticks (the search row's top less its 8px padding), --topbar-shown what stays, for the page's
+// scroll padding (WCAG 2.4.11). Both follow the bar's height (the offline note, user text spacing,
+// the search showing once its data has loaded) and every render (render()).
+function placeTopbar() {
+  const header = $("header");
+  const searchRow = $("#lookup");
+  const hide = DESKTOP.matches || searchRow.hidden ? 0 : Math.max(0, searchRow.offsetTop - 8);
+  const root = document.documentElement.style;
+  root.setProperty("--topbar-hide", `${hide}px`);
+  root.setProperty("--topbar-shown", `${header.offsetHeight - hide}px`);
+}
+new ResizeObserver(placeTopbar).observe($("header"));
 
 renderAbout();
 renderTypeTips();

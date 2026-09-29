@@ -1,4 +1,4 @@
-// The facet sidebar's ATC section (the phone sheet borrows it): the tree of the ATC classes with
+// The ATC class section (its chip's popover or sheet borrows it): the tree of the ATC classes with
 // products (facet-tree.js), each row with the code badge, the Title Case name and the count.
 // Checked classes combine with OR (state.atc).
 import { appendCodeBadge } from "./atc-picker.js";

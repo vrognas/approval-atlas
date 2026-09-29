@@ -5,7 +5,7 @@ import { buildProducts } from "./approvals.js";
 import { buildAreaTree, inAreas } from "./areas.js";
 import { equivalentSetKey, substanceEquivalents, substanceSetCount } from "./copies.js";
 import { buildConditions } from "./search.js";
-import { DEFAULT_STATE } from "./url.js";
+import { DEFAULT_STATE, activeFilterCount } from "./url.js";
 import { atcClassesAt } from "./atc.js";
 import { makePredicates } from "./filters.js";
 import {
@@ -17,6 +17,7 @@ import {
   TYPE_ORDER,
   defaultSortDirection,
   facetCounts,
+  filterChips,
   facetRows,
   holderActivity,
   keyCounts,
@@ -229,9 +230,9 @@ test("the ATC token names one class, quotes a name filter, reads two as codes an
   assert.equal(tokenLabel("atc", stateOf({ atc: ["A", "C", "H03"] }), lookups), "3 ATC classes");
 });
 
-// Owner decision 2026-09-29 (2): sidebar sections start collapsed; a collapsed one with an active
-// filter says what it holds after its title, so no filter is hidden.
-test("a collapsed section's summary names its one value, else counts them; none without a filter", () => {
+// An active filter chip's value (F · Spacious, phase 1; before, a collapsed sidebar section's
+// summary): its one value named, else how many.
+test("a section's summary names its one value, else counts them; none without a filter", () => {
   const summary = (dimension, patch, more = {}) => sectionSummary(dimension, stateOf(patch), { ...lookups, ...more });
   for (const dimension of ["type", "mod", "atc", "area", "mah", "status"]) assert.equal(summary(dimension, {}), null, dimension);
   assert.equal(summary("type", { type: ["Biosimilar"] }), "Biosimilar");
@@ -256,8 +257,8 @@ test("a collapsed section's summary names its one value, else counts them; none 
   assert.equal(summary("mah", { mah: ["g.roche", "g.pfizer"] }), "2 selected");
 });
 
-// Owner decision 2026-09-29 (layout): the approval years are a sidebar section again ("years": both
-// ends of the range, state.from and state.to); collapsed, it names the range as the slider shows it.
+// The approval years ("years": both ends of the range, state.from and state.to): the range as the
+// slider shows it.
 test("the approval year section's summary names the range, open ends at the data's bounds, or one year", () => {
   const summary = (patch) => sectionSummary("years", stateOf(patch), lookups);
   assert.equal(summary({}), null);
@@ -266,6 +267,54 @@ test("the approval year section's summary names the range, open ends at the data
   assert.equal(summary({ from: 2015, to: 2020 }), "2015–2020");
   // One year (a bar clicked): the year alone, as the sentence's token.
   assert.equal(summary({ from: 2024, to: 2024 }), "2024");
+});
+
+// F · Spacious, phase 1: one chip per filter dimension above the cards, in a fixed order (the
+// modality chip once its data has loaded); an active one names its value (sectionSummary()) and
+// clears its keys; whether it is active, and its explanation, come from the filter tokens
+// (sentenceParts()).
+// Owner decision 2026-09-29 ("Authorized by default", #22): the default status (Authorised) is no
+// filter, so its chip is inactive and not counted; every status (status []) or a choice is one, and
+// its remove button goes back to the default (DEFAULT_STATE).
+test("filter chips: the Status chip is inactive by default, active when widened or chosen", () => {
+  const status = (patch) => filterChips(stateOf(patch), lookups).find((chip) => chip.key === "status");
+  assert.deepEqual(status({}), { key: "status", active: false, value: null, tip: null, clears: ["status"] });
+  assert.equal(activeFilterCount(stateOf({})), 0);
+  assert.deepEqual(status({ status: [] }), { key: "status", active: true, value: "Every status", tip: null, clears: ["status"] });
+  assert.equal(activeFilterCount(stateOf({ status: [] })), 1);
+  assert.equal(status({ status: ["Withdrawn"] }).value, "Withdrawn");
+  assert.equal(status({ status: ["Refused", "Withdrawn"] }).value, "2 selected");
+  assert.deepEqual(DEFAULT_STATE.status, ["Authorised"]);
+});
+
+test("filter chips: one per dimension, inactive without filters", () => {
+  const chips = filterChips(stateOf({}), lookups);
+  assert.deepEqual(chips.map((chip) => chip.key), ["type", "atc", "area", "mah", "status", "years"]);
+  assert.ok(chips.every((chip) => !chip.active && chip.value === null && chip.tip === null));
+  assert.deepEqual(chips.find((chip) => chip.key === "years").clears, ["from", "to"]);
+  // "N active filters" counts as url.js activeFilterCount() does (the default status is none).
+  assert.equal(activeFilterCount(stateOf({})), 0);
+  const withModalities = { ...lookups, modalityNames: new Map([["antibody", "Antibody"]]) };
+  assert.deepEqual(filterChips(stateOf({}), withModalities).map((chip) => chip.key), ["type", "mod", "atc", "area", "mah", "status", "years"]);
+});
+
+test("filter chips: an active chip names its value, carries its explanation and clears its keys", () => {
+  const chips = filterChips(stateOf({ type: ["Biosimilar"], atc: ["C", "H03"], area: ["C17"], from: 2015, status: ["Lapsed"] }), lookups);
+  const byKey = Object.fromEntries(chips.map((chip) => [chip.key, chip]));
+  assert.deepEqual(byKey.type, { key: "type", active: true, value: "Biosimilar", tip: "Biosimilar", clears: ["type"] });
+  // Two ATC classes (two tokens) are one chip counting them, clearing both.
+  assert.deepEqual(byKey.atc, { key: "atc", active: true, value: "2 selected", tip: null, clears: ["atc"] });
+  assert.equal(byKey.area.value, "Skin and Connective Tissue Diseases");
+  // A status by its label, with its explanation.
+  assert.deepEqual(byKey.status, { key: "status", active: true, value: "Lapsed", tip: "Lapsed", clears: ["status"] });
+  // A year range: one chip for both ends.
+  assert.deepEqual(byKey.years, { key: "years", active: true, value: "2015–2026", tip: null, clears: ["from", "to"] });
+  assert.equal(byKey.mah.active, false);
+  assert.equal(activeFilterCount(stateOf({ type: ["Biosimilar"], atc: ["C", "H03"], area: ["C17"], from: 2015, status: ["Lapsed"] })), 5);
+  // One year (a bar clicked).
+  assert.equal(filterChips(stateOf({ from: 2024, to: 2024 }), lookups).find((chip) => chip.key === "years").value, "2024");
+  const mod = filterChips(stateOf({ mod: ["antibody"] }), { ...lookups, modalityNames: new Map([["antibody", "Antibody"]]) }).find((chip) => chip.key === "mod");
+  assert.deepEqual(mod, { key: "mod", active: true, value: "Antibody", tip: "antibody", clears: ["mod"] });
 });
 
 const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `[${part.text}]`)).join("");

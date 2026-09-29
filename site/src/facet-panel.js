@@ -1,6 +1,6 @@
-// Facet sections (static markup in index.html): the desktop sidebar, and the phone and tablet
-// sheets, which borrow the same section elements while open. Rows are real checkboxes with their
-// counts, updated in place on every render so focus and scroll stay put.
+// The medicine type and status sections (static markup in index.html #facet-store; a chip's popover
+// or sheet borrows the section while open). Rows are real checkboxes with their counts, updated in
+// place on every render so focus and scroll stay put.
 import * as d3 from "d3";
 import { statusHue, statusTip, typeTip } from "./badges.js";
 import { TYPE_ORDER, facetRows } from "./facets.js";
@@ -43,11 +43,10 @@ function renderChecklist(list, rows, { onToggle, dotClass = () => null, tipOf = 
   }
 }
 
-// root: the sidebar (its head stays; sections are found by id, as a sheet may hold them).
-// onChange(patch): a checkbox changed its dimension's values. The ATC classes, therapeutic areas
-// and companies are trees of their own (atc-tree.js, area-tree.js, phase 4f; company-tree.js,
-// companies part 2).
-export function createFacetPanel(root, { onChange }) {
+// The medicine type and status checklists (sections found by id, wherever they are: the hidden
+// store, a popover or a sheet). onChange(patch): a checkbox changed its dimension's values. The ATC
+// classes, therapeutic areas, companies and modalities are trees of their own.
+export function createFacetPanel({ onChange }) {
   const section = (key) => document.getElementById(`facet-${key}`);
   // Values unchecked here stay listed (facetRows() keep), so the row keeps its focus even when it
   // was listed only because it was selected.
@@ -67,16 +66,12 @@ export function createFacetPanel(root, { onChange }) {
     onChange({ [key]: checked ? [...values, value] : values.filter((item) => item !== value) });
   };
 
-  // model: { state, counts: { type, status } (facetCounts()), activeCount }. The approval
-  // years are the main column's strip (year-slider.js); the ATC, therapeutic area and company
-  // sections are trees (atc-tree.js, area-tree.js, company-tree.js).
+  // model: { state, counts: { type, status } (facetCounts()) }. The approval years, ATC classes,
+  // therapeutic areas, companies and modalities have sections of their own (year-slider.js and the
+  // trees: atc-tree.js, area-tree.js, company-tree.js, modality-tree.js).
   function render(next) {
     model = next;
-    const { state, counts, activeCount } = model;
-    const active = UI.facets.active(activeCount);
-    d3.select(root.querySelector("#facets-active")).text(active ?? "").attr("hidden", active ? null : "");
-    root.querySelector("#reset-all").disabled = activeCount === 0;
-    root.querySelector("#facets-note").textContent = UI.facets.counts;
+    const { state, counts } = model;
 
     const typeRows = TYPE_ORDER.map((type) => ({ value: type, label: type, count: counts.type.get(type) ?? 0, selected: state.type.includes(type) }));
     renderChecklist(section("type").querySelector(".facet-list"), typeRows, {
