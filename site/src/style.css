@@ -2751,9 +2751,12 @@ td.result-holder .holder-main .company-badge {
   fill: transparent;
 }
 
+/* At the pointer (placeTooltip() in chart.js), which can put it past its chart's edge: its own
+   width, so it never wraps there. */
 .tooltip {
   position: absolute;
   z-index: 1;
+  width: max-content;
   min-width: 140px;
   padding: 8px 10px;
   border: 1px solid var(--grid);
@@ -3240,24 +3243,16 @@ a.mesh-tip[data-tip] {
   max-width: none;
 }
 
-/* In the desktop sidebar the tip goes beside it, level with its row, so it covers no other row
-   (step 4 review). Fixed (no ancestor is a containing block for it, so the sidebar's scrolling does
-   not clip it): --tip-x, --tip-y (top) or --tip-y-end (bottom, lower rows) from setupTips()
-   (besidePanel() in tips.js); on hover a bridge (--bridge-*) spans from the row's right edge to it
-   (WCAG 1.4.13). The sidebar's scrollbar lies on the way and takes the pointer from the bridge, so
-   the tip holds for a moment when the pointer leaves its row to the right (.tip-hold, setupTips()).
-   While a row's tip shows, the sidebar is stacked over the main column and the splitter, so the
-   tip shows over the cards and the pointer can cross the splitter onto it. */
+/* With keyboard focus in the desktop sidebar the tip goes beside it, level with its row, so it
+   covers no other row (step 4 review; a mouse's hover opens it at the pointer, below). Fixed (no
+   ancestor is a containing block for it, so the sidebar's scrolling does not clip it): --tip-x,
+   --tip-y (top) or --tip-y-end (bottom, lower rows) from setupTips() (besidePanel() in tips.js).
+   While a tip in the sidebar shows (at the pointer too), the sidebar is stacked over the main
+   column and the splitter, so the tip shows over the cards and the pointer can cross the splitter
+   onto it. */
 @media (min-width: 1024px) {
-  .facets:has(:is(#facet-area, #facet-modality) .mesh-tip:is(:hover, :focus-within, .tip-hold)) {
+  .facets:has([data-tip]:is(:hover, :focus-within, .tip-hold)) {
     z-index: 5;
-  }
-
-  /* Held: shown without the pause, also when the pointer is back on the row, its bridge or tip. */
-  .facets :is(#facet-area, #facet-modality) .atc-row.mesh-tip.tip-hold[data-tip]::after {
-    content: attr(data-tip);
-    content: attr(data-tip) / "";
-    animation: none;
   }
 
   .facets :is(#facet-area, #facet-modality) .atc-row.mesh-tip[data-tip]::after {
@@ -3271,27 +3266,23 @@ a.mesh-tip[data-tip] {
   }
 }
 
-@media (min-width: 1024px) and (hover: hover) {
-  .facets :is(#facet-area, #facet-modality) .atc-row.mesh-tip[data-tip]:is(:hover, .tip-hold)::before {
-    content: "";
-    position: fixed;
-    z-index: 4;
-    top: var(--bridge-y, 0);
-    left: var(--bridge-x, 0);
-    width: var(--bridge-w, 0);
-    height: var(--bridge-h, 0);
-  }
-
-  .facets :is(#facet-area, #facet-modality) .atc-row.mesh-tip.tip-hold[data-tip]::before {
-    animation: none;
-  }
-}
-
 @media (hover: hover) {
   .mesh-tip[data-tip]:hover::before,
   .mesh-tip[data-tip]:hover::after {
     animation: tip-pause 0s 600ms both;
   }
+}
+
+/* Held (setupTips(): the pointer left its carrier on the way to its tip at the pointer): shown
+   without the pause, also when the pointer is back on the carrier or on the tip; so is its bridge. */
+[data-tip].tip-hold::after {
+  content: attr(data-tip);
+  content: attr(data-tip) / "";
+}
+
+.mesh-tip.tip-hold[data-tip]::before,
+.mesh-tip.tip-hold[data-tip]::after {
+  animation: none;
 }
 
 @keyframes tip-pause {
@@ -3336,6 +3327,60 @@ a.mesh-tip[data-tip] {
 
 .token-pill[data-tip]::after {
   max-width: min(16rem, 100%);
+}
+
+/* On mouse hover (owner decision 2026-09-29) a tip opens at the pointer: fixed, 12px below and
+   right of where the pointer entered its carrier (a MeSH explainer: where it rests when its pause
+   ends), inside the viewport and the scroll box that holds it, flipped above or left without room
+   (setupTips() in main.js, atPointer() in tips.js; --pointer-tip-x, --pointer-tip-y, relative to
+   its fixed containing block: the viewport, or, found by a probe, an ancestor that makes one, e.g.
+   a sheet while its transform animates). It stays put, and the pointer can move onto it: across
+   its bridge (below), or held on other ways (.tip-hold above). This placement wins over every
+   carrier's anchored one (the sidebar's, the sentence's, a Type cell's, a tile's spanning its
+   carrier), which keyboard focus and touch taps keep, while the pointer is on the carrier or tip
+   or held (review 2026-09-29: a focused carrier the pointer passed over kept its tip where the
+   pointer had been; setupTips() also takes the class off when the pointer leaves). */
+.tip-at-pointer[data-tip]:is(:hover, .tip-hold)::after {
+  position: fixed !important;
+  top: var(--pointer-tip-y, 0) !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: var(--pointer-tip-x, 0) !important;
+  width: max-content !important;
+  max-width: min(16rem, calc(100vw - 32px)) !important;
+}
+
+.tip-at-pointer.mesh-tip[data-tip]:is(:hover, .tip-hold)::after {
+  max-width: min(22rem, calc(100vw - 32px)) !important;
+}
+
+/* Its bridge (WCAG 1.4.13; review 2026-09-29): the band from the pointer to the tip's near edge,
+   as wide as the tip (pointerBridge() in tips.js; --bridge-*, relative to the same containing
+   block), part of the carrier, so the pointer moving onto the tip never crosses another carrier
+   (a row entered near its bottom edge had the next row between the pointer and its tip). A MeSH
+   explainer's bridge waits for its pause (above), so it takes no pointer before the tip shows. */
+@media (hover: hover) {
+  .tip-at-pointer[data-tip]:is(:hover, .tip-hold)::before {
+    content: "";
+    position: fixed !important;
+    z-index: 4;
+    top: var(--bridge-y, 0) !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: var(--bridge-x, 0) !important;
+    width: var(--bridge-w, 0) !important;
+    height: var(--bridge-h, 0) !important;
+  }
+}
+
+/* Finds a carrier's fixed containing block (setupTips()): placed at its origin, measured, removed. */
+.tip-probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
 }
 
 /* Segmented ATC badge: one segment per level, shaded darker per level in the group's hue.
@@ -5048,6 +5093,7 @@ mark {
 .timeline-tip {
   position: absolute;
   z-index: 3;
+  width: max-content;
   max-width: 260px;
   padding: 8px 10px;
   border: 1px solid var(--grid);

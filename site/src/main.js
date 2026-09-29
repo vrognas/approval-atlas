@@ -71,7 +71,7 @@ import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { besidePanel, tipAbove, tipHeightEstimate, tipShift } from "./tips.js";
+import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -338,16 +338,21 @@ function renderTypeTips() {
   for (const [key, tip] of Object.entries(UI.modalityTips)) container.append("p").attr("id", modalityTipId(key)).text(tip);
 }
 
-// The type and status tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides
-// them (and does nothing else, so the sidebar's Escape waits for the next press) until the pointer
-// reaches another carrier or focus moves; a pointer click on a tip only hides it, as it lies over
-// other controls, and a pointer click on a MeSH explainer's carrier hides it too (step 4 review: it
-// covered the next rows, so checking one row and moving to the next took two clicks). A carrier
-// whose tip is anchored to its row (static: lookup rows, the sentence, the area tree in a sheet)
-// puts the tip under its own line (--tip-top, CSSOM); the area tree's rows in the desktop sidebar
-// put it beside the sidebar (fixed; besidePanel()); a tip starting at its carrier that would cross
-// the viewport's right edge (a status near the right of a phone) or its scroll box's (the medicines
-// table) moves left (--tip-left), and goes above it where the box has no room below (.tip-above).
+// The tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides them (and does
+// nothing else, so the sidebar's Escape waits for the next press) until the pointer reaches another
+// carrier or focus moves; a pointer click on a tip only hides it, as it lies over other controls,
+// and a pointer click on a MeSH explainer's carrier hides it too (step 4 review: it covered the next
+// rows, so checking one row and moving to the next took two clicks). On mouse hover (owner decision
+// 2026-09-29) a tip opens at the pointer: fixed (.tip-at-pointer, --pointer-tip-x/-y, CSSOM),
+// 12px below and right of where the pointer entered its carrier, or, for a MeSH explainer, where it
+// rests when its pause ends, flipped above or left without room (atPointer()); it stays put, and
+// leaving the carrier toward it holds it, so the pointer can move onto it. Keyboard focus and touch
+// taps anchor it to its carrier: a carrier whose tip is anchored to its row (static: lookup rows, the
+// sentence, the area tree in a sheet) puts the tip under its own line (--tip-top); the area tree's
+// rows in the desktop sidebar put it beside the sidebar (fixed; besidePanel()); a tip starting at
+// its carrier that would cross the viewport's right edge (a status near the right of a phone) or its
+// scroll box's (the medicines table) moves left (--tip-left), and goes above it where the box has no
+// room below (.tip-above).
 function setupTips() {
   const root = document.documentElement;
   let hiddenOn = null; // the carrier under the pointer when the tips were hidden
@@ -356,45 +361,50 @@ function setupTips() {
   // label's checkbox, the first new bar), neither of which shows them again.
   let clickedAt = null;
   const carrierOf = (target) => (target instanceof Element ? target.closest("[data-tip]") : null);
-  const showing = () => [...document.querySelectorAll("[data-tip]:hover, [data-tip]:focus-within")]
+  const showing = () => [...document.querySelectorAll("[data-tip]:is(:hover, :focus-within, .tip-hold)")]
     .some((carrier) => getComputedStyle(carrier, "::after").content !== "none");
   const fixed = (carrier) => getComputedStyle(carrier, "::after").position === "fixed";
+  const pointAt = (event) => ({ x: event.clientX, y: event.clientY });
+  // Touch screens (phones) and touch input anchor tips to their carriers, as before.
+  const touchScreen = window.matchMedia("(hover: none)");
+  const touch = (event) => event.pointerType === "touch" || touchScreen.matches;
+  const within = (box, at) => at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom;
   // A scroll box's visible area inside its borders and scrollbars and the viewport, in viewport
   // pixels.
   function scrollArea(box) {
     const rect = box.getBoundingClientRect();
     const top = rect.top + box.clientTop;
+    const left = rect.left + box.clientLeft;
     return {
+      left: Math.max(left, 0),
       top: Math.max(top, 0),
+      right: Math.min(left + box.clientWidth, root.clientWidth),
       bottom: Math.min(top + box.clientHeight, root.clientHeight),
-      right: rect.left + box.clientLeft + box.clientWidth,
     };
   }
+  function reveal() {
+    hiddenOn = null;
+    clickedAt = null;
+    root.classList.remove("tips-hidden");
+  }
   function hide(at = null) {
+    release();
     hiddenOn = document.querySelector("[data-tip]:hover");
     clickedAt = at;
     root.classList.add("tips-hidden");
   }
-  let beside = null; // the carrier placed beside the sidebar last, and where: { carrier, row, x }
   function placeBeside(carrier) {
     const panel = carrier.closest(".facets") ?? carrier;
-    const row = carrier.getBoundingClientRect();
-    const place = besidePanel(row, panel.getBoundingClientRect().right, root.clientHeight);
-    beside = { carrier, row, x: place.x };
+    const place = besidePanel(carrier.getBoundingClientRect(), panel.getBoundingClientRect().right, root.clientHeight);
     const set = (name, value) => carrier.style.setProperty(name, value === null ? "auto" : `${value}px`);
     set("--tip-x", place.x);
     set("--tip-y", place.top);
     set("--tip-y-end", place.bottom);
-    set("--bridge-x", place.bridge.left);
-    set("--bridge-y", place.bridge.top);
-    set("--bridge-w", place.bridge.width);
-    set("--bridge-h", place.bridge.height);
   }
-  function show(carrier) {
-    hiddenOn = null;
-    clickedAt = null;
-    root.classList.remove("tips-hidden");
-    if (!carrier) return;
+  // Keyboard focus and touch taps: the tip at its carrier.
+  function anchor(carrier) {
+    carrier.classList.remove("tip-at-pointer");
+    if (pointed?.carrier === carrier) pointed = null;
     if (fixed(carrier)) {
       placeBeside(carrier);
       return;
@@ -425,32 +435,101 @@ function setupTips() {
     const height = Number.isFinite(measuredHeight) ? measuredHeight : tipHeightEstimate(carrier.dataset.tip.length, width);
     if (tipAbove(carrier.getBoundingClientRect(), height, clip)) carrier.classList.add("tip-above");
   }
-  // A tip beside the sidebar holds when the pointer leaves its row toward it (.tip-hold: shown
-  // without its pause, style.css): the sidebar's scrollbar, on the way, takes the pointer from the
-  // bridge. The hold ends after a moment unless the pointer is back on the row, its bridge or tip,
-  // and when it leaves them otherwise or reaches another carrier. Only a tip already shown (its
-  // pause over) holds. No style or layout is read here: a style update between the row losing
-  // :hover and the class arriving would drop the tip and restart its pause.
+  // Mouse hover: the tip at the pointer. pointed: the carrier placed so last, where the pointer was
+  // (anchor) and the tip is (rect, viewport pixels), its size, the origin of its fixed containing
+  // block (the viewport, or an ancestor that makes one, e.g. a sheet while its transform animates:
+  // a probe finds it) and the scroll box that bounds it (clip), kept inside that box as an anchored
+  // tip is (step 4 review).
+  let pointed = null;
+  function fixedOrigin(carrier) {
+    const probe = document.createElement("span");
+    probe.className = "tip-probe";
+    carrier.append(probe);
+    const { left, top } = probe.getBoundingClientRect();
+    probe.remove();
+    return { x: left, y: top };
+  }
+  // Its size once shown, else its widest (its max-width) and the height its text takes there.
+  function tipSize(carrier) {
+    const tip = getComputedStyle(carrier, "::after");
+    const width = parseFloat(tip.width);
+    const height = parseFloat(tip.height);
+    if (Number.isFinite(width) && Number.isFinite(height)) return { width, height, measured: true };
+    const widest = parseFloat(tip.maxWidth);
+    const estimate = Number.isFinite(widest) ? widest : Math.min(256, root.clientWidth - 32);
+    return { width: estimate, height: tipHeightEstimate(carrier.dataset.tip.length, estimate), measured: false };
+  }
+  function moveTip(point) {
+    const { carrier, size, origin, clip } = pointed;
+    const place = atPointer(point, size, tipBounds(root.clientWidth, root.clientHeight, clip));
+    pointed.anchor = point;
+    pointed.rect = { ...place, width: size.width, height: size.height, right: place.left + size.width, bottom: place.top + size.height };
+    const bridge = pointerBridge(point, pointed.rect);
+    const set = (name, value) => carrier.style.setProperty(name, `${value}px`);
+    set("--pointer-tip-x", place.left - origin.x);
+    set("--pointer-tip-y", place.top - origin.y);
+    set("--bridge-x", bridge.left - origin.x);
+    set("--bridge-y", bridge.top - origin.y);
+    set("--bridge-w", bridge.width);
+    set("--bridge-h", bridge.height);
+  }
+  // The pointer has left carrier and its tip: the tip leaves the pointer's place, back to the
+  // carrier while it has keyboard focus (review 2026-09-29: it stayed where the pointer had been).
+  function unpoint(carrier) {
+    carrier.classList.remove("tip-at-pointer");
+    if (pointed?.carrier === carrier) pointed = null;
+    if (carrier.matches(":focus-visible, :has(:focus-visible)")) anchor(carrier);
+  }
+  function placeAtPointer(carrier, point) {
+    carrier.classList.remove("tip-above");
+    carrier.classList.add("tip-at-pointer");
+    const scroller = carrier.closest(".table-scroll, .activity-scroll");
+    pointed = { carrier, size: tipSize(carrier), origin: fixedOrigin(carrier), clip: scroller ? scrollArea(scroller) : null };
+    moveTip(point);
+    if (pointed.size.measured) return;
+    requestAnimationFrame(() => {
+      if (pointed?.carrier !== carrier) return;
+      const size = tipSize(carrier);
+      if (!size.measured) return;
+      pointed.size = size;
+      moveTip(pointed.anchor);
+    });
+  }
+  // A tip at the pointer holds when the pointer leaves its carrier on the way to it (.tip-hold:
+  // shown without its pause, style.css; towardTip()), so the pointer can move onto it (WCAG 1.4.13).
+  // The hold ends when the pointer leaves that way, reaches another carrier, or after a moment
+  // unless the pointer is on the carrier or its tip (then as long as it stays). Only a tip already
+  // shown (a MeSH explainer's pause over) holds. Most ways onto the tip need no hold: they cross
+  // its bridge (pointerBridge(), style.css), part of the carrier. No style or layout is read in
+  // pointerout on the way to a hold: a style update between the carrier losing :hover and the class
+  // arriving would drop the tip and restart its pause.
   const PAUSE_MS = 600;
+  const pauseOf = (carrier) => (carrier.classList.contains("mesh-tip") ? PAUSE_MS : 0);
   let entered = { carrier: null, at: 0 };
   let held = null;
   let holdTimer = 0;
   function release() {
     clearTimeout(holdTimer);
-    held?.classList.remove("tip-hold");
+    const was = held;
     held = null;
+    if (!was) return;
+    was.classList.remove("tip-hold");
+    if (!was.matches(":hover")) unpoint(was);
   }
+  const shownAt = (carrier, time) => !root.classList.contains("tips-hidden")
+    && (held === carrier || (entered.carrier === carrier && time - entered.at >= pauseOf(carrier)));
+  const onTheWay = (carrier, point) => pointed?.carrier === carrier && towardTip(pointed.anchor, pointed.rect, point);
   document.addEventListener("pointerout", (event) => {
     const carrier = carrierOf(event.target);
     if (!carrier || carrier.contains(event.relatedTarget)) return;
-    const shown = held === carrier || (entered.carrier === carrier && event.timeStamp - entered.at >= PAUSE_MS);
-    const row = beside?.carrier === carrier ? beside.row : null;
-    const towardTip = row && event.clientX >= row.right - 1 && event.clientX < beside.x && event.clientY >= row.top && event.clientY <= row.bottom;
-    if (!shown || !towardTip || root.classList.contains("tips-hidden")) {
+    if (!shownAt(carrier, event.timeStamp) || !onTheWay(carrier, pointAt(event))) {
       if (held === carrier) release();
+      unpoint(carrier);
       return;
     }
-    release();
+    // Another carrier is never held here (entering this one released it), so none is read.
+    if (held !== carrier) release();
+    clearTimeout(holdTimer);
     held = carrier;
     carrier.classList.add("tip-hold");
     holdTimer = setTimeout(() => {
@@ -459,16 +538,33 @@ function setupTips() {
   });
   document.addEventListener("pointerover", (event) => {
     const carrier = carrierOf(event.target);
-    if (entered.carrier !== carrier) entered = { carrier, at: event.timeStamp };
+    const fresh = entered.carrier !== carrier;
+    if (fresh) entered = { carrier, at: event.timeStamp };
     if (!carrier) return;
-    if (carrier !== held) release();
+    const returning = carrier === held; // back from the way to its tip, or on it
+    if (!returning) release();
     if (carrier === hiddenOn) return;
     if (clickedAt && event.clientX === clickedAt.x && event.clientY === clickedAt.y) return;
-    show(carrier);
+    reveal();
+    if (touch(event)) anchor(carrier);
+    else if (!returning && (fresh || pointed?.carrier !== carrier)) placeAtPointer(carrier, pointAt(event));
   });
+  document.addEventListener("pointermove", (event) => {
+    if (touch(event)) return;
+    const carrier = carrierOf(event.target);
+    const point = pointAt(event);
+    if (held && carrier !== held && !onTheWay(held, point)) release();
+    // A MeSH explainer opens where the pointer rests when its pause ends: until then it follows.
+    if (pointed && carrier === pointed.carrier && carrier === entered.carrier && carrier !== held
+      && event.timeStamp - entered.at < pauseOf(carrier)) moveTip(point);
+  }, { passive: true });
   document.addEventListener("focusin", (event) => {
-    if (clickedAt && !event.target.matches(":focus-visible")) return;
-    show(carrierOf(event.target));
+    const visible = event.target.matches(":focus-visible");
+    if (clickedAt && !visible) return;
+    reveal();
+    const carrier = carrierOf(event.target);
+    // Focus a pointer click gives keeps the tip where the pointer opened it.
+    if (carrier && (visible || !carrier.classList.contains("tip-at-pointer"))) anchor(carrier);
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || root.classList.contains("tips-hidden") || !showing()) return;
@@ -477,24 +573,42 @@ function setupTips() {
   }, true);
   // Keyboard and scripted clicks (detail 0) have no position. On touch screens a tap on a carrier
   // of a short tip (.tap-tip: the modalities') shows it, as a tap on a type or status carrier does:
-  // there a tip takes no taps (style.css), so it never stands in the way of the next one.
-  const touchScreen = window.matchMedia("(hover: none)");
+  // there a tip takes no taps (style.css), so it never stands in the way of the next one. A tip at
+  // the pointer can lie over its own carrier: a click on it is told apart by where it shows, and
+  // where it lies over the carrier the click is meant for the control under it (review 2026-09-29:
+  // the first click on a row's count or an area row's condition page link only hid the tip), which
+  // gets it once the tip is hidden; so does a click on its bridge (unseen, over the next row). The
+  // tip and bridge are the carrier's, so the click reached the carrier.
   document.addEventListener("click", (event) => {
     const carrier = carrierOf(event.target);
     if (!carrier || event.detail === 0) return;
-    const box = carrier.getBoundingClientRect();
-    const at = { x: event.clientX, y: event.clientY };
-    if (at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom) {
+    const at = pointAt(event);
+    const atPointer = pointed?.carrier === carrier;
+    const overCarrier = within(carrier.getBoundingClientRect(), at);
+    const onTip = atPointer ? shownAt(carrier, event.timeStamp) && within(pointed.rect, at) : !overCarrier;
+    const onBridge = atPointer && !onTip && !overCarrier;
+    if (!onTip && !onBridge) {
       const tapShows = touchScreen.matches && carrier.classList.contains("tap-tip");
       if (carrier.classList.contains("mesh-tip") && !tapShows) hide(at);
       return;
     }
-    event.preventDefault();
     hide(at);
+    if (onTip && !overCarrier) {
+      event.preventDefault();
+      return;
+    }
+    const under = document.elementFromPoint(at.x, at.y);
+    if (!under || under === event.target) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    // Within a label, to its checkbox: a scripted click on the label would also focus the checkbox
+    // with a keyboard focus ring.
+    (under.closest("label")?.control ?? under).dispatchEvent(new MouseEvent("click", event));
   }, true);
-  // A sidebar scrolled under a resting pointer (or a focused row) moves the row away from its tip.
+  // A sidebar scrolled under a focused row moves the row away from its tip beside the sidebar
+  // (not while the tip is at the pointer: style.css).
   document.addEventListener("scroll", () => {
-    const carrier = document.querySelector(".mesh-tip:hover, .mesh-tip:has(:focus-visible)");
+    const carrier = document.querySelector(".mesh-tip:has(:focus-visible):not(.tip-at-pointer:is(:hover, .tip-hold))");
     if (carrier && fixed(carrier)) placeBeside(carrier);
   }, { capture: true, passive: true });
 }
