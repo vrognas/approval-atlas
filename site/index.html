@@ -96,27 +96,23 @@
         </div>
         <p id="url-note" class="note" role="status" hidden></p>
 
-        <!-- Approval years (every width): slim one-colour per-year bars above a two-thumb slider (the
-             status stacks are "Approvals per year", Stack by Status). -->
-        <section id="year-strip" class="year-strip" aria-labelledby="year-strip-title">
-          <div class="year-strip-head">
-            <h2 id="year-strip-title">Approval years</h2>
-            <button id="year-reset" class="text-button" type="button">Reset</button>
+        <!-- One dashboard: every medicine matching the filters, whatever its status. The top row
+             (owner decision 2026-09-29): "Authorized over time" at half the main column's width,
+             the four type tiles 2 x 2 beside it; stacked in a narrow main column. The frame is
+             their size container: the main column's width, which the sidebar's width sets on
+             desktop. -->
+        <div class="top-row-frame">
+          <div class="top-row">
+            <section class="chart-card" aria-labelledby="over-time-title">
+              <h2 id="over-time-title">Authorized over time</h2>
+              <p class="muted">Authorized products and distinct active substances at each month end. All filters apply except approval years, which are shaded.</p>
+              <ul id="over-time-legend" class="legend"></ul>
+              <div id="over-time" class="chart"></div>
+              <p id="over-time-note" class="muted"></p>
+            </section>
+            <div id="tiles" class="tiles"></div>
           </div>
-          <div id="year-hist" class="year-hist" aria-hidden="true"></div>
-          <p id="year-hist-summary" class="visually-hidden"></p>
-          <p class="year-values" aria-hidden="true"><span id="year-start-value"></span><span id="year-end-value"></span></p>
-          <div class="year-slider">
-            <div class="year-track" aria-hidden="true"><span class="year-track-fill"></span></div>
-            <input id="year-start" type="range" />
-            <input id="year-end" type="range" />
-          </div>
-        </section>
-
-        <!-- One dashboard: every medicine matching the filters, whatever its status. The frame is the
-             tiles' size container: their columns follow the main column, which the sidebar's
-             width sets on desktop. -->
-        <div class="tiles-frame"><div id="tiles" class="tiles"></div></div>
+        </div>
         <p id="register-note" class="muted" hidden></p>
         <p id="undated-authorized" class="muted" hidden></p>
 
@@ -197,14 +193,6 @@
           <h2 id="pc-title"></h2>
           <p id="pc-note" class="muted"></p>
           <div id="pc-body"></div>
-        </section>
-
-        <section class="chart-card" aria-labelledby="over-time-title">
-          <h2 id="over-time-title">Authorized over time</h2>
-          <p class="muted">Authorized products and distinct active substances at each month end. All filters apply except approval years, which are shaded.</p>
-          <ul id="over-time-legend" class="legend"></ul>
-          <div id="over-time" class="chart"></div>
-          <p id="over-time-note" class="muted"></p>
         </section>
 
         <!-- Most common conditions of the medicines shown (every one without a filter); each opens its condition page. -->
@@ -323,6 +311,25 @@
         </h3>
         <div id="facet-status-body" class="facet-body" hidden>
           <ul class="facet-list"></ul>
+        </div>
+      </div>
+      <!-- Approval year (owner decision 2026-09-29: back in the sidebar, last): slim one-colour
+           per-year bars above a two-thumb slider (year-slider.js; the status stacks are "Approvals
+           per year", Stack by Status). -->
+      <div id="facet-years" class="facet" role="group" aria-labelledby="facet-years-title">
+        <h3 class="facet-title">
+          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-years-body"><span id="facet-years-title" class="facet-heading">Approval year</span><span class="facet-summary" hidden></span></button>
+        </h3>
+        <div id="facet-years-body" class="facet-body" hidden>
+          <div id="year-hist" class="year-hist" aria-hidden="true"></div>
+          <p id="year-hist-summary" class="visually-hidden"></p>
+          <p class="year-values" aria-hidden="true"><span id="year-start-value"></span><span id="year-end-value"></span></p>
+          <div class="year-slider">
+            <div class="year-track" aria-hidden="true"><span class="year-track-fill"></span></div>
+            <input id="year-start" type="range" />
+            <input id="year-end" type="range" />
+          </div>
+          <p class="year-foot"><button id="year-reset" class="text-button" type="button">Reset</button></p>
         </div>
       </div>
     </aside>

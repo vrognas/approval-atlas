@@ -8,8 +8,9 @@
 // heading hidden, the sheet's title naming it (solo()); the "All filters" sheet shows the headings
 // as the sidebar does.
 
-// The sections (index.html #facet-{key}), in page order.
-export const FACET_SECTIONS = ["type", "modality", "atc", "area", "mah", "status"];
+// The sections (index.html #facet-{key}), in page order; the approval year filter last (owner
+// decision 2026-09-29: back in the sidebar, the main column's strip removed).
+export const FACET_SECTIONS = ["type", "modality", "atc", "area", "mah", "status", "years"];
 const STORAGE_KEY = "approval-atlas:facets-open";
 
 // Pure: the sections the viewer left open (none stored, unreadable or blocked: none).

@@ -358,18 +358,16 @@ test("the medicines table merges approval date and status into one column", () =
   ]);
 });
 
-test("tiles: every medicine and those currently authorized, then the four types with their share", () => {
+// Owner decision 2026-09-29 (layout): the headline states every medicine and those currently
+// authorized, so only the four type tiles stay (2 x 2 beside "Authorized over time").
+test("tiles: the four types with their share", () => {
   assert.deepEqual(labels.UI.tiles.map((tile) => [tile.key, tile.label]), [
-    ["products", "Medicines"],
-    ["authorized", "Currently authorized"],
     ["orphan", "Orphan"],
     ["biosimilar", "Biosimilar"],
     ["generic", "Generic"],
     ["advancedTherapy", "Advanced therapy"],
   ]);
-  // The Medicines tile's caption follows the filters.
-  assert.equal(labels.UI.tiles[0].caption, "Every status in the EMA data");
-  assert.equal(labels.UI.tiles[0].captionFiltered, "Every status, matching the filters");
+  for (const tile of labels.UI.tiles) assert.equal(tile.captionFiltered, undefined, tile.key);
   assert.equal(labels.UI.undatedAuthorized(6), "6 authorized medicines without an approval date are not counted as currently authorized.");
   assert.equal(labels.UI.undatedAuthorized(1), "1 authorized medicine without an approval date is not counted as currently authorized.");
 });

@@ -225,6 +225,18 @@ test("a collapsed section's summary names its one value, else counts them; none 
   assert.equal(summary("mah", { mah: ["g.roche", "g.pfizer"] }), "2 selected");
 });
 
+// Owner decision 2026-09-29 (layout): the approval years are a sidebar section again ("years": both
+// ends of the range, state.from and state.to); collapsed, it names the range as the slider shows it.
+test("the approval year section's summary names the range, open ends at the data's bounds, or one year", () => {
+  const summary = (patch) => sectionSummary("years", stateOf(patch), lookups);
+  assert.equal(summary({}), null);
+  assert.equal(summary({ from: 2015 }), "2015–2026");
+  assert.equal(summary({ to: 2020 }), "1995–2020");
+  assert.equal(summary({ from: 2015, to: 2020 }), "2015–2020");
+  // One year (a bar clicked): the year alone, as the sentence's token.
+  assert.equal(summary({ from: 2024, to: 2024 }), "2024");
+});
+
 const text = (parts) => parts.map((part) => (typeof part === "string" ? part : `[${part.text}]`)).join("");
 
 test("the filter sentence: defaults, one therapeutic area token", () => {

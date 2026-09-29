@@ -1,10 +1,11 @@
-// The approval-years strip (main column, index.html #year-strip): a slim one-colour per-year
-// histogram of every medicine with an approval date (aria-hidden, with a text summary; the status
-// stacks are the per-year chart's, Stack by Status), above a two-thumb range slider: two native
-// range inputs over one track; the thumbs take the pointer, and a click on the track moves the
-// nearest thumb there (no drag needed, WCAG 2.5.7). Each bar sits at its year's thumb position; a
-// click on a bar selects that year alone, on the one selected year's bar every year (the bars take
-// no focus: the slider is the keyboard path).
+// The approval year filter (the sidebar's last section, index.html #facet-years; owner decision
+// 2026-09-29, it was a strip in the main column): a slim one-colour per-year histogram of every
+// medicine with an approval date (aria-hidden, with a text summary; the status stacks are the
+// per-year chart's, Stack by Status), above a two-thumb range slider: two native range inputs over
+// one track; the thumbs take the pointer, and a click on the track moves the nearest thumb there
+// (no drag needed, WCAG 2.5.7). Each bar sits at its year's thumb position; a click on a bar
+// selects that year alone, on the one selected year's bar every year (the bars take no focus: the
+// slider is the keyboard path). It follows the sidebar's width (260-560px) or a sheet's.
 import * as d3 from "d3";
 import { UI } from "./labels.js";
 import { normalizeYearRange } from "./url.js";
@@ -62,8 +63,8 @@ export function yearTicks([first, last], pixelsPerYear) {
   return d3.range(first, last + 1).filter((year) => year % every === 0);
 }
 
-// root: #year-strip. years: [first, last] of the data. onRange({ from, to }): the year filter
-// (null = open end) changed.
+// root: #facet-years. years: [first, last] of the data. onRange({ from, to }): the year filter
+// (null = open end) changed. The sentence's year tokens focus a thumb (main.js TOKEN_TARGETS).
 export function createYearStrip(root, { years, onRange }) {
   const [first, last] = years;
   const chart = root.querySelector("#year-hist");
@@ -76,7 +77,7 @@ export function createYearStrip(root, { years, onRange }) {
   let applied = { from: null, to: null }; // the filter as last rendered
   let latest = applied;
   // A pointer drag is under way: the thumbs are ahead of the state until release. The filter
-  // waits for it, as the headline and sentence above would reflow and move the strip mid-drag.
+  // waits for it, as a render per step would redraw the dashboard and the bars above the thumbs.
   let dragging = false;
   let current = { start: first, end: last };
   let bars = d3.select(null);
@@ -167,19 +168,24 @@ export function createYearStrip(root, { years, onRange }) {
     jump(yearAt(event.clientX - box.left, years, box.width, thumbSize()));
   });
 
-  // rows: yearHistogram() output; bars line up with the thumbs (thumbCenter()).
+  // rows: yearHistogram() output; bars line up with the thumbs (thumbCenter()). A collapsed
+  // section has no width: nothing is drawn until it opens (its size change re-renders, main.js).
   function draw(rows) {
     const width = chart.clientWidth;
     const height = chart.clientHeight;
     const thumb = thumbSize();
+    const peak = d3.greatest(rows, (row) => row.count);
+    summary.textContent = UI.yearStrip.summary(first, last, d3.sum(rows, (row) => row.count), peak.year, peak.count);
+    const container = d3.select(chart);
+    container.selectChildren().remove();
+    bars = d3.select(null);
+    if (width <= thumb) return;
     const x = (year) => thumbCenter(year, years, width, thumb);
     const step = (width - thumb) / (last - first);
     const barWidth = Math.max(2, Math.min(MAX_BAR_WIDTH, step * 0.64));
     const bottom = height - TICK_HEIGHT;
     const y = d3.scaleLinear([0, d3.max(rows, (row) => row.count) || 1], [bottom, 2]);
 
-    const container = d3.select(chart);
-    container.selectChildren().remove();
     const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", [0, 0, width, height]).attr("focusable", "false");
     const columns = svg.append("g").selectAll("g").data(rows).join("g").attr("class", "year-col").on("click", (event, row) => pickYear(row.year));
     columns.append("title").text((row) => UI.years.tooltipTitle(row.year, row.count));
@@ -206,9 +212,6 @@ export function createYearStrip(root, { years, onRange }) {
       .attr("x", x)
       .attr("y", height - 4)
       .text((year) => year);
-
-    const peak = d3.greatest(rows, (row) => row.count);
-    summary.textContent = UI.yearStrip.summary(first, last, d3.sum(rows, (row) => row.count), peak.year, peak.count);
   }
 
   return {
@@ -222,11 +225,6 @@ export function createYearStrip(root, { years, onRange }) {
         latest = applied;
         show(from ?? first, to ?? last);
       }
-    },
-    // The sentence's year tokens: key "start" | "end".
-    focus(key) {
-      root.scrollIntoView({ block: "nearest" });
-      inputs[key].focus({ preventScroll: true });
     },
   };
 }
