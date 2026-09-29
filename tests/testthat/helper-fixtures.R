@@ -42,6 +42,12 @@ fixture_gleif_matches_path <- function() {
   testthat::test_path("fixtures", "gleif-holder-matches-sample.json")
 }
 
+# Real rows of data-raw/atc-class-explanations.json for the ATC classes the
+# fixture EMA data uses.
+fixture_atc_explanations_path <- function() {
+  testthat::test_path("fixtures", "atc-class-explanations-sample.json")
+}
+
 # Real rows of data-raw/chembl-substance-matches.json (ChEMBL_37) for the
 # keys of the modality and EMA fixtures.
 fixture_chembl_matches_path <- function() {

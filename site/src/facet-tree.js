@@ -208,8 +208,9 @@ export function createFacetTree(section, spec, { onToggle }) {
       if (spec.number) setNumber(item.select(":scope > .atc-row .tree-number"), spec.number(row.key, row.parent, model));
       // Its explainer (the data can arrive later), on hover and keyboard focus: on the whole row, so
       // the tip's hover bridge never covers the row's link (style.css).
+      // A tip of two lines (an ATC class's explanation, then its level: atcClassTip()) keeps them.
       item.select(":scope > .atc-row").attr("data-tip", tip?.text ?? null).classed("mesh-tip", tip !== null)
-        .classed("tap-tip", tip !== null && Boolean(tapTip));
+        .classed("tap-tip", tip !== null && Boolean(tapTip)).classed("tip-lines", Boolean(tip?.text.includes("\n")));
       item.select(":scope > .atc-row .facet-name").text(text).classed("no-name", missing);
       // Muted at 0 unless checked: checked rows sit on the accent wash, never muted (as facet-panel.js).
       item.select(":scope > .atc-row .facet-row").classed("empty", row.count === 0 && state !== "checked" && state !== "included");

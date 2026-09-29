@@ -51,14 +51,16 @@ function appendSortButton(parent, { key, label, text = null, sort, onSort }) {
 
 const ARIA_SORT = { asc: "ascending", desc: "descending" };
 
-// A filter toggle's tooltip ("Show only …", after lead: a row's EMA holder names) and its
-// description: what a click does. The tooltip is a data-tip with the explainers' pause, as the
-// other tooltips (owner feedback 2026-09-29: it was a native title); the button's name and
-// description already say it, so it is left out of both.
-const filterButton = (button, label, pressed, lead = null) => button
+// A filter toggle's tooltip ("Show only …", after lead: a row's EMA holder names, an ATC column's
+// explanation) and its description: what a click does. The tooltip is a data-tip with the
+// explainers' pause, as the other tooltips (owner feedback 2026-09-29: it was a native title); the
+// button's name and description already say it, so it is left out of both. explanation: an ATC
+// class's { text, id } (main.js; owner decisions 2026-09-29), leading the tip and describing the
+// button before the hint.
+const filterButton = (button, label, pressed, lead = null, explanation = null) => button
   .attr("aria-pressed", String(pressed))
-  .attr("aria-describedby", HINT_ID)
-  .attr("data-tip", [lead, pressed ? UI.activity.pressedTitle : UI.activity.filterBy(label)].filter(Boolean).join("\n"))
+  .attr("aria-describedby", explanation ? `${explanation.id} ${HINT_ID}` : HINT_ID)
+  .attr("data-tip", [lead, explanation?.text, pressed ? UI.activity.pressedTitle : UI.activity.filterBy(label)].filter(Boolean).join("\n"))
   .classed("mesh-tip tip-lines", true);
 
 // rows: holderActivity() output, in display order (companies part 2: company groups, each with
@@ -87,7 +89,7 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
       .attr("data-focus-key", `column:${parent.key}`)
       .attr("aria-label", parent.label)
       .on("click", () => onFilter(parent.filter));
-    filterButton(button, parent.label, isSet(parent.filter));
+    filterButton(button, parent.label, isSet(parent.filter), null, parent.explanation ?? null);
     if (parent.badge) appendCodeBadge(button, parent.badge);
     button.append("span").attr("class", "activity-parent-name").attr("aria-hidden", "true").text(parent.name);
     button.append("span").attr("class", "activity-parent-remove").attr("aria-hidden", "true").text("×");
@@ -115,7 +117,7 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
       .attr("type", "button")
       .attr("data-focus-key", `column:${column.key}`)
       .on("click", () => onFilter(column.filter));
-    filterButton(button, column.label, isSet(column.filter));
+    filterButton(button, column.label, isSet(column.filter), null, column.explanation ?? null);
     if (column.badge) appendCodeBadge(button.attr("aria-label", column.label), column.badge);
     else button.text(column.label);
   });

@@ -182,7 +182,10 @@ test_that("build_meta adds the snapshot date, sources and data licence", {
       "and level names © WHO Collaborating Centre for Drug Statistics",
       "Methodology, Oslo (via ChEMBL, the ATC/DDD Index at",
       "https://atcddd.fhi.no and archived copies of it), reproduced verbatim,",
-      "not for commercial distribution and excluded from this licence."
+      "not for commercial distribution and excluded from this licence. The",
+      "ATC class explanations (atc_class_explanations.json) are",
+      "approval-atlas's own plain-language summaries, not WHO's, and part of",
+      "this licence."
     )
   )
 })

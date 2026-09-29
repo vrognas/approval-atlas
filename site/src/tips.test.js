@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
+import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -116,6 +116,23 @@ test("tipShift: moves a tip left by what crosses the limit, never right", () => 
   assert.equal(tipShift(1000.4, 352, 1384), 0);
   assert.equal(tipShift(1032.5, 352, 1384), -1);
   assert.equal(tipShift(100, 200, 1409), 0);
+});
+
+// Review of the ATC class explanations: at 390px a column header's tip (352px, its explanation
+// first) in the activity table's box (33 to 342px) started at -19px, cutting ~52px off each line.
+test("tipShift and tipMaxWidth keep a tip wider than its scroll box inside it", () => {
+  const clip = { left: 33, right: 342 };
+  const start = 247;
+  const shift = tipShift(start, 352, clip.right - 8, clip.left + 8);
+  assert.ok(start + shift >= clip.left, `${start + shift}`);
+  assert.equal(start + shift, 41);
+  // Capped to the box, the tip then fits between its edges.
+  assert.equal(tipMaxWidth(clip), 293);
+  const capped = tipShift(start, tipMaxWidth(clip), clip.right - 8, clip.left + 8);
+  assert.equal(start + capped, 41);
+  assert.ok(start + capped + tipMaxWidth(clip) <= clip.right - 8);
+  // Never moves a tip right, even one whose carrier starts left of the box (scrolled under it).
+  assert.equal(tipShift(20, 100, 334, 41), 0);
 });
 
 test("tipAbove: above the carrier only when it does not fit below inside its box and there is more room above", () => {

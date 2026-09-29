@@ -902,7 +902,9 @@ export const UI = {
     // with WHO's meaning for it (WHOCC, ATC structure and principles: 2nd levels pharmacological or
     // therapeutic groups, 3rd and 4th chemical, pharmacological or therapeutic subgroups), the class
     // above it by its code (owner decision 2026-09-29: shorter tips), and a retired (atc_classes.json
-    // replaced_by, changed_year; now null: deleted) or temporary code's status.
+    // replaced_by, changed_year; now null: deleted) or temporary code's status. Since the ATC class
+    // explanations (owner decisions 2026-09-29) this is the tip's second line, after the class's
+    // explanation (atc_class_explanations.json; levels 1-4), where it has one.
     levels: {
       1: "anatomical main group",
       2: "pharmacological or therapeutic subgroup",
@@ -1703,7 +1705,11 @@ export const UI = {
   footer: {
     mesh: (version) => `MeSH® courtesy of the U.S. National Library of Medicine${version ? ` (${version})` : ""}.`,
     chembl: (version) => `ATC classification from ChEMBL${version ? ` (${version})` : ""}. ChEMBL data is from https://www.ebi.ac.uk/chembl.`,
-    atc: "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology.",
+    // explained: the data credits the ATC class explanations (owner decisions 2026-09-29): WHO's
+    // codes and names are WHO's, the explanations ours.
+    atc: (explained) => `ATC classification © WHO Collaborating Centre for Drug Statistics Methodology.${explained
+      ? " ATC codes and class names are WHO's; the class explanations in the tooltips are Approval Atlas's own plain-language summaries, not WHO's."
+      : ""}`,
     // CC BY 4.0 requires indicating that the material was modified.
     unionRegister: "Orphan exclusivity, EU register status and holders: © European Union, Union Register, CC BY 4.0, modified.",
     // date: the company groups' curation date.

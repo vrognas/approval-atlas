@@ -5,7 +5,7 @@
 import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
 import { areaChips, chipTogglable, fillTerm, markAreaChips } from "./area-chips.js";
 import { termBranches } from "./areas.js";
-import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
+import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, buildAtcExplanations, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusFlags, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
 import {
@@ -198,12 +198,14 @@ export function createLookup(panel, {
 }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
-    // Rows without a code to use (atcCode()) are left out.
-    atc: [["ema_medicine_atc_codes.json", "atc_classes.json"], (rows, classes) => ({
+    // Rows without a code to use (atcCode()) are left out. The ATC class explanations (owner
+    // decisions 2026-09-29) lead the badge tips; none when the file is missing (older data).
+    atc: [["ema_medicine_atc_codes.json", "atc_classes.json", { optional: "atc_class_explanations.json" }], (rows, classes, explanationRows) => ({
       byProduct: groupBy(rows.filter((row) => atcCode(row) !== null), "ema_product_number"),
       names: new Map(classes.map((row) => [row.atc_code, row.name])),
       retiredYears: new Map(classes.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null])),
       classes,
+      explanations: buildAtcExplanations(explanationRows),
     })],
     // Medicines currently authorized per ATC prefix, no filters: ladder counts, drug-class suggestions.
     atcCounts: [["ema_medicines.json", "ema_medicine_atc_codes.json"], (medicines, rows) => {
@@ -812,9 +814,10 @@ export function createLookup(panel, {
   }
 
   // A result row's ATC codes (atcCode()): display-only badges with the medicines table's tooltip
-  // (atcBadgeTip(): level names, origin, source; a data-tip as the type badges', shown on a tap too;
-  // owner feedback 2026-09-29: it was a native title) and the level names for screen readers,
-  // incomplete codes and codes that differ from EMA's flagged. Nothing while loading.
+  // (atcBadgeTip(): the explanation of its deepest class at levels 1-4, level names, origin,
+  // source; a data-tip as the type badges', shown on a tap too; owner feedback 2026-09-29: it was a
+  // native title) and the level names for screen readers, incomplete codes and codes that differ
+  // from EMA's flagged. Nothing while loading.
   function atcCodes(number, atc) {
     if (!ready(atc)) return null;
     return (atc.byProduct.get(number) ?? []).map((row) => {
@@ -822,7 +825,7 @@ export function createLookup(panel, {
       const names = atcLevelNames(code, atc.names);
       const originRow = atcOrigin(row);
       const origin = atcOriginText(originRow, atc.names, atc.retiredYears);
-      return el("span", { class: "code tip-lines", "data-tip": atcBadgeTip(row, atc.names, atc.retiredYears), tabindex: "-1" },
+      return el("span", { class: "code tip-lines", "data-tip": atcBadgeTip(row, atc.names, atc.retiredYears, atc.explanations), tabindex: "-1" },
         atcBadge(code),
         names.length ? el("span", { class: "visually-hidden" }, ` (${names.join("; ")})`) : null,
         atcRowIncomplete(row) ? el("span", { class: "flag" }, UI.table.incomplete) : null,

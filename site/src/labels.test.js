@@ -849,6 +849,14 @@ test("modality copy: filter chip, tree rows, static rows, breakdown and sources"
   assert.equal(footer.modality("ChEMBL_37"), "Modalities from WHO INN stems (WHO Stem book 2024, CC BY-NC-SA 3.0 IGO), ChEMBL molecule types (ChEMBL_37) and EMA data, some checked by hand.");
 });
 
+// Owner decisions 2026-09-29: the ATC class explanations are credited next to the WHOCC's ATC
+// credit as our own summaries, WHO's codes and names as WHO's (once the data credits them).
+test("the footer's ATC credit: WHO's codes and names, our explanations", () => {
+  const { footer } = labels.UI;
+  assert.equal(footer.atc(false), "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology.");
+  assert.equal(footer.atc(true), "ATC classification © WHO Collaborating Centre for Drug Statistics Methodology. ATC codes and class names are WHO's; the class explanations in the tooltips are Approval Atlas's own plain-language summaries, not WHO's.");
+});
+
 // Phase 4f: the strip is a slim one-colour year filter; its status stacks, legend and undated note
 // moved to "Approvals per year" (Stack by Status).
 test("approval-years strip copy: slider names and the summary of its bars", () => {

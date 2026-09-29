@@ -8,6 +8,7 @@ import {
   atcClassesAt,
   atcCode,
   atcExactCounts,
+  atcExplanation,
   atcIncomplete,
   atcIncompleteAt,
   atcLadder,
@@ -19,6 +20,7 @@ import {
   atcTreeChildren,
   atcTreeCodes,
   atcTreeSearch,
+  buildAtcExplanations,
   mainAtcCode,
   toggleAtcCode,
 } from "./atc.js";
@@ -358,4 +360,66 @@ test("atcClassTip: the class, its ATC level and what WHO calls that level, its p
   // No WHO name (EMA's B06C): the code alone; a malformed code has no explainer.
   assert.equal(atcClassTip("B06C", new Map()), "B06C: ATC level 3, chemical, pharmacological or therapeutic subgroup, in B06.");
   assert.equal(atcClassTip("LX1XX02", atcClasses), null);
+});
+
+// Owner decisions 2026-09-29: our plain-language explanations of the classes at levels 1-4
+// (atc_class_explanations.json; real rows of data-raw/atc-class-explanations.json) lead the ATC
+// tips, on a line of their own.
+const explanations = buildAtcExplanations([
+  ["C10AX", "Blood-fat medicines that fit none of the named groups, lowering cholesterol or other blood fats in other ways."],
+  ["L", "Cancer medicines (chemotherapy, targeted and hormone therapy) and medicines that calm or boost immunity, e.g. for arthritis or transplants."],
+  ["L01FA", "Antibodies that destroy B cells, a type of white blood cell, including cancerous ones, by attaching to their CD20 protein."],
+  ["L04", "Calm the immune system in autoimmune diseases, e.g. arthritis, psoriasis, bowel inflammation, multiple sclerosis, and to prevent transplant rejection."],
+  ["L04AC", "Block interleukins, immune messenger proteins that drive inflammation, or their receptors, calming overactive immune responses."],
+].map(([atc_code, explanation]) => ({ atc_code, level: atcLevel(atc_code), explanation, checked_date: "2026-09-29", source: "approval_atlas" })));
+
+test("buildAtcExplanations and atcExplanation: code -> text, levels 1-4 only, none without the file", () => {
+  assert.equal(explanations.size, 5);
+  assert.equal(atcExplanation("L04AC", explanations), "Block interleukins, immune messenger proteins that drive inflammation, or their receptors, calming overactive immune responses.");
+  assert.equal(atcExplanation("L01", explanations), null);
+  // A level-5 code keeps its substance's name: never an explanation, even were one given.
+  assert.equal(atcExplanation("L04AC05", new Map([["L04AC05", "Text."]])), null);
+  assert.equal(atcExplanation("LX1XX02", explanations), null);
+  assert.equal(atcExplanation(null, explanations), null);
+  assert.equal(buildAtcExplanations(null).size, 0);
+  assert.equal(atcExplanation("L"), null);
+});
+
+test("atcClassTip: the class's explanation first, then on a line of its own the level line", () => {
+  assert.equal(atcClassTip("L04AC", atcClasses, explanations), [
+    "Block interleukins, immune messenger proteins that drive inflammation, or their receptors, calming overactive immune responses.",
+    "L04AC Interleukin Inhibitors: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A.",
+  ].join("\n"));
+  assert.equal(atcClassTip("L", atcClasses, explanations), [
+    "Cancer medicines (chemotherapy, targeted and hormone therapy) and medicines that calm or boost immunity, e.g. for arthritis or transplants.",
+    "L Antineoplastic and Immunomodulating Agents: ATC level 1, anatomical main group.",
+  ].join("\n"));
+  // A class without an explanation (L01F here; a retired class, which the data no longer uses; a
+  // level-5 code) and older data (no explanations) as before.
+  assert.equal(atcClassTip("L01F", atcClasses, explanations), atcClassTip("L01F", atcClasses));
+  assert.equal(atcClassTip("L01XC", atcClasses, explanations), "L01XC Monoclonal Antibodies: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X. Retired 2022, now L01F.");
+  assert.equal(atcClassTip("L01FA01", atcClasses, explanations), "L01FA01 Rituximab: ATC level 5, chemical substance, in L01FA.");
+  // A temporary class with an explanation: its status stays on the level line.
+  const temporary = new Map([["C10AX", atcClass("C10AX", "Other lipid modifying agents", "temporary")]]);
+  assert.equal(atcClassTip("C10AX", temporary, explanations), [
+    "Blood-fat medicines that fit none of the named groups, lowering cholesterol or other blood fats in other ways.",
+    "C10AX Other Lipid Modifying Agents: ATC level 4, chemical, pharmacological or therapeutic subgroup, in C10A. On WHO's temporary list: it can still change.",
+  ].join("\n"));
+});
+
+test("atcBadgeTip: led by the explanation of the code's deepest class at levels 1-4", () => {
+  const complete = row("L01FA01", "L01FA01", { atc_code_source: "ema", atc_final_level: true });
+  assert.equal(atcBadgeTip(complete, atcNamesOf, new Map(), explanations), [
+    "Antibodies that destroy B cells, a type of white blood cell, including cancerous ones, by attaching to their CD20 protein.",
+    ...atcBadgeTip(complete, atcNamesOf, new Map()).split("\n"),
+  ].join("\n"));
+  // An incomplete code: its own class's.
+  const incomplete = row("L04AC", "L04AC", { atc_code_source: "ema", atc_final_level: false });
+  assert.equal(atcBadgeTip(incomplete, atcNamesOf, new Map(), explanations).split("\n")[0],
+    "Block interleukins, immune messenger proteins that drive inflammation, or their receptors, calming overactive immune responses.");
+  // Its deepest class has none (L01XX here): no lead, not a shallower class's.
+  const other = row("L01XX02", "L01XX02", { atc_code_source: "ema", atc_final_level: true });
+  assert.equal(atcBadgeTip(other, atcNamesOf, new Map(), explanations), atcBadgeTip(other, atcNamesOf, new Map()));
+  // A malformed code: none.
+  assert.equal(atcBadgeTip({ atc_code_human: "VO4D", source: "ema" }, atcNamesOf, new Map(), explanations), [UI.table.incompleteTitle, "Source: EMA"].join("\n"));
 });

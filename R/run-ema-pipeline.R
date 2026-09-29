@@ -3,7 +3,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
                              downloads_directory = ".cache/downloads",
                              smpc_budget = smpc_budget_from_env(),
                              gleif_path = gleif_matches_path,
-                             chembl_path = chembl_matches_path) {
+                             chembl_path = chembl_matches_path,
+                             explanations_path = atc_explanations_path) {
   ema <- read_ema_json(download_ema_json(destination = cache_path))
   ema$data |>
     check_expected_columns() |>
@@ -68,6 +69,14 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   tables <- c(tables, build_protection_tables(tables, snapshot_date))
   modality_run <- build_modality_tables(tables, chembl_matches)
   tables <- c(tables, modality_run$tables)
+  tables$atc_class_explanations <- build_atc_explanations_table(
+    read_atc_explanations(explanations_path),
+    tables$ema_medicine_atc_codes,
+    tables$atc_classes,
+    tables$ema_medicines,
+    tables$ema_medicine_substances,
+    tables$ema_medicine_active_substances
+  )
   previous_protection <- read_previous_protection(
     file.path(output_directory, "ema_medicine_protection.json")
   )
@@ -91,7 +100,9 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
         orphan_designations$meta$timestamp
       ),
       union_register_source_entry(register_source)
-    ), atc_sources$source_entries, company_source_entries(
+    ), atc_sources$source_entries, purrr::compact(list(
+      atc_explanations_source_entry(tables$atc_class_explanations)
+    )), company_source_entries(
       register_source,
       gleif_matches
     ), purrr::compact(list(

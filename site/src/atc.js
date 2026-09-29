@@ -62,33 +62,58 @@ export function atcLevelNames(code, names) {
   return atcPrefixes(code).filter((prefix) => names.has(prefix)).map((prefix) => atcClassLabel(prefix, names.get(prefix)));
 }
 
+// The ATC class explanations (atc_class_explanations.json; owner decisions 2026-09-29): our own
+// plain-language summaries of the classes at levels 1-4 the data uses, each generic to its WHO
+// class. rows (null: the file is missing, older data) -> code -> explanation.
+export function buildAtcExplanations(rows) {
+  return new Map((rows ?? []).map((row) => [row.atc_code, row.explanation]));
+}
+
+const NO_EXPLANATIONS = new Map();
+
+// A class's explanation (explanations: buildAtcExplanations()), or null: none for level 5 (its
+// substance's name says what it is) or a class without one.
+export function atcExplanation(code, explanations = NO_EXPLANATIONS) {
+  const level = atcLevel(code);
+  return level && level < ATC_PREFIX_LENGTHS.length ? explanations.get(code) ?? null : null;
+}
+
+// A tip led by a class's explanation, on a line of its own (the carrier keeps line breaks: class
+// tip-lines, or the facet tree's and breakdown's rows); text alone without one. Each explanation
+// ends with a period, so the two read apart as one description too (aria-describedby).
+export const explainedTip = (explanation, text) => (explanation ? `${explanation}\n${text}` : text);
+
 // An ATC badge's explainer, the same in the medicines table and the result tables (owner feedback
-// 2026-09-29: a data-tip as the type badges', no longer a native title), one line each: the code's
-// level names, why it is incomplete, how it differs from EMA's published code (atcOriginText();
-// years: retired code -> the year WHO retired it), then its source (atc_code_source; older data
-// files: the row's source).
-export function atcBadgeTip(row, names, years) {
+// 2026-09-29: a data-tip as the type badges', no longer a native title), one line each: the
+// explanation of the code's deepest class at levels 1-4 (a level-5 code's level-4 class; owner
+// decisions 2026-09-29: one tip per badge, as its segments are all one carrier), the code's level
+// names, why it is incomplete, how it differs from EMA's published code (atcOriginText(); years:
+// retired code -> the year WHO retired it), then its source (atc_code_source; older data files: the
+// row's source). explanations: buildAtcExplanations() (none: as before).
+export function atcBadgeTip(row, names, years, explanations = NO_EXPLANATIONS) {
   const lines = atcLevelNames(atcCode(row), names);
   if (atcRowIncomplete(row)) lines.push(UI.table.incompleteTitle);
   const origin = atcOriginText(atcOrigin(row), names, years);
   if (origin) lines.push(origin);
-  return [...lines, UI.table.source(row.atc_code_source ?? row.source)].join("\n");
+  const deepest = atcPrefixes(atcCode(row)).filter((prefix) => atcLevel(prefix) < ATC_PREFIX_LENGTHS.length).at(-1) ?? null;
+  return explainedTip(atcExplanation(deepest, explanations), [...lines, UI.table.source(row.atc_code_source ?? row.source)].join("\n"));
 }
 
-// An ATC tree row's explainer (owner feedback 2026-09-29): the class, its level and what WHO calls
-// that level, the class above it by its code only (owner decision 2026-09-29: shorter tips; the
-// tree shows its name), and whether WHO retired it (and what replaced it) or lists it as temporary.
-// classes: code -> atc_classes.json row ({ name, status, replaced_by, changed_year }). Null for a
-// malformed code.
-export function atcClassTip(code, classes) {
+// An ATC tree row's explainer (owner feedback 2026-09-29): the class's explanation (levels 1-4,
+// where there is one), then on a line of its own the class, its level and what WHO calls that
+// level, the class above it by its code only (owner decision 2026-09-29: shorter tips; the tree
+// shows its name), and whether WHO retired it (and what replaced it) or lists it as temporary.
+// classes: code -> atc_classes.json row ({ name, status, replaced_by, changed_year });
+// explanations: buildAtcExplanations(). Null for a malformed code. Also the ATC breakdown's bars.
+export function atcClassTip(code, classes, explanations = NO_EXPLANATIONS) {
   const level = atcLevel(code);
   if (!level) return null;
   const parent = atcPrefixes(code).at(-2) ?? null;
   const tip = UI.atc.classTip(atcClassLabel(code, classes.get(code)?.name ?? null), level, parent);
   const entry = classes.get(code);
-  if (entry?.status === "retired") return `${tip} ${UI.atc.retired(entry.changed_year ?? null, entry.replaced_by ?? null)}`;
-  if (entry?.status === "temporary") return `${tip} ${UI.atc.temporary}`;
-  return tip;
+  const status = entry?.status === "retired" ? UI.atc.retired(entry.changed_year ?? null, entry.replaced_by ?? null)
+    : entry?.status === "temporary" ? UI.atc.temporary : null;
+  return explainedTip(atcExplanation(code, explanations), status ? `${tip} ${status}` : tip);
 }
 
 // The valid codes some product is coded at exactly with an incomplete code (atcRowIncomplete()):
