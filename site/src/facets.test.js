@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { buildProducts } from "./approvals.js";
+import { buildAreaTree, inAreas } from "./areas.js";
 import { equivalentSetKey, substanceEquivalents, substanceSetCount } from "./copies.js";
 import { buildConditions } from "./search.js";
 import { DEFAULT_STATE } from "./url.js";
@@ -391,6 +392,7 @@ test("condition rows: per MeSH descriptor as its condition page counts, with its
     total: 5,
     unlisted: 0,
     anyAuthorized: true,
+    broad: 0,
   });
   // Only the medicines shown: without A5, Neoplasms has 2 (1 authorized) and Breast Neoplasms none.
   const shown = conditionRows(conditionProducts.filter((item) => item.ema_product_number !== "A5"), conditionOptions).rows;
@@ -403,7 +405,7 @@ test("condition rows: per MeSH descriptor as its condition page counts, with its
   assert.deepEqual([cancer.name, cancer.term], ["Neoplasms", "Cancer"]);
   // A medicine without substances adds no treatment.
   assert.equal(conditionRows(conditionProducts, { ...conditionOptions, setKeyOf: () => null }).rows[0].treatments, 0);
-  assert.deepEqual(conditionRows([], conditionOptions), { rows: [], total: 0, unlisted: 0, anyAuthorized: false });
+  assert.deepEqual(conditionRows([], conditionOptions), { rows: [], total: 0, unlisted: 0, anyAuthorized: false, broad: 0 });
   // Phase 4f: with a therapeutic area filter, only the conditions with a term within it (within(term)).
   const within = (term) => term !== "Psoriasis" && term !== "Neoplasms";
   assert.deepEqual(conditionRows(conditionProducts, { ...conditionOptions, within }).rows.map((row) => row.name), [
@@ -420,12 +422,42 @@ test("condition rows: anyAuthorized says whether some condition has an authorize
   assert.equal(conditionRows(withdrawn, { ...conditionOptions, direction: "asc" }).unlisted, 5);
 });
 
+// Owner decision 2026-09-29: only specific conditions are ranked (broad(term): every tree number of
+// its descriptor at level 1 or 2, areas.js tree.broad()), in both directions and within the selected
+// areas; broad counts those left out. The counts of the others are unchanged.
+test("condition rows: broad conditions are left out, both ways and within the selected areas", () => {
+  const broad = (term) => term === "Cancer" || term === "Neoplasms";
+  const options = { ...conditionOptions, broad };
+  assert.deepEqual(conditionRows(conditionProducts, options), {
+    rows: conditionRows(conditionProducts, conditionOptions).rows.filter((row) => row.name !== "Neoplasms"),
+    total: 4,
+    unlisted: 0,
+    anyAuthorized: true,
+    broad: 1,
+  });
+  assert.deepEqual(conditionRows(conditionProducts, { ...options, direction: "asc" }).rows.map((row) => row.name), [
+    "Arthritis, Psoriatic", "Breast Neoplasms", "Unmatched term", "Psoriasis",
+  ]);
+  const within = (term) => term !== "Psoriasis";
+  const result = conditionRows(conditionProducts, { ...options, within });
+  assert.deepEqual(result.rows.map((row) => row.name), ["Arthritis, Psoriatic", "Breast Neoplasms", "Unmatched term"]);
+  assert.equal(result.broad, 1);
+  // Only broad conditions among the medicines shown: nothing listed, and the card says why.
+  const onlyBroad = conditionRows([conditionProducts[2], conditionProducts[3]], options);
+  assert.deepEqual(onlyBroad, { rows: [], total: 0, unlisted: 0, anyAuthorized: false, broad: 1 });
+  assert.equal(conditionsCardState(onlyBroad), "broad");
+});
+
 // What the card shows: a line when there is no condition, or when none has an authorized medicine
 // (review 2026-09-29: the ranking then carried no information, A to Z under "the most treatments"),
 // else the table, its header (the sort buttons) kept even when fewest first lists no row (review
 // 2026-09-29: hiding it left no way back to most first).
 test("the conditions card shows the table, a line when nothing is ranked, or its empty line", () => {
   assert.equal(conditionsCardState({ total: 0, unlisted: 0, anyAuthorized: false }), "none");
+  assert.equal(conditionsCardState({ total: 0, unlisted: 0, anyAuthorized: false, broad: 0 }), "none");
+  // Every condition of the medicines shown is broad (owner decision 2026-09-29): a line saying so.
+  assert.equal(conditionsCardState({ total: 0, unlisted: 0, anyAuthorized: false, broad: 2 }), "broad");
+  assert.equal(conditionsCardState({ total: 5, unlisted: 0, anyAuthorized: true, broad: 2 }), "table");
   assert.equal(conditionsCardState({ total: 5, unlisted: 0, anyAuthorized: false }), "unranked");
   assert.equal(conditionsCardState({ total: 0, unlisted: 5, anyAuthorized: false }), "unranked");
   assert.equal(conditionsCardState({ total: 0, unlisted: 5, anyAuthorized: true }), "table");
@@ -459,6 +491,7 @@ test("condition rows: by treatments or authorized medicines, most or fewest firs
     total: 5,
     unlisted: 0,
     anyAuthorized: true,
+    broad: 0,
   });
   assert.equal(conditionRows(rows, { descriptorOf, setKeyOf, direction: "asc", limit: 2 }).total, 4);
 });
@@ -519,6 +552,66 @@ test(
     assert.ok(!fewest.rows.slice(0, 40).some((row) => ["Infections", "Metabolic Diseases", "Skin Diseases", "Abdominal Neoplasms"].includes(row.name)));
     const byMedicines = conditionRows(real, { ...options, sort: "medicines", direction: "asc" });
     assert.deepEqual(byMedicines.rows.filter((row) => row.authorized < 1), []);
+  },
+);
+
+// Owner decision 2026-09-29: the conditions card ranks only specific conditions (MeSH level 3 and
+// deeper), read from the area tree (areas.js tree.broad(): ema_therapeutic_area_branches.json and
+// ema_therapeutic_area_subtree.json, at hand when the card first renders); the same conditions as
+// the rule read from every tree number in mesh_descriptor_notes.json, which loads later. Most and
+// fewest first, and within the selected areas; each listed condition's counts are its page's.
+test(
+  "condition rows on the real data: broad conditions (every tree number at level 1 or 2) left out, both ways and within areas",
+  { skip: existsSync(new URL("ema_medicines.json", dataDir)) ? false : "site/public/data not found: run the pipeline first" },
+  () => {
+    const branchRows = read("ema_therapeutic_area_branches.json");
+    const subtreeRows = read("ema_therapeutic_area_subtree.json");
+    const areaRows = read("ema_medicine_therapeutic_areas.json");
+    const noteRows = read("mesh_descriptor_notes.json");
+    const real = buildProducts(read("ema_medicines.json"), { areaRows, branchRows, subtreeRows, atcRows: [] });
+    const byNumber = new Map(read("ema_search_index.json").map((row) => [row.ema_product_number, row]));
+    const conditions = buildConditions({ byNumber, entryTerms: [] }, { descriptorAreaRows: read("mesh_descriptor_areas.json"), areaRows, branchRows });
+    const equivalents = substanceEquivalents(read("ema_substance_equivalents.json"));
+    const descriptorOf = new Map(branchRows.map((row) => [row.therapeutic_area_mesh, row.mesh_descriptor_ui]));
+    const setKeyOf = (item) => equivalentSetKey(item.substance_set_key?.split("|"), equivalents);
+    const tree = buildAreaTree(branchRows, subtreeRows);
+    const options = { descriptorOf, descriptors: conditions.descriptors, setKeyOf, broad: tree.broad };
+    const numbers = new Map(noteRows.map((row) => [row.mesh_descriptor_ui, row.tree_numbers]));
+    const broadByNotes = (ui) => numbers.get(ui).every((number) => number.split(".").length <= 2);
+    const every = conditionRows(real, { ...options, broad: undefined }).rows;
+    const most = conditionRows(real, options);
+    const fewest = conditionRows(real, { ...options, direction: "asc" });
+    // The same conditions left out as by every tree number in the notes.
+    const keys = (rows) => rows.map((row) => row.key).sort();
+    assert.deepEqual(keys(most.rows), keys(every.filter((row) => !broadByNotes(row.descriptorUi))));
+    assert.equal(most.broad, every.filter((row) => broadByNotes(row.descriptorUi)).length);
+    assert.ok(most.broad > 0);
+    assert.equal(fewest.broad, most.broad);
+    assert.equal(fewest.total + fewest.unlisted, most.total);
+    for (const rows of [most.rows, fewest.rows]) assert.deepEqual(rows.filter((row) => broadByNotes(row.descriptorUi)).map((row) => row.name), []);
+    // The notes arriving later change nothing.
+    tree.setNotes(noteRows);
+    assert.deepEqual(conditionRows(real, options), most);
+    // Broad ones are gone; specific ones stay, counted as their pages count.
+    const names = new Set(most.rows.map((row) => row.name));
+    for (const name of ["Neoplasms", "Lung Diseases", "Infections", "Immune System Diseases", "Nutritional and Metabolic Diseases", "Metabolic Diseases"]) assert.ok(!names.has(name), name);
+    const page = (ui) => {
+      const descriptor = conditions.descriptors.get(ui);
+      const authorized = [...descriptor.products].map((number) => byNumber.get(number)).filter((row) => row?.medicine_status === "Authorised");
+      return { count: descriptor.products.size, authorized: authorized.length, treatments: substanceSetCount(authorized.map((row) => row.substance_keys), equivalents) };
+    };
+    for (const name of ["Breast Neoplasms", "Psoriasis", "Diabetes Mellitus, Type 2", "Diabetes Mellitus", "Arthritis, Rheumatoid"]) {
+      const row = most.rows.find((item) => item.name === name);
+      assert.ok(row, name);
+      assert.deepEqual({ count: row.count, authorized: row.authorized, treatments: row.treatments }, page(row.descriptorUi), name);
+      assert.ok(fewest.rows.some((item) => item.key === row.key), name);
+    }
+    // Within the selected areas: Neoplasms (C04) lists its specific conditions, not itself.
+    const within = conditionRows(real, { ...options, within: (term) => inAreas(tree, ["C04"], term) });
+    assert.ok(within.rows.some((row) => row.name === "Breast Neoplasms"));
+    assert.ok(!within.rows.some((row) => row.name === "Neoplasms"));
+    assert.deepEqual(within.rows.filter((row) => broadByNotes(row.descriptorUi)).map((row) => row.name), []);
+    assert.ok(within.broad > 0);
   },
 );
 

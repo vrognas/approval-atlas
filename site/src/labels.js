@@ -630,9 +630,11 @@ export const UI = {
     // substance sets, so a combination counts on its own and the copy says so; review of step 4: HIV
     // Infections has 40 sets of 27 substances). within: a therapeutic area filter is set, and only
     // the conditions within it are listed. Kept short (review 2026-09-29: at 1024px it took 3 lines).
+    // Broad categories are not ranked (owner decision 2026-09-29: only MeSH level 3 and deeper), and
+    // the last sentence says where they are.
     subtitle: (count, filtered, within = false) => `${filtered
       ? `Conditions of the ${plural(count, "medicine", "medicines")} matching the filters`
-      : `Conditions of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}, each with its narrower ones; treatments are the active substances or combinations of the authorized ones.`,
+      : `Conditions of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.`,
     headers: { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" },
     // The sort buttons in the headers (UI.sortOrder.name() adds the order to the pressed one's).
     sortBy: { treatments: "Sort by treatments", medicines: "Sort by authorized medicines" },
@@ -659,6 +661,11 @@ export const UI = {
     noneAuthorized: (count) => (count === 1
       ? "The one condition of these medicines has no authorized medicine, so it is not ranked."
       : `None of the ${formatCount(count)} conditions of these medicines has an authorized medicine, so they are not ranked.`),
+    // count: the conditions of the medicines shown, every one a broad category (owner decision
+    // 2026-09-29: not ranked).
+    onlyBroad: (count) => (count === 1
+      ? "The one condition of these medicines is a broad category, not ranked here: see the therapeutic area filter."
+      : `The ${formatCount(count)} conditions of these medicines are broad categories, not ranked here: see the therapeutic area filter.`),
     // Condition page links beside a therapeutic area group or term (breakdown, sidebar).
     open: (name) => `Open condition page: ${name}`,
   },

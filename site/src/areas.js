@@ -169,6 +169,13 @@ export function buildAreaTree(branchRows, subtreeRows, noteRows = null) {
     rootTerms: (key) => rootTerms.get(key) ?? [],
     // Every category, branch and node above (for a term: above or at it), over every path.
     ancestors: (key) => ancestors.get(key) ?? NONE,
+    // A broad condition (owner decision 2026-09-29: the conditions card ranks only specific ones): a
+    // term every tree number of whose descriptor is at level 1 or 2 (a branch root tag, "Neoplasms";
+    // a level-2 node only, Lung Diseases C08.381), i.e. with no level-3 node above or at it on any
+    // path; one at level 3 or deeper makes it specific (Diabetes Mellitus: C18.452.394.750 as well
+    // as C19.246). From the tree's own rows, so the notes arriving later change nothing. False for
+    // every other key.
+    broad: (key) => tree.isTerm(key) && ![...ancestors.get(key)].some((above) => above.split(".").length >= 3),
     searchNames: (key) => searchNames.get(key) ?? [],
     // A product's tree keys (its terms and everything above them) and the keys of its static rows:
     // the nodes its terms are, and the branches it is tagged only at the root of.

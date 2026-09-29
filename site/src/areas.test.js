@@ -213,6 +213,38 @@ test("area tree: tags matched at a branch root are the branch's static row, not 
   assert.deepEqual(areaTreeSearch(tree, everyKey, "cancer").matches, ["C04"]);
 });
 
+// Owner decision 2026-09-29: the conditions card ranks only specific conditions. A term is broad when
+// every tree number of its descriptor is at level 1 or 2 (a tag matched at a branch root, or a
+// level-2 node only: Lung Diseases, C08.381), specific with one at level 3 or deeper on any path
+// (Diabetes Mellitus: C18.452.394.750 as well as C19.246). Real rows (2026-09-28).
+test("area tree: broad terms (every tree number at level 1 or 2) and specific ones", () => {
+  const broadTree = buildAreaTree(
+    [
+      ...branchRows,
+      branch("Lung Diseases", "Lung Diseases", "C08", "Respiratory Tract Diseases"),
+      branch("Diabetes Mellitus", "Diabetes Mellitus", "C18", "Nutritional and Metabolic Diseases"),
+      branch("Diabetes Mellitus", "Diabetes Mellitus", "C19", "Endocrine System Diseases"),
+    ],
+    [
+      ...subtreeRows,
+      node("Lung Diseases", "C08.381", 2, "C08", "Lung Diseases"),
+      node("Diabetes Mellitus", "C18.452", 2, "C18", "Metabolic Diseases"),
+      node("Diabetes Mellitus", "C18.452.394", 3, "C18.452", "Glucose Metabolism Disorders"),
+      node("Diabetes Mellitus", "C19.246", 2, "C19", "Diabetes Mellitus"),
+    ],
+  );
+  const broad = (terms) => terms.map((term) => broadTree.broad(term));
+  assert.deepEqual(broad(["Neoplasms", "Cancer", "Lung Diseases"]), [true, true, true]);
+  // At level 3 (Breast Neoplasms is C04.588.180), deeper, or both (Diabetes Mellitus).
+  assert.deepEqual(broad(["Breast Neoplasms", "Triple Negative Breast Neoplasms", "Psoriasis", "Arthritis, Juvenile", "Diabetes Mellitus"]), [false, false, false, false, false]);
+  // Only terms: categories, branches, nodes and unknown terms are never broad conditions.
+  assert.deepEqual(broad(["C", "C04", "C08.381", "Unmatched term", "Not a term"]), [false, false, false, false, false]);
+  // Read from the tree's own rows, so the tree numbers arriving later change nothing.
+  broadTree.setNotes([{ mesh_descriptor_ui: "D008171", tree_numbers: ["C08.381"] }]);
+  assert.equal(broadTree.broad("Lung Diseases"), true);
+  assert.equal(broadTree.broad("Diabetes Mellitus"), false);
+});
+
 test("area selection: a root tag (older links) is selected as itself, within its branch", () => {
   assert.deepEqual(tree.canonical("Neoplasms"), ["Neoplasms"]);
   assert.equal(areaCheckState(tree, "C04", ["Cancer"]), "mixed");
