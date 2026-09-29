@@ -2497,6 +2497,12 @@ input::placeholder {
   margin: 4px 0;
 }
 
+/* The per-year legend's heading, stacked by status (owner call 2026-09-30: "Status today"). */
+.legend-heading {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   .info-button {
     width: 44px;
@@ -6421,6 +6427,13 @@ code {
     text-decoration-line: underline;
     text-decoration-thickness: 2px;
     text-underline-offset: 6px;
+  }
+
+  /* An open (i) (review of phase 3): its accent colour is dropped here, so a filled state. */
+  .info-button[aria-expanded="true"] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
   }
 
   /* Approval years: bars outside the range outlined, inside filled (as the breakdown's bars); the

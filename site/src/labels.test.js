@@ -171,8 +171,8 @@ test("the Union Register chip and note use U.S. labels", () => {
     "EMA and the EU Union Register (the legal record) show different statuses; either can lag behind a recent decision.",
   );
   // Under all the tiles: names the population it counts in (the medicines EMA lists as currently authorized).
-  assert.equal(labels.UI.register.notAuthorized(24), "24 of the medicines EMA lists as currently authorized are no longer authorized according to the EU Union Register.");
-  assert.equal(labels.UI.register.notAuthorized(1), "1 of the medicines EMA lists as currently authorized is no longer authorized according to the EU Union Register.");
+  assert.equal(labels.UI.register.notAuthorized(24), "24 medicines that EMA lists as currently authorized are no longer authorized according to the EU Union Register.");
+  assert.equal(labels.UI.register.notAuthorized(1), "1 medicine that EMA lists as currently authorized is no longer authorized according to the EU Union Register.");
 });
 
 // A footer or About line's links ({ text, url } parts; partsText() below gives the text shown).
@@ -456,6 +456,8 @@ test("tiles: the four types with their share", () => {
     ["advancedTherapy", "Advanced therapy"],
   ]);
   for (const tile of labels.UI.tiles) assert.equal(tile.captionFiltered, undefined, tile.key);
+  // Copy review 2026-09-29 (adapted): one caption for the four shares, by the medicines shown.
+  assert.deepEqual(["authorized", "all", "filtered"].map(labels.UI.tileShare), ["Share of the authorized medicines", "Share of all medicines", "Share of the matching medicines"]);
   // Owner decision 2026-09-29 ("Authorized by default"): the default headline counts them (status
   // Authorised), "Authorized over time" and the currently authorized count leave them out.
   assert.equal(labels.UI.undatedAuthorized(6), "6 authorized medicines without an approval date are left out of “Authorized over time” and of the currently authorized count.");
@@ -532,7 +534,7 @@ test("the default dek says how many medicines of other statuses are left out", (
 // "Authorized over time" is authorization history: the status filter does not apply (owner decision
 // 2026-09-29); its note says so.
 test("the over-time subtitle says the status filter does not apply", () => {
-  assert.equal(labels.UI.overTime.subtitle, "Authorized products and distinct active substances at each month end, those withdrawn since included. Every filter applies but the status and the approval years, which are shaded.");
+  assert.equal(labels.UI.overTime.subtitle, "Authorized medicines and their active substances or combinations at each month end, those withdrawn since included. All filters apply except the status and the approval years, which are shaded.");
 });
 
 test("the dek starts with the medicines by status: the top four, then how many more", () => {
@@ -987,9 +989,14 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
   const { years } = labels.UI;
   assert.equal(years.stack.modes.status, "Status");
   assert.equal(years.by.status, "current status");
-  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.");
+  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.");
   // The legend states the stack order, so position identifies a segment, not only its colour.
   assert.equal(years.legendLead, "Bottom to top:");
+  // Owner calls 2026-09-30: stacked by status, the note says the colors are the status today and the
+  // legend is headed so; the card is named by what it counts.
+  assert.match(years.noteStatus, /^Each medicine once, in the year it was first approved; colors show its status today\. EMA/);
+  assert.equal(years.legendHeading, "Status today");
+  assert.equal(years.title, "Medicines by year of approval");
   assert.equal(years.undatedStatuses(366), "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart.");
   assert.equal(years.undatedStatuses(1), "1 medicine without an approval date (refused, application withdrawn, pending…) is not in this chart.");
   // Phase 4c review: a year filter also leaves them out of every count.
@@ -1084,7 +1091,7 @@ test("the results timeline explains its dots and lines", () => {
 // Step 4 (#17): the per-year totals differ from EMA's annual reports, which count CHMP opinions.
 test("the approvals per year note says why its totals differ from EMA's annual reports", () => {
   const { years } = labels.UI;
-  assert.match(years.note(years.counting.type), /^Year of EU marketing authorization; each medicine counted once\. EMA's annual reports count CHMP opinions instead, so their yearly totals differ\. Click a year/);
+  assert.match(years.note(years.counting.type), /^Year of EU marketing authorization; each medicine counted once\. EMA's annual reports count recommendations \(CHMP opinions\) instead, so their totals differ\. Click a year/);
 });
 
 test("the medicines table lists every matching medicine, undated ones last", () => {
@@ -1108,7 +1115,7 @@ test("the holder activity card: title, modes, cell names and the holder-name not
   // Companies part 2: the rows are company groups, each naming the EMA holder names behind it.
   assert.equal(activity.subtitle(15), "The 15 companies with the most matching medicines; a medicine can count in several columns.");
   assert.equal(activity.subtitle(1), "The company of the matching medicines; a medicine can count in several columns.");
-  assert.equal(activity.note("2026-09-28"), "Companies by current owner as of 28 Sep 2026; each row lists the holder names EMA publishes in its tooltip.");
+  assert.equal(activity.note("2026-09-28"), "Companies grouped by current owner as of 28 Sep 2026; each row's tooltip lists the EMA holder names.");
   assert.equal(activity.holder, "Company");
   assert.equal(activity.other, "Other");
 });
@@ -1149,10 +1156,10 @@ test("the area headline counts the medicines in one therapeutic area and those c
 
 test("the ATC breakdown copy counts medicines of every status", () => {
   const { atc } = labels.UI;
-  assert.equal(labels.UI.breakdown.atc.title, "Medicines by ATC level 1");
+  assert.equal(labels.UI.breakdown.atc.title, "Medicines by ATC group");
   assert.equal(labels.UI.breakdown.atc.titleIn("L04 Immunosuppressants"), "Medicines in L04 Immunosuppressants by ATC class");
   assert.equal(labels.UI.breakdown.atc.titleLeaf("L04AC05 Ustekinumab"), "Medicines in L04AC05 Ustekinumab");
-  assert.equal(labels.UI.breakdown.area.title, "Medicines by therapeutic area group (MeSH branch)");
+  assert.equal(labels.UI.breakdown.area.title, "Medicines by therapeutic area (MeSH branch)");
   assert.equal(labels.UI.breakdown.mah.title, "Medicines by company");
   assert.equal(labels.UI.breakdown.mah.titleIn("Sanofi", false), "Medicines of Sanofi by company");
   assert.equal(labels.UI.breakdown.mah.titleIn("Genzyme Europe B.V.", true), "Medicines of Genzyme Europe B.V. by EMA holder name");
@@ -1269,7 +1276,7 @@ test("the intro card says what the site is for and what it covers", () => {
   assert.deepEqual(UI.intro.cards.map(({ hue, title, text, action }) => ({ hue, title, text, action })), [
     { hue: "green", title: "Look up a drug", text: "Type a brand or active substance: is it authorized in the EU, what for, since when, and who owns it?", action: "Try Keytruda" },
     { hue: "gold", title: "Protection and copies", text: "See roughly how long market protection runs, and whether generics or biosimilars are authorized yet.", action: "Try Humira" },
-    { hue: "blue", title: "Explore the landscape", text: "Which conditions have the most medicines, which companies are active where, and how approvals change over time.", action: "Explore cancer medicines" },
+    { hue: "blue", title: "Explore the landscape", text: "Which conditions have the most treatments, which companies are active where, and how approvals change over time.", action: "Explore cancer medicines" },
   ]);
   assert.deepEqual(UI.intro.cards.map((card) => card.patch ?? { area: card.area }), [{ med: "EMEA/H/C/003820" }, { med: "EMEA/H/C/000481" }, { area: "C04" }]);
   assert.equal(
@@ -1403,7 +1410,7 @@ test("breakdown notes say how many medicines have no value", () => {
   assert.equal(labels.UI.breakdown.atc.excluded(20), "20 medicines without a valid ATC code are not shown.");
   assert.equal(labels.UI.breakdown.area.excluded(1), "1 medicine without a therapeutic area is not shown.");
   // Companies part 2: medicines without a holder have no company group.
-  assert.equal(labels.UI.breakdown.mah.excluded(5), "5 medicines without a holder are not shown.");
+  assert.equal(labels.UI.breakdown.mah.excluded(5), "5 medicines without a company are not shown.");
 });
 
 test("document lines leave out a missing update date instead of printing null", () => {
@@ -1453,7 +1460,7 @@ test("the holder activity card: sort buttons, column order and row names with th
   // and the drilled-into class as a toggle of its own.
   assert.equal(activity.sortName, "Name");
   assert.equal(activity.sortTotal, "Total");
-  assert.equal(activity.sortByTotal, "Sort companies by their total of matching medicines");
+  assert.equal(activity.sortByTotal, "Sort companies by total matching medicines");
   assert.equal(activity.filterBy("Novartis Europharm Limited"), "Show only Novartis Europharm Limited");
   assert.equal(activity.pressedTitle, "Shown alone: click again to clear");
   assert.equal(activity.filterHint, "Filters the dashboard; select again to clear.");
@@ -1467,25 +1474,25 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   // Modality (M2 phase 2): groups, or one group's modalities; a medicine counts in each it has.
   assert.equal(years.by.mod, "modality group");
   assert.equal(years.by.modIn("Antibody"), "modality in Antibody");
-  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`);
+  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.`);
   assert.equal(
     years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
-    "Stacked column chart of EMA approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",
+    "Stacked column chart of EU approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",
   );
   assert.equal(years.by.atcIn("L04 Immunosuppressants"), "ATC class in L04 Immunosuppressants");
   assert.equal(years.by.atc, "ATC group");
   assert.equal(years.by.mah, "company");
-  const howTo = "EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.";
+  const howTo = "EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.";
   assert.equal(years.note(years.counting.type), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
   assert.equal(years.note(years.counting.atc(6, false)), `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each. ${howTo}`);
   // Phase 4c review: the top classes or holders and Other only when there is an Other segment.
   assert.equal(
     years.note(years.counting.atc(6, true)),
-    `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each: the 6 classes with the most matching medicines, the rest as Other classes. ${howTo}`,
+    `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each: the top 6 classes, the rest as Other classes. ${howTo}`,
   );
   assert.equal(
     years.note(years.counting.mah(8, true)),
-    `Year of EU marketing authorization; each medicine counted once: the 8 companies with the most matching medicines, the rest as Other companies. ${howTo}`,
+    `Year of EU marketing authorization; each medicine counted once: the top 8 companies, the rest as Other companies. ${howTo}`,
   );
   assert.equal(years.note(years.counting.mah(1, false)), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
   assert.deepEqual(years.other, { atc: "Other classes", mah: "Other companies" });
