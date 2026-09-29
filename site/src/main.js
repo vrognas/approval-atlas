@@ -13,7 +13,7 @@ import {
 } from "./approvals.js";
 import { appendSortIcon, renderActivity } from "./activity.js";
 import { createAreaTree, renderAreaPath } from "./area-tree.js";
-import { areaBreakdownRows, areaDrillVia, areaExactLabel, areaUpLevel, buildAreaTree, inAreas, toggleArea } from "./areas.js";
+import { areaBreakdownRows, areaCategoryTip, areaDrillVia, areaExactLabel, areaUpLevel, buildAreaTree, inAreas, toggleArea } from "./areas.js";
 import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
@@ -58,7 +58,7 @@ import { createIntro } from "./intro.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
-import { addMeshTip, areaNote, meshTip } from "./mesh-notes.js";
+import { addMeshTip, areaNote, describedTip, meshTip } from "./mesh-notes.js";
 import { NOT_CLASSIFIED, buildModalityTree, modalityBreakdownRows, modalityTip, modalityTipId, toggleModality } from "./modalities.js";
 import { createModalityTree, renderModalityPath } from "./modality-tree.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
@@ -71,7 +71,7 @@ import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
+import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -368,7 +368,8 @@ function setupTips() {
   // Touch screens (phones) and touch input anchor tips to their carriers, as before.
   const touchScreen = window.matchMedia("(hover: none)");
   const touch = (event) => event.pointerType === "touch" || touchScreen.matches;
-  const within = (box, at) => at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom;
+  // What a mouse click focuses: the element itself, or the nearest such ancestor.
+  const FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]";
   // A scroll box's visible area inside its borders and scrollbars and the viewport, in viewport
   // pixels.
   function scrollArea(box) {
@@ -465,6 +466,7 @@ function setupTips() {
     pointed.anchor = point;
     pointed.rect = { ...place, width: size.width, height: size.height, right: place.left + size.width, bottom: place.top + size.height };
     const bridge = pointerBridge(point, pointed.rect);
+    pointed.bridge = bridge;
     const set = (name, value) => carrier.style.setProperty(name, `${value}px`);
     set("--pointer-tip-x", place.left - origin.x);
     set("--pointer-tip-y", place.top - origin.y);
@@ -577,23 +579,23 @@ function setupTips() {
   // the pointer can lie over its own carrier: a click on it is told apart by where it shows, and
   // where it lies over the carrier the click is meant for the control under it (review 2026-09-29:
   // the first click on a row's count or an area row's condition page link only hid the tip), which
-  // gets it once the tip is hidden; so does a click on its bridge (unseen, over the next row). The
-  // tip and bridge are the carrier's, so the click reached the carrier.
+  // gets it once the tip is hidden; so does a click on its bridge (unseen), over the next row or
+  // over its own carrier's controls (review of PR #15: an ATC badge's other segments; tipClick()).
+  // The tip and bridge are the carrier's, so the click reached the carrier.
   document.addEventListener("click", (event) => {
     const carrier = carrierOf(event.target);
     if (!carrier || event.detail === 0) return;
     const at = pointAt(event);
-    const atPointer = pointed?.carrier === carrier;
-    const overCarrier = within(carrier.getBoundingClientRect(), at);
-    const onTip = atPointer ? shownAt(carrier, event.timeStamp) && within(pointed.rect, at) : !overCarrier;
-    const onBridge = atPointer && !onTip && !overCarrier;
-    if (!onTip && !onBridge) {
+    const where = tipClick(at, carrier.getBoundingClientRect(), pointed?.carrier === carrier
+      ? { shown: shownAt(carrier, event.timeStamp), tip: pointed.rect, bridge: pointed.bridge }
+      : null);
+    if (where === "carrier") {
       const tapShows = touchScreen.matches && carrier.classList.contains("tap-tip");
       if (carrier.classList.contains("mesh-tip") && !tapShows) hide(at);
       return;
     }
     hide(at);
-    if (onTip && !overCarrier) {
+    if (where === "tip") {
       event.preventDefault();
       return;
     }
@@ -602,8 +604,11 @@ function setupTips() {
     event.preventDefault();
     event.stopImmediatePropagation();
     // Within a label, to its checkbox: a scripted click on the label would also focus the checkbox
-    // with a keyboard focus ring.
-    (under.closest("label")?.control ?? under).dispatchEvent(new MouseEvent("click", event));
+    // with a keyboard focus ring. Focus goes where the click would have put it (the synthetic click
+    // moves none): the segment a table re-render focuses again, a checkbox, a link.
+    const target = under.closest("label")?.control ?? under;
+    target.closest(FOCUSABLE)?.focus({ preventScroll: true, focusVisible: false });
+    target.dispatchEvent(new MouseEvent("click", event));
   }, true);
   // A sidebar scrolled under a focused row moves the row away from its tip beside the sidebar
   // (not while the tip is at the pointer: style.css).
@@ -873,6 +878,8 @@ function startDashboard(meta, [
   const seriesDates = seriesRows.map((row) => row.date);
   const approvalYears = d3.extent(products, (product) => product.year);
   const atcNames = new Map(atcClasses.map((row) => [row.atc_code, row.name]));
+  // The ATC tree rows' explainers read a code's status too (atcClassTip()).
+  const atcClassRows = new Map(atcClasses.map((row) => [row.atc_code, row]));
   // The filter sentence's modality token names (null without the modality data: no token).
   const modalityNames = modalityTree ? new Map(modalityTree.keys.map((key) => [key, modalityTree.name(key)])) : null;
   const atcRetiredYears = new Map(atcClasses.filter((row) => row.status === "retired").map((row) => [row.atc_code, row.changed_year ?? null]));
@@ -889,10 +896,14 @@ function startDashboard(meta, [
   // A therapeutic area's MeSH explainer ({ text, id }: mesh-notes.js meshTip(); owner request
   // 2026-09-28) for its tree row, breakdown bar, table link or common-condition link: a term by its
   // descriptor, a branch or node by the descriptor of its tree number; null until the notes have
-  // loaded (after the first render) or without a scope note.
-  const areaTip = (key) => meshTip(areaNote(lookup.meshNotes(), key, (term) => descriptorOf.get(term)));
+  // loaded (after the first render) or without a scope note. A MeSH category has no descriptor, so
+  // no scope note: its own explainer from the data (owner feedback 2026-09-29: areaCategoryTip()).
+  const areaTip = (key) => (meshTree.isCategory(key)
+    ? describedTip(`mesh-category-tip-${key}`, areaCategoryTip(meshTree, key))
+    : meshTip(areaNote(lookup.meshNotes(), key, (term) => descriptorOf.get(term))));
   // A small icon link to a condition page (ui: its descriptor) after a row: sidebar area rows,
-  // therapeutic area group bars. name: the condition, for its accessible name and tooltip.
+  // therapeutic area group bars. name: the condition, for its accessible name and tooltip (a tree
+  // row with an explainer drops the tooltip: facet-tree.js).
   const conditionIconLink = (ui, name) => {
     const link = lookup.link(openIcon(), { cond: ui }, "cond-link", UI.conditions.open(name));
     link.title = UI.conditions.open(name);
@@ -1789,7 +1800,7 @@ function startDashboard(meta, [
     const atcExact = atcExactCounts(withoutAtcFilter);
     const atcIncomplete = atcIncompleteAt(withoutAtcFilter);
     const { codes: atcCodes, names: atcQueries } = atcSelection();
-    safely($("#facet-atc"), () => atcTree.render({ selected: atcCodes, names: atcQueries, counts: atcCounts, exact: atcExact, incompleteAt: atcIncomplete, classNames: atcNames }));
+    safely($("#facet-atc"), () => atcTree.render({ selected: atcCodes, names: atcQueries, counts: atcCounts, exact: atcExact, incompleteAt: atcIncomplete, classNames: atcNames, classes: atcClassRows }));
     // Therapeutic areas: medicines per tree key, and in each key's static row (tagged at a node itself,
     // only at a branch's root), matching every other filter.
     const withoutAreaFilter = filterProducts(products, predicates, "area");

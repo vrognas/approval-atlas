@@ -46,8 +46,8 @@ function setNumber(badge, number) {
 //   link(key): an element after the row (a condition page link), or null; optional
 //   note(model): a line under the tree (older links' ATC name queries, root tags), or ""; optional
 //   tip(key, model): { text, id } or null: the row's explainer (the therapeutic areas' MeSH notes,
-//     mesh-notes.js meshTip()), a tooltip on its row and the description (id) of its checkbox;
-//     optional
+//     mesh-notes.js meshTip(); the ATC classes', atc.js atcClassTip()), a tooltip on its row and
+//     the description (id) of its checkbox; optional
 //   tapTip: the tips are short (the modalities', at most 12 words), so a tap on a touch screen shows
 //     them, as the type and status tips (class tap-tip; the MeSH notes' long tips stay hidden on a
 //     tap, style.css); optional
@@ -212,12 +212,18 @@ export function createFacetTree(section, spec, { onToggle }) {
       item.select(":scope > .atc-row .facet-name").text(text).classed("no-name", missing);
       // Muted at 0 unless checked: checked rows sit on the accent wash, never muted (as facet-panel.js).
       item.select(":scope > .atc-row .facet-row").classed("empty", row.count === 0 && state !== "checked" && state !== "included");
-      // A link after the row (the data it needs can arrive later): added once it exists.
+      // A link after the row (the data it needs can arrive later): added once it exists. Its native
+      // tooltip (its name, as its aria-label) only while the row has no explainer, so hovering it
+      // shows one tooltip, in one look (review of PR #15: an area row's condition page icon showed
+      // the row's MeSH explainer and its own title).
       const line = item.select(":scope > .atc-row");
       if (spec.link && line.select(":scope > a").empty()) {
         const link = spec.link(row.key);
         if (link) line.append(() => link);
       }
+      line.select(":scope > a").attr("title", function title() {
+        return tip ? null : this.getAttribute("aria-label");
+      });
       const children = item.select(":scope > ul").attr("id", listId).attr("hidden", open ? null : "");
       if (open) renderLevel(children.node(), row.key);
       else children.selectChildren().remove();

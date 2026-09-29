@@ -41,7 +41,10 @@ export function renderBreakdown(container, rows, { isSelected = null, onToggle, 
       const badge = row.other ? null : badgeOf(row);
       return ["bar-row", row.other ? "other" : null, badge?.hue ? `hue-${badge.hue}` : null].filter(Boolean).join(" ");
     })
-    .attr("title", (row) => row.title ?? null);
+    // A company's EMA holder names (row.title, also in its name): a tooltip with the explainers'
+    // pause (owner feedback 2026-09-29: it was a native title).
+    .attr("data-tip", (row) => row.title ?? null)
+    .classed("mesh-tip tip-lines", (row) => Boolean(row.title));
   items.filter((row) => !row.other && !row.static)
     .attr("type", "button")
     .attr("aria-pressed", isSelected === null ? null : (row) => String(isSelected(row.key)))

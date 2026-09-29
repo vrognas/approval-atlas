@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  atcBadgeTip,
   atcCheckState,
   atcChildren,
+  atcClassTip,
   atcClassesAt,
   atcCode,
   atcExactCounts,
@@ -20,6 +22,7 @@ import {
   mainAtcCode,
   toggleAtcCode,
 } from "./atc.js";
+import { UI } from "./labels.js";
 
 test("a code's level prefixes: all five, only those an incomplete code has, none for a malformed code", () => {
   assert.deepEqual(atcPrefixes("L04AC05"), ["L", "L04", "L04A", "L04AC", "L04AC05"]);
@@ -296,4 +299,62 @@ test("atcIncompleteAt: the classes some medicine is coded at with an incomplete 
     { atc: [row("J07BX03", "J07BX03", { current_atc_code: "J07BN", atc_final_level: true }), row("L01XE", "L01XE", { atc_final_level: false })] },
   ];
   assert.deepEqual([...atcIncompleteAt(products)], ["L01XE"]);
+});
+
+// Real atc_classes.json rows (2026-09-28).
+const atcClass = (atc_code, name, status = "current", replaced_by = null, changed_year = null) => ({ atc_code, name, status, replaced_by, changed_year });
+const atcClasses = new Map([
+  atcClass("L", "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS"),
+  atcClass("L01", "ANTINEOPLASTIC AGENTS"),
+  atcClass("L01F", "MONOCLONAL ANTIBODIES AND ANTIBODY DRUG CONJUGATES"),
+  atcClass("L01FA", "CD20 (Clusters of Differentiation 20) inhibitors"),
+  atcClass("L01FA01", "rituximab"),
+  atcClass("L01X", "OTHER ANTINEOPLASTIC AGENTS"),
+  atcClass("L01XC", "Monoclonal antibodies", "retired", "L01F", 2022),
+  atcClass("L01XC02", "rituximab", "retired", "L01FA01", 2022),
+  atcClass("L04", "IMMUNOSUPPRESSANTS"),
+  atcClass("L04A", "IMMUNOSUPPRESSANTS"),
+  atcClass("L04AC", "Interleukin inhibitors"),
+  atcClass("C10AX", "Other lipid modifying agents"),
+  atcClass("C10AX21", "olezarsen", "temporary"),
+].map((entry) => [entry.atc_code, entry]));
+const atcNamesOf = new Map([...atcClasses].map(([code, entry]) => [code, entry.name]));
+
+// Owner feedback 2026-09-29: an ATC badge's explainer (the medicines table's and result tables')
+// is a data-tip as the type badges' are, no longer a native title; the same text in both tables.
+test("atcBadgeTip: the level names one per line, then why the code is incomplete, how it differs from EMA's, its source", () => {
+  const retired = row("L01XC02", "L01XC02", { current_atc_code: "L01FA01", atc_code_source: "ema", atc_final_level: true });
+  assert.equal(atcBadgeTip(retired, atcNamesOf, new Map([["L01XC02", 2022]])), [
+    "L Antineoplastic and Immunomodulating Agents",
+    "L01 Antineoplastic Agents",
+    "L01F Monoclonal Antibodies and Antibody Drug Conjugates",
+    "L01FA CD20 (Clusters of Differentiation 20) Inhibitors",
+    "L01FA01 Rituximab",
+    "L01XC02 Rituximab: retired 2022, now L01FA01.",
+    "Source: EMA",
+  ].join("\n"));
+  // An incomplete code: the levels it has (a level without a WHO name left out), then why.
+  const incomplete = row("L04AC", "L04AC", { atc_code_source: "ema", atc_final_level: false });
+  assert.equal(atcBadgeTip(incomplete, new Map([["L", "ANTINEOPLASTIC AND IMMUNOMODULATING AGENTS"], ["L04AC", "Interleukin inhibitors"]]), new Map()),
+    ["L Antineoplastic and Immunomodulating Agents", "L04AC Interleukin Inhibitors", UI.table.incompleteTitle, "Source: EMA"].join("\n"));
+  // Older data files: no atc_code_source, the row's source as published.
+  assert.equal(atcBadgeTip({ atc_code_human: "L04AC", source: "ema" }, new Map(), new Map()), [UI.table.incompleteTitle, "Source: EMA"].join("\n"));
+});
+
+// Owner feedback 2026-09-29: every ATC tree row explains its class, as the therapeutic area rows do.
+test("atcClassTip: the class, its ATC level and what WHO calls that level, its parent, and a retired or temporary status", () => {
+  assert.equal(atcClassTip("L", atcClasses), "L Antineoplastic and Immunomodulating Agents: ATC level 1, anatomical main group.");
+  assert.equal(atcClassTip("L04", atcClasses), "L04 Immunosuppressants: ATC level 2, pharmacological or therapeutic subgroup, in L Antineoplastic and Immunomodulating Agents.");
+  assert.equal(atcClassTip("L01F", atcClasses), "L01F Monoclonal Antibodies and Antibody Drug Conjugates: ATC level 3, chemical, pharmacological or therapeutic subgroup, in L01 Antineoplastic Agents.");
+  assert.equal(atcClassTip("L04AC", atcClasses), "L04AC Interleukin Inhibitors: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A Immunosuppressants.");
+  assert.equal(atcClassTip("L01FA01", atcClasses), "L01FA01 Rituximab: ATC level 5, chemical substance, in L01FA CD20 (Clusters of Differentiation 20) Inhibitors.");
+  // Retired (atc_classes.json status, replaced_by, changed_year) and temporary codes say so.
+  assert.equal(atcClassTip("L01XC02", atcClasses), "L01XC02 Rituximab: ATC level 5, chemical substance, in L01XC Monoclonal Antibodies. Retired 2022, now L01FA01.");
+  assert.equal(atcClassTip("L01XC", atcClasses), "L01XC Monoclonal Antibodies: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X Other Antineoplastic Agents. Retired 2022, now L01F.");
+  assert.equal(atcClassTip("C10AX21", atcClasses), "C10AX21 Olezarsen: ATC level 5, chemical substance, in C10AX Other Lipid Modifying Agents. On WHO's temporary list: it can still change.");
+  const deleted = new Map([["J07BX99", atcClass("J07BX99", "example vaccines", "retired", null, 2023)]]);
+  assert.equal(atcClassTip("J07BX99", deleted), "J07BX99 Example Vaccines: ATC level 5, chemical substance, in J07BX. Retired 2023, with no successor.");
+  // No WHO name (EMA's B06C): the code alone; a malformed code has no explainer.
+  assert.equal(atcClassTip("B06C", new Map()), "B06C: ATC level 3, chemical, pharmacological or therapeutic subgroup, in B06.");
+  assert.equal(atcClassTip("LX1XX02", atcClasses), null);
 });

@@ -2,15 +2,18 @@
 // products (facet-tree.js), each row with the code badge, the Title Case name and the count.
 // Checked classes combine with OR (state.atc).
 import { appendCodeBadge } from "./atc-picker.js";
-import { atcCheckState, atcPrefixes, atcTreeChildren, atcTreeCodes, atcTreeSearch } from "./atc.js";
+import { atcCheckState, atcClassTip, atcPrefixes, atcTreeChildren, atcTreeCodes, atcTreeSearch } from "./atc.js";
 import { createFacetTree } from "./facet-tree.js";
 import { UI, atcName } from "./labels.js";
+import { describedTip } from "./mesh-notes.js";
 
 // section: #facet-atc. onToggle(code): a checkbox changed. render(model): { selected: the selected
 // ATC codes (splitAtcValues() codes), names: the class-name queries (older links), counts, exact:
 // atcPrefixCounts() and atcExactCounts() of the medicines matching every other filter,
 // incompleteAt: the classes some of those medicines are coded at with an incomplete code
-// (atcIncompleteAt()), classNames: code -> WHO name }.
+// (atcIncompleteAt()), classNames: code -> WHO name, classes: code -> atc_classes.json row }.
+// Each row explains its class (owner feedback 2026-09-29: atcClassTip(), as the therapeutic area
+// rows their MeSH notes), its checkbox described by the same text; so do the static rows.
 export function createAtcTree(section, { onToggle }) {
   section.querySelector(".atc-note").textContent = UI.atc.note;
   return createFacetTree(section, {
@@ -43,5 +46,7 @@ export function createAtcTree(section, { onToggle }) {
     },
     decorate: (label, code) => appendCodeBadge(label, code),
     note: (model) => (model.names.length ? UI.atc.nameQueries(model.names) : ""),
+    tip: (code, model) => describedTip(`atc-tip-${code}`, atcClassTip(code, model.classes), "atc-tips"),
+    staticTip: (parent, model) => (model.incompleteAt.has(parent) ? UI.atc.incompleteTip : UI.atc.codedHereTip),
   }, { onToggle });
 }

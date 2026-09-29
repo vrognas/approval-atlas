@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
+import { atPointer, besidePanel, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -80,6 +80,32 @@ test("pointerBridge: beside a tip level with the pointer, across to its near sid
   assert.deepEqual(pointerBridge({ x: 1300, y: 450 }, { left: 1088, top: 92, width: 200, height: 800 }), { left: 1287, top: 92, width: 13, height: 800 });
   // Under the pointer: nothing to bridge.
   assert.deepEqual(pointerBridge({ x: 200, y: 450 }, { left: 8, top: 8, width: 400, height: 880 }), { left: 200, top: 8, width: 0, height: 880 });
+});
+
+// Review of PR #15: a tip at the pointer and its unseen bridge can lie over controls, the next row's
+// or its own carrier's (an ATC badge's segments, entered from above: the click on "L" reached the
+// badge, not the segment). A click there goes on to the control under it; a click on the tip where
+// it does not lie over its carrier only hides it.
+test("tipClick: on the tip, through it or its bridge to the control under them, or on the carrier", () => {
+  const badge = { left: 960, top: 436, width: 121, height: 22 };
+  const anchor = { x: 976, y: 440 };
+  const tip = { left: 988, top: 452, width: 236, height: 90 };
+  const pointed = { shown: true, tip, bridge: pointerBridge(anchor, tip) };
+  // The bridge over its own carrier's segments, and over the next row.
+  assert.equal(tipClick({ x: 1010, y: 446 }, badge, pointed), "through");
+  assert.equal(tipClick({ x: 1150, y: 445 }, badge, pointed), "through");
+  // The tip over its own carrier, and off it.
+  assert.equal(tipClick({ x: 1000, y: 455 }, badge, pointed), "through");
+  assert.equal(tipClick({ x: 1100, y: 500 }, badge, pointed), "tip");
+  // The carrier outside the tip and its bridge; off all three (a child reaching past the carrier).
+  assert.equal(tipClick({ x: 965, y: 438 }, badge, pointed), "carrier");
+  assert.equal(tipClick({ x: 950, y: 470 }, badge, pointed), "carrier");
+  // Not shown yet (a MeSH explainer's pause) or hidden: neither the tip nor its bridge takes a click.
+  assert.equal(tipClick({ x: 1010, y: 446 }, badge, { ...pointed, shown: false }), "carrier");
+  assert.equal(tipClick({ x: 1100, y: 500 }, badge, { ...pointed, shown: false }), "carrier");
+  // An anchored tip (keyboard focus, a tap): a click that reached its carrier off it is on the tip.
+  assert.equal(tipClick({ x: 1010, y: 446 }, badge, null), "carrier");
+  assert.equal(tipClick({ x: 1010, y: 470 }, badge, null), "tip");
 });
 
 // Step 4 review: at 1440 the medicines table's scroll box ended at 1392 while tips were kept inside

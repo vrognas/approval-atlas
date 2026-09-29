@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
   areaBreakdownRows,
+  areaCategoryTip,
   areaCheckState,
   areaDrillVia,
   areaExactLabel,
@@ -57,6 +58,15 @@ const subtreeRows = [
 ];
 const tree = buildAreaTree(branchRows, subtreeRows);
 const everyKey = new Set([...tree.names.keys()]);
+
+// Owner feedback 2026-09-29: a MeSH category has no scope note (no descriptor holds one), so its
+// row's explainer is computed from the data: the first and last of its branches here.
+test("areaCategoryTip: a category's explainer names its level and its branches in the data; none for other keys", () => {
+  assert.equal(areaCategoryTip(tree, "C"), "Diseases (MeSH category C): the top level of the MeSH tree; its branches here: C04–C17.");
+  const one = buildAreaTree([branch("Anatomy term", "Anatomy term", "A02", "Musculoskeletal System")], []);
+  assert.equal(areaCategoryTip(one, "A"), "Anatomy (MeSH category A): the top level of the MeSH tree; its branch here: A02.");
+  assert.deepEqual(["C04", "C04.588", "Psoriasis", "X"].map((key) => areaCategoryTip(tree, key)), [null, null, null, null]);
+});
 
 test("area tree: MeSH categories, then branches by code, level-2 and level-3 nodes, EMA's terms as leaves", () => {
   // Owner decision 2026-09-29: the top level is the MeSH category (a branch code's letter), by NLM's name.
