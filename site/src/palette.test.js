@@ -55,6 +55,9 @@ const BRANDS = Object.values(BRAND_HUES).map((brand) => brand.hue);
 const TEXT_PAIRS = [
   ...["--ink", "--ink-secondary", "--muted", "--link", "--link-hover", "--accent"].flatMap((text) => BACKGROUNDS.map((background) => [text, background])),
   ["--ink", "--input"],
+  // A chip's popover (F · Spacious, phase 1) on --input: its note, tree counts and names, Clear, the
+  // theme button's icon; the filter count's number on the accent (--on-accent, above).
+  ...["--ink-secondary", "--muted", "--link", "--link-hover", "--accent"].map((text) => [text, "--input"]),
   ["--on-accent", "--accent"],
   ["--accent", "--accent-wash"],
   // Checked facet rows: name and count on the accent wash.
@@ -90,9 +93,10 @@ const MARK_PAIRS = [
 // WCAG 1.4.11: text-field borders against the field and what surrounds it; the year slider's
 // thumb ring and selected track against the card and the unselected track; the approval-years
 // bars outside the range and the unselected track: a --field-border outline against the card and
-// their --raised fill. The sidebar splitter (sidebar-resize.js): its grip (--field-border) and its
-// line on hover, focus and drag (--accent) against the sidebar and the page. A pressed branch chip's
-// accent underline (area-chips.js; owner decision 2026-09-29) on the chip's fill.
+// their --raised fill. A pressed branch chip's accent underline (area-chips.js; owner decision
+// 2026-09-29) on the chip's fill. The filter chips (F · Spacious, phase 1; filter-bar.js): an
+// inactive chip's dashed --field-border outline on the page (above), an active chip's --accent
+// hairline on its wash and on the page, and the popover's controls (on --input) as in a sheet.
 const NON_TEXT_PAIRS = [
   ...["--input", ...BACKGROUNDS].map((background) => ["--field-border", background]),
   ["--field-border", "--raised"],
@@ -100,6 +104,8 @@ const NON_TEXT_PAIRS = [
   ["--accent", "--raised"],
   ["--accent", "--page"],
   ["--accent", "--slate-2"],
+  ["--accent", "--accent-wash"],
+  ["--accent", "--input"],
 ];
 
 for (const [mode, tokens] of [["light", light], ["dark", dark]]) {

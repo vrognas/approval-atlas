@@ -1,4 +1,4 @@
-// The facet sidebar's therapeutic area section (the phone sheet borrows it; phase 4f): one tree of
+// The therapeutic area section (its chip's popover or sheet borrows it; phase 4f): one tree of
 // MeSH category › branch › level 2 › level 3 › EMA's terms (areas.js, facet-tree.js), each row with
 // its MeSH tree number (a badge, once known), name, count and a link to its condition page once
 // known (none for a category). Checked areas combine with OR (state.area). Diseases starts open

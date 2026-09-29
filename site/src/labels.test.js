@@ -197,9 +197,12 @@ test("dates display as day, abbreviated month and year; missing dates stay missi
   assert.equal(labels.formatDate(undefined), null);
 });
 
-test("the header shows the data date in display form", () => {
-  // Step 2 (#1): the header names the scope, EMA's central procedure, not "EU medicines".
-  assert.equal(labels.UI.dataDate("2026-09-26"), "Human medicines, EMA central procedure · data as of 26 Sep 2026");
+test("the top bar shows the source and the data date in display form", () => {
+  // F · Spacious, phase 1: the wordmark's second line names EMA's data (the page heading reads "EU
+  // medicines"; the intro card and the About disclosure say it covers EMA's central procedure).
+  assert.equal(labels.UI.dataDate("2026-09-26"), "EMA data as of 26 Sep 2026");
+  assert.equal(labels.UI.dataDate(null), "EMA data");
+  assert.equal(labels.UI.page.title, "EU medicines");
   assert.equal(labels.UI.offline("2026-09-26"), "Offline: data as of 26 Sep 2026");
 });
 
@@ -786,33 +789,38 @@ test("the medicine card's document buttons", () => {
   assert.equal(documents.overview, "Summary for the public");
 });
 
-test("filter sentence, sidebar and sheet copy", () => {
-  const { sentence, facets, sheet } = labels.UI;
-  // Tokens: the visible text first (WCAG 2.5.3), then the filter they belong to.
-  assert.equal(sentence.tokenName("type", "all medicine types"), "all medicine types, medicine type filter");
-  assert.equal(sentence.tokenName("from", "1995"), "1995, start year filter");
-  assert.equal(sentence.tokenName("to", "2026"), "2026, end year filter");
-  assert.equal(sentence.tokenName("area", "all therapeutic areas"), "all therapeutic areas, therapeutic area filter");
-  assert.equal(sentence.remove("type", "Biosimilar"), "Remove medicine type filter: Biosimilar");
-  assert.equal(sentence.remove("from", "2010"), "Remove start year filter: 2010");
-  // One approval year: one token for both ends.
+test("filter chips, popover and sheet copy", () => {
+  const { sentence, filters, facets, sheet } = labels.UI;
+  // F · Spacious, phase 1: one chip per dimension, named as the sidebar's sections were.
+  assert.deepEqual(filters.names, {
+    type: "Medicine type", mod: "Modality", atc: "ATC class", area: "Therapeutic area", mah: "Company", status: "Status", years: "Approval year",
+  });
+  assert.deepEqual(Object.keys(filters.dimensions), Object.keys(filters.names));
+  assert.equal(filters.label, "Filters");
+  assert.equal(filters.remove("type", "Biosimilar"), "Remove medicine type filter: Biosimilar");
+  assert.equal(filters.remove("years", "2015–2026"), "Remove approval year filter: 2015–2026");
+  assert.equal(filters.remove("atc", "2 selected"), "Remove ATC class filter: 2 selected");
+  assert.equal(filters.popoverTitle("atc"), "Filter by ATC class");
+  assert.equal(filters.popoverTitle("years"), "Filter by approval year");
+  assert.equal(filters.active(1), "active filter");
+  assert.equal(filters.active(2), "active filters");
+  assert.equal(filters.clear, "Clear filters");
+  assert.equal(filters.popoverClear, "Clear");
+  assert.equal(filters.done, "Done");
+  // The filter tokens the chips read (facets.js sentenceParts()).
   assert.equal(sentence.words.approvedIn, ", approved in ");
-  assert.equal(sentence.tokenName("year", "2024"), "2024, approval year filter");
-  assert.equal(sentence.remove("year", "2024"), "Remove approval year filter: 2024");
-  for (const key of ["type", "atc", "mah", "area", "from", "to", "year", "status"]) assert.ok(sentence.dimensions[key], key);
   // Phase 4f: one therapeutic area tree, no separate group filter.
-  assert.equal(sentence.dimensions.branch, undefined);
   assert.equal(sentence.defaults.branch, undefined);
-  assert.equal(sentence.reset, "Reset");
-  assert.equal(sentence.allFilters, "All filters");
-  assert.equal(facets.active(0), null);
-  assert.equal(facets.active(2), "2 active");
+  // The sentence's own controls, the sidebar's count and its splitter are gone.
+  for (const removed of ["tokenName", "remove", "reset", "allFilters", "dimensions"]) assert.equal(sentence[removed], undefined, removed);
+  assert.equal(facets.active, undefined);
+  assert.equal(labels.UI.sidebar, undefined);
   assert.equal(facets.counts, "Counts: medicines matching the other filters.");
   assert.equal(facets.showMore(20), "Show 20 more");
   assert.equal(facets.matches(0), "No matches");
   assert.equal(facets.matches(1), "1 match");
   assert.equal(facets.matches(1234), "1,234 matches");
-  // A collapsed section with several values selected (owner decision 2026-09-29 (2)).
+  // An active chip with several values selected.
   assert.equal(facets.selected(2), "2 selected");
   assert.equal(facets.selected(1234), "1,234 selected");
   assert.equal(sheet.show(33), "Show 33 medicines");
@@ -821,11 +829,11 @@ test("filter sentence, sidebar and sheet copy", () => {
   assert.equal(sheet.close, "Close filters");
 });
 
-// Modality (M2 phase 2): the sentence's token, the tree, the breakdown and the card's source line.
-test("modality copy: sentence token, tree rows, static rows, breakdown and sources", () => {
-  const { sentence, modality, breakdown, footer } = labels.UI;
-  assert.equal(sentence.tokenName("mod", "all modalities"), "all modalities, modality filter");
-  assert.equal(sentence.remove("mod", "siRNA"), "Remove modality filter: siRNA");
+// Modality (M2 phase 2): the filter chip, the tree, the breakdown and the card's source line.
+test("modality copy: filter chip, tree rows, static rows, breakdown and sources", () => {
+  const { sentence, filters, modality, breakdown, footer } = labels.UI;
+  assert.equal(filters.names.mod, "Modality");
+  assert.equal(filters.remove("mod", "siRNA"), "Remove modality filter: siRNA");
   assert.equal(sentence.many.mod(2), "2 modalities");
   assert.equal(sentence.words.withModality, " with ");
   assert.equal(modality.count("Antibody", 312), "Antibody, 312 medicines");
@@ -1130,9 +1138,11 @@ test("search copy: retried and empty lists, did you mean, the indication-text op
   assert.equal(condition.alsoSearched("acetylsalicylic acid"), "Also searching for “acetylsalicylic acid”, the name EMA uses.");
 });
 
-test("the header's tagline and the intro card say what the site is for and what it covers", () => {
+test("the intro card says what the site is for and what it covers", () => {
   const { UI } = labels;
-  assert.equal(UI.tagline, "Look up the regulatory status of any drug in the EU.");
+  // F · Spacious, phase 1: the tagline and the scope line left the top bar (the intro card says it).
+  assert.equal(UI.tagline, undefined);
+  assert.equal(UI.scopeLine, undefined);
   assert.equal(UI.intro.link, "What is this?");
   // Owner decision 2026-09-29: three onboarding cards (a bold title, one plain sentence, an example to
   // try) in place of the two lists, then one quiet line on scope and use.
@@ -1281,11 +1291,7 @@ test("document lines leave out a missing update date instead of printing null", 
   assert.equal(labels.UI.card.documentMeta(true, "8 Feb 2018"), "PDF · updated 8 Feb 2018");
 });
 
-// Phase 4c: the sidebar splitter, sorting, and the per-year chart's stack category.
-test("the sidebar splitter is named for what it resizes, with a hint", () => {
-  assert.equal(labels.UI.sidebar.resize, "Resize filters");
-  assert.equal(labels.UI.sidebar.hint, "Drag or use the arrow keys to resize the filters; double-click to reset");
-});
+// Phase 4c: sorting, and the per-year chart's stack category.
 
 test("the breakdown sorts by count or by code (ATC), MeSH tree order (areas) and name (holders)", () => {
   const { sort } = labels.UI.breakdown;
@@ -1502,7 +1508,7 @@ test("companies: aggregated views name the EMA holder names behind a company, th
 });
 
 test("companies: tree, company page, search and footer copy", () => {
-  const { companies, lookup, footer, sentence, card } = labels.UI;
+  const { companies, lookup, footer, sentence, filters, card } = labels.UI;
   assert.equal(companies.find, "Find a company");
   // QA 2026-09-29 (#6): the tree's note (a second "note" key, the ownership line, used to replace it).
   assert.equal(companies.note("2026-09-28"),
@@ -1523,7 +1529,7 @@ test("companies: tree, company page, search and footer copy", () => {
   assert.equal(lookup.companyMeta("Genzyme Europe B.V.", 12), "matches “Genzyme Europe B.V.” · 12 authorized");
   assert.equal(lookup.companyMeta(null, 31), "31 authorized");
   assert.equal(sentence.defaults.mah, "all companies");
-  assert.equal(sentence.remove("mah", "Roche"), "Remove company filter: Roche");
+  assert.equal(filters.remove("mah", "Roche"), "Remove company filter: Roche");
   assert.equal(card.company, "Company");
   assert.equal(labels.UI.kicker.company, "Company");
   assert.equal(labels.UI.external.destinations["search.gleif.org"], "GLEIF website");

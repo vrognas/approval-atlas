@@ -25,27 +25,16 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header>
-      <!-- The wordmark opens the overview (main.js); the icon is public/icon.svg's, drawn inline.
-           The theme button (Auto, Light, Dark) is filled by theme.js. -->
-      <div class="brand-row">
-        <h1><a id="home-link" href="/" aria-label="Approval Atlas, home"><svg class="brand-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <!-- The top bar (F · Spacious, phase 1; every width): the wordmark and the data's date, the
+         lookup search, "What is this?" and the theme button. Phones: two rows, the search the
+         second, which stays at the top while the page scrolls (below 1024px, sticky). -->
+    <header class="topbar">
+      <!-- The wordmark opens the overview (main.js); the icon is public/icon.svg's, drawn inline. -->
+      <a id="home-link" class="brand" href="/" aria-label="Approval Atlas, home"><svg class="brand-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
           <rect width="64" height="64" rx="14" fill="#2B4A31" />
           <path d="M17 51 L32 13 L47 51" fill="none" stroke="#F3F3EE" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
           <path d="M21 37 L28 43 L44 27" fill="none" stroke="#D8B45A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>Approval Atlas</a></h1>
-        <button id="theme-toggle" class="theme-toggle" type="button"></button>
-      </div>
-      <!-- What the site is for (UI.tagline) and the scope line; "What is this?" shows the intro card
-           (intro.js). Filled by main.js before any data loads. -->
-      <p id="tagline" class="tagline"></p>
-      <p class="meta"><span id="data-date"></span> · <button id="intro-link" class="inline-button" type="button"></button></p>
-      <p id="offline-note" class="note" role="status" hidden></p>
-    </header>
-
-    <main>
-      <p id="message" hidden></p>
-
+        </svg><span class="brand-text"><span class="brand-name">Approval Atlas</span><span id="data-date" class="brand-date"></span></span></a>
       <section id="lookup" class="lookup" hidden>
         <label id="lookup-label" for="lookup-input" class="visually-hidden"></label>
         <div class="lookup-box">
@@ -65,7 +54,19 @@
         </div>
         <p id="lookup-status" class="visually-hidden" aria-live="polite"></p>
       </section>
-      <!-- Outside the search section, which stays at the top on phones (sticky): the field only. -->
+      <!-- "What is this?" shows the intro card (intro.js); the theme button (Light, Dark) is filled
+           by theme.js. -->
+      <div class="topbar-actions">
+        <button id="intro-link" class="inline-button" type="button"></button>
+        <button id="theme-toggle" class="theme-toggle" type="button"></button>
+      </div>
+      <p id="offline-note" class="note" role="status" hidden></p>
+    </header>
+
+    <main>
+      <p id="message" hidden></p>
+
+      <!-- Under the top bar: the Try examples (hidden while the intro card shows). -->
       <p id="lookup-try" class="try" hidden></p>
 
       <!-- The landing intro (intro.js): on the untouched overview until closed; "What is this?" in
@@ -77,32 +78,55 @@
       <p id="app-loading" class="muted">Loading charts…</p>
 
       <div id="app" hidden>
-        <!-- While a lookup result is open: the dashboard below is the overview, under its own heading. -->
-        <div id="explore" class="explore" hidden>
-          <h2 id="explore-title"></h2>
-          <p id="explore-note" class="muted"></p>
-        </div>
-        <section class="answer" aria-labelledby="headline">
-          <h2 id="headline" class="headline" tabindex="-1"></h2>
-          <p id="headline-dek" class="dek"></p>
-          <p id="status-scope" class="muted status-scope" hidden><span id="status-scope-text"></span> <button id="status-include" class="inline-button" type="button"></button></p>
-          <div id="class-path" class="class-path" hidden></div>
-        </section>
-        <p id="filter-result" class="visually-hidden" role="status"></p>
+        <!-- The page header (F · Spacious, phase 1): the heading, the answer headline as its lead
+             paragraph (and the dek), Download CSV at the right; then the filter chips. While a
+             lookup result is open the dashboard below it is the overview: the heading says so and
+             a note replaces the lead. -->
+        <div class="page-head">
+          <div class="page-head-row">
+            <div class="page-head-text">
+              <h1 id="page-title"></h1>
+              <div class="answer">
+                <!-- The lead: the headline, then by default (owner decision 2026-09-29, "Authorized by
+                     default") a quiet sentence on the medicines of other statuses and "Include them",
+                     inline (F · Spacious mockup). -->
+                <p class="page-lead"><span id="headline" class="headline" tabindex="-1"></span><span id="status-scope" class="status-scope" hidden> <span id="status-scope-text"></span> <button id="status-include" class="lead-button" type="button"></button></span></p>
+                <p id="headline-dek" class="page-dek"></p>
+                <div id="class-path" class="class-path" hidden></div>
+              </div>
+              <p id="explore-note" class="page-dek" hidden></p>
+            </div>
+            <!-- The table card has the same button (main.js); the table's caption says what it saves. -->
+            <button id="page-download" class="more download" type="button" aria-describedby="table-caption"><svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span id="page-download-text"></span></button>
+          </div>
+          <p id="filter-result" class="visually-hidden" role="status"></p>
 
-        <!-- The filters as a sentence: tokens open the sidebar section (desktop) or a sheet. -->
-        <div class="sentence-row">
-          <p id="filter-sentence" class="sentence"></p>
-          <button id="all-filters" class="all-filters" type="button" aria-haspopup="dialog"></button>
+          <!-- One chip per filter dimension (filter-bar.js): each opens a popover under it
+               (desktop, popover.js) or a bottom sheet (below 1024px). -->
+          <div class="filter-bar" role="group" aria-labelledby="filter-bar-label">
+            <span id="filter-bar-label" class="visually-hidden"></span>
+            <div id="filter-chips" class="chip-row"></div>
+            <p id="filter-summary" class="filter-summary" hidden></p>
+            <dialog id="filter-popover" class="popover" aria-labelledby="popover-title" aria-describedby="popover-note">
+              <div class="popover-head">
+                <h2 id="popover-title" tabindex="-1"></h2>
+                <p id="popover-note" class="popover-note"></p>
+              </div>
+              <div id="popover-body" class="popover-body"></div>
+              <div class="popover-foot">
+                <button id="popover-clear" class="text-button" type="button"></button>
+                <button id="popover-done" class="popover-done" type="button"></button>
+              </div>
+            </dialog>
+          </div>
+          <p id="url-note" class="note" role="status" hidden></p>
         </div>
-        <p id="url-note" class="note" role="status" hidden></p>
 
         <!-- One dashboard: every medicine matching the filters (by default the authorized ones:
              owner decision 2026-09-29). The top row
              (owner decision 2026-09-29, revised): "Authorized over time" across the main column,
              the four type tiles under it, in one row, 2 x 2 or one per row by the main column's
-             width. The frame is their size container: the main column's width, which the
-             sidebar's width sets on desktop. -->
+             width. The frame is their size container: the main column's width. -->
         <div class="top-row-frame">
           <div class="top-row">
             <section class="chart-card" aria-labelledby="over-time-title">
@@ -222,123 +246,68 @@
       </div>
     </main>
 
-    <!-- Desktop: the splitter on the sidebar's right edge (sidebar-resize.js), between the panes. -->
-    <div
-      id="sidebar-resize"
-      class="sidebar-resize"
-      role="separator"
-      aria-orientation="vertical"
-      aria-controls="facets"
-      tabindex="0"
-      hidden
-    ></div>
-
-    <!-- Facet sidebar (desktop, >= 1024px; after main so the search comes first in tab order).
-         Below that width it is hidden and a sheet borrows its sections. -->
-    <aside id="facets" class="facets" aria-labelledby="facets-title" hidden>
-      <div class="facets-head">
-        <h2 id="facets-title" tabindex="-1">Filters</h2>
-        <span id="facets-active" class="count-pill" hidden></span>
-        <button id="reset-all" class="text-button" type="button">Reset all</button>
+    <!-- The facet sections (F · Spacious, phase 1): kept here, hidden, and borrowed by a chip's
+         popover (desktop, popover.js) or sheet (below 1024px, sheet.js) while it is open; the
+         dialog's title names the section. -->
+    <div id="facet-store" hidden>
+      <div id="facet-type" class="facet">
+        <ul class="facet-list"></ul>
       </div>
-      <p id="facets-note" class="facets-note"></p>
-      <!-- Each section's heading is a disclosure button (facet-sections.js; owner decision
-           2026-09-29 (2)): collapsed by default, the summary after its title names an active filter.
-           The group is named by the title alone. -->
-      <div id="facet-type" class="facet" role="group" aria-labelledby="facet-type-title">
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-type-body"><span id="facet-type-title" class="facet-heading">Medicine type</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-type-body" class="facet-body" hidden>
-          <ul class="facet-list"></ul>
-        </div>
+      <!-- One tree (M2 phase 2): modality group › modality (modality-tree.js); its chip shows once
+           the modality data has loaded. -->
+      <div id="facet-modality" class="facet">
+        <input id="modality-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <ul id="modality-tree" class="atc-tree modality-tree"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <p class="muted atc-note tree-note"></p>
       </div>
-      <!-- One tree (M2 phase 2): modality group › modality (modality-tree.js); shown once the
-           modality data has loaded. -->
-      <div id="facet-modality" class="facet" role="group" aria-labelledby="facet-modality-title" hidden>
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-modality-body"><span id="facet-modality-title" class="facet-heading">Modality</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-modality-body" class="facet-body" hidden>
-          <input id="modality-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-          <p class="facet-live visually-hidden" role="status"></p>
-          <ul id="modality-tree" class="atc-tree modality-tree"></ul>
-          <p class="facet-empty muted" hidden></p>
-          <p class="muted atc-note tree-note"></p>
-        </div>
-      </div>
-      <div id="facet-atc" class="facet" role="group" aria-labelledby="facet-atc-title">
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-atc-body"><span id="facet-atc-title" class="facet-heading">ATC class</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-atc-body" class="facet-body" hidden>
-          <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-          <p class="facet-live visually-hidden" role="status"></p>
-          <p id="atc-names" class="muted tree-names" hidden></p>
-          <ul id="atc-tree" class="atc-tree"></ul>
-          <p class="facet-empty muted" hidden></p>
-          <p class="muted atc-note"></p>
-        </div>
+      <div id="facet-atc" class="facet">
+        <input id="atc-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <p id="atc-names" class="muted tree-names" hidden></p>
+        <ul id="atc-tree" class="atc-tree"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <p class="muted atc-note"></p>
       </div>
       <!-- One tree (phase 4f): MeSH category › branch › level 2 › level 3 › EMA's terms (area-tree.js). -->
-      <div id="facet-area" class="facet" role="group" aria-labelledby="facet-area-title">
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-area-body"><span id="facet-area-title" class="facet-heading">Therapeutic area</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-area-body" class="facet-body" hidden>
-          <input id="area-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-          <p class="facet-live visually-hidden" role="status"></p>
-          <p id="area-tags" class="muted tree-names" hidden></p>
-          <ul id="area-tree" class="atc-tree area-tree"></ul>
-          <p class="facet-empty muted" hidden></p>
-          <p class="muted atc-note tree-note"></p>
-        </div>
+      <div id="facet-area" class="facet">
+        <input id="area-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <p id="area-tags" class="muted tree-names" hidden></p>
+        <ul id="area-tree" class="atc-tree area-tree"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <p class="muted atc-note tree-note"></p>
       </div>
       <!-- One tree (companies part 2): company group › company › EMA holder name (company-tree.js). -->
-      <div id="facet-mah" class="facet" role="group" aria-labelledby="facet-mah-title">
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-mah-body"><span id="facet-mah-title" class="facet-heading">Company</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-mah-body" class="facet-body" hidden>
-          <input id="company-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
-          <p class="facet-live visually-hidden" role="status"></p>
-          <ul id="company-tree" class="atc-tree company-tree"></ul>
-          <p class="facet-empty muted" hidden></p>
-          <button class="facet-more text-button" type="button" hidden></button>
-          <p class="muted atc-note tree-note"></p>
+      <div id="facet-mah" class="facet">
+        <input id="company-search" class="facet-search" type="search" autocomplete="off" spellcheck="false" />
+        <p class="facet-live visually-hidden" role="status"></p>
+        <ul id="company-tree" class="atc-tree company-tree"></ul>
+        <p class="facet-empty muted" hidden></p>
+        <button class="facet-more text-button" type="button" hidden></button>
+        <p class="muted atc-note tree-note"></p>
+      </div>
+      <div id="facet-status" class="facet">
+        <ul class="facet-list"></ul>
+        <!-- Include every status, or back to the default (authorized): facet-panel.js. -->
+        <button id="status-widen" class="text-button status-widen" type="button"></button>
+      </div>
+      <!-- Approval year: slim one-colour per-year bars above a two-thumb slider (year-slider.js; the
+           status stacks are "Approvals per year", Stack by Status). -->
+      <div id="facet-years" class="facet">
+        <div id="year-hist" class="year-hist" aria-hidden="true"></div>
+        <p id="year-hist-summary" class="visually-hidden"></p>
+        <p class="year-values" aria-hidden="true"><span id="year-start-value"></span><span id="year-end-value"></span></p>
+        <div class="year-slider">
+          <div class="year-track" aria-hidden="true"><span class="year-track-fill"></span></div>
+          <input id="year-start" type="range" />
+          <input id="year-end" type="range" />
         </div>
       </div>
-      <div id="facet-status" class="facet" role="group" aria-labelledby="facet-status-title">
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-status-body"><span id="facet-status-title" class="facet-heading">Status</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-status-body" class="facet-body" hidden>
-          <ul class="facet-list"></ul>
-          <button id="status-widen" class="text-button status-widen" type="button"></button>
-        </div>
-      </div>
-      <!-- Approval year (owner decision 2026-09-29: back in the sidebar, last): slim one-colour
-           per-year bars above a two-thumb slider (year-slider.js; the status stacks are "Approvals
-           per year", Stack by Status). -->
-      <div id="facet-years" class="facet" role="group" aria-labelledby="facet-years-title">
-        <h3 class="facet-title">
-          <button class="facet-toggle" type="button" aria-expanded="false" aria-controls="facet-years-body"><span id="facet-years-title" class="facet-heading">Approval year</span><span class="facet-summary" hidden></span></button>
-        </h3>
-        <div id="facet-years-body" class="facet-body" hidden>
-          <div id="year-hist" class="year-hist" aria-hidden="true"></div>
-          <p id="year-hist-summary" class="visually-hidden"></p>
-          <p class="year-values" aria-hidden="true"><span id="year-start-value"></span><span id="year-end-value"></span></p>
-          <div class="year-slider">
-            <div class="year-track" aria-hidden="true"><span class="year-track-fill"></span></div>
-            <input id="year-start" type="range" />
-            <input id="year-end" type="range" />
-          </div>
-          <p class="year-foot"><button id="year-reset" class="text-button" type="button">Reset</button></p>
-        </div>
-      </div>
-    </aside>
+    </div>
 
-    <!-- Phones and tablets: a bottom sheet (showModal) with the sections of one token, or all. -->
+    <!-- Phones and tablets: a bottom sheet (showModal) with the section of one chip. -->
     <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
       <div class="sheet-head">
         <h2 id="sheet-title" tabindex="-1"></h2>

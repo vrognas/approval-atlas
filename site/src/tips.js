@@ -31,19 +31,6 @@ export function tipAbove(carrier, height, clip) {
   return height > below && above > below;
 }
 
-// A tip beside a panel (the area tree's rows in the desktop sidebar, with keyboard focus; step 4
-// review: under the row it covered the next rows): gap px right of the panel's right edge (clear of
-// its splitter), level with the row, growing down from the row's top in the upper half of the
-// viewport, else up from its bottom (bottom: from the viewport's bottom edge), so it stays on screen.
-export function besidePanel(row, panelRight, viewportHeight, gap = 16) {
-  const down = row.top + row.height / 2 <= viewportHeight / 2;
-  return {
-    x: Math.round(panelRight + gap),
-    top: down ? row.top : null,
-    bottom: down ? null : viewportHeight - row.bottom,
-  };
-}
-
 // A tip's height before it shows (its size cannot be measured yet): its text in lines of about half
 // an em per character (13px text on 18px lines), within width less the padding and border (22px),
 // plus the padding and border (14px).

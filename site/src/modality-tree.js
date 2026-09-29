@@ -1,4 +1,4 @@
-// The facet sidebar's modality section (M2 phase 2; the phone sheet borrows it): the tree of
+// The modality section (M2 phase 2; its chip's popover or sheet borrows it): the tree of
 // modality groups › modalities (modalities.js, facet-tree.js), each row with its name, count and
 // explainer; under a group its medicines no source names the modality of, and last the medicines
 // no source classifies (static rows, count only). Checked rows combine with OR (state.mod). Also

@@ -243,12 +243,15 @@ const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; e
 const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " (est.)");
 
 export const UI = {
-  // Under the wordmark, always shown (landing, user-approved design 2026-09-28): what the site is for.
-  tagline: "Look up the regulatory status of any drug in the EU.",
-  // The scope (step 2, #1): EMA's central procedure, every status; national authorizations are not in
-  // it. The header shows it alone until the data's date is known.
-  scopeLine: "Human medicines, EMA central procedure",
-  dataDate: (date) => `${UI.scopeLine} · data as of ${formatDate(date)}`,
+  // Under the wordmark in the top bar (F · Spacious, phase 1): the source and the data's date ("EMA
+  // data" until meta.json has loaded). The tagline and the scope line left the bar: beside the
+  // search they did not fit one clean line; the intro card and the About disclosure say what the site
+  // covers (EMA's central procedure).
+  dataDate: (date) => (date ? `EMA data as of ${formatDate(date)}` : "EMA data"),
+  // The dashboard's page heading (F · Spacious, phase 1): the answer headline is its lead paragraph.
+  page: {
+    title: "EU medicines",
+  },
   // The landing intro card (intro.js): on the untouched overview (no lookup, no filter) until the
   // viewer closes it; the header's link brings it back.
   intro: {
@@ -301,8 +304,9 @@ export const UI = {
   missingData: ["No data found. Run ", "Rscript scripts/run-pipeline.R", " first."],
   ignoredValues: (count) => `${plural(count, "filter value", "filter values")} in the link ${count === 1 ? "was" : "were"} not recognized and ignored.`,
 
-  // The filter sentence under the headline (facets.js sentenceParts()): each token opens its
-  // sidebar section (desktop) or sheet (phones, tablets); an active one has a remove button.
+  // The filter tokens (facets.js sentenceParts()), which the filter chips read (facets.js
+  // filterChips(): which dimensions are active, their explanations); the words are those of the
+  // sentence the chips replaced (F · Spacious, phase 1).
   sentence: {
     words: {
       showing: "Showing ", in: " in ", from: " from ", and: " and ", approved: ", approved ", approvedIn: ", approved in ", to: "–", with: ", with ", end: ".",
@@ -335,36 +339,50 @@ export const UI = {
     },
     atcName: (query) => `ATC classes matching “${query}”`,
     status: (label) => `status ${label}`,
-    // The filter each token (sentenceParts() key) belongs to, for its accessible name.
+  },
+  // The filter chips under the page heading (F · Spacious, phase 1; filter-bar.js): one per
+  // dimension, in this order; an inactive one reads "⊕ {name}", an active one "{name} | {value}"
+  // (facets.js filterChips(), sectionSummary()) with a remove button. A chip opens its controls: a
+  // popover under it on desktop (popover.js), a bottom sheet below 1024px (sheet.js).
+  filters: {
+    label: "Filters",
+    names: {
+      type: "Medicine type",
+      mod: "Modality",
+      atc: "ATC class",
+      area: "Therapeutic area",
+      mah: "Company",
+      status: "Status",
+      years: "Approval year",
+    },
+    // In the remove buttons' names and the popovers' titles.
     dimensions: {
       type: "medicine type",
-      atc: "ATC class",
-      mah: "company",
-      area: "therapeutic area",
-      from: "start year",
-      to: "end year",
-      years: "approval years",
-      // One approval year: a single token for both ends.
-      year: "approval year",
-      status: "status",
       mod: "modality",
+      atc: "ATC class",
+      area: "therapeutic area",
+      mah: "company",
+      status: "status",
+      years: "approval year",
     },
-    // The visible text first, so speech input can use it (WCAG 2.5.3).
-    tokenName: (key, text) => `${text}, ${UI.sentence.dimensions[key]} filter`,
-    remove: (key, text) => `Remove ${UI.sentence.dimensions[key]} filter: ${text}`,
-    reset: "Reset",
-    allFilters: "All filters",
+    remove: (key, value) => `Remove ${UI.filters.dimensions[key]} filter: ${value}`,
+    popoverTitle: (key) => `Filter by ${UI.filters.dimensions[key]}`,
+    // After the chips while any filter is active: "[2] active filters · Clear filters" (the number
+    // in its own badge).
+    active: (count) => (count === 1 ? "active filter" : "active filters"),
+    clear: "Clear filters",
+    // A popover's buttons: Clear resets its dimension, Done closes it.
+    popoverClear: "Clear",
+    done: "Done",
   },
-  // Facet sections: the desktop sidebar and the phone sheets.
+  // Facet sections: the chips' popovers (desktop) and sheets (phones, tablets).
   facets: {
-    active: (count) => (count ? `${formatCount(count)} active` : null),
     counts: "Counts: medicines matching the other filters.",
     showMore: (count) => `Show ${formatCount(count)} more`,
     noMatches: "No matches",
     // Announced after typing in a facet search.
     matches: (count) => (count ? plural(count, "match", "matches") : UI.facets.noMatches),
-    // After a collapsed section's title (owner decision 2026-09-29 (2); facets.js sectionSummary()):
-    // several values selected; one is named.
+    // An active chip's value (facets.js sectionSummary()): several values selected; one is named.
     selected: (count) => `${formatCount(count)} selected`,
     // The Status section with every status included (owner decision 2026-09-29).
     everyStatus: "Every status",
@@ -372,16 +390,15 @@ export const UI = {
     statusWiden: "Include withdrawn, refused and pending",
     statusDefault: "Authorized only",
   },
+  // Below 1024px a chip opens its section in a bottom sheet, titled by the chip's name.
   sheet: {
     show: (count) => `Show ${plural(count, "medicine", "medicines")}`,
     clear: "Clear",
     close: "Close filters",
-    // Sheets with more than one section; single sections take their heading.
-    titles: { all: "Filters" },
   },
   allYears: "All years",
   yearRange: (from, to) => (from === to ? `${from}` : `${from}–${to}`),
-  // The approval year filter (the sidebar's last section, owner decision 2026-09-29): a slim
+  // The approval year filter (the Approval year chip's popover or sheet, F · Spacious): a slim
   // one-colour histogram of every medicine with an approval date (aria-hidden; the summary is read
   // instead; a tooltip per bar, UI.years.tooltipTitle()) above a two-thumb slider.
   yearStrip: {
@@ -1274,12 +1291,6 @@ export const UI = {
   },
 
   offline: (date) => `Offline: data as of ${formatDate(date)}`,
-
-  // The splitter on the desktop sidebar's right edge (sidebar-resize.js); hint: its tooltip.
-  sidebar: {
-    resize: "Resize filters",
-    hint: "Drag or use the arrow keys to resize the filters; double-click to reset",
-  },
 
   // The header's theme button (theme.js; owner request 2026-09-28): an icon of the scheme shown; a
   // press shows the other one (nextTheme()). button: its name; hint: its tooltip (theme: the stored

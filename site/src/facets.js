@@ -227,12 +227,11 @@ export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahNa
   return values[0];
 }
 
-// A collapsed sidebar section's summary after its title (owner decision 2026-09-29 (2)), so no
-// active filter is hidden: its one value named as the sentence's token names it (a status by its
+// A section's active filter in a few words (an active filter chip's value, F · Spacious; before, a
+// collapsed sidebar section's summary): its one value named as the token names it (a status by its
 // label alone), several rows of one company by that company (lookups.mahSelection), else how many
 // are selected; null without a filter. dimension: a filter key (type, mod, atc, area, mah, status),
-// or "years": the approval year range (owner decision 2026-09-29, a section again), open ends at
-// the data's bounds, one year alone.
+// or "years": the approval year range, open ends at the data's bounds, one year alone.
 export function sectionSummary(dimension, state, lookups) {
   if (dimension === "years") {
     if (state.from === null && state.to === null) return null;
@@ -283,6 +282,31 @@ export function sentenceParts(state, lookups) {
     words.showing, typeToken, ...modality, words.in, ...atc, words.from, token("mah"), words.in, token("area"),
     ...years, words.with, statusToken, words.end,
   ];
+}
+
+// The filter chips (F · Spacious, phase 1; filter-bar.js), in this order; the modality chip only
+// once the modality data has loaded (lookups.modalityNames). The chip each token belongs to.
+const CHIP_KEYS = ["type", "mod", "atc", "area", "mah", "status", "years"];
+const TOKEN_CHIP = { from: "years", to: "years", year: "years", years: "years" };
+
+// One chip per filter dimension { key, active, value, tip, clears }: active and tip (the one
+// value's explanation, as the token's) from the filter tokens (sentenceParts()), so the chips follow
+// what the tokens say is a filter; value: the active filter named (sectionSummary(): a status by its
+// label, "2 selected"; two ATC classes are one chip), else null; clears: the state keys its remove
+// button and its popover's or sheet's Clear reset.
+export function filterChips(state, lookups) {
+  const tokens = sentenceParts(state, lookups).filter((part) => typeof part !== "string");
+  return CHIP_KEYS.filter((key) => key !== "mod" || lookups.modalityNames).map((key) => {
+    const own = tokens.filter((token) => (TOKEN_CHIP[token.key] ?? token.key) === key);
+    const active = own.some((token) => token.active);
+    return {
+      key,
+      active,
+      value: active ? sectionSummary(key, state, lookups) ?? own.map((token) => token.text).join(" ") : null,
+      tip: active && own.length === 1 ? own[0].tip ?? null : null,
+      clears: [...new Set(own.flatMap((token) => token.clears))],
+    };
+  });
 }
 
 // The conditions card (redesign 2026-09-29): one row per condition of the products, counted as the

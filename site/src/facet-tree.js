@@ -1,5 +1,5 @@
 // A facet section's expandable tree (the ATC classes, atc-tree.js; the therapeutic areas,
-// area-tree.js; the phone sheets borrow the section): nested lists, each node row an expand button
+// area-tree.js; a chip's popover or sheet borrows the section): nested lists, each node row an expand button
 // (none on leaves), a checkbox with the node's name and count, and, for some trees, a link after it.
 // Checked nodes combine with OR; a node under a checked one shows checked and disabled, one above a
 // checked node indeterminate. A search expands the tree to matching nodes (it does not filter).
@@ -58,8 +58,7 @@ function setNumber(badge, number) {
 //     shows.
 //   open: the keys open at first (the therapeutic areas' Diseases category); optional
 export function createFacetTree(section, spec, { onToggle }) {
-  // The section's collapsible body (facet-sections.js) holds its controls.
-  const body = section.querySelector(":scope > .facet-body") ?? section;
+  const body = section;
   const search = body.querySelector(".facet-search");
   const status = body.querySelector(".facet-live");
   const tree = body.querySelector(":scope > .atc-tree");
@@ -208,7 +207,7 @@ export function createFacetTree(section, spec, { onToggle }) {
         .attr("aria-describedby", tip?.id ?? null);
       if (spec.number) setNumber(item.select(":scope > .atc-row .tree-number"), spec.number(row.key, row.parent, model));
       // Its explainer (the data can arrive later), on hover and keyboard focus: on the whole row, so
-      // the tip's hover bridge beside the desktop sidebar never covers the row's link (style.css).
+      // the tip's hover bridge never covers the row's link (style.css).
       item.select(":scope > .atc-row").attr("data-tip", tip?.text ?? null).classed("mesh-tip", tip !== null)
         .classed("tap-tip", tip !== null && Boolean(tapTip));
       item.select(":scope > .atc-row .facet-name").text(text).classed("no-name", missing);

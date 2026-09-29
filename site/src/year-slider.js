@@ -1,11 +1,11 @@
-// The approval year filter (the sidebar's last section, index.html #facet-years; owner decision
-// 2026-09-29, it was a strip in the main column): a slim one-colour per-year histogram of every
+// The approval year filter (index.html #facet-years: the Approval year chip's popover or sheet, F ·
+// Spacious; before, the sidebar's last section): a slim one-colour per-year histogram of every
 // medicine with an approval date (aria-hidden, with a text summary; the status stacks are the
 // per-year chart's, Stack by Status), above a two-thumb range slider: two native range inputs over
 // one track; the thumbs take the pointer, and a click on the track moves the nearest thumb there
 // (no drag needed, WCAG 2.5.7). Each bar sits at its year's thumb position; a click on a bar
 // selects that year alone, on the one selected year's bar every year (the bars take no focus: the
-// slider is the keyboard path). It follows the sidebar's width (260-560px) or a sheet's.
+// slider is the keyboard path). It follows the popover's width or a sheet's; their Clear resets it.
 import * as d3 from "d3";
 import { UI } from "./labels.js";
 import { normalizeYearRange } from "./url.js";
@@ -64,14 +64,13 @@ export function yearTicks([first, last], pixelsPerYear) {
 }
 
 // root: #facet-years. years: [first, last] of the data. onRange({ from, to }): the year filter
-// (null = open end) changed. The sentence's year tokens focus a thumb (main.js TOKEN_TARGETS).
+// (null = open end) changed. Its chip's popover focuses the Start thumb (main.js FOCUS_TARGETS).
 export function createYearStrip(root, { years, onRange }) {
   const [first, last] = years;
   const chart = root.querySelector("#year-hist");
   const summary = root.querySelector("#year-hist-summary");
   const slider = root.querySelector(".year-slider");
   const fill = root.querySelector(".year-track-fill");
-  const reset = root.querySelector("#year-reset");
   const inputs = { start: root.querySelector("#year-start"), end: root.querySelector("#year-end") };
   const values = { start: root.querySelector("#year-start-value"), end: root.querySelector("#year-end-value") };
   let applied = { from: null, to: null }; // the filter as last rendered
@@ -103,7 +102,6 @@ export function createYearStrip(root, { years, onRange }) {
       .style("left", `${(100 * (start - first)) / (last - first)}%`)
       .style("right", `${(100 * (last - end)) / (last - first)}%`);
     bars.classed("in-range", (row) => row.year >= start && row.year <= end);
-    reset.disabled = start === first && end === last;
   }
 
   // settle: a key press, a click or the end of a drag applies the filter; dragging, it waits.
@@ -144,12 +142,6 @@ export function createYearStrip(root, { years, onRange }) {
       move(key, Math.min(last, Math.max(first, input.valueAsNumber + direction * PAGE_YEARS)), true);
     });
   }
-  reset.addEventListener("click", () => {
-    latest = { from: null, to: null };
-    show(first, last);
-    apply();
-    inputs.start.focus(); // the button is disabled now
-  });
   // A drag that ends on the year it started from fires no change event.
   for (const type of ["pointerup", "pointercancel"]) {
     window.addEventListener(type, () => {
@@ -216,7 +208,7 @@ export function createYearStrip(root, { years, onRange }) {
 
   return {
     // The dashboard's render: counts follow the other filters; the thumbs follow the state (the
-    // per-year chart's brush, the sentence's remove buttons, Reset) unless a drag is ahead of it.
+    // per-year chart's brush, the chip's remove button, Clear) unless a drag is ahead of it.
     render({ rows, from, to }) {
       applied = { from, to };
       draw(rows);

@@ -1,4 +1,4 @@
-// The facet sidebar's company section (companies part 2; the phone sheet borrows it): the tree of
+// The company section (companies part 2; its chip's popover or sheet borrows it): the tree of
 // company groups › companies › EMA holder names (companies.js, facet-tree.js), each row with its
 // name and count, a group's monogram badge, and a link to its company page. Checked rows combine
 // with OR (state.mah holds their filter values). The top groups first, then "Show 20 more". Also
