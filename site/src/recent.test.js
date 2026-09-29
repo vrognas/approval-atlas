@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RECENT_MAX, addRecent, createRecent, parseRecent, readRecent, recentEntry, recentGroup, storeRecent } from "./recent.js";
+import { RECENT_MAX, addRecent, createRecent, keptOpenedClass, openedClass, parseRecent, readRecent, recentEntry, recentGroup, recentLookupState, storeRecent } from "./recent.js";
 import { UI } from "./labels.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState } from "./url.js";
 
@@ -13,8 +13,12 @@ test("a viewed medicine, substance, condition, company or class is an entry; oth
   assert.deepEqual(recentEntry({ ...home, sub: "semaglutide" }, "Semaglutide"), { kind: "substances", value: "semaglutide", label: "Semaglutide" });
   assert.deepEqual(recentEntry({ ...home, cond: "D011565" }, "Psoriasis"), psoriasis);
   assert.deepEqual(recentEntry({ ...home, co: "g.roche" }, "Roche"), { kind: "companies", value: "g.roche", label: "Roche" });
-  // A drug class: the dashboard filtered to it alone, named by the dashboard (main.js classTitle).
-  assert.deepEqual(recentEntry({ ...home, ...classState("L04AC") }, "L04AC Interleukin Inhibitors"), { kind: "classes", value: "L04AC", label: "L04AC Interleukin Inhibitors" });
+  // A drug class opened as a lookup (opened: openedClass()): the dashboard filtered to it alone,
+  // named by the dashboard (main.js classTitle).
+  assert.deepEqual(recentEntry({ ...home, ...classState("L04AC") }, "L04AC Interleukin Inhibitors", "L04AC"), { kind: "classes", value: "L04AC", label: "L04AC Interleukin Inhibitors" });
+  // One class reached by a filter or a drill (not opened as a lookup) is not recorded.
+  assert.equal(recentEntry({ ...home, ...classState("L04AC") }, "L04AC Interleukin Inhibitors"), null);
+  assert.equal(recentEntry({ ...home, ...classState("L04AC") }, "L04AC Interleukin Inhibitors", "L04"), null);
   // Not yet named (its data still loading): nothing to record yet.
   assert.equal(recentEntry({ ...home, cond: "D011565" }, null), null);
   // An indication-text search, the overview, a filtered overview are not views to resume.
@@ -149,4 +153,62 @@ test("a view is added when it opens or is named, not on every render; Clear stic
   blocked.view(wegovy);
   blocked.view(psoriasis);
   assert.deepEqual(blocked.group().options.map((option) => option.label), ["Wegovy", "Clear"]);
+});
+
+// Review 2026-09-29: drilling the ATC breakdown (L › L01 › L01E › L01EX) or filtering to one class
+// with the chip or tree stored every level. A class is recorded only when a lookup opened it:
+// navigate() with classState() (the Drug classes suggestion, a ladder, the Try link, a recent pick).
+test("only a class opened as a lookup is recorded; a drill chain or a filter is not", () => {
+  assert.equal(openedClass(classState("L04AC")), "L04AC");
+  for (const patch of [{ med: "EMEA/H/C/005422" }, { area: ["C04"] }, structuredClone(DEFAULT_STATE), { ...classState("L04AC"), type: ["Generic"] }, { ...classState("L"), atc: ["L", "C"] }]) {
+    assert.equal(openedClass(patch), null, JSON.stringify(patch));
+  }
+  // Kept while that class is shown alone; any other view ends it (a drill down, a card, the overview).
+  const shown = { ...home, ...classState("L04AC") };
+  assert.equal(keptOpenedClass(shown, "L04AC"), "L04AC");
+  assert.equal(keptOpenedClass({ ...shown, atc: ["L04AC05"] }, "L04AC"), null);
+  assert.equal(keptOpenedClass({ ...shown, med: "EMEA/H/C/005422" }, "L04AC"), null);
+  assert.equal(keptOpenedClass(home, "L04AC"), null);
+  assert.equal(keptOpenedClass(shown, null), null);
+
+  // The drill chain from /?by=atc after Humira: each level named by the dashboard, none opened.
+  const recent = createRecent(storage());
+  recent.view({ kind: "medicines", value: "EMEA/H/C/000481", label: "Humira" });
+  let opened = null;
+  for (const code of ["L", "L01", "L01E", "L01EX"]) {
+    const state = { ...home, ...classState(code), by: "atc" };
+    opened = keptOpenedClass(state, opened);
+    recent.view(recentEntry(state, `${code} name`, opened));
+  }
+  recent.view(null); // back on the overview
+  assert.deepEqual(recent.group().options.map((option) => option.label), ["Humira", "Clear"]);
+  // Opened from a ladder: recorded; then drilled further: the drilled levels are not.
+  opened = openedClass(classState("L04AC"));
+  for (const code of ["L04AC", "L04AC05"]) {
+    const state = { ...home, ...classState(code) };
+    opened = keptOpenedClass(state, opened);
+    recent.view(recentEntry(state, `${code} name`, opened));
+  }
+  recent.view(null);
+  assert.deepEqual(recent.group().options.map((option) => option.label), ["L04AC name", "Humira", "Clear"]);
+});
+
+test("an entry's lookup state, to check it still resolves", () => {
+  assert.deepEqual(recentLookupState(wegovy), { ...DEFAULT_LOOKUP, med: "EMEA/H/C/005422" });
+  assert.deepEqual(recentLookupState(psoriasis), { ...DEFAULT_LOOKUP, cond: "D011565" });
+  assert.deepEqual(recentLookupState({ kind: "companies", value: "g.roche", label: "Roche" }), { ...DEFAULT_LOOKUP, co: "g.roche" });
+  assert.equal(recentLookupState({ kind: "classes", value: "L04AC", label: "L04AC" }), null);
+});
+
+test("entries that no longer resolve are left out of the list, not the storage", () => {
+  const kept = storage();
+  const gone = { kind: "medicines", value: "EMEA/H/C/999999", label: "Gone" };
+  const recent = createRecent(kept, (entry) => entry.value !== gone.value);
+  recent.view(wegovy);
+  recent.view(gone);
+  recent.view(null);
+  assert.deepEqual(recent.group().options.map((option) => option.label), ["Wegovy", "Clear"]);
+  assert.equal(JSON.parse(kept.items.get("approval-atlas:recent")).length, 2);
+  // Nothing that resolves: no group.
+  assert.equal(createRecent(storage({ "approval-atlas:recent": JSON.stringify([gone]) }), () => false).group(), null);
 });

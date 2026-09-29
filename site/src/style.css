@@ -4810,6 +4810,15 @@ table.activity {
   color: var(--link);
 }
 
+/* Phones (review 2026-09-29): every suggestion a 44px target, its text centred in it. */
+@media (max-width: 720px) {
+  .lookup [role="option"] {
+    min-height: 44px;
+    align-items: center;
+    align-content: center;
+  }
+}
+
 /* Step 2 (#2): an empty indication-text search says why. */
 .empty-state {
   margin: 8px 0 16px;

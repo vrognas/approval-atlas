@@ -153,6 +153,9 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     // New background data (conditions, drug classes) arrived: refresh an open list in place, or
     // show one for a query that had no matches yet.
     refresh() {
+      // An empty field shows the recently viewed list, which background data does not change: not
+      // rebuilt (review 2026-09-29: it reset the active option and repeated the announcement).
+      if (input.value.trim() === "") return;
       if (!listbox.hidden || (requested && input.value.trim().length >= 2)) renderList();
     },
     setText(text) {

@@ -65,7 +65,7 @@ import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { renderProtectionCalendar } from "./protection-calendar-card.js";
 import { calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
-import { createRecent, recentEntry } from "./recent.js";
+import { createRecent, keptOpenedClass, openedClass, recentEntry, recentLookupState } from "./recent.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
 import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
@@ -166,8 +166,16 @@ createThemeToggle($("#theme-toggle"), { onChange: () => lookup && scheduleRender
 const intro = createIntro($("#intro"), $("#intro-link"), { link: (...args) => lookup.link(...args), tryLine: $("#lookup-try") });
 
 // The viewer's recently viewed (recent.js; this device only): each medicine, substance, condition,
-// company or class view once named (updateTitle()), offered by the search while it is empty.
-const recent = createRecent();
+// company or class view once named (updateTitle()), offered by the search while it is empty; a class
+// only when a lookup opened it (navigate(); not a filter or a drill: openClass), and only entries
+// that still resolve (a condition or company kept until its data has loaded; a class always).
+let openClass = null;
+const recent = createRecent(undefined, (entry) => {
+  const lookupState = recentLookupState(entry);
+  if (!lookupState || !lookup) return true;
+  if ((entry.kind === "conditions" && !lookup.conditions()) || (entry.kind === "companies" && !lookup.companies())) return true;
+  return lookup.title(lookupState) !== null;
+});
 
 const files = new Map();
 function loadFile(file) {
@@ -253,7 +261,8 @@ function applyUrl() {
 function updateTitle() {
   const name = lookupView(state).kind !== null ? lookup.title(state) : dashboard?.title() ?? null;
   document.title = UI.pageTitle(name);
-  recent.view(recentEntry(state, name));
+  openClass = keptOpenedClass(state, openClass);
+  recent.view(recentEntry(state, name, openClass));
 }
 
 function render() {
@@ -314,6 +323,7 @@ function setState(patch, push = false) {
 // history entry, focus moves to its heading.
 function navigate(patch) {
   const next = { ...DEFAULT_LOOKUP, ...patch };
+  openClass = openedClass(next);
   focusAnswer = lookupView(next).kind === null;
   if (!focusAnswer) lookup.focusOnNextRender();
   setState(next, true);
