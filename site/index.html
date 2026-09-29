@@ -96,7 +96,7 @@
                      inline (F · Spacious mockup). -->
                 <p class="page-lead"><span id="headline" class="headline" tabindex="-1"></span><span id="status-scope" class="status-scope" hidden> <span id="status-scope-text"></span> <button id="status-include" class="lead-button" type="button"></button></span></p>
                 <p id="headline-dek" class="page-dek"></p>
-                <div id="class-path" class="class-path" hidden></div>
+                <div id="class-path" class="class-path neutral-badges" hidden></div>
               </div>
               <p id="explore-note" class="page-dek" hidden></p>
             </div>
@@ -150,11 +150,19 @@
         <div class="top-row-frame">
           <div class="top-row">
             <section class="chart-card" aria-labelledby="over-time-title">
-              <h2 id="over-time-title">Authorized over time</h2>
-              <p id="over-time-subtitle" class="muted"></p>
+              <div class="card-head">
+                <div class="card-title">
+                  <h2 id="over-time-title">Authorized over time</h2>
+                  <button class="info-button" type="button" aria-expanded="false" aria-controls="over-time-info" aria-describedby="over-time-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
+                </div>
+              </div>
+              <p id="over-time-takeaway" class="card-takeaway"></p>
+              <div id="over-time-info" class="card-info" hidden>
+                <p id="over-time-subtitle" class="muted"></p>
+                <p id="over-time-note" class="muted"></p>
+              </div>
               <ul id="over-time-legend" class="legend"></ul>
               <div id="over-time" class="chart"></div>
-              <p id="over-time-note" class="muted"></p>
             </section>
             <div id="tiles" class="tiles"></div>
           </div>
@@ -164,7 +172,7 @@
 
         <!-- Previews of the other tabs (overview-previews.js): three small cards side by side when
              there is room (their frame is a size container). -->
-        <div class="previews-frame">
+        <div class="previews-frame neutral-badges">
           <div class="previews">
             <section id="preview-companies" class="chart-card preview-card" aria-labelledby="preview-companies-title">
               <div class="preview-head">
@@ -195,9 +203,17 @@
         <div id="tab-protection" class="tab-panel" data-tab-panel="protection" hidden>
         <!-- Draft (loss-of-exclusivity calendar; protection-calendar-card.js): currently authorized
              medicines by the year their estimated market protection ends at the earliest. -->
-        <section id="protection-calendar" class="chart-card" aria-labelledby="pc-title">
-          <h2 id="pc-title"></h2>
-          <p id="pc-note" class="muted"></p>
+        <section id="protection-calendar" class="chart-card neutral-badges" aria-labelledby="pc-title">
+          <div class="card-head">
+            <div class="card-title">
+              <h2 id="pc-title"></h2>
+              <button class="info-button" type="button" aria-expanded="false" aria-controls="pc-info" aria-describedby="pc-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
+            </div>
+          </div>
+          <p id="pc-takeaway" class="card-takeaway"></p>
+          <div id="pc-info" class="card-info" hidden>
+            <p id="pc-note" class="muted"></p>
+          </div>
           <div id="pc-body"></div>
         </section>
         </div>
@@ -205,9 +221,12 @@
         <!-- Classes and areas: the breakdown (ATC, therapeutic area, company or modality) and the
              conditions card. -->
         <div id="tab-classes" class="tab-panel" data-tab-panel="classes" hidden>
-        <section class="chart-card" aria-labelledby="breakdown-title">
+        <section class="chart-card neutral-badges" aria-labelledby="breakdown-title">
           <div class="card-head">
-            <h2 id="breakdown-title"></h2>
+            <div class="card-title">
+              <h2 id="breakdown-title"></h2>
+              <button class="info-button" type="button" aria-expanded="false" aria-controls="breakdown-info" aria-describedby="breakdown-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
+            </div>
             <div class="card-head-tools">
               <div id="breakdown-by" class="segmented" role="group" aria-label="Break down by">
                 <button type="button" data-by="atc">ATC</button>
@@ -218,6 +237,7 @@
               <button class="view-options-button" type="button" aria-expanded="false" aria-controls="breakdown-options" aria-describedby="breakdown-title"><svg class="view-options-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4h7M13 4h1M2 12h1M7 12h7" /><circle cx="11" cy="4" r="2" /><circle cx="5" cy="12" r="2" /></svg><span class="view-options-text"></span><svg class="view-options-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></button>
             </div>
           </div>
+          <p id="breakdown-takeaway" class="card-takeaway"></p>
           <div id="breakdown-options" class="view-options" hidden>
             <div class="card-tools">
               <span id="breakdown-sort-label" class="tools-label"></span>
@@ -227,17 +247,27 @@
               </div>
             </div>
           </div>
-          <p id="breakdown-note" class="muted"></p>
+          <div id="breakdown-info" class="card-info" hidden>
+            <p id="breakdown-note" class="muted"></p>
+            <p id="breakdown-excluded" class="muted" hidden></p>
+          </div>
           <ul id="breakdown-legend" class="legend" hidden></ul>
           <div id="breakdown-path" class="breakdown-path" hidden></div>
           <div id="breakdown" class="breakdown"></div>
-          <p id="breakdown-excluded" class="muted" hidden></p>
         </section>
 
         <!-- The conditions of the medicines shown (every one without a filter), ranked by treatments or authorized medicines (conditions-card.js); each opens its condition page. -->
         <section id="conditions" class="chart-card conditions-card" aria-labelledby="conditions-title">
-          <h2 id="conditions-title"></h2>
-          <p id="conditions-subtitle" class="muted"></p>
+          <div class="card-head">
+            <div class="card-title">
+              <h2 id="conditions-title"></h2>
+              <button class="info-button" type="button" aria-expanded="false" aria-controls="conditions-info" aria-describedby="conditions-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
+            </div>
+          </div>
+          <p id="conditions-takeaway" class="card-takeaway"></p>
+          <div id="conditions-info" class="card-info" hidden>
+            <p id="conditions-subtitle" class="muted"></p>
+          </div>
           <table id="conditions-table" class="conditions-table" role="table" aria-labelledby="conditions-title" aria-describedby="conditions-subtitle" hidden></table>
           <button id="conditions-more" class="text-button" type="button" hidden></button>
           <p id="conditions-unlisted" class="muted"></p>
@@ -247,11 +277,15 @@
 
         <!-- Companies: who is active where, the top company groups by ATC group or therapeutic area group. -->
         <div id="tab-companies" class="tab-panel" data-tab-panel="companies" hidden>
-        <section class="chart-card" aria-labelledby="activity-title">
+        <section class="chart-card neutral-badges" aria-labelledby="activity-title">
           <div class="card-head">
-            <h2 id="activity-title"></h2>
+            <div class="card-title">
+              <h2 id="activity-title"></h2>
+              <button class="info-button" type="button" aria-expanded="false" aria-controls="activity-info" aria-describedby="activity-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
+            </div>
             <button class="view-options-button" type="button" aria-expanded="false" aria-controls="activity-options" aria-describedby="activity-title"><svg class="view-options-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4h7M13 4h1M2 12h1M7 12h7" /><circle cx="11" cy="4" r="2" /><circle cx="5" cy="12" r="2" /></svg><span class="view-options-text"></span><svg class="view-options-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></button>
           </div>
+          <p id="activity-takeaway" class="card-takeaway"></p>
           <div id="activity-options" class="view-options" hidden>
             <div class="card-tools">
               <span id="activity-by-label" class="tools-label"></span>
@@ -268,11 +302,13 @@
               </div>
             </div>
           </div>
-          <p id="activity-subtitle" class="muted"></p>
+          <div id="activity-info" class="card-info" hidden>
+            <p id="activity-subtitle" class="muted"></p>
+            <p id="activity-note" class="muted"></p>
+          </div>
           <div id="activity-table" class="activity-scroll"></div>
           <!-- Touch screens: the ATC columns' names (their tooltips never show there). -->
           <p id="activity-legend" class="muted activity-legend" aria-hidden="true"></p>
-          <p id="activity-note" class="muted"></p>
         </section>
         </div>
 
@@ -280,9 +316,13 @@
         <div id="tab-years" class="tab-panel" data-tab-panel="years" hidden>
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
-            <h2 id="chart-title">Approvals per year</h2>
+            <div class="card-title">
+              <h2 id="chart-title">Approvals per year</h2>
+              <button class="info-button" type="button" aria-expanded="false" aria-controls="chart-info" aria-describedby="chart-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
+            </div>
             <button class="view-options-button" type="button" aria-expanded="false" aria-controls="chart-options" aria-describedby="chart-title"><svg class="view-options-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4h7M13 4h1M2 12h1M7 12h7" /><circle cx="11" cy="4" r="2" /><circle cx="5" cy="12" r="2" /></svg><span class="view-options-text"></span><svg class="view-options-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></button>
           </div>
+          <p id="chart-takeaway" class="card-takeaway"></p>
           <div id="chart-options" class="view-options" hidden>
             <div class="card-tools">
               <span id="chart-stack-label" class="tools-label"></span>
@@ -295,19 +335,21 @@
               </div>
             </div>
           </div>
-          <p id="chart-note" class="muted"></p>
+          <div id="chart-info" class="card-info" hidden>
+            <p id="chart-note" class="muted"></p>
+            <p id="undated-note" class="muted"></p>
+          </div>
           <div class="legend-row">
             <ul id="legend" class="legend stack-legend"></ul>
             <output id="year-readout" class="readout" aria-live="polite"></output>
           </div>
           <div id="chart" class="chart"></div>
-          <p id="undated-note" class="muted"></p>
         </section>
         </div>
 
         <!-- Medicines: the table with Download CSV. -->
         <div id="tab-medicines" class="tab-panel" data-tab-panel="medicines" hidden>
-        <section class="chart-card table-card" aria-labelledby="table-title">
+        <section class="chart-card table-card neutral-badges" aria-labelledby="table-title">
           <!-- "Download CSV" (main.js, csv.js): every medicine the table lists; the caption says which. -->
           <div class="card-head">
             <h2 id="table-title">Medicines</h2>

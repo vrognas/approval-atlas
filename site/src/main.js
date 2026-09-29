@@ -92,7 +92,8 @@ import {
   togglePatch,
   withoutLookup,
 } from "./url.js";
-import { setupViewOptions } from "./view-options.js";
+import { activityTakeaway, breakdownTakeaway, conditionsTakeaway, overTimeTakeaway, protectionTakeaway, yearsTakeaway } from "./takeaways.js";
+import { setupCardInfo, setupViewOptions } from "./view-options.js";
 import { createYearStrip } from "./year-slider.js";
 
 // First load: enough for the search box. Everything else loads in the background or on demand.
@@ -1131,6 +1132,12 @@ function startDashboard(meta, [
   }
   // "View options": each card's secondary controls behind one disclosure (Hick's Law).
   setupViewOptions($("#app"), UI.viewOptions);
+  // (i): each card's method description behind one disclosure (F · Spacious, phase 3); under the
+  // title the card leads with its takeaway (takeaways.js), empty (hidden) when it has none.
+  setupCardInfo($("#app"), UI.cardInfo);
+  const setTakeaway = (selector, text) => {
+    $(selector).textContent = text ?? "";
+  };
 
   const includeEveryStatus = $("#status-include");
   includeEveryStatus.textContent = UI.statusScope.include;
@@ -1611,9 +1618,27 @@ function startDashboard(meta, [
   // has loaded). Treatments (step 4, #10): the authorized medicines' distinct substance sets,
   // equivalent spellings joined once they have loaded.
   const NO_EQUIVALENTS = new Map();
+  // The conditions of the medicines shown with the most treatments, as the conditions card ranks
+  // them (its default order): the card's takeaway and the Overview's preview; null until the
+  // lookup's conditions data has loaded (FAILED when it failed).
+  function conditionRanking(filtered, limit) {
+    const conditions = lookup.need("conditions");
+    if (conditions === undefined || conditions === FAILED) return conditions;
+    const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
+    return conditionRows(filtered, {
+      descriptorOf,
+      descriptors: conditions.descriptors,
+      within: state.area.length ? (term) => inAreas(meshTree, state.area, term) : null,
+      broad: meshTree.broad,
+      setKeyOf: (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents),
+      limit,
+    }).rows;
+  }
   function renderConditions(filtered, anyFilter) {
     const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
     const conditions = lookup.need("conditions");
+    const ranked = conditionRanking(filtered, 3);
+    setTakeaway("#conditions-takeaway", Array.isArray(ranked) ? conditionsTakeaway(ranked) : null);
     conditionsCard.render({
       products: filtered,
       anyFilter,
@@ -1655,6 +1680,8 @@ function startDashboard(meta, [
     // Every mode drills down (a tree each: ATC classes, therapeutic areas, companies, modalities).
     const drill = { area: areaBreakdown, mah: companyBreakdown, mod: modalityBreakdown };
     const tree = atc ?? drill[by](population);
+    // Its takeaway: the group with the most medicines among its bars (an ATC class with its code).
+    setTakeaway("#breakdown-takeaway", breakdownTakeaway(tree.rows, atc ? (row) => atcClassLabel(row.key, atcNames.get(row.key)) : undefined));
     d3.select("#breakdown-title").text(tree.title);
     d3.select("#breakdown-note").text(UI.breakdown[by].note).attr("hidden", UI.breakdown[by].note ? null : "");
     // One legend per card: the medicine types the stacked ATC or modality bars show.
@@ -1766,6 +1793,8 @@ function startDashboard(meta, [
       return { ...row, badge: companies.row(row.key), names: names.length ? UI.companies.legalNames(names, row.label) : null };
     });
     const rows = sortActivityRows(groups, sort.key, sort.direction);
+    // Its takeaway: the company with the most medicines (whatever the rows' sort) and its largest column.
+    setTakeaway("#activity-takeaway", activityTakeaway(groups, columns));
     d3.select("#activity-subtitle").text(rows.length ? UI.activity.subtitle(rows.length) : "");
     // Touch screens show no tooltips: the ATC columns' names under the table.
     d3.select("#activity-legend").text(columns.filter((column) => column.badge).map((column) => column.label).join(" · "));
@@ -1897,6 +1926,8 @@ function startDashboard(meta, [
     });
     const dated = withoutDateFilter.filter((product) => product.year !== null);
     const stack = yearStackSpec(dated);
+    // Its takeaway: the last full year's approvals (the chart ignores the year filter, and so does it).
+    setTakeaway("#chart-takeaway", yearsTakeaway(dated, calendarFirstYear - 1));
     const rows = yearStacks(dated, stack.keysOf, approvalYears);
     renderChart($("#chart"), { rows, series: stack.series, by: stack.by }, state, (range) => {
       keepInPlace($("#chart"));
@@ -1931,10 +1962,13 @@ function startDashboard(meta, [
     d3.select("#pc-note").text(UI.protectionCalendar.note);
     const protection = lookup.protection();
     if (protection === undefined || protection === FAILED) {
+      setTakeaway("#pc-takeaway", null);
       renderProtectionCalendar($("#pc-body"), { status: protection === FAILED ? "failed" : "loading" });
       return;
     }
     const { rows, orphanOnly, unclear, unclearLatest } = protectionEnding(authorizedNow, protection, dataDate);
+    // Its takeaway: how many may lose market protection (est.) within two years.
+    setTakeaway("#pc-takeaway", protectionTakeaway(rows, calendarFirstYear));
     renderProtectionCalendar($("#pc-body"), {
       status: "ready",
       buckets: calendarBuckets(rows, calendarFirstYear, 5),
@@ -1982,20 +2016,11 @@ function startDashboard(meta, [
       line: filtered.some((product) => product.group_key) ? null : UI.breakdown.empty,
     }));
     safely($("#preview-conditions"), () => {
-      const conditions = lookup.need("conditions");
-      if (conditions === undefined || conditions === FAILED) {
-        renderPreview(body("preview-conditions"), { line: conditions === FAILED ? UI.lookup.notAvailable : UI.lookup.loading });
+      const rows = conditionRanking(filtered, PREVIEW_ROWS);
+      if (!Array.isArray(rows)) {
+        renderPreview(body("preview-conditions"), { line: rows === FAILED ? UI.lookup.notAvailable : UI.lookup.loading });
         return;
       }
-      const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
-      const { rows } = conditionRows(filtered, {
-        descriptorOf,
-        descriptors: conditions.descriptors,
-        within: state.area.length ? (term) => inAreas(meshTree, state.area, term) : null,
-        broad: meshTree.broad,
-        setKeyOf: (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents),
-        limit: PREVIEW_ROWS,
-      });
       const ranked = rows.filter((row) => row.treatments > 0);
       renderPreview(body("preview-conditions"), {
         rows: ranked.map((row) => ({
@@ -2137,7 +2162,9 @@ function startDashboard(meta, [
       // chart marks the range instead; OVER_TIME_EXCEPT).
       safely(cardOf("#over-time"), () => {
         const history = filterProducts(products, predicates, OVER_TIME_EXCEPT);
-        renderOverTime($("#over-time"), authorizedSeries(history, seriesDates), state);
+        const series = authorizedSeries(history, seriesDates);
+        renderOverTime($("#over-time"), series, state);
+        setTakeaway("#over-time-takeaway", overTimeTakeaway(series));
         const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
         d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
       });
