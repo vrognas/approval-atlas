@@ -313,6 +313,53 @@ export const UI = {
   // A card's secondary controls (Sort, Stack by, Columns, Column order) behind one disclosure
   // (F · Spacious, phase 2; Hick's Law: each card opens in one view).
   viewOptions: "View options",
+  // A card's (i) button (F · Spacious, phase 3): its method description in a panel; the name says
+  // what it opens (the card's title describes it).
+  cardInfo: "About this card",
+  // Each dashboard card's one-sentence takeaway (F · Spacious, phase 3; takeaways.js), computed from
+  // the data it shows. Estimates say so; never "patent".
+  takeaways: {
+    // n: products authorized at the data's date; change: since a year before, or null.
+    overTime: (count, change) => {
+      const now = `${count === 0 ? "None" : formatCount(count)} authorized now`;
+      if (change === null) return `${now}.`;
+      if (change === 0) return `${now}, unchanged over the last 12 months.`;
+      return `${now}, ${change > 0 ? "up" : "down"} ${formatCount(Math.abs(change))} in the last 12 months.`;
+    },
+    // count: approvals in year (the last full year); biosimilars: how many of them.
+    years: (count, year, biosimilars) => {
+      if (count === 0) return `No approvals in ${year}.`;
+      const lead = `${plural(count, "approval", "approvals")} in ${year}`;
+      if (count === 1) return `${lead}, ${biosimilars ? "a biosimilar" : "not a biosimilar"}.`;
+      if (biosimilars === 0) return `${lead}, none of them biosimilars.`;
+      if (biosimilars === count) return `${lead}, all of them biosimilars.`;
+      return `${lead}, ${formatCount(biosimilars)} of them ${biosimilars === 1 ? "a biosimilar" : "biosimilars"}.`;
+    },
+    // names: the group(s), company(ies) tied for the most; count: their medicines each.
+    mostMedicines: (names, count) => {
+      if (names.length === 1) return `${names[0]} has the most medicines (${formatCount(count)}).`;
+      const who = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} groups`;
+      return `${who} have the most medicines (${formatCount(count)} each).`;
+    },
+    onlyGroup: (name, count) => `${name}: ${plural(count, "medicine", "medicines")}, the only group here.`,
+    // company: the company with the most medicines (count); column: its largest column (inColumn
+    // of them there), or null.
+    activity: (company, count, column, inColumn) => {
+      const lead = `${company} has the most medicines (${formatCount(count)})`;
+      if (!column) return `${lead}.`;
+      if (count === 1) return `${lead}, in ${column}.`;
+      return `${lead}, ${inColumn === count ? "all" : formatCount(inColumn)} of them in ${column}.`;
+    },
+    // ending: medicines whose market protection may end (est.) by the end of year, of running.
+    protection: (ending, running, year) => (ending
+      ? `${plural(ending, "medicine", "medicines")} may lose market protection (est.) by the end of ${year}.`
+      : `None of the ${plural(running, "medicine", "medicines")} with market protection running is estimated to lose it by the end of ${year}.`),
+    conditions: (names, count) => {
+      if (names.length === 1) return `${names[0]} has the most treatments (${formatCount(count)}).`;
+      const who = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} conditions`;
+      return `${who} have the most treatments (${formatCount(count)} each).`;
+    },
+  },
   // The Overview's previews of other tabs (overview-previews.js): each a few rows and a link to its
   // tab ("Companies tab").
   previews: {

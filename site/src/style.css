@@ -2417,6 +2417,109 @@ input::placeholder {
   display: none;
 }
 
+/* Card polish (F · Spacious, phase 3). Law of Common Region: every dashboard card's head is one row,
+   the title with its (i) button at the left, its tools (a mode switch, View options, Download CSV)
+   at the right, wrapping under it when short of room; then its takeaway, one sentence in the ink
+   (Selective Attention: the answer first), then the (i) panel when open. */
+.card-head {
+  min-height: 32px;
+}
+
+.card-head h2 {
+  margin: 0;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* (i) (view-options.js setupCardInfo()): a 28px round icon button (44px on phones), the icon in the
+   secondary ink, the accent while its panel is open. */
+.info-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.info-button:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.info-button[aria-expanded="true"] {
+  color: var(--accent);
+}
+
+.info-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.card-takeaway {
+  margin: 4px 0 8px;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+}
+
+.card-takeaway:empty {
+  display: none;
+}
+
+/* The (i) panel: the card's method description, the View options panel's hairline above it. */
+.card-info {
+  margin: 8px 0 12px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--grid);
+}
+
+.card-info[hidden] {
+  display: none;
+}
+
+.card-info .muted {
+  margin: 4px 0;
+}
+
+@media (max-width: 720px) {
+  .info-button {
+    width: 44px;
+    height: 44px;
+    margin: -8px -8px -8px -6px;
+  }
+}
+
+/* Von Restorff (phase 3): strong colour for status and protection only. In the cards where they are
+   decoration (the code or monogram already names the class or company), ATC and company badges are
+   the neutral slate (their level shades kept: they tell the levels apart); type badges keep their
+   hues, which are the charts' type colours, and so do the per-year chart's legend badges (its
+   series colours). slate-text on slate-1..5 is a checked pair (palette.test.js). */
+.neutral-badges :is(.letter-badge, .code-badge, .company-badge, .atc-badge) {
+  --hue-1: var(--slate-1);
+  --hue-2: var(--slate-2);
+  --hue-3: var(--slate-3);
+  --hue-4: var(--slate-4);
+  --hue-5: var(--slate-5);
+  --hue-mid: var(--slate-mid);
+  --hue-text: var(--slate-text);
+}
+
 @media (max-width: 720px) {
   .view-options-button {
     min-height: 44px;

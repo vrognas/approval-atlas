@@ -14,3 +14,21 @@ export function setupViewOptions(root, text) {
     });
   }
 }
+
+// (i) (F · Spacious, phase 3; Cognitive Load): each dashboard card's method description (the
+// captions and notes that used to sit under its title) behind one disclosure button beside its
+// title (index.html .info-button: aria-expanded, aria-controls its panel .card-info, described by
+// the card's title; name: label, "About this card"). A real button, so a tap, Enter or Space opens
+// it; open or closed is UI state, kept across renders.
+export function setupCardInfo(root, label) {
+  for (const button of root.querySelectorAll(".info-button")) {
+    const panel = document.getElementById(button.getAttribute("aria-controls"));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.addEventListener("click", () => {
+      const open = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(open));
+      panel.hidden = !open;
+    });
+  }
+}
