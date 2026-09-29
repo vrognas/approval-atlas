@@ -91,13 +91,15 @@ const MARK_PAIRS = [
 // thumb ring and selected track against the card and the unselected track; the approval-years
 // bars outside the range and the unselected track: a --field-border outline against the card and
 // their --raised fill. The sidebar splitter (sidebar-resize.js): its grip (--field-border) and its
-// line on hover, focus and drag (--accent) against the sidebar and the page.
+// line on hover, focus and drag (--accent) against the sidebar and the page. A pressed branch chip's
+// accent underline (area-chips.js; owner decision 2026-09-29) on the chip's fill.
 const NON_TEXT_PAIRS = [
   ...["--input", ...BACKGROUNDS].map((background) => ["--field-border", background]),
   ["--field-border", "--raised"],
   ["--accent", "--surface"],
   ["--accent", "--raised"],
   ["--accent", "--page"],
+  ["--accent", "--slate-2"],
 ];
 
 for (const [mode, tokens] of [["light", light], ["dark", dark]]) {

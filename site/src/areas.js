@@ -225,6 +225,42 @@ export function inAreas(tree, selected, key) {
   return selected.includes(key) || areaIncludedIn(tree, key, selected) !== null;
 }
 
+// Branch chips (owner decision 2026-09-29): in the tables and on the medicine card each condition is
+// followed by chips for its MeSH branches, each a filter toggle. branchRows:
+// ema_therapeutic_area_branches.json. of(term): its branch codes, distinct, in code order (a root
+// tag's: its branch; none for a term without a branch); name(code): the branch's name.
+export function termBranches(branchRows) {
+  const codes = new Map();
+  const names = new Map();
+  for (const row of branchRows) {
+    if (row.branch === null) continue;
+    codes.set(row.therapeutic_area_mesh, [...(codes.get(row.therapeutic_area_mesh) ?? []), row.branch]);
+    names.set(row.branch, row.branch_name ?? row.branch);
+  }
+  for (const [term, list] of codes) codes.set(term, [...new Set(list)].sort(byCode));
+  return { of: (term) => codes.get(term) ?? [], name: (code) => names.get(code) ?? code };
+}
+
+// The chips of a term's branches: at most BRANCH_CHIPS, the rest named behind "+n".
+const BRANCH_CHIPS = 2;
+export function branchChips(codes) {
+  return { shown: codes.slice(0, BRANCH_CHIPS), rest: codes.slice(BRANCH_CHIPS) };
+}
+
+// A chip is pressed when its branch is within the selection: selected, or under its selected
+// category (a branch's only ancestor, its code's letter), as inAreas(), without the tree (the
+// lookup's cards have none).
+export function branchSelected(selected, branch) {
+  return selected.includes(branch) || selected.includes(branch[0]);
+}
+
+// The selected category a chip's branch is included in (pressed, not selected itself), else null:
+// as the tree's included rows (areaCheckState() "included", checked and disabled), a click on it
+// does nothing (review 2026-09-29: it narrowed to the branch, the chip still pressed).
+export function branchIncludedIn(selected, branch) {
+  return !selected.includes(branch) && selected.includes(branch[0]) ? branch[0] : null;
+}
+
 // The tree's rows: the keys with medicines (counts: key -> medicines) plus the selection and
 // everything above it, so a selection always shows.
 export function areaTreeKeys(tree, counts, selected) {
