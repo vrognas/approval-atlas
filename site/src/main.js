@@ -64,6 +64,7 @@ import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance
 import { createSheet } from "./sheet.js";
 import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
+import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
 import { besidePanel, tipAbove, tipHeightEstimate, tipShift } from "./tips.js";
 import {
@@ -150,6 +151,11 @@ const STACK_OTHER = { color: "var(--raised)", stroke: "var(--field-border)" };
 const STACK_UNPLACED = { ...STACK_OTHER, hatch: true };
 
 const $ = (selector) => document.querySelector(selector);
+
+// The header's theme button (Auto, Light, Dark). The charts' colours are CSS var()s, so they follow
+// a new theme at once; a render (as after a resize) keeps anything drawn from the tokens in step
+// (none before the search's data has loaded).
+createThemeToggle($("#theme-toggle"), { onChange: () => lookup && scheduleRender() });
 
 // Desktop: the sidebar's width, the viewer's stored one set now, before the first render, so the
 // layout does not jump. The charts wait for a drag's end to follow the new width (resizeObserver).
@@ -503,9 +509,10 @@ function renderAbout() {
   for (const anchor of document.querySelectorAll('footer a[target="_blank"]')) markExternal(anchor);
 }
 
-// The colour tokens of both modes (style.css :root and its prefers-color-scheme: dark override),
-// read once from the page's style sheets, so companySeriesColors() can keep the company stacks apart
-// in either mode. Empty maps when the sheets cannot be read (the colours are then not compared).
+// The colour tokens of both modes (style.css :root and its dark override, read from the chosen Dark
+// theme's block, which equals the device's dark block), read once from the page's style sheets, so
+// companySeriesColors() can keep the company stacks apart in either mode, whichever is shown. Empty
+// maps when the sheets cannot be read (the colours are then not compared).
 let palette = null;
 function readPalette() {
   if (palette) return palette;
@@ -523,9 +530,7 @@ function readPalette() {
     }
     for (const rule of rules) {
       if (rule.selectorText === ":root") read(rule, light);
-      else if (rule.media?.mediaText.includes("prefers-color-scheme: dark")) {
-        for (const inner of rule.cssRules) if (inner.selectorText === ":root") read(inner, dark);
-      }
+      else if (rule.selectorText === ':root[data-theme="dark"]') read(rule, dark);
     }
   }
   palette = { light, dark: { ...light, ...dark } };

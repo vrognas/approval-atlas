@@ -167,7 +167,7 @@ test("company badges: brand hues for the largest groups, a stable damped hue (ne
 test("style.css defines each brand hue's fill, mid and text in both modes, and its hue class", () => {
   const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
   const light = css.match(/:root\s*\{([^}]*)\}/)[1];
-  const dark = css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{([^}]*)\}/)[1];
+  const dark = css.match(/@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)\s*\{([^}]*)\}/)[1];
   const missing = Object.values(BRAND_HUES).flatMap(({ hue }) => ["1", "mid", "text"].flatMap((step) =>
     [[light, "light"], [dark, "dark"]].filter(([block]) => !block.includes(`--${hue}-${step}:`)).map(([, mode]) => `${mode} --${hue}-${step}`)));
   assert.deepEqual(missing, []);

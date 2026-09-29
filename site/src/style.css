@@ -98,8 +98,11 @@
   --range-band: rgba(43, 74, 49, 0.1);
 }
 
+/* Dark: the device's dark scheme under Auto (no data-theme), and the viewer's Dark from the header's
+   theme button (data-theme on <html>, theme.js; public/theme-init.js sets it before the first
+   paint). The two blocks hold the same declarations: edit both (palette.test.js checks they match). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --page: #1b1c19;
     --surface: #232420;
@@ -166,6 +169,74 @@
     --out-of-range: #4a4b43;
     --range-band: rgba(167, 196, 160, 0.12);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #1b1c19;
+  --surface: #232420;
+  --raised: #2c2d28;
+  --input: #232420;
+  --grid: #383932;
+  --axis: #4a4b43;
+  --field-border: #76776e;
+  --wash: rgba(232, 232, 225, 0.06);
+  --separator: rgba(0, 0, 0, 0.3);
+  --ink: #e8e8e1;
+  --ink-secondary: #bdbdb2;
+  --muted: #9c9c92;
+  --link: #b9c4a4;
+  --link-underline: #7f8a6e;
+  --link-hover: #d2d9c4;
+  --accent: #a7c4a0;
+  --on-accent: #1b1c19;
+  --accent-wash: #343a31;
+  --mark: #3a341d;
+  --status-ended-text: #f0b9ae;
+  --status-pending-text: #eadfbc;
+  --heat-1: #3d4239; --heat-2: #566051; --heat-3: #7a8c74; --heat-4: #8ea688; --heat-5: #a7c4a0;
+  --heat-1-text: var(--ink); --heat-2-text: var(--ink); --heat-3-text: var(--on-accent); --heat-4-text: var(--on-accent); --heat-5-text: var(--on-accent);
+  /* Dark fills step 8% toward the hue's mid per level; mids lightened 12% toward white. */
+  --green-1: #28402a; --green-2: #2e472f; --green-3: #344e35; --green-4: #3a563a; --green-5: #3f5d40; --green-mid: #719a6e; --green-text: #c6e1bf;
+  --teal-1: #1e3f3a; --teal-2: #244641; --teal-3: #294e49; --teal-4: #2f5550; --teal-5: #345d57; --teal-mid: #639c95; --teal-text: #b5ddd5;
+  --blue-1: #2a3a52; --blue-2: #31415a; --blue-3: #384961; --blue-4: #3f5069; --blue-5: #465770; --blue-mid: #8095b1; --blue-text: #c3d3ea;
+  --indigo-1: #2e3057; --indigo-2: #34375f; --indigo-3: #3b3d67; --indigo-4: #41446e; --indigo-5: #484b76; --indigo-mid: #7f84b8; --indigo-text: #cccef2;
+  --purple-1: #403648; --purple-2: #473c50; --purple-3: #4e4159; --purple-4: #554761; --purple-5: #5c4d6a; --purple-mid: #987db2; --purple-text: #ddd2e8;
+  --plum-1: #463642; --plum-2: #4e3c4a; --plum-3: #564152; --plum-4: #5e4759; --plum-5: #654c61; --plum-mid: #a87ca3; --plum-text: #e4cfe1;
+  --pink-1: #4a2536; --pink-2: #532c3e; --pink-3: #5c3346; --pink-4: #653a4e; --pink-5: #6e4155; --pink-mid: #b97c98; --pink-text: #f0c3d5;
+  --red-1: #4e3430; --red-2: #573935; --red-3: #603f3a; --red-4: #694440; --red-5: #724945; --red-mid: #be7771; --red-text: #ebceca;
+  --orange-1: #4f3b28; --orange-2: #58412c; --orange-3: #614830; --orange-4: #6a4e34; --orange-5: #735438; --orange-mid: #c18a5b; --orange-text: #ecd5bf;
+  --gold-1: #473a1a; --gold-2: #50411d; --gold-3: #584821; --gold-4: #614f24; --gold-5: #695627; --gold-mid: #b29044; --gold-text: #ead9a8;
+  --olive-1: #3f4229; --olive-2: #46492d; --olive-3: #4d5132; --olive-4: #545836; --olive-5: #5b5f3b; --olive-mid: #959d60; --olive-text: #dbddc0;
+  --brown-1: #40362a; --brown-2: #473c2f; --brown-3: #4e4133; --brown-4: #564738; --brown-5: #5d4d3c; --brown-mid: #9a7d63; --brown-text: #dfd2c4;
+  --sky-1: #304248; --sky-2: #354950; --sky-3: #3a5059; --sky-4: #3f5861; --sky-5: #445f6a; --sky-mid: #6e9cb2; --sky-text: #c9dde7;
+  --slate-1: #3a3c38; --slate-2: #40423e; --slate-3: #474944; --slate-4: #4d4f4b; --slate-5: #545651; --slate-mid: #8a8d86; --slate-text: #d8d9d5;
+  --co-roche-1: #2b3650; --co-roche-mid: #7d91c0; --co-roche-text: #cad4ed;
+  --co-novartis-1: #523f28; --co-novartis-mid: #c6a276; --co-novartis-text: #edddc9;
+  --co-pfizer-1: #2b2f4f; --co-pfizer-mid: #7e84be; --co-pfizer-text: #cbceec;
+  --co-astrazeneca-1: #4c2e3f; --co-astrazeneca-mid: #b983a2; --co-astrazeneca-text: #e9cddd;
+  --co-sanofi-1: #3e304b; --co-sanofi-mid: #a086b7; --co-sanofi-text: #dccfe8;
+  --co-gsk-1: #523428; --co-gsk-mid: #c38d79; --co-gsk-text: #edd3c9;
+  --co-msd-1: #2a514e; --co-msd-mid: #7bc1bd; --co-msd-text: #c9edeb;
+  --co-novo-nordisk-1: #2a3851; --co-novo-nordisk-mid: #7b95c1; --co-novo-nordisk-text: #c9d7ed;
+  --co-lilly-1: #522b28; --co-lilly-mid: #c37d79; --co-lilly-text: #edcbc9;
+  --co-bms-1: #2b4050; --co-bms-mid: #7da4c0; --co-bms-text: #cadeed;
+  --co-jnj-1: #522e28; --co-jnj-mid: #c68176; --co-jnj-text: #edcec9;
+  --co-abbvie-1: #2e364c; --co-abbvie-mid: #8392b9; --co-abbvie-text: #cdd5e9;
+  --co-bayer-1: #3e4d2d; --co-bayer-mid: #a0bb81; --co-bayer-text: #dceacc;
+  --co-boehringer-1: #2d4d44; --co-boehringer-mid: #81bbaa; --co-boehringer-text: #cceae1;
+  --co-takeda-1: #502b2d; --co-takeda-mid: #c07d81; --co-takeda-text: #edcacc;
+  --co-gilead-1: #4e2c32; --co-gilead-mid: #bd7f8a; --co-gilead-text: #ebcbd1;
+  --co-amgen-1: #283d52; --co-amgen-mid: #799ec3; --co-amgen-text: #c9dbed;
+  --co-teva-1: #332f4c; --co-teva-mid: #8b84b8; --co-teva-text: #d1cee9;
+  --co-sandoz-1: #2c3b4e; --co-sandoz-mid: #7f9abd; --co-sandoz-text: #cbd9eb;
+  --co-viatris-1: #2b4a50; --co-viatris-mid: #7db4c0; --co-viatris-text: #cae7ed;
+  --co-krka-1: #2b5039; --co-krka-mid: #7cc096; --co-krka-text: #caedd7;
+  --co-csl-1: #52282a; --co-csl-mid: #c67679; --co-csl-text: #edc9cb;
+  --co-gedeon-richter-1: #2a3951; --co-gedeon-richter-mid: #7291c0; --co-gedeon-richter-text: #c9d8ed;
+  --de-emphasis: #4a4b43;
+  --out-of-range: #4a4b43;
+  --range-band: rgba(167, 196, 160, 0.12);
 }
 
 /* A hue class hands its level shades, mid and text colour to badges and bars inside it. */
@@ -279,6 +350,63 @@ h1 a {
 
 h1 a:hover {
   text-decoration: underline;
+}
+
+/* The wordmark and the theme button (theme.js) on one line; the button goes under the wordmark
+   when the line is too short for both (user text spacing, a narrow sidebar). */
+.brand-row {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 8px;
+}
+
+/* Icon only (its name and tooltip say the theme): 32px, 44px on phones; negative margins keep the
+   line's height and line the icon up with the text's right edge. */
+.theme-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -2px -6px -2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.theme-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-icon .theme-icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+@media (max-width: 720px) {
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+    margin: -8px -8px -8px 0;
+  }
 }
 
 .meta {
@@ -1284,10 +1412,15 @@ input::placeholder {
   background: rgba(40, 40, 40, 0.45);
 }
 
+/* Dark under Auto or chosen (theme.js), as the tokens. */
 @media (prefers-color-scheme: dark) {
-  .sheet::backdrop {
+  :root:not([data-theme="light"]) .sheet::backdrop {
     background: rgba(0, 0, 0, 0.6);
   }
+}
+
+:root[data-theme="dark"] .sheet::backdrop {
+  background: rgba(0, 0, 0, 0.6);
 }
 
 /* Title, Clear, then a visible 44px close button (no grab handle: the sheet does not swipe). */

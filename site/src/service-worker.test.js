@@ -111,12 +111,43 @@ test("activate deletes earlier builds' asset caches and legacy caches but keeps 
 
 test("URLs sent by the page go to the asset cache or the data cache", async () => {
   const { listeners, calls } = loadWorker([]);
-  await dispatch(listeners.message, ["/assets/index-a1.js", "/data/ema_search_index.json", "https://www.ema.europa.eu/x.pdf"]);
+  await dispatch(listeners.message, ["/assets/index-a1.js", "/data/ema_search_index.json", "/theme-init.js", "https://www.ema.europa.eu/x.pdf"]);
   assert.deepEqual(calls.added.sort(), [
     ["approval-atlas-assets-current", "https://example.org/assets/index-a1.js"],
     ["approval-atlas-data", "https://example.org/"],
     ["approval-atlas-data", "https://example.org/data/ema_search_index.json"],
+    ["approval-atlas-data", "https://example.org/theme-init.js"],
   ]);
+});
+
+// The theme script (public/theme-init.js) holds up the first paint: a cached copy answers at once,
+// however slow the network, and the network's answer is kept for the next load.
+const THEME_SCRIPT = "https://example.org/theme-init.js";
+
+test("the theme script: a cached copy answers at once, and the network refreshes the cache", async () => {
+  const network = deferred();
+  const { listeners, calls, timers } = loadWorker([], { stored: new Map([[THEME_SCRIPT, response("cached script")]]), fetch: () => network.promise });
+  const event = fetchEvent(listeners.fetch, THEME_SCRIPT);
+  assert.equal((await event.response).body, "cached script");
+  assert.deepEqual(timers, []);
+  network.resolve(response("fresh script"));
+  await event.settled();
+  assert.deepEqual(calls.put, [["approval-atlas-data", THEME_SCRIPT, "fresh script"]]);
+});
+
+test("the theme script: without a cached copy, the network answers and is cached", async () => {
+  const { listeners, calls } = loadWorker([], { fetch: async () => response("fresh script") });
+  const event = fetchEvent(listeners.fetch, THEME_SCRIPT);
+  assert.equal((await event.response).body, "fresh script");
+  await event.settled();
+  assert.deepEqual(calls.put, [["approval-atlas-data", THEME_SCRIPT, "fresh script"]]);
+});
+
+test("the theme script: offline with a cached copy, that copy answers", async () => {
+  const { listeners } = loadWorker([], { stored: new Map([[THEME_SCRIPT, response("cached script")]]) });
+  const event = fetchEvent(listeners.fetch, THEME_SCRIPT);
+  assert.equal((await event.response).body, "cached script");
+  await event.settled();
 });
 
 // Conference Wi-Fi (#13): a slow network must not hang the page when a copy is at hand.

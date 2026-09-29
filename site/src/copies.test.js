@@ -279,6 +279,66 @@ test("followsReference: a hybrid whose estimate follows a reference, or finds no
   assert.equal(followsReference(hyrimoz, undefined).copy, true);
 });
 
+// Backlog (step 4 review): copies EMA does not flag, checked by hand (ema_curated_copies.json,
+// real rows 2026-09-29), count as their copy type on the originator's card: Tuznue (EMA type
+// Other) is a biosimilar of Herceptin, Sugammadex Adroiq a generic of Bridion. A curated hybrid is
+// neither (Liraglutide STADA on Victoza's card); the curated type wins over EMA's flag (Riulvy,
+// flagged Generic, is a hybrid of Tecfidera).
+const curatedCopy = (row, copy_type, reference) => [row.ema_product_number, {
+  ema_product_number: row.ema_product_number, copy_type, reference_product_number: reference?.ema_product_number ?? null,
+  reference_name: reference?.name_of_medicine ?? null, source: "curated",
+}];
+const HERCEPTIN = medicine("EMEA/H/C/000278", "Herceptin", ["trastuzumab"], "Other", "Authorised", "2000-08-28");
+const TRASTUZUMAB = [
+  HERCEPTIN,
+  medicine("EMEA/H/C/004323", "Ontruzant", ["trastuzumab"], "Biosimilar", "Authorised", "2017-11-15"),
+  medicine("EMEA/H/C/002575", "Herzuma", ["trastuzumab"], "Biosimilar", "Authorised", "2018-02-09"),
+  medicine("EMEA/H/C/005066", "Tuznue", ["trastuzumab"], "Biosimilar", "Application withdrawn", null),
+  medicine("EMEA/H/C/006252", "Tuznue", ["trastuzumab"], "Other", "Authorised", "2024-09-19"),
+];
+const TUZNUE = TRASTUZUMAB[4];
+const BRIDION = medicine("EMEA/H/C/000885", "Bridion", ["sugammadex"], "Other", "Authorised", "2008-07-25");
+const SUGAMMADEX = [
+  BRIDION,
+  medicine("EMEA/H/C/005403", "Sugammadex Mylan", ["sugammadex"], "Generic", "Authorised", "2021-11-15"),
+  medicine("EMEA/H/C/006046", "Sugammadex Adroiq", ["sugammadex"], "Other", "Authorised", "2023-05-26"),
+];
+const CURATED = new Map([
+  curatedCopy(TUZNUE, "biosimilar", HERCEPTIN), curatedCopy(SUGAMMADEX[2], "generic", BRIDION), curatedCopy(LIRAGLUTIDE_STADA, "hybrid", VICTOZA),
+]);
+const COMPANY = new Map([
+  ["EMEA/H/C/004323", "g.samsung-bioepis"], ["EMEA/H/C/002575", "g.celltrion"], [TUZNUE.ema_product_number, "g.prestige-biopharma"],
+  ["EMEA/H/C/005403", "g.viatris"], ["EMEA/H/C/006046", "g.extrovis"],
+]);
+const companyOf = (number) => COMPANY.get(number) ?? null;
+const counts = (summary) => summary.copies.map(({ type, count, companies, first }) => ({ type, count, companies, first: first.name_of_medicine }));
+
+test("copiesSummary: curated generics and biosimilars count on the originator's card", () => {
+  assert.deepEqual(counts(copiesSummary(HERCEPTIN, TRASTUZUMAB, companyOf, CURATED)), [{ type: "Biosimilar", count: 3, companies: 3, first: "Ontruzant" }]);
+  assert.deepEqual(counts(copiesSummary(BRIDION, SUGAMMADEX, companyOf, CURATED)), [{ type: "Generic", count: 2, companies: 2, first: "Sugammadex Mylan" }]);
+  // Without the curated file (older data, not loaded yet): EMA's flags only.
+  assert.deepEqual(counts(copiesSummary(HERCEPTIN, TRASTUZUMAB, companyOf)), [{ type: "Biosimilar", count: 2, companies: 2, first: "Ontruzant" }]);
+  assert.deepEqual(counts(copiesSummary(BRIDION, SUGAMMADEX, companyOf, null)), [{ type: "Generic", count: 1, companies: 1, first: "Sugammadex Mylan" }]);
+  // The curated copy's own card reads as a copy's.
+  assert.equal(copiesSummary(TUZNUE, TRASTUZUMAB, companyOf, CURATED).copy, true);
+  assert.equal(copiesSummary(TUZNUE, TRASTUZUMAB, companyOf).copy, false);
+});
+
+test("copiesSummary: a curated hybrid is no generic or biosimilar, whatever EMA's flag", () => {
+  const liraglutide = [VICTOZA, SAXENDA, LIRAGLUTIDE_STADA];
+  assert.deepEqual(copiesSummary(VICTOZA, liraglutide, groupOf, CURATED).copies, []);
+  const riulvy = medicine("EMEA/H/C/006427", "Riulvy", ["tegomil fumarate"], "Generic", "Authorised", "2025-07-28");
+  // Riulvy is tegomil fumarate's only medicine; a made-up later one shows how it counts.
+  const later = medicine("X3", "Later", ["tegomil fumarate"], "Other", "Authorised", "2026-01-01");
+  const hybrid = new Map([curatedCopy(riulvy, "hybrid", null)]);
+  assert.deepEqual(copiesSummary(later, [riulvy, later], groupOf, hybrid).copies, []);
+  // Its own card still reads as a copy's, as every curated copy's (Liraglutide STADA's too).
+  assert.equal(copiesSummary(riulvy, [riulvy, later], groupOf, hybrid).copy, true);
+  assert.equal(copiesSummary(LIRAGLUTIDE_STADA, liraglutide, groupOf, CURATED).copy, true);
+  // EMA's flag alone: a generic.
+  assert.deepEqual(counts(copiesSummary(later, [riulvy, later], groupOf)).map(({ type, count }) => ({ type, count })), [{ type: "Generic", count: 1 }]);
+});
+
 // R names a medicine's substances by its active substance field where EMA's INN field repeats the
 // medicine's name (Vysribli, a denosumab biosimilar; real row of ema_search_index.json 2026-09-28):
 // it joins denosumab's set.

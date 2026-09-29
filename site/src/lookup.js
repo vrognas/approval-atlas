@@ -10,6 +10,7 @@ import {
   copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup,
   substanceSetCount,
 } from "./copies.js";
+import { FAILED, createDatasets } from "./datasets.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import {
@@ -37,7 +38,6 @@ import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSub
 import { renderTimeline } from "./timeline.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
 
-const FAILED = Symbol("failed");
 const formatNumber = new Intl.NumberFormat("en-US").format;
 
 function el(tag, props, ...children) {
@@ -215,7 +215,6 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       ? { tree: buildModalityTree(taxonomy), byProduct: groupBy(rows, "ema_product_number") }
       : null)],
   };
-  const values = new Map();
   const listeners = [];
   let lastState = null;
   let renderedKey = null;
@@ -227,20 +226,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     if (timeline && timeline.container.clientWidth !== timeline.width) drawTimeline();
   });
 
-  // Value, FAILED, or undefined while loading (the first call starts the load). A file given as
-  // { optional } is null when it fails to load (a newer file missing from older data).
-  const loadRows = (file) => (typeof file === "string" ? loadFile(file) : loadFile(file.optional).catch(() => null));
-  function need(name) {
-    if (values.has(name)) return values.get(name);
-    values.set(name, undefined);
-    const [files, build] = DATASETS[name];
-    Promise.all(files.map(loadRows)).then((rows) => build(...rows), () => FAILED).then((value) => {
-      values.set(name, value);
-      for (const listener of listeners) listener(name);
-      if (lastState) render(lastState, true);
-    });
-    return undefined;
-  }
+  // need(name): the value, FAILED, or undefined while loading (the first call starts the load). A
+  // file given as { optional } is null when it fails to load (a newer file missing from older
+  // data), and is asked for once more by the next card or list that uses it (datasets.js).
+  const datasets = createDatasets(DATASETS, loadFile, (name) => {
+    for (const listener of listeners) listener(name);
+    if (lastState) render(lastState, true);
+  });
+  const { need } = datasets;
   const ready = (value) => value !== undefined && value !== FAILED;
   const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
@@ -635,8 +628,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     const groupOf = ready(companies) ? (number) => companies.entry(number)?.group?.key ?? null : null;
     // The set's first approval, named as the protection estimate names it where it can be; a hybrid
     // following a reference reads as a copy (followsReference()).
+    // Copies EMA does not flag, checked by hand, count as their type (Herceptin's Tuznue).
     const protectionRow = ready(protection) ? protection.byProduct.get(row.ema_product_number) : undefined;
-    const summary = followsReference(copiesSummary(row, setRowsOf(row, equivalents), groupOf), protectionRow);
+    const curatedCopies = ready(protection) ? protection.curatedCopies : null;
+    const summary = followsReference(copiesSummary(row, setRowsOf(row, equivalents), groupOf, curatedCopies), protectionRow);
     // A twin's first approval (Humira's Trudexa) is not named: the copies line covers it.
     const { copies, first, same } = copiesLinePlan(row, summary, firstApprovalShown(row, summary, protectionRow, referenceDate(protectionRow)));
     const lines = [];
@@ -1252,8 +1247,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     const sameView = key === renderedKey;
     if (!force && sameView) return;
     renderedKey = key;
-    // A new view retries data that failed to load (not forced re-renders: that would loop).
-    if (!force) for (const [name, value] of values) if (value === FAILED) values.delete(name);
+    // A new view retries data that failed to load, and, once, an optional file that was missing,
+    // each when a card or list next needs it (not forced re-renders: that would loop).
+    if (!force) datasets.retry();
     // A new search, substance or condition starts at Authorized only; opening a medicine card
     // and coming back keeps the choice.
     if (view.kind !== null && view.kind !== "medicine" && key !== showAllKey) {
@@ -1305,8 +1301,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     const { kind, value } = lookupView(state);
     if (kind === "medicine") return index.byNumber.get(value)?.name_of_medicine ?? null;
     if (kind === "substance") return index.substances.get(value)?.name ?? null;
-    if (kind === "condition") return ready(values.get("conditions")) ? values.get("conditions").descriptors.get(value)?.name ?? null : null;
-    if (kind === "company") return ready(values.get("companies")) ? values.get("companies").row(value)?.name ?? null : null;
+    if (kind === "condition") return ready(datasets.peek("conditions")) ? datasets.peek("conditions").descriptors.get(value)?.name ?? null : null;
+    if (kind === "company") return ready(datasets.peek("companies")) ? datasets.peek("companies").row(value)?.name ?? null : null;
     return kind === "text" ? UI.textTitle(value) : null;
   }
 
@@ -1314,21 +1310,21 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     render,
     need,
     title: viewTitle,
-    conditions: () => (ready(values.get("conditions")) ? values.get("conditions") : null),
+    conditions: () => (ready(datasets.peek("conditions")) ? datasets.peek("conditions") : null),
     // Company groups (the "Companies" suggestions): null until need("companies") has loaded them.
-    companies: () => (ready(values.get("companies")) ? values.get("companies") : null),
+    companies: () => (ready(datasets.peek("companies")) ? datasets.peek("companies") : null),
     // ema_medicines rows by product (EMA's opinion in the suggestions): null until need("medicines").
-    medicines: () => (ready(values.get("medicines")) ? values.get("medicines") : null),
+    medicines: () => (ready(datasets.peek("medicines")) ? datasets.peek("medicines") : null),
     // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
-    documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
+    documents: () => (ready(datasets.peek("documents")) ? datasets.peek("documents") : null),
     // MeSH scope notes (buildMeshNotes()): null until need("meshNotes") has loaded them (or failed).
-    meshNotes: () => (ready(values.get("meshNotes")) ? values.get("meshNotes") : null),
+    meshNotes: () => (ready(datasets.peek("meshNotes")) ? datasets.peek("meshNotes") : null),
     // Substance equivalents (substanceEquivalents()): null until need("equivalents") has loaded them
     // (none when that failed: older data).
-    equivalents: () => (ready(values.get("equivalents")) ? values.get("equivalents") : null),
+    equivalents: () => (ready(datasets.peek("equivalents")) ? datasets.peek("equivalents") : null),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
-      const [atc, counts] = [values.get("atc"), values.get("atcCounts")];
+      const [atc, counts] = [datasets.peek("atc"), datasets.peek("atcCounts")];
       return ready(atc) && ready(counts) ? { classes: atc.classes, counts } : null;
     },
     link: internalLink,

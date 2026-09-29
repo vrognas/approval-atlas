@@ -53,24 +53,32 @@ export function setGroups(rows, equivalents) {
 const earliest = (rows) => rows.filter((row) => row.marketing_authorisation_date)
   .sort((a, b) => a.marketing_authorisation_date.localeCompare(b.marketing_authorisation_date) || a.name_of_medicine.localeCompare(b.name_of_medicine))[0] ?? null;
 
+// Backlog (step 4 review): a copy EMA does not flag, checked by hand (ema_curated_copies.json
+// copy_type), has that type here: Tuznue (EMA type Other) is a biosimilar of Herceptin, Sugammadex
+// Adroiq a generic of Bridion. A hybrid is neither, even where EMA flags it Generic (Riulvy).
+const CURATED_TYPES = { generic: "Generic", biosimilar: "Biosimilar", hybrid: "Hybrid" };
+const copyType = (row, curatedCopies) => CURATED_TYPES[curatedCopies?.get(row.ema_product_number)?.copy_type] ?? row.medicine_type;
+
 // row: a search-index row; setRows: the rows of its set (setGroups()); groupOf: product number ->
-// company group key (null while the companies load: companies then null). Returns
-// { copy: the row is a generic or biosimilar,
+// company group key (null while the companies load: companies then null); curatedCopies: product
+// number -> ema_curated_copies.json row (null or left out: EMA's flags only). Returns
+// { copy: the row is a generic or biosimilar, or a curated copy of any type (a hybrid too),
 //   copies: per type (generics, then biosimilars) the authorized ones of the set other than row,
 //     [{ type, count, companies (distinct groups), first (the earliest) }],
 //   others: the set's other authorized medicines (any type),
 //   first: the set's first dated medicine when it came before row (row undated: any), else null }.
-export function copiesSummary(row, setRows, groupOf) {
+export function copiesSummary(row, setRows, groupOf, curatedCopies = null) {
   const others = setRows.filter((other) => other !== row);
   const authorized = others.filter((other) => other.medicine_status === AUTHORIZED);
   const copies = COPY_TYPES.map((type) => {
-    const rows = authorized.filter((other) => other.medicine_type === type);
+    const rows = authorized.filter((other) => copyType(other, curatedCopies) === type);
     const companies = groupOf ? new Set(rows.map((other) => groupOf(other.ema_product_number) ?? other.ema_product_number)).size : null;
     return { type, count: rows.length, companies, first: earliest(rows) ?? rows[0] ?? null };
   }).filter((entry) => entry.count > 0);
   const first = earliest(others);
   const before = first && (!row.marketing_authorisation_date || first.marketing_authorisation_date < row.marketing_authorisation_date) ? first : null;
-  return { copy: COPY_TYPES.includes(row.medicine_type), copies, others: authorized.length, first: before };
+  const copy = COPY_TYPES.includes(row.medicine_type) || Boolean(curatedCopies?.has(row.ema_product_number));
+  return { copy, copies, others: authorized.length, first: before };
 }
 
 // Step 4: a hybrid (EMA type Other; R's curated hybrid list) shares its reference's protection:

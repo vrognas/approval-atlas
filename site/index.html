@@ -11,6 +11,10 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f3f3ee" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1b1c19" media="(prefers-color-scheme: dark)" />
+    <!-- The viewer's chosen theme (data-theme) before the first paint: a classic script, as the CSP
+         allows no inline script and a module runs after the first paint; before the stylesheet,
+         so it runs as soon as it arrives. theme.js (the header's button) does the rest. -->
+    <script src="/theme-init.js"></script>
     <title>Approval Atlas</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <!-- iOS home screen: icon.svg full bleed at 180px (iOS rounds the corners itself). -->
@@ -20,12 +24,16 @@
   </head>
   <body>
     <header>
-      <!-- The wordmark opens the overview (main.js); the icon is public/icon.svg's, drawn inline. -->
-      <h1><a id="home-link" href="/" aria-label="Approval Atlas, home"><svg class="brand-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-        <rect width="64" height="64" rx="14" fill="#2B4A31" />
-        <path d="M17 51 L32 13 L47 51" fill="none" stroke="#F3F3EE" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
-        <path d="M21 37 L28 43 L44 27" fill="none" stroke="#D8B45A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>Approval Atlas</a></h1>
+      <!-- The wordmark opens the overview (main.js); the icon is public/icon.svg's, drawn inline.
+           The theme button (Auto, Light, Dark) is filled by theme.js. -->
+      <div class="brand-row">
+        <h1><a id="home-link" href="/" aria-label="Approval Atlas, home"><svg class="brand-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+          <rect width="64" height="64" rx="14" fill="#2B4A31" />
+          <path d="M17 51 L32 13 L47 51" fill="none" stroke="#F3F3EE" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M21 37 L28 43 L44 27" fill="none" stroke="#D8B45A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>Approval Atlas</a></h1>
+        <button id="theme-toggle" class="theme-toggle" type="button"></button>
+      </div>
       <!-- What the site is for (UI.tagline) and the scope line; "What is this?" shows the intro card
            (intro.js). Filled by main.js before any data loads. -->
       <p id="tagline" class="tagline"></p>
