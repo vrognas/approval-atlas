@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { UI } from "./labels.js";
-import { THEME_STORAGE_KEY, colorSchemeContent, nextTheme, readTheme, storeTheme, themeColors } from "./theme.js";
+import { THEME_STORAGE_KEY, colorSchemeContent, nextTheme, readTheme, shownScheme, storeTheme, themeColors } from "./theme.js";
 
 // A localStorage stand-in; broken: every access throws (blocked site data).
 function storage(entries = {}, broken = false) {
@@ -40,14 +40,29 @@ test("storeTheme: Light and Dark are stored, Auto removes the entry, blocked sto
   assert.doesNotThrow(() => storeTheme(undefined, "dark"));
 });
 
-test("nextTheme: from Auto the scheme the device is not showing, then the device's, then Auto", () => {
-  const cycle = (deviceDark) => {
-    const seen = ["auto"];
-    for (let press = 0; press < 3; press += 1) seen.push(nextTheme(seen.at(-1), deviceDark));
-    return seen;
-  };
-  assert.deepEqual(cycle(false), ["auto", "dark", "light", "auto"]);
-  assert.deepEqual(cycle(true), ["auto", "light", "dark", "auto"]);
+test("shownScheme: Auto shows the device's scheme, Light and Dark their own", () => {
+  assert.equal(shownScheme("auto", true), "dark");
+  assert.equal(shownScheme("auto", false), "light");
+  assert.equal(shownScheme("light", true), "light");
+  assert.equal(shownScheme("dark", false), "dark");
+});
+
+// Every press flips the page (bug 2026-09-29: Dark to Auto on a dark device changed nothing, so it
+// took two presses); back on the device's own scheme it is Auto again (nothing stored).
+test("nextTheme: every press shows the other scheme; the device's own is Auto", () => {
+  for (const deviceDark of [true, false]) {
+    for (const theme of ["auto", "light", "dark"]) {
+      const next = nextTheme(theme, deviceDark);
+      assert.notEqual(shownScheme(next, deviceDark), shownScheme(theme, deviceDark), `${theme}, device dark: ${deviceDark}`);
+    }
+  }
+  assert.equal(nextTheme("auto", true), "light");
+  assert.equal(nextTheme("light", true), "auto");
+  assert.equal(nextTheme("auto", false), "dark");
+  assert.equal(nextTheme("dark", false), "auto");
+  // A choice made on the other scheme (the device changed since): Dark on a dark device flips to Light.
+  assert.equal(nextTheme("dark", true), "light");
+  assert.equal(nextTheme("light", false), "dark");
 });
 
 const METAS = [
@@ -67,11 +82,11 @@ test("colorSchemeContent: both schemes under Auto, else the chosen one", () => {
   assert.equal(colorSchemeContent("dark"), "dark");
 });
 
-test("the theme button's name says the theme shown; its tooltip what a press does", () => {
-  assert.equal(UI.theme.button("auto"), "Theme: Auto");
+test("the theme button's name says the scheme shown; its tooltip whether it follows the device and what a press does", () => {
   assert.equal(UI.theme.button("dark"), "Theme: Dark");
-  assert.equal(UI.theme.hint("auto", "dark"), "Theme: Auto (follows your device). Select to switch to Dark.");
-  assert.equal(UI.theme.hint("light", "auto"), "Theme: Light. Select to switch to Auto (follows your device).");
+  assert.equal(UI.theme.button("light"), "Theme: Light");
+  assert.equal(UI.theme.hint("auto", "dark"), "Theme: Dark (follows your device). Select to switch to Light.");
+  assert.equal(UI.theme.hint("light", "light"), "Theme: Light. Select to switch to Dark.");
 });
 
 // public/theme-init.js runs before the first paint (a classic script in <head>, as the CSP allows no

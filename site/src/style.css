@@ -396,11 +396,6 @@ h1 a:hover {
   stroke-linejoin: round;
 }
 
-.theme-icon .theme-icon-fill {
-  fill: currentColor;
-  stroke: none;
-}
-
 @media (max-width: 720px) {
   .theme-toggle {
     width: 44px;

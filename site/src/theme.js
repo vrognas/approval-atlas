@@ -29,13 +29,15 @@ export function storeTheme(storage, theme) {
   }
 }
 
-// Pure: the theme after a press. From Auto the scheme the device is not showing, so the first press
-// always changes the page; then the device's own; then Auto again.
+// Pure: the scheme the page shows: the device's under Auto, else the chosen one.
+export const shownScheme = (theme, deviceDark) => (CHOSEN.includes(theme) ? theme : deviceDark ? "dark" : "light");
+
+// Pure: the theme after a press. Every press shows the other scheme (bug 2026-09-29: a Dark to Auto
+// step on a dark device changed nothing); the device's own scheme is Auto, so the page follows the
+// device again.
 export function nextTheme(theme, deviceDark) {
-  const device = deviceDark ? "dark" : "light";
-  const other = deviceDark ? "light" : "dark";
-  if (theme === "auto") return other;
-  return theme === other ? device : "auto";
+  const target = shownScheme(theme, deviceDark) === "dark" ? "light" : "dark";
+  return target === shownScheme("auto", deviceDark) ? "auto" : target;
 }
 
 // Pure: the content of each theme-color meta tag (metas: index.html's, { media, content }, one per
@@ -48,27 +50,22 @@ export function themeColors(metas, theme) {
 // Pure: the color-scheme meta tag's content.
 export const colorSchemeContent = (theme) => (CHOSEN.includes(theme) ? theme : "light dark");
 
-// Icons (16px grid, stroked in the text colour): a sun, a crescent moon, and a half-filled circle
-// for Auto (either scheme).
+// Icons (16px grid, stroked in the text colour) for the scheme shown: a sun and a crescent moon.
 const ICONS = {
   light: { stroked: ["M8 5.25a2.75 2.75 0 1 0 0 5.5a2.75 2.75 0 1 0 0-5.5z", "M8 1.25v1.5", "M8 13.25v1.5", "M1.25 8h1.5", "M13.25 8h1.5", "M3.23 3.23l1.06 1.06", "M11.71 11.71l1.06 1.06", "M3.23 12.77l1.06-1.06", "M11.71 4.29l1.06-1.06"] },
   dark: { stroked: ["M14 8.53A6 6 0 1 1 7.47 2a4.67 4.67 0 0 0 6.53 6.53z"] },
-  auto: { stroked: ["M8 2a6 6 0 1 0 0 12a6 6 0 1 0 0-12z"], filled: ["M8 2a6 6 0 0 0 0 12z"] },
 };
 
-function themeIcon(theme) {
+function themeIcon(scheme) {
   const svg = document.createElementNS(SVG, "svg");
   for (const [name, value] of Object.entries({ class: "theme-icon", viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false" })) {
     svg.setAttribute(name, value);
   }
-  const path = (d, className = null) => {
+  svg.append(...ICONS[scheme].stroked.map((d) => {
     const element = document.createElementNS(SVG, "path");
     element.setAttribute("d", d);
-    if (className) element.setAttribute("class", className);
     return element;
-  };
-  const { stroked, filled = [] } = ICONS[theme];
-  svg.append(...stroked.map((d) => path(d)), ...filled.map((d) => path(d, "theme-icon-fill")));
+  }));
   return svg;
 }
 
@@ -98,9 +95,10 @@ export function createThemeToggle(button, { onChange = () => {} } = {}) {
     else delete root.dataset.theme;
     colorScheme?.setAttribute("content", colorSchemeContent(theme));
     themeColors(metas, theme).forEach((content, index) => themeColorTags[index].setAttribute("content", content));
-    button.replaceChildren(themeIcon(theme));
-    button.setAttribute("aria-label", UI.theme.button(theme));
-    button.title = UI.theme.hint(theme, nextTheme(theme, device.matches));
+    const shown = shownScheme(theme, device.matches);
+    button.replaceChildren(themeIcon(shown));
+    button.setAttribute("aria-label", UI.theme.button(shown));
+    button.title = UI.theme.hint(theme, shown);
   }
 
   button.addEventListener("click", () => {
@@ -109,7 +107,7 @@ export function createThemeToggle(button, { onChange = () => {} } = {}) {
     apply();
     onChange();
   });
-  // The next theme depends on the device's scheme (the tooltip says it).
+  // Under Auto the scheme shown is the device's (the icon and tooltip say it).
   device.addEventListener("change", apply);
   apply();
 }

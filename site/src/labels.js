@@ -1176,14 +1176,16 @@ export const UI = {
     hint: "Drag or use the arrow keys to resize the filters; double-click to reset",
   },
 
-  // The header's theme button (theme.js; owner request 2026-09-28): an icon of the theme shown; a
-  // press moves to the next one (nextTheme()). button: its name; hint: its tooltip.
+  // The header's theme button (theme.js; owner request 2026-09-28): an icon of the scheme shown; a
+  // press shows the other one (nextTheme()). button: its name; hint: its tooltip (theme: the stored
+  // choice, Auto following the device).
   theme: {
-    names: { auto: "Auto", light: "Light", dark: "Dark" },
-    button: (theme) => `Theme: ${UI.theme.names[theme]}`,
-    hint: (theme, next) => {
-      const name = (key) => (key === "auto" ? `${UI.theme.names.auto} (follows your device)` : UI.theme.names[key]);
-      return `Theme: ${name(theme)}. Select to switch to ${name(next)}.`;
+    names: { light: "Light", dark: "Dark" },
+    button: (shown) => `Theme: ${UI.theme.names[shown]}`,
+    hint: (theme, shown) => {
+      const other = shown === "dark" ? "light" : "dark";
+      const follows = theme === "auto" ? " (follows your device)" : "";
+      return `Theme: ${UI.theme.names[shown]}${follows}. Select to switch to ${UI.theme.names[other]}.`;
     },
   },
 
