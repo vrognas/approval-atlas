@@ -252,8 +252,8 @@ export const UI = {
   page: {
     title: "EU medicines",
   },
-  // The landing intro card (intro.js): on the untouched overview (no lookup, no filter) until the
-  // viewer closes it; the header's link brings it back.
+  // The landing intro card (intro.js): on the untouched overview (no lookup, no filter) on the first
+  // visit, until the viewer does anything or closes it; the header's link brings it back.
   intro: {
     link: "What is this?",
     // The card's heading (visually hidden; the link's text, so the link and its target agree).
@@ -1355,6 +1355,16 @@ export const UI = {
     companyMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     noMatches: "No matches",
     matches: (count) => plural(count, "suggestion", "suggestions"),
+    // 2026-09-29: the viewer's last lookups (recent.js), listed while the search field is focused and
+    // empty; kinds name each entry's kind in its meta line; Clear (named in full) empties the list.
+    recent: {
+      label: "Recently viewed",
+      kinds: { medicines: "Medicine", substances: "Active substance", conditions: "Condition", companies: "Company", classes: "Drug class" },
+      clear: "Clear",
+      clearName: "Clear recently viewed",
+      status: (count) => `Recently viewed: ${plural(count, "item", "items")}`,
+      cleared: "Recently viewed cleared",
+    },
     loading: "Loading…",
     notAvailable: "Not available right now.",
     // Home state only: example lookups (ids checked against the data 2026-09-26), each followed by
@@ -1726,7 +1736,7 @@ export const UI = {
     scope: "Only human medicines that went through the European Medicines Agency's (EMA) central procedure are included, whatever their status. Many older or common medicines are authorized country by country and are not here; check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not in the UK or Switzerland; whether a medicine is sold or reimbursed in a country is decided nationally.",
     intendedUse: "Informational only: not medical or legal advice; not a medical device. Data can lag EMA.",
     privacy:
-      "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device.",
+      "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device. Your recently viewed lookups (in the search; Clear removes them) and display choices stay in this browser and are never sent.",
     security: "Security policy and how to report a vulnerability (GitHub)",
   },
 };

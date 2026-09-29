@@ -4803,6 +4803,13 @@ table.activity {
   color: var(--link);
 }
 
+/* 2026-09-29: "Recently viewed" (focused, empty search) ends with Clear, an action under a hairline. */
+.lookup [role="option"].option-action {
+  margin-top: 4px;
+  border-top: 1px solid var(--grid);
+  color: var(--link);
+}
+
 /* Step 2 (#2): an empty indication-text search says why. */
 .empty-state {
   margin: 8px 0 16px;

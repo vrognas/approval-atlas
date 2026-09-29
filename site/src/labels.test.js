@@ -184,7 +184,7 @@ test("the About disclosure states scope, intended use and privacy", () => {
   assert.equal(labels.UI.about.intendedUse, "Informational only: not medical or legal advice; not a medical device. Data can lag EMA.");
   assert.equal(
     labels.UI.about.privacy,
-    "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device.",
+    "No cookies, no analytics, no tracking. Searches run in your browser. The site is hosted on GitHub Pages; GitHub may log IP addresses and page addresses, which include your search when a page is reloaded or opened from a link. Offline mode stores only this site's files and data on your device. Your recently viewed lookups (in the search; Clear removes them) and display choices stay in this browser and are never sent.",
   );
 });
 
