@@ -327,7 +327,7 @@ export const UI = {
     // also counts those without one: review of phase 3); change: since a year before, or null;
     // ignored: { status, years }, the filters set that this history does not apply.
     overTime: (count, change, { status = false, years = false } = {}) => {
-      const now = `${count === 0 ? "None" : formatCount(count)} authorized with an approval date`;
+      const now = `${count === 0 ? "No medicines" : plural(count, "medicine", "medicines")} authorized with an approval date`;
       const trend = change === null ? `${now}.`
         : change === 0 ? `${now}, unchanged over the last 12 months.`
           : `${now}, ${change > 0 ? "up" : "down"} ${formatCount(Math.abs(change))} in the last 12 months.`;
@@ -348,14 +348,15 @@ export const UI = {
       return `${lead}, ${formatCount(biosimilars)} of them ${biosimilars === 1 ? "a biosimilar" : "biosimilars"}.`;
     },
     // names: the group(s), company(ies) tied for the most (null: more tie than the bars show);
-    // count: their medicines each; noun: "groups" or "companies".
+    // count: their medicines each; noun: "groups", "classes" (ATC) or "companies".
     mostMedicines: (names, count, noun = "groups") => {
       if (names === null) return `Several ${noun} have the most medicines (${formatCount(count)} each).`;
       if (names.length === 1) return `${names[0]} has the most medicines (${formatCount(count)}).`;
       const who = names.length === 2 ? `${names[0]} and ${names[1]}` : `${names.length} ${noun}`;
       return `${who} have the most medicines (${formatCount(count)} each).`;
     },
-    onlyGroup: (name, count) => `${name}: ${plural(count, "medicine", "medicines")}, the only group here.`,
+    // noun: "group", or "class" in ATC mode (final round before merge).
+    onlyGroup: (name, count, noun = "group") => `${name}: ${plural(count, "medicine", "medicines")}, the only ${noun} here.`,
     // company: the company with the most medicines (count); column: its largest column (inColumn
     // of them there), or null; alone: the only company shown.
     activity: (company, count, column, inColumn, alone = false) => {
@@ -366,13 +367,17 @@ export const UI = {
     },
     // ending: medicines whose market protection may end (est.) by the end of year, of running;
     // orphan: how many of those have orphan market exclusivity running later (review of phase 3).
+    // Scoped to the medicines with market protection running, so it stands alone (final round
+    // before merge).
     protection: (ending, running, year, orphan = 0) => {
       if (!ending) {
         return running === 1
           ? `The 1 medicine with market protection running is not estimated to lose it by the end of ${year}.`
           : `None of the ${plural(running, "medicine", "medicines")} with market protection running is estimated to lose it by the end of ${year}.`;
       }
-      const lead = `${plural(ending, "medicine", "medicines")} may lose market protection (est.) by the end of ${year}`;
+      const lead = running === 1
+        ? `The 1 medicine with market protection running (est.) may lose it by the end of ${year}`
+        : `Of the ${plural(running, "medicine", "medicines")} with market protection running (est.), ${formatCount(ending)} may lose it by the end of ${year}`;
       if (!orphan) return `${lead}.`;
       if (ending === 1) return `${lead}, with orphan market exclusivity running later.`;
       return `${lead}, ${orphan === ending ? "all" : formatCount(orphan)} of them with orphan market exclusivity running later.`;

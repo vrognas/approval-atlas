@@ -56,13 +56,15 @@ export function yearsTakeaway(products, year, partial = false) {
 // the most medicines; labelOf(row): its name (an ATC class with its code). Static rows (a class
 // shown alone, "code incomplete", "not more specific", "not classified") and Other are no group.
 // Every bar shown tied while Other holds more: the ties may go on beyond the bars ("several").
-export function breakdownTakeaway(rows, labelOf = (row) => row.label) {
+// by: the breakdown's mode; "atc" names its bars classes (final round before merge).
+export function breakdownTakeaway(rows, labelOf = (row) => row.label, by = null) {
+  const [one, many] = by === "atc" ? ["class", "classes"] : ["group", "groups"];
   const groups = rows.filter((row) => !row.static && !row.other && !row.incomplete);
   const { count, items } = topTies(groups, (row) => row.count);
   if (!items.length) return null;
-  if (groups.length === 1 && !rows.some((row) => row.other)) return COPY.onlyGroup(labelOf(items[0]), count);
-  if (items.length === groups.length && rows.some((row) => row.other && row.count > 0)) return COPY.mostMedicines(null, count, "groups");
-  return COPY.mostMedicines(items.map(labelOf), count, "groups");
+  if (groups.length === 1 && !rows.some((row) => row.other)) return COPY.onlyGroup(labelOf(items[0]), count, one);
+  if (items.length === groups.length && rows.some((row) => row.other && row.count > 0)) return COPY.mostMedicines(null, count, many);
+  return COPY.mostMedicines(items.map(labelOf), count, many);
 }
 
 // "Who is active where": rows (facets.js holderActivity() of every company, most medicines first)
@@ -90,8 +92,10 @@ export function protectionTakeaway(rows, firstYear, span = 2) {
 }
 
 // Conditions: rows (facets.js conditionRows(), every condition ranked, most treatments first), the
-// condition(s) with the most treatments.
+// condition(s) with the most treatments; none when more than two tie on 1 treatment, which says
+// little (final round before merge).
 export function conditionsTakeaway(rows) {
   const { count, items } = topTies(rows, (row) => row.treatments);
-  return items.length ? COPY.conditions(items.map((row) => row.name), count) : null;
+  if (!items.length || (count === 1 && items.length > 2)) return null;
+  return COPY.conditions(items.map((row) => row.name), count);
 }

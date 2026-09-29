@@ -31,17 +31,17 @@ test("Authorized over time: authorized with an approval date, the 12-month chang
     { date: "2026-09-29", authorized_products: 1567 },
   ];
   // Compared with the point nearest to a year before the last (2025-09-30 for 2026-09-29).
-  assert.equal(overTimeTakeaway(series), "1,567 authorized with an approval date, up 105 in the last 12 months.");
-  assert.equal(overTimeTakeaway([{ date: "2025-09-30", authorized_products: 12 }, { date: "2026-09-29", authorized_products: 10 }]), "10 authorized with an approval date, down 2 in the last 12 months.");
-  assert.equal(overTimeTakeaway([{ date: "2025-09-30", authorized_products: 1 }, { date: "2026-09-29", authorized_products: 1 }]), "1 authorized with an approval date, unchanged over the last 12 months.");
-  assert.equal(overTimeTakeaway([{ date: "2025-09-30", authorized_products: 3 }, { date: "2026-09-29", authorized_products: 0 }]), "None authorized with an approval date, down 3 in the last 12 months.");
+  assert.equal(overTimeTakeaway(series), "1,567 medicines authorized with an approval date, up 105 in the last 12 months.");
+  assert.equal(overTimeTakeaway([{ date: "2025-09-30", authorized_products: 12 }, { date: "2026-09-29", authorized_products: 10 }]), "10 medicines authorized with an approval date, down 2 in the last 12 months.");
+  assert.equal(overTimeTakeaway([{ date: "2025-09-30", authorized_products: 1 }, { date: "2026-09-29", authorized_products: 1 }]), "1 medicine authorized with an approval date, unchanged over the last 12 months.");
+  assert.equal(overTimeTakeaway([{ date: "2025-09-30", authorized_products: 3 }, { date: "2026-09-29", authorized_products: 0 }]), "No medicines authorized with an approval date, down 3 in the last 12 months.");
   // A series shorter than a year: no change named.
-  assert.equal(overTimeTakeaway([{ date: "2026-08-31", authorized_products: 4 }, { date: "2026-09-29", authorized_products: 5 }]), "5 authorized with an approval date.");
+  assert.equal(overTimeTakeaway([{ date: "2026-08-31", authorized_products: 4 }, { date: "2026-09-29", authorized_products: 5 }]), "5 medicines authorized with an approval date.");
   assert.equal(overTimeTakeaway([]), null);
   // A status or year filter set: said not to apply to this history.
-  assert.equal(overTimeTakeaway(series, { status: true }), "1,567 authorized with an approval date, up 105 in the last 12 months. The status filter does not apply to this history.");
-  assert.equal(overTimeTakeaway(series, { years: true }), "1,567 authorized with an approval date, up 105 in the last 12 months. The year filter does not apply to this history.");
-  assert.equal(overTimeTakeaway(series, { status: true, years: true }), "1,567 authorized with an approval date, up 105 in the last 12 months. The status and year filters do not apply to this history.");
+  assert.equal(overTimeTakeaway(series, { status: true }), "1,567 medicines authorized with an approval date, up 105 in the last 12 months. The status filter does not apply to this history.");
+  assert.equal(overTimeTakeaway(series, { years: true }), "1,567 medicines authorized with an approval date, up 105 in the last 12 months. The year filter does not apply to this history.");
+  assert.equal(overTimeTakeaway(series, { status: true, years: true }), "1,567 medicines authorized with an approval date, up 105 in the last 12 months. The status and year filters do not apply to this history.");
 });
 
 // Review of phase 3: the year the per-year takeaway names follows the year filter: the last full
@@ -85,6 +85,9 @@ test("Breakdown: the group with the most medicines; ties, one group, static rows
   assert.equal(breakdownTakeaway([{ key: "a", label: "A", count: 5 }, { key: "b", label: "B", count: 5 }]), "A and B have the most medicines (5 each).");
   assert.equal(breakdownTakeaway([{ key: "a", label: "A", count: 5 }, { key: "b", label: "B", count: 5 }, { key: "c", label: "C", count: 5 }]), "3 groups have the most medicines (5 each).");
   assert.equal(breakdownTakeaway([{ key: "a", label: "A", count: 1 }]), "A: 1 medicine, the only group here.");
+  // In ATC mode, classes (final round before merge).
+  assert.equal(breakdownTakeaway([{ key: "L", label: "L X", count: 1 }], undefined, "atc"), "L X: 1 medicine, the only class here.");
+  assert.equal(breakdownTakeaway([{ key: "a", label: "A", count: 5 }, { key: "b", label: "B", count: 5 }, { key: "c", label: "C", count: 5 }], undefined, "atc"), "3 classes have the most medicines (5 each).");
   assert.equal(breakdownTakeaway([{ key: "a", label: "A", count: 7, static: true }]), null);
   assert.equal(breakdownTakeaway([]), null);
   // Review of phase 3: every bar shown tied and more in Other (the top 20 cap): how many tie is unknown.
@@ -119,11 +122,12 @@ test("Protection: how many may lose market protection (est.) within two years, a
   const row = (min, orphanEnd = null) => ({ min, orphanEnd });
   const orphan = { end: "2033-01-01", source: "computed" };
   const rows = [row("2026-11-01"), row("2027-03-01", orphan), row("2028-12-31"), row("2029-01-01", orphan), row("2031-05-01")];
-  assert.equal(protectionTakeaway(rows, 2026), "3 medicines may lose market protection (est.) by the end of 2028, 1 of them with orphan market exclusivity running later.");
-  assert.equal(protectionTakeaway([row("2026-11-01"), row("2027-01-01")], 2026), "2 medicines may lose market protection (est.) by the end of 2028.");
-  assert.equal(protectionTakeaway([row("2026-11-01")], 2026), "1 medicine may lose market protection (est.) by the end of 2028.");
-  assert.equal(protectionTakeaway([row("2026-11-01", orphan)], 2026), "1 medicine may lose market protection (est.) by the end of 2028, with orphan market exclusivity running later.");
-  assert.equal(protectionTakeaway([row("2026-11-01", orphan), row("2027-01-01", orphan)], 2026), "2 medicines may lose market protection (est.) by the end of 2028, all of them with orphan market exclusivity running later.");
+  assert.equal(protectionTakeaway(rows, 2026), "Of the 5 medicines with market protection running (est.), 3 may lose it by the end of 2028, 1 of them with orphan market exclusivity running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01"), row("2027-01-01")], 2026), "Of the 2 medicines with market protection running (est.), 2 may lose it by the end of 2028.");
+  assert.equal(protectionTakeaway([row("2026-11-01")], 2026), "The 1 medicine with market protection running (est.) may lose it by the end of 2028.");
+  assert.equal(protectionTakeaway([row("2026-11-01", orphan)], 2026), "The 1 medicine with market protection running (est.) may lose it by the end of 2028, with orphan market exclusivity running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01", orphan), row("2027-01-01", orphan)], 2026), "Of the 2 medicines with market protection running (est.), 2 may lose it by the end of 2028, all of them with orphan market exclusivity running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01"), row("2031-05-01")], 2026), "Of the 2 medicines with market protection running (est.), 1 may lose it by the end of 2028.");
   assert.equal(protectionTakeaway([row("2031-05-01")], 2026), "The 1 medicine with market protection running is not estimated to lose it by the end of 2028.");
   assert.equal(protectionTakeaway([row("2031-05-01"), row("2032-01-01")], 2026), "None of the 2 medicines with market protection running is estimated to lose it by the end of 2028.");
   assert.equal(protectionTakeaway([], 2026), null);
@@ -138,5 +142,8 @@ test("Conditions: the condition with the most treatments; ties over every condit
   assert.equal(conditionsTakeaway([{ name: "A", treatments: 0 }]), null);
   assert.equal(conditionsTakeaway([]), null);
   // Review of phase 3: 10 tied (?mah=g.bio-thera-solutions), counted over the whole ranking.
-  assert.equal(conditionsTakeaway(Array.from({ length: 10 }, (_, index) => ({ name: `C${index}`, treatments: 1 }))), "10 conditions have the most treatments (1 each).");
+  // Final round before merge: more than two tied on 1 treatment says little: no sentence.
+  assert.equal(conditionsTakeaway(Array.from({ length: 10 }, (_, index) => ({ name: `C${index}`, treatments: 1 }))), null);
+  assert.equal(conditionsTakeaway(Array.from({ length: 10 }, (_, index) => ({ name: `C${index}`, treatments: 2 }))), "10 conditions have the most treatments (2 each).");
+  assert.equal(conditionsTakeaway([{ name: "A", treatments: 1 }, { name: "B", treatments: 1 }]), "A and B have the most treatments (1 each).");
 });
