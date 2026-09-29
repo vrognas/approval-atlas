@@ -1,5 +1,5 @@
-// Pure: counts for the facet sidebar and sheets, the approval year filter, the filter sentence's
-// tokens, the most common conditions and the holder activity of the filtered medicines. No DOM.
+// Pure: counts for the facet sections (chip popovers and sheets), the approval year filter, the filter
+// tokens and chips, the most common conditions and the holder activity of the filtered medicines. No DOM.
 // Products come from buildProducts(); every status counts (one dashboard, phase 4a) unless the status
 // filter (by default Authorised: owner decision 2026-09-29) leaves some out.
 import { byStatusOrder } from "./approvals.js";

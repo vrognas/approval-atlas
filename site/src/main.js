@@ -205,6 +205,9 @@ let state = { ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP };
 let dashboard = null;
 let pendingFilters = new URLSearchParams();
 let lookup = null;
+// Whether a chip's filter popover is open (set once the dashboard exists): the intro card stays as
+// it is shown until it closes (intro.js introVisible() held).
+let filtersOpen = () => false;
 let frame = 0;
 const urlNote = $("#url-note");
 // Filter edits (not the first render, the breakdown's mode or lookups) announce the new headline, debounced.
@@ -246,12 +249,21 @@ function render() {
   const lookupOpen = lookupView(state).kind !== null;
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
   // Below a lookup result, the dashboard is the overview of every medicine: its heading says so and
-  // a note replaces the lead.
-  $("#page-title").textContent = lookupOpen ? UI.explore.title : UI.page.title;
+  // a note replaces the lead. The page has one h1 at the top: the result's headline while a result
+  // is open (lookup.js), and then the overview's heading is an h2 (review of phase 1).
+  const level = lookupOpen ? "H2" : "H1";
+  let pageTitle = $("#page-title");
+  if (pageTitle.tagName !== level) {
+    const heading = document.createElement(level);
+    heading.id = "page-title";
+    pageTitle.replaceWith(heading);
+    pageTitle = heading;
+  }
+  pageTitle.textContent = lookupOpen ? UI.explore.title : UI.page.title;
   $("#explore-note").hidden = !lookupOpen;
   // The intro card, and the Try line with it. Before the dashboard's data has loaded, the URL's
-  // filters are still verbatim (pendingFilters).
-  intro.render(state, dashboard ? null : pendingFilters);
+  // filters are still verbatim (pendingFilters). While a filter popover is open it stays as it is.
+  intro.render(state, dashboard ? null : pendingFilters, { hold: filtersOpen() });
   dashboard?.render();
   updateTitle();
   if (scrollAnchor) {
@@ -947,6 +959,7 @@ function startDashboard(meta, [
   // A chip's controls: a popover under it (desktop) or a bottom sheet (below 1024px); each borrows
   // the chip's section from the hidden store. Clear resets the chip's filter keys.
   const popover = createPopover($("#filter-popover"), { onClear: (keys) => setState(cleared(keys)) });
+  filtersOpen = () => popover.isOpen();
   // In the headline's lead (owner decision 2026-09-29, "Authorized by default"; inline after the
   // headline, F · Spacious): include the medicines of every status; the control goes, so focus goes
   // to the headline, which then counts them.

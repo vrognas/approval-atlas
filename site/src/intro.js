@@ -23,9 +23,11 @@ export function isOverview(state, pendingFilters = null) {
 }
 
 // Pure: whether the card shows. overview: isOverview(); closed: the viewer closed it; requested: the
-// viewer asked for it on the view shown.
-export function introVisible({ overview, closed, requested }) {
-  return requested || (overview && !closed);
+// viewer asked for it on the view shown; held: it showed when a filter popover opened, which is still
+// open (review of F · Spacious phase 1: hiding it moved the chip bar and the popover under the
+// pointer), so it stays until the popover closes.
+export function introVisible({ overview, closed, requested, held = false }) {
+  return requested || ((overview || held) && !closed);
 }
 
 // Pure (owner decision 2026-09-29): the Try line under the search hides while the card shows, whose
@@ -142,7 +144,7 @@ function introCard(card, link) {
 // card: index.html #intro (hidden); link: the header's "What is this?" button; options.link: makes
 // the cards' example links (lookup.link, called once the page first renders, when it exists);
 // options.tryLine: the Try line (#lookup-try, hidden until the first render), shown or hidden with
-// the card. render(state, pendingFilters) after every page render shows or hides both.
+// the card. render(state, pendingFilters, { hold }) after every page render shows or hides both.
 export function createIntro(card, link, { link: exampleLink, tryLine }) {
   const copy = UI.intro;
   const storage = browserStorage();
@@ -167,7 +169,8 @@ export function createIntro(card, link, { link: exampleLink, tryLine }) {
   function update() {
     if (!last) return;
     if (requested !== null && requested !== view()) requested = null; // the view changed
-    const shown = introVisible({ overview: isOverview(last.state, last.pendingFilters), closed, requested: requested !== null });
+    const held = last.hold && !card.hidden;
+    const shown = introVisible({ overview: isOverview(last.state, last.pendingFilters), closed, requested: requested !== null, held });
     card.hidden = !shown;
     tryLine.hidden = !tryLineVisible(shown, lookupView(last.state).kind !== null);
   }
@@ -190,9 +193,10 @@ export function createIntro(card, link, { link: exampleLink, tryLine }) {
   });
 
   return {
-    render(state, pendingFilters = null) {
+    // hold: a filter popover is open; the card stays as it is shown until it closes.
+    render(state, pendingFilters = null, { hold = false } = {}) {
       if (!last) cards.append(...copy.cards.map((entry) => introCard(entry, exampleLink)));
-      last = { state, pendingFilters };
+      last = { state, pendingFilters, hold };
       update();
     },
   };

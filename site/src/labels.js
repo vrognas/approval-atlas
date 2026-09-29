@@ -525,7 +525,7 @@ export const UI = {
     Other: "Not a generic, biosimilar or advanced therapy.",
   },
   // The same for the EMA statuses (keys: raw EMA values), wherever a status dot or pill, facet row,
-  // "Stack by Status" legend entry or the sentence's status token names one; at most 10 words.
+  // "Stack by Status" legend entry or the Status chip names one; at most 10 words.
   statusTips: {
     // Step 2 (#16): authorized is not available or reimbursed everywhere.
     Authorised: "Can be marketed EU-wide; availability and reimbursement vary by country.",
@@ -725,7 +725,7 @@ export const UI = {
     onlyBroad: (count) => (count === 1
       ? "The one condition of these medicines is a broad category, not ranked here: see the therapeutic area filter."
       : `The ${formatCount(count)} conditions of these medicines are broad categories, not ranked here: see the therapeutic area filter.`),
-    // Condition page links beside a therapeutic area group or term (breakdown, sidebar).
+    // Condition page links beside a therapeutic area group or term (breakdown, area tree rows).
     open: (name) => `Open condition page: ${name}`,
   },
   // "Who is active where": the top holders (rows) x ATC groups or therapeutic area groups.
@@ -880,7 +880,7 @@ export const UI = {
     classPath: "ATC levels of this class",
     // Tree rows, path items and bars: the class and its count of medicines (null: no count shown).
     classCount: (code, name, count) => `${namedClass(code, name)}${count === null ? "" : `, ${plural(count, "medicine", "medicines")}`}`,
-    // The sidebar's ATC tree: a search (not a filter), expand buttons, checkboxes.
+    // The ATC tree (its chip's popover or sheet): a search (not a filter), expand buttons, checkboxes.
     find: "Find an ATC class",
     tree: "ATC classes",
     expand: (code) => `Classes in ${code}`,
@@ -955,7 +955,7 @@ export const UI = {
   },
 
   // The therapeutic-area tree (phase 4f; areas.js, area-tree.js): MeSH category › branch › level 2 ›
-  // level 3 › EMA's terms, in the sidebar, the breakdown's path and the activity card.
+  // level 3 › EMA's terms, in its chip's popover or sheet, the breakdown's path and the activity card.
   areas: {
     // The MeSH categories, the tree's top level (owner decision 2026-09-29), by a branch code's
     // letter: NLM's names verbatim, from the MeSH Tree Structures (https://meshb.nlm.nih.gov/treeView).
@@ -1104,7 +1104,7 @@ export const UI = {
     plant_extract: "Extract of a plant, such as birch bark.",
     polymer: "Large synthetic chain of repeating units, such as sevelamer.",
   },
-  // The modality tree (sidebar, sheet; modality-tree.js), the breakdown's path and the medicine and
+  // The modality tree (its chip's popover or sheet; modality-tree.js), the breakdown's path and the medicine and
   // substance cards' Modality line.
   modality: {
     label: "Modality",
@@ -1199,9 +1199,9 @@ export const UI = {
     tipHolder: (group, holder) => (holder === null || group === holder ? group : `${group} (${holder})`),
     // The company tree's and breakdown's static row: a company's medicines EMA names no holder for.
     noHolder: "No EMA holder name",
-    // A row's value that also shows under another group, named with its group (the filter sentence).
+    // A row's value that also shows under another group, named with its group (the Company chip).
     inGroup: (name, group) => `${name} (${group})`,
-    // An EMA holder name as a filter value (the sentence's pill; a company can have the same name),
+    // An EMA holder name as a filter value (the Company chip; a company can have the same name),
     // with its group when the row's value is its path.
     holderValue: (name, group = null) => `${name} (EMA holder name${group ? `, ${group}` : ""})`,
     // A holder name that repeats its company's name one level down (tree rows, the company page).

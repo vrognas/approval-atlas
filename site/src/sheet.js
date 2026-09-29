@@ -1,6 +1,6 @@
 // Phones and tablets: filters in a bottom sheet — a native <dialog> opened with showModal() (focus
-// trap, Escape, the page inert behind it). While open it borrows facet sections from the sidebar
-// (same controls and state) and puts them back when it closes; filters apply live.
+// trap, Escape, the page inert behind it). While open it borrows a chip's facet section from the store
+// (same controls and state) and puts it back when it closes; filters apply live.
 import { UI } from "./labels.js";
 
 // onClear(keys): the sheet's Clear button resets these filter keys.
