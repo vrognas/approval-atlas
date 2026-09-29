@@ -41,7 +41,9 @@ test("protection ends read 'ended' once past the data date and 'ends' until then
 test("a generic or biosimilar has no protection of its own and follows its reference", () => {
   const follows = { ...own, basis: "follows_reference", reference_name: "Humira", status: "ended" };
   const summary = protectionSummary(follows, [], "adalimumab", "2026-09-26");
-  assert.equal(summary.status, "Data/market protection: Ended");
+  // QA 2026-09-29 (#1): the chip never shows the reference's status as the copy's own.
+  assert.equal(summary.status, "Data/market protection: None of its own");
+  assert.equal(protectionSummary({ ...follows, status: "protected" }, [], "adalimumab", "2026-09-26").status, "Data/market protection: None of its own");
   assert.equal(summary.lines[0], "No protection of its own; follows Humira");
   assert.equal(summary.lines.length, 4);
 });
@@ -49,7 +51,7 @@ test("a generic or biosimilar has no protection of its own and follows its refer
 test("a generic whose reference is not centrally authorized shows no dates", () => {
   const missing = { ...own, basis: "reference_not_found", reference_product_number: null, reference_name: null, counted_from: null, data_exclusivity_end: null, market_protection_end_min: null, market_protection_end_max: null, status: null };
   assert.deepEqual(protectionSummary(missing, [], "x", "2026-09-26"), {
-    status: "Data/market protection: Unclear",
+    status: "Data/market protection: None of its own",
     lines: ["No protection of its own; reference product not found in EU central authorizations"],
     orphan: [],
   });
@@ -155,7 +157,7 @@ const liraglutideStada = {
 
 test("a curated copy's counted-from line names its reference medicine, not its own substance", () => {
   const summary = protectionSummary(riulvy, [], "tegomil fumarate", "2026-09-29", "Tecfidera", { referenceSubstance: "dimethyl fumarate" });
-  assert.equal(summary.status, "Data/market protection: Ended");
+  assert.equal(summary.status, "Data/market protection: None of its own");
   assert.deepEqual(summary.lines, [
     "No protection of its own; follows Tecfidera",
     "Data exclusivity ended (est.) 30 Jan 2022",
@@ -204,7 +206,7 @@ const buprenorphineNeuraxpharmCopy = {
 
 test("a curated copy of a nationally authorized medicine names its reference and the evidence", () => {
   const summary = protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: buprenorphineNeuraxpharmCopy });
-  assert.equal(summary.status, "Data/market protection: Unclear");
+  assert.equal(summary.status, "Data/market protection: None of its own");
   assert.deepEqual(summary.lines, [[
     "No protection of its own; a hybrid of Subutex (authorized nationally), whose protection dates are not in EU central data.",
     " ",
@@ -266,12 +268,39 @@ test("a curated copy of a central reference names its copy type and the evidence
 
 test("protectionGlance: the answer strip's short form of the estimate", () => {
   const protectedRow = { ...own, market_protection_end_min: "2031-01-06", market_protection_end_max: "2032-01-06", status: "protected" };
-  assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Until 2031–2032", orphan: null });
-  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, [], "2026-09-28"), { value: "Ended", orphan: null });
-  assert.deepEqual(protectionGlance(own, [], "2026-09-28"), { value: "Unclear", orphan: null });
+  assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Until 2031–2032", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, [], "2026-09-28"), { value: "Ended", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance(own, [], "2026-09-28"), { value: "Unclear", reference: null, orphan: null });
   assert.deepEqual(protectionGlance({ ...own, basis: "other_company_reference", status: "unclear" }, [], "2026-09-28").value, "Unclear");
-  assert.deepEqual(protectionGlance({ ...own, basis: "reference_not_found", status: null }, [], "2026-09-28").value, "Unclear");
   assert.equal(protectionGlance(undefined, [], "2026-09-28"), null);
+});
+
+// QA 2026-09-29 (#1): a copy has no protection of its own; the strip never shows its reference's
+// range or status as the copy's own (Palbociclib Viatris, a generic of Ibrance, showed "Until
+// 2026–2027"; real row 2026-09-29). While the reference is protected, its range follows as
+// secondary text naming the reference.
+test("protectionGlance: a copy follows its reference and never shows the reference's protection as its own", () => {
+  const palbociclibViatris = {
+    ...own, ema_product_number: "EMEA/H/C/006624", basis: "follows_reference", copy_source: "ema_flag", reference_product_number: "EMEA/H/C/003853",
+    reference_name: "Ibrance", counted_from: "2016-11-09", data_exclusivity_end: "2024-11-09", market_protection_end_min: "2026-11-09",
+    market_protection_end_max: "2027-11-09", status: "protected",
+  };
+  assert.deepEqual(protectionGlance(palbociclibViatris, [], "2026-09-29"), { value: "Follows Ibrance", reference: "Ibrance's: until 2026–2027", orphan: null });
+  assert.equal(protectionGlance({ ...palbociclibViatris, market_protection_end_min: "2027-01-01" }, [], "2026-09-29").reference, "Ibrance's: until 2027");
+  // Once the reference's protection has ended (or is unclear): the reference alone.
+  assert.deepEqual(protectionGlance({ ...palbociclibViatris, status: "ended" }, [], "2026-09-29"), { value: "Follows Ibrance", reference: null, orphan: null });
+  assert.equal(protectionGlance({ ...palbociclibViatris, status: "unclear" }, [], "2026-09-29").reference, null);
+  // A curated copy (Riulvy, a hybrid of Tecfidera) the same way.
+  assert.deepEqual(protectionGlance(riulvy, [], "2026-09-29"), { value: "Follows Tecfidera", reference: null, orphan: null });
+  assert.equal(protectionGlance({ ...riulvy, status: "protected", market_protection_end_min: "2030-01-30", market_protection_end_max: "2031-01-30" }, [], "2026-09-29").value,
+    "Follows Tecfidera");
+  // No central reference (a copy of a nationally authorized medicine, curated or not): none of its own.
+  assert.deepEqual(protectionGlance({ ...own, basis: "reference_not_found", reference_name: null, status: null }, [], "2026-09-28"),
+    { value: "None of its own", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance(buprenorphineNeuraxpharm, [], "2026-09-29"), { value: "None of its own", reference: null, orphan: null });
+  // Its own orphan exclusivity still shows.
+  assert.equal(protectionGlance(palbociclibViatris, [{ condition: "A", exclusivity_end: "2033-05-30", end_source: "register" }], "2026-09-29").orphan,
+    "Orphan exclusivity until 2033");
 });
 
 test("protectionGlance: orphan market exclusivity still running is named with its latest end year", () => {
@@ -281,7 +310,7 @@ test("protectionGlance: orphan market exclusivity still running is named with it
     { condition: "C", exclusivity_end: "2031-01-01", end_source: "computed" },
     { condition: "D", exclusivity_end: null, end_source: null, designation_status: "Withdrawn" },
   ];
-  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Ended", orphan: "Orphan exclusivity until 2033" });
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Ended", reference: null, orphan: "Orphan exclusivity until 2033" });
   assert.equal(protectionGlance({ ...own, status: "ended" }, orphan.slice(0, 1), "2026-09-28").orphan, null);
 });
 

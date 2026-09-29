@@ -1088,7 +1088,8 @@ export const UI = {
     // (renamed Talphera in 2024)"), then a second link to the rename's evidence ("Rename source").
     // On phones a long note sits behind a disclosure: its summary, then the note alone (noteBody).
     why: (group, note) => `Why ${group}: ${sentenceOf(note)}`,
-    note: (note) => `Ownership: ${sentenceOf(note)}`,
+    // Not "note": that key is the company tree's note above (QA 2026-09-29: a second "note" replaced it).
+    groupNote: (note) => `Ownership: ${sentenceOf(note)}`,
     sponsor: (note) => `Sponsor: ${sentenceOf(note)}`,
     whySummary: (group) => `Why ${group}?`,
     noteSummary: "Ownership",
@@ -1297,6 +1298,9 @@ export const UI = {
   protection: {
     title: "EU regulatory protection (estimate)",
     status: { protected: "Protected", ended: "Ended", unclear: "Unclear" },
+    // QA 2026-09-29 (#1): a copy's chip and strip cell (basis follows_reference or
+    // reference_not_found): its status and dates are its reference's, never its own.
+    noneOfItsOwn: "None of its own",
     // Names what the chip covers, so it is not read as covering orphan exclusivity too.
     chip: (status) => `Data/market protection: ${status}`,
     // ended: the date (the range's later end) is before the data date.
@@ -1339,8 +1343,12 @@ export const UI = {
     // The answer strip's "Protection (est.)" cell (protectionGlance()): the market protection
     // range's years while protected, else the status; then orphan exclusivity still running.
     // link: after the value, for screen readers (the cell jumps to the section).
+    // A copy's cell: the reference it follows, then, while that is protected, the reference's
+    // years as secondary text (QA 2026-09-29, #1).
     glance: {
       until: (from, to) => (from === to ? `Until ${from}` : `Until ${from}–${to}`),
+      follows: (name) => `Follows ${name}`,
+      referenceUntil: (name, from, to) => `${name}'s: until ${from === to ? from : `${from}–${to}`}`,
       orphan: (year) => `Orphan exclusivity until ${year}`,
       link: ", see the estimate below",
     },
@@ -1382,6 +1390,10 @@ export const UI = {
   // reference product, so Humira's biosimilars (whose reference is Trudexa) count.
   copies: {
     none: "No generic or biosimilar authorized yet.",
+    // QA 2026-09-29 (#9): the card's Type fact, in place of EMA's type explanation (UI.typeTips),
+    // where a curated copy type contradicts it (copies.js curatedTypeDiffers(): Riulvy, EMA
+    // Generic, a hybrid of Tecfidera); type: the curated row's copy_type, reference: its reference_name.
+    typeDiffers: (type, reference) => `As EMA's data lists it; its EPAR page calls it a ${copyTypeWord(type)}${reference ? ` of ${reference}` : ""}.`,
     // entries: [{ type ("Generic" | "Biosimilar"), count, companies (null: unknown), first: { name, date } }].
     // substance: named on a medicine that is not its substance's first (step 3 review: Opzelura's
     // generic is Jakavi's, "1 generic of ruxolitinib …"); null on the first's (Humira, Sprycel).

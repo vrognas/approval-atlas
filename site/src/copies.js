@@ -59,6 +59,18 @@ const earliest = (rows) => rows.filter((row) => row.marketing_authorisation_date
 const CURATED_TYPES = { generic: "Generic", biosimilar: "Biosimilar", hybrid: "Hybrid" };
 const copyType = (row, curatedCopies) => CURATED_TYPES[curatedCopies?.get(row.ema_product_number)?.copy_type] ?? row.medicine_type;
 
+// QA 2026-09-29 (#9): the medicine card explains EMA's type (UI.typeTips), which a curated copy
+// type can contradict: Riulvy (EMA Generic, "same active substance") is a hybrid of Tecfidera with
+// another substance; Tuznue and Sugammadex Adroiq (EMA Other, "not a generic, biosimilar …") are a
+// biosimilar and a generic. The card then says what the EPAR page calls it (UI.copies.typeDiffers).
+// medicineType: EMA's type; curatedRow: the ema_curated_copies.json row (undefined without one).
+// A hybrid agrees with Other.
+const AGREEING_TYPES = { generic: "Generic", biosimilar: "Biosimilar", hybrid: "Other" };
+export function curatedTypeDiffers(medicineType, curatedRow) {
+  const agreeing = AGREEING_TYPES[curatedRow?.copy_type];
+  return Boolean(agreeing) && agreeing !== medicineType;
+}
+
 // row: a search-index row; setRows: the rows of its set (setGroups()); groupOf: product number ->
 // company group key (null while the companies load: companies then null); curatedCopies: product
 // number -> ema_curated_copies.json row (null or left out: EMA's flags only). Returns

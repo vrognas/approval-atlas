@@ -42,7 +42,7 @@ export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate,
     );
   }
   return {
-    status: COPY.chip(COPY.status[row.status] ?? COPY.status.unclear),
+    status: COPY.chip(isCopy(row) ? COPY.noneOfItsOwn : COPY.status[row.status] ?? COPY.status.unclear),
     lines,
     orphan: orphanRows.map((orphan) => orphan.exclusivity_end === null
       ? COPY.orphanNoEnd(orphan.condition, orphan.designation_status)
@@ -68,18 +68,33 @@ const withEvidence = (text, curatedRow) => (curatedRow.evidence_url?.startsWith(
   ? [text, " ", { text: COPY.copyEvidence, url: curatedRow.evidence_url }]
   : text);
 
+// A copy (a generic, biosimilar or hybrid, EMA-flagged or curated) has no protection of its own:
+// its row's status and dates are its reference's (follows_reference), or unknown (no central
+// reference). QA 2026-09-29 (#1): chip and strip never show them as the copy's own.
+const isCopy = (row) => row.basis === "follows_reference" || row.basis === "reference_not_found";
+
 // The answer strip's short form (step 3, #7): { value: "Until 2031–2032" | "Ended" | "Unclear"
-// (the status; the years of the market protection range while protected), orphan: the latest
-// orphan market exclusivity still running ("Orphan exclusivity until 2033") or null }; null
-// without a row.
+// (the status; the years of the market protection range while protected), reference: null,
+// orphan: the latest orphan market exclusivity still running ("Orphan exclusivity until 2033") or
+// null }; null without a row. A copy: value "Follows Ibrance" (a reference by name, else "None of
+// its own"), reference: the reference's years while it is protected ("Ibrance's: until
+// 2026–2027"), else null.
 export function protectionGlance(row, orphanRows, snapshotDate) {
   if (!row) return null;
   const year = (date) => Number(date.slice(0, 4));
-  const value = row.status === "protected"
-    ? COPY.glance.until(year(row.market_protection_end_min), year(row.market_protection_end_max))
-    : COPY.status[row.status] ?? COPY.status.unclear;
   const running = orphanRows.map((orphan) => orphan.exclusivity_end).filter((end) => end && end >= snapshotDate).sort().at(-1);
-  return { value, orphan: running ? COPY.glance.orphan(year(running)) : null };
+  const orphan = running ? COPY.glance.orphan(year(running)) : null;
+  const range = [row.market_protection_end_min, row.market_protection_end_max].map((date) => (date ? year(date) : null));
+  if (isCopy(row)) {
+    const follows = row.basis === "follows_reference" && row.reference_name;
+    return {
+      value: follows ? COPY.glance.follows(row.reference_name) : COPY.noneOfItsOwn,
+      reference: follows && row.status === "protected" ? COPY.glance.referenceUntil(row.reference_name, ...range) : null,
+      orphan,
+    };
+  }
+  const value = row.status === "protected" ? COPY.glance.until(...range) : COPY.status[row.status] ?? COPY.status.unclear;
+  return { value, reference: null, orphan };
 }
 
 export function espacenetUrl(inn) {

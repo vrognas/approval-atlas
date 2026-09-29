@@ -627,6 +627,11 @@ test("each type badge has an explanation of at most 12 words", () => {
   assert.equal(typeTips.Generic, "Same active substance as an already approved reference medicine.");
   assert.equal(typeTips["Advanced therapy"], "Gene therapy, cell therapy or tissue-engineered medicine.");
   for (const tip of Object.values(typeTips)) assert.ok(tip.split(" ").length <= 12, tip);
+  // QA 2026-09-29 (#9): the card's explanation where a curated copy type contradicts EMA's type.
+  const { typeDiffers } = labels.UI.copies;
+  assert.equal(typeDiffers("hybrid", "Tecfidera"), "As EMA's data lists it; its EPAR page calls it a hybrid of Tecfidera.");
+  assert.equal(typeDiffers("biosimilar", "Herceptin"), "As EMA's data lists it; its EPAR page calls it a biosimilar of Herceptin.");
+  assert.equal(typeDiffers("generic", null), "As EMA's data lists it; its EPAR page calls it a generic.");
 });
 
 // Phase 4f: hover, focus and tap explanations of the EMA statuses, keyed by the raw status.
@@ -1357,6 +1362,11 @@ test("companies: aggregated views name the EMA holder names behind a company, th
 test("companies: tree, company page, search and footer copy", () => {
   const { companies, lookup, footer, sentence, card } = labels.UI;
   assert.equal(companies.find, "Find a company");
+  // QA 2026-09-29 (#6): the tree's note (a second "note" key, the ownership line, used to replace it).
+  assert.equal(companies.note("2026-09-28"),
+    "Companies by current owner as of 28 Sep 2026, then the companies they hold and the holder names EMA publishes. A level that only repeats a name is left out.");
+  assert.equal(companies.note(null),
+    "Companies by current owner, then the companies they hold and the holder names EMA publishes. A level that only repeats a name is left out.");
   assert.equal(companies.expand("Sanofi", false), "Companies in Sanofi");
   assert.equal(companies.expand("Genzyme Europe B.V.", true), "Holder names of Genzyme Europe B.V.");
   assert.equal(companies.count("Roche", 1), "Roche, 1 medicine");
@@ -1414,7 +1424,7 @@ test("companies: provenance, why a medicine sits under its group, a sponsor, a g
   // On the page of the group it is under: no "(under …)"; a plain note (the medicine not moved) too.
   assert.equal(`Trudexa${companies.moved(null, "Humira's second brand")}`, "Trudexa: Humira's second brand.");
   // A plain note (group_note without a per-medicine move): about its later ownership, no "Why".
-  assert.equal(companies.note("Coherus sold its U.S. rights in 2025"), "Ownership: Coherus sold its U.S. rights in 2025.");
+  assert.equal(companies.groupNote("Coherus sold its U.S. rights in 2025"), "Ownership: Coherus sold its U.S. rights in 2025.");
   // On phones a long note sits behind a disclosure: its summary, then the note alone.
   assert.equal(companies.whySummary("Theramex"), "Why Theramex?");
   assert.equal(companies.sponsorSummary, "Sponsor");

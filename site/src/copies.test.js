@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup, substanceSetCount } from "./copies.js";
+import { copiesLinePlan, copiesSummary, countedFromName, curatedTypeDiffers, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup, substanceSetCount } from "./copies.js";
 
 // ema_substance_equivalents.json rows (hand-checked pairs; both directions in the file).
 const pair = (substance_key, equivalent_key) => ({
@@ -390,4 +390,21 @@ test("siblingSubstances: the other keys of the same substance with their medicin
   // A pair naming a key the data does not have is left out.
   assert.deepEqual(siblingSubstances("metformin", substances, substanceEquivalents(EQUIVALENT_ROWS)), []);
   assert.deepEqual(siblingSubstances("dasatinib", substances, new Map()), []);
+});
+
+// QA 2026-09-29 (#9): the card explains EMA's type; a curated copy whose type contradicts that
+// explanation (real rows 2026-09-29: Riulvy, EMA Generic, a hybrid of Tecfidera; Tuznue, EMA Other,
+// a biosimilar of Herceptin; Sugammadex Adroiq, EMA Other, a generic of Bridion) says so instead.
+test("curatedTypeDiffers: a curated copy type that contradicts EMA's type", () => {
+  const copy = (copy_type) => ({ copy_type, reference_name: "X" });
+  assert.equal(curatedTypeDiffers("Generic", copy("hybrid")), true);
+  assert.equal(curatedTypeDiffers("Other", copy("biosimilar")), true);
+  assert.equal(curatedTypeDiffers("Other", copy("generic")), true);
+  // Agreeing types: a hybrid is Other (Liraglutide STADA), a generic Generic, a biosimilar Biosimilar.
+  assert.equal(curatedTypeDiffers("Other", copy("hybrid")), false);
+  assert.equal(curatedTypeDiffers("Generic", copy("generic")), false);
+  assert.equal(curatedTypeDiffers("Biosimilar", copy("biosimilar")), false);
+  // No curated row (most medicines, or while the file loads), or an unknown copy type.
+  assert.equal(curatedTypeDiffers("Generic", undefined), false);
+  assert.equal(curatedTypeDiffers("Other", copy("other")), false);
 });
