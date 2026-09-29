@@ -46,16 +46,22 @@ no_copies <- function() {
   )
 }
 
+no_pumas <- function() {
+  dplyr::tibble(ema_product_number = character())
+}
+
 protection_of <- function(medicines,
                           set_keys = set_keys_of(medicines),
                           medicine_groups = no_groups(),
-                          copies = no_copies()) {
+                          copies = no_copies(),
+                          pumas = no_pumas()) {
   build_protection_table(
     medicines,
     snapshot,
     set_keys,
     medicine_groups,
-    copies
+    copies,
+    pumas
   )
 }
 
@@ -737,6 +743,132 @@ test_that("a curated generic follows its reference medicine", {
   expect_identical(adroiq$status, "ended")
 })
 
+# Alkindi (Immedica) is a paediatric-use marketing authorisation (PUMA) of
+# hydrocortisone, first centrally approved as Plenadren (Takeda); Slenyto a
+# PUMA of melatonin, whose company's Circadin came first.
+puma_medicines <- function() {
+  dplyr::tibble(
+    ema_product_number = paste0(
+      "EMEA/H/C/",
+      c("002185", "004416", "000695", "004425")
+    ),
+    name_of_medicine = c("Plenadren", "Alkindi", "Circadin", "Slenyto"),
+    medicine_status = "Authorised",
+    generic = FALSE,
+    biosimilar = FALSE,
+    marketing_authorisation_date = as.Date(c(
+      "2011-11-03", "2018-02-09", "2007-06-29", "2018-09-20"
+    )),
+    substance_set_key = c(
+      "hydrocortisone", "hydrocortisone", "melatonin", "melatonin"
+    )
+  )
+}
+
+puma_groups <- function() {
+  dplyr::tibble(
+    ema_product_number = paste0(
+      "EMEA/H/C/",
+      c("002185", "004416", "000695", "004425")
+    ),
+    group_key = c(
+      "g.takeda", "g.immedica-pharma", "g.rad-neurim-pharmaceuticals-eec",
+      "g.rad-neurim-pharmaceuticals-eec"
+    )
+  )
+}
+
+puma_of <- function(product_numbers) {
+  dplyr::tibble(ema_product_number = product_numbers)
+}
+
+test_that("a paediatric-use marketing authorisation counts from itself", {
+  pumas <- puma_of(c("EMEA/H/C/004416", "EMEA/H/C/004425"))
+  without <- protection_of(puma_medicines(), medicine_groups = puma_groups())
+  expect_identical(
+    protection_row(without, "EMEA/H/C/004416")$basis,
+    "other_company_reference"
+  )
+  expect_identical(protection_row(without, "EMEA/H/C/004425")$status, "ended")
+  protection <- protection_of(
+    puma_medicines(),
+    medicine_groups = puma_groups(),
+    pumas = pumas
+  )
+  alkindi <- protection_row(protection, "EMEA/H/C/004416")
+  expect_identical(alkindi$basis, "paediatric_use")
+  expect_identical(alkindi$copy_source, NA_character_)
+  expect_identical(alkindi$reference_product_number, "EMEA/H/C/004416")
+  expect_identical(alkindi$reference_name, "Alkindi")
+  expect_identical(alkindi$counted_from, as.Date("2018-02-09"))
+  expect_identical(alkindi$own_reference_product_number, NA_character_)
+  expect_identical(alkindi$own_counted_from, as.Date(NA))
+  expect_identical(alkindi$data_exclusivity_end, as.Date("2026-02-09"))
+  expect_identical(alkindi$data_exclusivity_end_max, as.Date(NA))
+  expect_identical(alkindi$market_protection_end_min, as.Date("2028-02-09"))
+  expect_identical(alkindi$market_protection_end_max, as.Date("2029-02-09"))
+  expect_identical(alkindi$status, "protected")
+  # Counted from Circadin, its company's first melatonin, it had ended.
+  slenyto <- protection_row(protection, "EMEA/H/C/004425")
+  expect_identical(slenyto$basis, "paediatric_use")
+  expect_identical(slenyto$counted_from, as.Date("2018-09-20"))
+  expect_identical(slenyto$status, "protected")
+  # The other medicines of the substance keep their estimates.
+  plenadren <- protection_row(protection, "EMEA/H/C/002185")
+  expect_identical(plenadren$basis, "own")
+  expect_identical(plenadren$counted_from, as.Date("2011-11-03"))
+  expect_identical(
+    protection_row(protection, "EMEA/H/C/000695")$reference_name,
+    "Circadin"
+  )
+})
+
+test_that("a paediatric-use marketing authorisation is no copy", {
+  medicines <- dplyr::mutate(
+    puma_medicines(),
+    generic = .data$name_of_medicine == "Alkindi"
+  )
+  alkindi <- protection_row(
+    protection_of(
+      medicines,
+      medicine_groups = puma_groups(),
+      pumas = puma_of("EMEA/H/C/004416")
+    ),
+    "EMEA/H/C/004416"
+  )
+  expect_identical(alkindi$basis, "paediatric_use")
+  expect_identical(alkindi$copy_source, NA_character_)
+  expect_identical(alkindi$counted_from, as.Date("2018-02-09"))
+})
+
+test_that("a curated copy of a PUMA follows the PUMA's own approval", {
+  medicines <- dplyr::bind_rows(
+    puma_medicines(),
+    dplyr::tibble(
+      ema_product_number = "EMEA/H/C/009999",
+      name_of_medicine = "Stand-in hybrid",
+      medicine_status = "Authorised",
+      generic = FALSE,
+      biosimilar = FALSE,
+      marketing_authorisation_date = as.Date("2026-01-15"),
+      substance_set_key = "hydrocortisone"
+    )
+  )
+  copy <- protection_row(
+    protection_of(
+      medicines,
+      medicine_groups = puma_groups(),
+      copies = copy_of("EMEA/H/C/009999", "EMEA/H/C/004416"),
+      pumas = puma_of("EMEA/H/C/004416")
+    ),
+    "EMEA/H/C/009999"
+  )
+  expect_identical(copy$basis, "follows_reference")
+  expect_identical(copy$reference_name, "Alkindi")
+  expect_identical(copy$counted_from, as.Date("2018-02-09"))
+  expect_identical(copy$status, "protected")
+})
+
 curated_copy_row <- function() {
   dplyr::tibble(
     ema_product_number = "EMEA/H/C/006615",
@@ -915,6 +1047,121 @@ test_that("the curated copies are well formed and say so", {
     copy_of_product("EMEA/H/C/006252")$reference_product_number,
     "EMEA/H/C/000278"
   )
+  # From the EPAR scan of 2026-09-29: Ledaga, Nyxoid, Trepulmix and Ryjunea
+  # (protected), and Nordimet (unclear), hybrids of medicines authorised
+  # nationally.
+  scanned <- paste0(
+    "EMEA/H/C/",
+    c("002826", "004325", "005207", "006324", "003983")
+  )
+  expect_identical(copy_of_product(scanned[1])$reference_name, "Caryolysine")
+  expect_identical(copy_of_product(scanned[5])$reference_name, "Lantarel FS")
+  expect_true(all(is.na(
+    copies$reference_product_number[copies$ema_product_number %in% scanned]
+  )))
+  expect_true(all(scanned %in% copies$ema_product_number))
+  expect_identical(nrow(copies), 41L)
+})
+
+puma_row <- function() {
+  dplyr::tibble(
+    ema_product_number = "EMEA/H/C/004416",
+    evidence_url = paste0(
+      "https://www.ema.europa.eu/en/documents/assessment-report/",
+      "alkindi-epar-public-assessment-report_en.pdf"
+    ),
+    evidence_quote = paste(
+      "an application for a Paediatric Use marketing authorisation in",
+      "accordance with Article 30 of Regulation (EC) No 1901/2006"
+    ),
+    checked_date = as.Date("2026-09-29"),
+    note = NA_character_
+  )
+}
+
+test_that("check_curated_pumas accepts well-formed rows", {
+  pumas <- dplyr::bind_rows(
+    puma_row(),
+    dplyr::mutate(
+      puma_row(),
+      ema_product_number = "EMEA/H/C/006044",
+      evidence_quote = "an application for a paediatric-use marketing
+      authorisation"
+    )
+  )
+  expect_identical(check_curated_pumas(pumas, curated_copy_row()), pumas)
+})
+
+test_that("check_curated_pumas aborts on malformed rows", {
+  expect_puma_error <- function(pumas, offender, copies = curated_copy_row()) {
+    error <- expect_error(
+      check_curated_pumas(pumas, copies),
+      class = "rlang_error"
+    )
+    expect_match(conditionMessage(error), offender, fixed = TRUE)
+  }
+  row <- puma_row()
+  expect_puma_error(
+    dplyr::mutate(row, ema_product_number = "H/C/4416"),
+    "H/C/4416"
+  )
+  expect_puma_error(
+    dplyr::mutate(row, evidence_url = "http://www.ema.europa.eu/"),
+    "EMEA/H/C/004416"
+  )
+  expect_puma_error(
+    dplyr::mutate(row, evidence_quote = paste(rep("word", 21), collapse = " ")),
+    "EMEA/H/C/004416"
+  )
+  # The quote must say it is a paediatric-use marketing authorisation.
+  expect_puma_error(
+    dplyr::mutate(row, evidence_quote = "Alkindi is a ‘hybrid medicine’."),
+    "EMEA/H/C/004416"
+  )
+  expect_puma_error(
+    dplyr::mutate(row, checked_date = as.Date(NA)),
+    "EMEA/H/C/004416"
+  )
+  expect_puma_error(dplyr::bind_rows(row, row), "more than once")
+  expect_puma_error(
+    dplyr::mutate(row, ema_product_number = "EMEA/H/C/006615"),
+    "also a curated copy"
+  )
+})
+
+test_that("select_curated_pumas leaves out rows not in the data", {
+  pumas <- dplyr::bind_rows(
+    puma_row(),
+    dplyr::mutate(puma_row(), ema_product_number = "EMEA/H/C/009999")
+  )
+  expect_warning(
+    selected <- select_curated_pumas(pumas, puma_medicines()),
+    "EMEA/H/C/009999"
+  )
+  expect_identical(selected$ema_product_number, "EMEA/H/C/004416")
+  expect_identical(names(selected), c(names(puma_row()), "source"))
+  expect_identical(selected$source, "curated")
+  expect_no_warning(select_curated_pumas(puma_row(), puma_medicines()))
+})
+
+test_that("the curated PUMAs are well formed and no curated copies", {
+  pumas <- curated_puma_medicines()
+  expect_identical(
+    check_curated_pumas(pumas, curated_copy_medicines()),
+    pumas
+  )
+  expect_true(all(startsWith(
+    pumas$evidence_url,
+    "https://www.ema.europa.eu/en/documents/"
+  )))
+  # Alkindi, and the five the EPAR scan found calling themselves hybrids:
+  # Kigabeq, Aqumeldi, Tuzulby, Neoatricon and Bopediat.
+  hybrids <- paste0(
+    "EMEA/H/C/",
+    c("004416", "004534", "005731", "005975", "006044", "006617")
+  )
+  expect_true(all(hybrids %in% pumas$ema_product_number))
+  expect_identical(nrow(pumas), 11L)
 })
 
 test_that("build_protection_tables applies and returns the curated copies", {
@@ -928,17 +1175,19 @@ test_that("build_protection_tables applies and returns the curated copies", {
     ),
     ema_medicine_companies = liraglutide_groups()
   )
+  # Saxenda stands in for a PUMA.
   built <- build_protection_tables(
     tables,
     snapshot,
     equivalents = curated_substance_equivalents()[0, ],
-    copies = curated_copy_row()
+    copies = curated_copy_row(),
+    pumas = dplyr::mutate(puma_row(), ema_product_number = "EMEA/H/C/003780")
   )
   expect_named(
     built,
     c(
       "ema_medicine_protection", "ema_substance_equivalents",
-      "ema_curated_copies"
+      "ema_curated_copies", "ema_curated_pumas"
     )
   )
   stada <- protection_row(built$ema_medicine_protection, "EMEA/H/C/006615")
@@ -946,6 +1195,27 @@ test_that("build_protection_tables applies and returns the curated copies", {
   expect_identical(stada$copy_source, "curated")
   expect_identical(nrow(built$ema_substance_equivalents), 0L)
   expect_identical(built$ema_curated_copies$reference_name, "Victoza")
+  saxenda <- protection_row(built$ema_medicine_protection, "EMEA/H/C/003780")
+  expect_identical(saxenda$basis, "paediatric_use")
+  expect_identical(saxenda$counted_from, as.Date("2015-03-23"))
+  expect_identical(
+    built$ema_curated_pumas$ema_product_number,
+    "EMEA/H/C/003780"
+  )
+})
+
+test_that("curated_pumas_source_entry dates the entry by the last check", {
+  expect_null(curated_pumas_source_entry(puma_row()[0, ]))
+  entry <- curated_pumas_source_entry(dplyr::bind_rows(
+    puma_row(),
+    dplyr::mutate(puma_row(), checked_date = as.Date("2026-09-30"))
+  ))
+  expect_match(entry$name, "paediatric-use marketing authorisations")
+  expect_match(entry$name, "EMA public assessment reports", fixed = TRUE)
+  expect_identical(entry$version, "Checked 2026-09-30")
+  expect_identical(entry$retrieved, "2026-09-30")
+  expect_match(entry$url, "R/curated-copies.R$")
+  expect_match(entry$attribution, "European Medicines Agency", fixed = TRUE)
 })
 
 test_that("curated_copies_source_entry dates the entry by the last check", {

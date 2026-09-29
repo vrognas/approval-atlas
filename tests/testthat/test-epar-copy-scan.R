@@ -58,7 +58,7 @@ scan_protection <- function() {
     ),
     basis = c("own", "own", "own", "own", "own", "own", "follows_reference"),
     status = c(
-      "protected", "protected", "ended", "protected", "protected",
+      "protected", "unclear", "ended", "protected", "protected",
       "protected", "ended"
     )
   )
@@ -87,7 +87,7 @@ scan_copies <- function() {
   dplyr::tibble(ema_product_number = "EMEA/H/C/006046")
 }
 
-test_that("plan_epar_copy_scan picks Authorised own, protected medicines", {
+test_that("plan_epar_copy_scan picks Authorised own medicines not ended", {
   plan <- plan_epar_copy_scan(
     scan_protection(),
     scan_medicines(),
@@ -95,8 +95,9 @@ test_that("plan_epar_copy_scan picks Authorised own, protected medicines", {
     empty_epar_copy_checks(),
     budget = 10
   )
-  # Not Bridion (ended), Sixmo (withdrawn), Camcevi (no page), Sugammadex
-  # Adroiq (curated) or Herceptin (a follower).
+  # Buvidal (protected) and Okedi (unclear); not Bridion (ended), Sixmo
+  # (withdrawn), Camcevi (no page), Sugammadex Adroiq (curated) or Herceptin
+  # (a follower).
   expect_identical(
     plan,
     dplyr::tibble(
@@ -297,12 +298,13 @@ test_that("run_epar_copy_scan lists the pages that name a copy", {
     read_epar_copy_checks(file.path(cache_directory, "checks.json"))$copy_types,
     c("hybrid", NA)
   )
-  # Once curated, a medicine is no longer a candidate.
-  expect_identical(
-    nrow(epar_copy_candidates(
-      read_epar_copy_checks(file.path(cache_directory, "checks.json")),
-      dplyr::tibble(ema_product_number = "EMEA/H/C/004651")
-    )),
-    0L
-  )
+  # Once curated, as a copy or as a paediatric-use marketing authorisation
+  # (a PUMA, which has protection of its own), a medicine is no longer a
+  # candidate.
+  checks <- read_epar_copy_checks(file.path(cache_directory, "checks.json"))
+  none <- dplyr::tibble(ema_product_number = character())
+  curated <- dplyr::tibble(ema_product_number = "EMEA/H/C/004651")
+  expect_identical(nrow(epar_copy_candidates(checks, none, none)), 1L)
+  expect_identical(nrow(epar_copy_candidates(checks, curated, none)), 0L)
+  expect_identical(nrow(epar_copy_candidates(checks, none, curated)), 0L)
 })

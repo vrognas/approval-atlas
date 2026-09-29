@@ -203,12 +203,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
     conditions: [["mesh_descriptor_areas.json", "ema_medicine_therapeutic_areas.json", "ema_therapeutic_area_branches.json"],
       (descriptorAreaRows, areaRows, branchRows) => buildConditions(index, { descriptorAreaRows, areaRows, branchRows })],
     documents: [["ema_medicine_documents.json"], (rows) => groupBy(rows, "ema_product_number")],
-    // Step 4 review: the curated copies (their national references and evidence) with it; none
-    // when that file is missing (older data).
-    protection: [["ema_medicine_protection.json", "ema_medicine_orphan_exclusivity.json", { optional: "ema_curated_copies.json" }], (rows, orphanRows, copyRows) => ({
+    // Step 4 review: the curated copies (their national references and evidence) with it, and the
+    // curated pediatric-use marketing authorizations (their evidence); none when a file is missing
+    // (older data).
+    protection: [["ema_medicine_protection.json", "ema_medicine_orphan_exclusivity.json", { optional: "ema_curated_copies.json" }, { optional: "ema_curated_pumas.json" }], (rows, orphanRows, copyRows, pumaRows) => ({
       byProduct: new Map(rows.map((row) => [row.ema_product_number, row])),
       orphan: groupBy(orphanRows, "ema_product_number"),
       curatedCopies: new Map((copyRows ?? []).map((row) => [row.ema_product_number, row])),
+      pumas: new Map((pumaRows ?? []).map((row) => [row.ema_product_number, row])),
     })],
     register: [["ema_medicine_register_status.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
     // Step 3 (#7, #8): substance spellings checked by hand as one substance (copies.js).
@@ -553,7 +555,11 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       names.length ? names.join(" + ") : UI.protection.thisSubstance,
       snapshotDate,
       countedFromOf(row, protectionRow, protection),
-      { curated: protection.curatedCopies.get(row.ema_product_number), referenceSubstance: reference?.substances?.split("; ").join(" + ") ?? null },
+      {
+        curated: protection.curatedCopies.get(row.ema_product_number),
+        referenceSubstance: reference?.substances?.split("; ").join(" + ") ?? null,
+        puma: protection.pumas.get(row.ema_product_number),
+      },
     );
     if (!summary) return null;
     return el("section", { class: "card-section protection" },

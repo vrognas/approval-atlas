@@ -19,8 +19,12 @@ const COPY = UI.protection;
 // copy type ("a hybrid of Tecfidera"), a national reference and the EMA page that says so;
 // referenceSubstance, the central reference's substances (null when unknown).
 // A curated copy is counted as its reference is, so its counted-from line names the reference
-// (firstName: the reference's name when it was approved on counted_from). A line is a string, or
-// parts: strings and { text, url } for an external link.
+// (firstName: the reference's name when it was approved on counted_from). puma (2026-09-29), for
+// basis paediatric_use: its ema_curated_pumas.json row (undefined without one). A pediatric-use
+// marketing authorization has protection of its own, counted from its own approval (R: its
+// reference is itself), so its line never calls it the substance's first central approval
+// (Alkindi, 2018: hydrocortisone's was Plenadren, 2011). A line is a string, or parts: strings and
+// { text, url } for an external link.
 export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate, firstName = row?.reference_name, copy = {}) {
   if (!row) return null;
   const lines = [];
@@ -36,9 +40,10 @@ export function protectionSummary(row, orphanRows, substanceLabel, snapshotDate,
         ? COPY.dataExclusivityRange(row.data_exclusivity_end, exclusivityMax, exclusivityMax < snapshotDate)
         : COPY.dataExclusivity(row.data_exclusivity_end, row.data_exclusivity_end < snapshotDate),
       COPY.marketProtection(row.market_protection_end_min, row.market_protection_end_max, row.market_protection_end_max < snapshotDate),
-      !curated || !row.reference_name ? COPY.countedFrom(substanceLabel, firstName, row.counted_from)
-        : firstName === row.reference_name ? COPY.countedFromReference(row.reference_name, row.counted_from)
-          : COPY.countedAsReference(row.reference_name, copy.referenceSubstance ?? null, firstName, row.counted_from),
+      row.basis === "paediatric_use" ? paediatricUse(row, copy.puma)
+        : !curated || !row.reference_name ? COPY.countedFrom(substanceLabel, firstName, row.counted_from)
+          : firstName === row.reference_name ? COPY.countedFromReference(row.reference_name, row.counted_from)
+            : COPY.countedAsReference(row.reference_name, copy.referenceSubstance ?? null, firstName, row.counted_from),
     );
   }
   return {
@@ -64,9 +69,14 @@ function curatedFollows(row, curatedRow) {
   return withEvidence(COPY.curatedFollows(curatedRow.copy_type, row.reference_name ?? curatedRow.reference_name), curatedRow);
 }
 
-const withEvidence = (text, curatedRow) => (curatedRow.evidence_url?.startsWith("https://")
+const withEvidence = (text, curatedRow) => (curatedRow?.evidence_url?.startsWith("https://")
   ? [text, " ", { text: COPY.copyEvidence, url: curatedRow.evidence_url }]
   : text);
+
+// A pediatric-use marketing authorization: counted from its own approval (counted_from), then a
+// link to its public assessment report (pumaRow: its ema_curated_pumas.json row; the sentence alone
+// without one).
+const paediatricUse = (row, pumaRow) => withEvidence(COPY.paediatricUse(row.counted_from), pumaRow);
 
 // A copy (a generic, biosimilar or hybrid, EMA-flagged or curated) has no protection of its own:
 // its row's status and dates are its reference's (follows_reference), or unknown (no central

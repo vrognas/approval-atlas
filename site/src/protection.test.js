@@ -266,6 +266,67 @@ test("a curated copy of a central reference names its copy type and the evidence
     "No protection of its own; follows Tecfidera");
 });
 
+// 2026-09-29: a pediatric-use marketing authorization (basis paediatric_use, a row of
+// ema_curated_pumas.json) has protection of its own, counted from its own approval (R: its
+// reference is itself). Alkindi (2018) is not the first central approval of hydrocortisone
+// (Plenadren, 2011), so its line never says so; Buccolam is midazolam's first, and reads the same
+// way (real rows 2026-09-29).
+const pumaRow = (ema_product_number, slug) => ({
+  ema_product_number,
+  evidence_url: `https://www.ema.europa.eu/en/documents/assessment-report/${slug}-epar-public-assessment-report_en.pdf`,
+  evidence_quote: "an application for a Paediatric Use marketing authorisation in accordance with Article 30 of Regulation (EC) No 1901/2006",
+  checked_date: "2026-09-29", note: null, source: "curated",
+});
+const alkindi = {
+  ema_product_number: "EMEA/H/C/004416", basis: "paediatric_use", copy_source: null, reference_product_number: "EMEA/H/C/004416",
+  reference_name: "Alkindi", counted_from: "2018-02-09", own_reference_product_number: null, own_counted_from: null,
+  data_exclusivity_end: "2026-02-09", data_exclusivity_end_max: null, market_protection_end_min: "2028-02-09",
+  market_protection_end_max: "2029-02-09", status: "protected", source: "estimate_from_ema_dates",
+};
+const buccolam = {
+  ...alkindi, ema_product_number: "EMEA/H/C/002267", reference_product_number: "EMEA/H/C/002267", reference_name: "Buccolam",
+  counted_from: "2011-09-04", data_exclusivity_end: "2019-09-04", market_protection_end_min: "2021-09-04", market_protection_end_max: "2022-09-04", status: "ended",
+};
+
+test("a pediatric-use marketing authorization counts from its own approval, not as its substance's first", () => {
+  // lookup.js passes the name countedFromName() gives: Alkindi, approved on counted_from.
+  const summary = protectionSummary(alkindi, [], "hydrocortisone", "2026-09-29", "Alkindi", { puma: pumaRow("EMEA/H/C/004416", "alkindi") });
+  assert.equal(summary.status, "Data/market protection: Protected");
+  assert.deepEqual(summary.lines, [
+    "Data exclusivity ended (est.) 9 Feb 2026",
+    "Market protection ends (est.) 9 Feb 2028 – 9 Feb 2029",
+    [
+      "A pediatric-use marketing authorization: protection counted from its own EU authorization, 9 Feb 2018",
+      " ",
+      { text: "Source", url: "https://www.ema.europa.eu/en/documents/assessment-report/alkindi-epar-public-assessment-report_en.pdf" },
+    ],
+  ]);
+  assert.ok(summary.lines.flat().every((line) => typeof line !== "string" || !line.includes("first central EU approval")));
+  // Buccolam, the first central approval of midazolam, is no different: its own protection.
+  assert.deepEqual(protectionSummary(buccolam, [], "midazolam", "2026-09-29", "Buccolam", { puma: pumaRow("EMEA/H/C/002267", "buccolam") }), {
+    status: "Data/market protection: Ended",
+    lines: [
+      "Data exclusivity ended (est.) 4 Sep 2019",
+      "Market protection ended (est.) 4 Sep 2021 – 4 Sep 2022",
+      [
+        "A pediatric-use marketing authorization: protection counted from its own EU authorization, 4 Sep 2011",
+        " ",
+        { text: "Source", url: "https://www.ema.europa.eu/en/documents/assessment-report/buccolam-epar-public-assessment-report_en.pdf" },
+      ],
+    ],
+    orphan: [],
+  });
+  // Without its curated row (a missing ema_curated_pumas.json) or without https evidence: the sentence alone.
+  const sentence = "A pediatric-use marketing authorization: protection counted from its own EU authorization, 9 Feb 2018";
+  assert.equal(protectionSummary(alkindi, [], "hydrocortisone", "2026-09-29", "Alkindi").lines[2], sentence);
+  assert.equal(protectionSummary(alkindi, [], "hydrocortisone", "2026-09-29", "Alkindi", { puma: { ...pumaRow("EMEA/H/C/004416", "alkindi"), evidence_url: null } }).lines[2], sentence);
+});
+
+test("protectionGlance: a pediatric-use marketing authorization shows its own protection", () => {
+  assert.deepEqual(protectionGlance(alkindi, [], "2026-09-29"), { value: "Until 2028–2029", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance(buccolam, [], "2026-09-29"), { value: "Ended", reference: null, orphan: null });
+});
+
 test("protectionGlance: the answer strip's short form of the estimate", () => {
   const protectedRow = { ...own, market_protection_end_min: "2031-01-06", market_protection_end_max: "2032-01-06", status: "protected" };
   assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Until 2031–2032", reference: null, orphan: null });

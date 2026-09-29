@@ -8,6 +8,8 @@
 # reference medicine, or, when it was authorised nationally, have no
 # reference found. Informed-consent copies and copies not on that list count
 # as medicines of their own, so they may show protection they do not have.
+# A paediatric-use marketing authorisation (curated_puma_medicines()) has
+# protection of its own, so it counts from its own approval and is no copy.
 data_exclusivity_years <- 8L
 market_protection_years_min <- 10L
 market_protection_years_max <- 11L
@@ -96,8 +98,9 @@ first_products <- function(originators, by) {
 # A generic or biosimilar follows the first product of its substances as
 # spelt, else of their equivalents (Dasatinib Accord Healthcare: Sprycel,
 # "dasatinib (anhydrous)"); any other medicine counts from the first product
-# of the equivalent substances, whoever holds it. A curated copy follows
-# the reference medicine its EPAR names, from the date that medicine counts
+# of the equivalent substances, whoever holds it. A paediatric-use marketing
+# authorisation counts from its own approval. A curated copy follows the
+# reference medicine its EPAR names, from the date that medicine counts
 # from, whatever its substances (Riulvy, tegomil fumarate: Tecfidera).
 match_references <- function(dated, originators, copies) {
   by_spelling <- dated |>
@@ -109,7 +112,7 @@ match_references <- function(dated, originators, copies) {
       relationship = "many-to-one"
     )
   by_substance <- dated |>
-    dplyr::filter(!.data$is_curated_copy) |>
+    dplyr::filter(!.data$is_curated_copy, !.data$is_puma) |>
     dplyr::anti_join(by_spelling, by = "ema_product_number") |>
     dplyr::select("ema_product_number", "equivalent_set_key") |>
     dplyr::inner_join(
@@ -117,7 +120,16 @@ match_references <- function(dated, originators, copies) {
       by = "equivalent_set_key",
       relationship = "many-to-one"
     )
-  references <- dplyr::bind_rows(by_spelling, by_substance)
+  own_approvals <- dated |>
+    dplyr::filter(.data$is_puma) |>
+    dplyr::transmute(
+      .data$ema_product_number,
+      reference_product_number = .data$ema_product_number,
+      reference_name = .data$name_of_medicine,
+      counted_from = .data$marketing_authorisation_date,
+      reference_group_key = .data$group_key
+    )
+  references <- dplyr::bind_rows(by_spelling, by_substance, own_approvals)
   by_curated <- copies |>
     dplyr::filter(!is.na(.data$reference_product_number)) |>
     dplyr::select("ema_product_number", "reference_product_number") |>
@@ -166,7 +178,8 @@ own_company_firsts <- function(originators) {
 prepare_dated_medicines <- function(medicines,
                                     set_keys,
                                     medicine_groups,
-                                    copies) {
+                                    copies,
+                                    pumas) {
   medicines |>
     dplyr::filter(!is.na(.data$marketing_authorisation_date)) |>
     dplyr::select(
@@ -196,7 +209,9 @@ prepare_dated_medicines <- function(medicines,
       ),
       is_curated_copy = .data$ema_product_number %in%
         copies$ema_product_number,
-      is_follower = .data$generic | .data$biosimilar | .data$is_curated_copy,
+      is_puma = .data$ema_product_number %in% pumas$ema_product_number,
+      is_follower = (.data$generic | .data$biosimilar | .data$is_curated_copy) &
+        !.data$is_puma,
       is_authorised = .data$medicine_status %in% "Authorised"
     )
 }
@@ -249,6 +264,7 @@ apply_other_company_rule <- function(data, snapshot_date) {
         as.Date(NA)
       ),
       basis = dplyr::case_when(
+        .data$is_puma ~ "paediatric_use",
         .data$other_company ~ "other_company_reference",
         !.data$is_follower ~ "own",
         !is.na(.data$reference_product_number) ~ "follows_reference",
@@ -271,12 +287,14 @@ build_protection_table <- function(medicines,
                                    snapshot_date,
                                    set_keys,
                                    medicine_groups,
-                                   copies) {
+                                   copies,
+                                   pumas) {
   dated <- prepare_dated_medicines(
     medicines,
     set_keys,
     medicine_groups,
-    copies
+    copies,
+    pumas
   )
   originators <- dplyr::filter(dated, !.data$is_follower)
   dated |>
@@ -401,31 +419,95 @@ select_curated_copies <- function(copies, medicines) {
     dplyr::arrange(.data$ema_product_number)
 }
 
+# The quote must say the application was for a paediatric-use marketing
+# authorisation.
+quote_names_puma <- function(quotes) {
+  grepl(
+    "paediatric[- ]use\\s+marketing\\s+authorisation",
+    quotes,
+    ignore.case = TRUE
+  )
+}
+
+# Product numbers, evidence (has_evidence()) whose quote names a
+# paediatric-use marketing authorisation, one row per medicine, and none a
+# curated copy: a PUMA has protection of its own.
+check_curated_pumas <- function(pumas, copies) {
+  malformed <- !is_product_number(pumas$ema_product_number) |
+    !has_evidence(pumas) |
+    !quote_names_puma(pumas$evidence_quote)
+  if (any(malformed)) {
+    cli::cli_abort(c(
+      "Curated paediatric-use marketing authorisations need an EMA product
+      number, an https evidence URL, a quote of at most 20 words naming a
+      paediatric-use marketing authorisation and a checked date.",
+      x = "{.val {offender_values(pumas$ema_product_number[malformed])}}"
+    ))
+  }
+  repeated <- duplicated(pumas$ema_product_number)
+  if (any(repeated)) {
+    cli::cli_abort(c(
+      "Curated paediatric-use marketing authorisations list a medicine more
+      than once.",
+      x = "{.val {offender_values(pumas$ema_product_number[repeated])}}"
+    ))
+  }
+  copied <- pumas$ema_product_number %in% copies$ema_product_number
+  if (any(copied)) {
+    cli::cli_abort(c(
+      "Paediatric-use marketing authorisations that are also a curated copy
+      (a PUMA has protection of its own).",
+      x = "{.val {offender_values(pumas$ema_product_number[copied])}}"
+    ))
+  }
+  pumas
+}
+
+# The curated PUMAs in the EMA data (published as ema_curated_pumas.json).
+select_curated_pumas <- function(pumas, medicines) {
+  in_data <- pumas$ema_product_number %in% medicines$ema_product_number
+  if (!all(in_data)) {
+    cli::cli_warn(c(
+      "Curated paediatric-use marketing authorisations not in the EMA data
+      (left out):",
+      x = "{.val {offender_values(pumas$ema_product_number[!in_data])}}"
+    ))
+  }
+  pumas[in_data, ] |>
+    dplyr::mutate(source = "curated") |>
+    dplyr::arrange(.data$ema_product_number)
+}
+
 # Built after the company tables, whose groups it reads.
 build_protection_tables <- function(tables,
                                     snapshot_date,
                                     equivalents =
                                       curated_substance_equivalents(),
-                                    copies = curated_copy_medicines()) {
+                                    copies = curated_copy_medicines(),
+                                    pumas = curated_puma_medicines()) {
   equivalents <- build_substance_equivalents(
     equivalents,
     tables$ema_medicine_substances
   )
   set_keys <- protection_set_keys(tables$ema_medicine_substances, equivalents)
-  copies <- select_curated_copies(
-    check_curated_copies(copies),
+  copies <- check_curated_copies(copies)
+  pumas <- select_curated_pumas(
+    check_curated_pumas(pumas, copies),
     tables$ema_medicines
   )
+  copies <- select_curated_copies(copies, tables$ema_medicines)
   list(
     ema_medicine_protection = build_protection_table(
       tables$ema_medicines,
       snapshot_date,
       set_keys,
       tables$ema_medicine_companies,
-      copies
+      copies,
+      pumas
     ),
     ema_substance_equivalents = equivalents,
-    ema_curated_copies = copies
+    ema_curated_copies = copies,
+    ema_curated_pumas = pumas
   )
 }
 
@@ -450,6 +532,32 @@ curated_copies_source_entry <- function(copies) {
     attribution = paste(
       "Copy type and reference medicine checked by hand by approval-atlas",
       "against EMA EPAR pages, quoted verbatim;",
+      ema_attribution
+    )
+  )
+}
+
+# meta.json entry for the curated PUMAs (none when no row is in the data).
+curated_pumas_source_entry <- function(pumas) {
+  if (nrow(pumas) == 0) {
+    return(NULL)
+  }
+  checked <- format(max(pumas$checked_date))
+  list(
+    name = paste(
+      "EMA paediatric-use marketing authorisations (PUMAs; curated by",
+      "approval-atlas from EMA public assessment reports)"
+    ),
+    url = paste0(
+      "https://github.com/vrognas/approval-atlas/blob/main/",
+      "R/curated-copies.R"
+    ),
+    version = paste("Checked", checked),
+    retrieved = checked,
+    licence = "© European Medicines Agency; reuse with acknowledgement",
+    attribution = paste(
+      "Paediatric-use marketing authorisations checked by hand by",
+      "approval-atlas against EMA public assessment reports, quoted verbatim;",
       ema_attribution
     )
   )
