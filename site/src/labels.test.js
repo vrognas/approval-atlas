@@ -795,7 +795,9 @@ test("the medicine card's document buttons", () => {
 // one "More details" at the end. Estimates only, never "patent".
 test("the medicine card's blocks and More details", () => {
   const { card } = labels.UI;
-  assert.deepEqual(card.blocks, { status: "Status", protection: "Protection and copies", documents: "Documents" });
+  assert.deepEqual(card.blocks, { status: "Status", protection: "Protection and copies", documents: "Documents", indication: "Indication" });
+  // The indication shows after the Documents block, so More details does not name it again.
+  assert.doesNotMatch(card.more.hint, /indication/i);
   assert.equal(card.more.summary, "More details");
   assert.equal(card.more.about, "About this medicine");
   assert.equal(card.more.allDocuments, "All documents");

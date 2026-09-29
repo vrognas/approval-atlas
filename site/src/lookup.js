@@ -574,14 +574,16 @@ export function createLookup(panel, {
       .sort((a, b) => a.marketing_authorisation_date.localeCompare(b.marketing_authorisation_date))[0] ?? null;
   }
 
-  // The indication's lead (indicationLead()), the full text behind a disclosure.
-  function indicationFact(text) {
+  // The Indication block, right after the Documents block (what it is for is part of the answer):
+  // the indication's lead (indicationLead()), the full text behind "Show full indication" (shown
+  // only here, not again in More details). Loading… until EMA's rows arrive; none without a text.
+  function indicationBlock(medicines, text) {
+    if (!ready(medicines)) return cardBlock("indication", pending(medicines));
     if (!text) return null;
     const { lead, more } = indicationLead(text);
-    return fact(UI.card.indication, [
+    return cardBlock("indication",
       el("p", { class: "indication-lead" }, lead),
-      more ? el("details", { class: "indication", "data-key": "indication" }, el("summary", null, UI.card.fullIndication), el("p", null, text)) : null,
-    ]);
+      more ? el("details", { class: "indication", "data-key": "indication" }, el("summary", null, UI.card.fullIndication), el("p", null, text)) : null);
   }
 
   // The section's heading is the target of the protection lead (focusable, kept
@@ -787,8 +789,8 @@ export function createLookup(panel, {
     // F · Spacious, phase 4 (Miller's Law / chunking; Peak-End; Von Restorff): the answer headline,
     // then three blocks, Status (the status and its sentence, since, company, the first conditions),
     // Protection and copies (the estimate's short form as its lead, the copies lines) and Documents
-    // (the product information, EPAR and overview buttons), which end the first phone screen; then
-    // one More details disclosure holding the rest (a disclosure per block would add a 44px row
+    // (the product information, EPAR and overview buttons), which end the first phone screen; the
+    // Indication block after them (what it is for); then one More details disclosure holding the rest (a disclosure per block would add a 44px row
     // before the buttons for each). The answer's parts (authorized or not, since, protected until)
     // are the card's strong type; its chips and badges are neutral.
     // The Status block's lead: the status pill, then since when (approved when, once it ended) in
@@ -819,8 +821,7 @@ export function createLookup(panel, {
       el("summary", null, el("span", { class: "more-title" }, UI.card.more.summary), " ", el("span", { class: "more-hint" }, UI.card.more.hint)),
       el("section", { class: "card-section" },
         el("h2", null, UI.card.more.about),
-        el("dl", { class: "facts what-for" },
-          ready(medicines) ? indicationFact(medicine?.therapeutic_indication) : fact(UI.card.indication, pending(medicines)),
+        el("dl", { class: "facts" },
           fact(UI.card.areas, areaLinks(number, areas, conditions)),
           fact(UI.card.substances, substances.map((link, position) => [link, position < substances.length - 1 ? "; " : ""])),
           fact(UI.card.company, companyFact(number)),
@@ -842,7 +843,8 @@ export function createLookup(panel, {
       kicker("medicine"),
       title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status), opinion))),
       namesakeNotes(namesakes),
-      el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, statusBlock, protectionBlock, documentsBlock)),
+      el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, statusBlock, protectionBlock, documentsBlock,
+        indicationBlock(medicines, medicine?.therapeutic_indication))),
       more);
   }
 

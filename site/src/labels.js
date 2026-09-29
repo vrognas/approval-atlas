@@ -1428,17 +1428,16 @@ export const UI = {
     type: "Medicine type",
     atc: "ATC classification",
     areas: "Therapeutic areas",
-    indication: "Indication",
     fullIndication: "Show full indication",
     // F · Spacious, phase 4: the Status block's first three conditions, then this button, which
     // opens More details at the full list (with their branch chips); hidden: the rest of its name.
     moreAreas: (count) => ({ text: `and ${formatCount(count)} more`, hidden: count === 1 ? " therapeutic area" : " therapeutic areas" }),
-    // F · Spacious, phase 4 (Miller's Law / chunking): the card's three blocks, then one disclosure
-    // at the end holding the rest (its hint says what).
-    blocks: { status: "Status", protection: "Protection and copies", documents: "Documents" },
+    // F · Spacious, phase 4 (Miller's Law / chunking): the card's three blocks and, after them, the
+    // indication's (what it is for); then one disclosure at the end holding the rest (its hint says what).
+    blocks: { status: "Status", protection: "Protection and copies", documents: "Documents", indication: "Indication" },
     more: {
       summary: "More details",
-      hint: "Indication, all therapeutic areas, active substances, type, modality, ATC, company notes, the protection estimate and every document",
+      hint: "All therapeutic areas, active substances, type, modality, ATC, company notes, the protection estimate and every document",
       about: "About this medicine",
       allDocuments: "All documents",
     },
