@@ -66,8 +66,9 @@ const TEXT_PAIRS = [
   ["--ink", "--mark"],
   // The search list's last option, the indication-text search (step 2), in link colour when active.
   ["--link", "--option-active"],
-  // Headline tones: the "not" of "not authorized" and the "not yet" of a pending opinion.
-  ...["--status-ended-text", "--status-pending-text"].flatMap((text) => BACKGROUNDS.map((background) => [text, background])),
+  // Headline tones: the "not" of "not authorized", the "not yet" of a pending opinion and (F · Spacious,
+  // phase 4) the "authorized" of an authorized medicine.
+  ...["--status-ended-text", "--status-pending-text", "--status-authorized"].flatMap((text) => BACKGROUNDS.map((background) => [text, background])),
   ...STATUS_HUES.flatMap((hue) => BACKGROUNDS.map((background) => [`--${hue}-text`, background])),
   ...ATC_HUES.flatMap((hue) => [1, 2, 3, 4, 5].map((level) => [`--${hue}-text`, `--${hue}-${level}`])),
   ...HEAT_STEPS.map((step) => [`--heat-${step}-text`, `--heat-${step}`]),

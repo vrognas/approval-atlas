@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
+import { espacenetUrl, isCopy, protectionGlance, protectionSummary } from "./protection.js";
 
 const own = {
   ema_product_number: "EMEA/H/C/003820",
@@ -362,6 +362,14 @@ test("protectionGlance: a copy follows its reference and never shows the referen
   // Its own orphan exclusivity still shows.
   assert.equal(protectionGlance(palbociclibViatris, [{ condition: "A", exclusivity_end: "2033-05-30", end_source: "register" }], "2026-09-29").orphan,
     "Orphan exclusivity until 2033");
+});
+
+// F · Spacious, phase 4: the medicine card's protection lead says "(est.)" after an estimate of the
+// medicine's own protection, not after a copy's "Follows Ibrance" or "None of its own".
+test("isCopy: a copy's estimate is its reference's (or none), never its own", () => {
+  assert.equal(isCopy({ basis: "follows_reference" }), true);
+  assert.equal(isCopy({ basis: "reference_not_found" }), true);
+  for (const basis of ["own", "other_company_reference", "paediatric_use"]) assert.equal(isCopy({ basis }), false);
 });
 
 test("protectionGlance: orphan market exclusivity still running is named with its latest end year", () => {

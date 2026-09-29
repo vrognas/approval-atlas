@@ -507,7 +507,8 @@ export const UI = {
     // kind: statusKind(); an opinion without a decision yet is "not yet" authorized, unless it was
     // negative (opinion: ema_medicines opinion_status; step 2, #11): then "not".
     medicine: (name, kind, opinion = null) => {
-      if (kind === "authorized") return [`${name} is authorized in the EU.`];
+      // F · Spacious, phase 4 (Von Restorff): the answer word in the status's colour, as "not".
+      if (kind === "authorized") return [`${name} is `, { text: "authorized", tone: "authorized" }, " in the EU."];
       return [`${name} is `, kind === "pending" && opinion !== "Negative" ? NOT_YET : NOT, " authorized in the EU."];
     },
     // Substance names stay as in the data (lower-case INN) except for the first letter. Step 2 (#1):
@@ -1419,21 +1420,34 @@ export const UI = {
     notFound: (kind, value) => `No ${kind} “${value}” in the EMA data.`,
     noDate: "no approval date",
     kinds: { medicine: "medicine", substance: "substance", condition: "condition", company: "company" },
-    // Answer strip under a lookup headline: "Since" while authorized, "Approved" otherwise.
-    // "Company": it leads with the company group, as the table's "Company · Holder" column.
-    strip: { label: "Answer summary", company: "Company", since: "Since", approved: "Approved", status: "Status", protection: "Protection (est.)" },
     documentMeta: (isPdf, date) => [isPdf ? UI.card.pdf : null, UI.card.updated(date)].filter(Boolean).join(" · "),
     substances: "Active substance(s)",
-    // The medicine's company group and holder (companies part 2), with the groups' as-of date.
+    // The medicine's company group and holder (companies part 2), with the groups' as-of date; the
+    // Status blocks' label too (it leads with the company group, as the table's "Company · Holder").
     company: "Company",
     type: "Medicine type",
     atc: "ATC classification",
     areas: "Therapeutic areas",
     indication: "Indication",
     fullIndication: "Show full indication",
-    // Phones (review 2026-09-29): the first three conditions, the rest behind this button, so the
-    // product information button stays near the first screen; hidden: the rest of its name.
-    moreAreas: (count) => ({ text: `Show ${formatCount(count)} more`, hidden: count === 1 ? " therapeutic area" : " therapeutic areas" }),
+    // F · Spacious, phase 4: the Status block's first three conditions, then this button, which
+    // opens More details at the full list (with their branch chips); hidden: the rest of its name.
+    moreAreas: (count) => ({ text: `and ${formatCount(count)} more`, hidden: count === 1 ? " therapeutic area" : " therapeutic areas" }),
+    // F · Spacious, phase 4 (Miller's Law / chunking): the card's three blocks, then one disclosure
+    // at the end holding the rest (its hint says what).
+    blocks: { status: "Status", protection: "Protection and copies", documents: "Documents" },
+    more: {
+      summary: "More details",
+      hint: "Indication, all therapeutic areas, active substances, type, modality, ATC, company notes, the protection estimate and every document",
+      about: "About this medicine",
+      allDocuments: "All documents",
+    },
+    // The Status block's lead after the status pill: "since 6 Jan 2022" while authorized, else
+    // "approved 26 Jul 2016".
+    since: "since",
+    approvedOn: "approved",
+    // After the protection lead of a medicine's own estimate ("Until 2028–2029 (est.)").
+    estimate: "(est.)",
     // Another medicine with the same name (the refused and the authorized Mylotarg): a link to its
     // card, then its status; documents: the namesake's documents EMA lists under this one.
     namesake: {
@@ -1443,7 +1457,6 @@ export const UI = {
       documents: (count) => `${plural(count, "later document", "later documents")} EMA lists here ${count === 1 ? "belongs" : "belong"} to `,
       documentsLink: (name) => `the other ${name}`,
     },
-    documents: "Documents",
     pdf: "PDF",
     updated: (date) => (date ? `updated ${date}` : null),
     medicinePage: "EMA medicine page",
@@ -1559,7 +1572,8 @@ export const UI = {
     basisNote: "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.",
     // The answer strip's "Protection (est.)" cell (protectionGlance()): the market protection
     // range's years while protected, else the status; then orphan exclusivity still running.
-    // link: after the value, for screen readers (the cell jumps to the section).
+    // link: after the value, for screen readers (the medicine card's protection lead opens the
+    // estimate in More details; F · Spacious, phase 4).
     // A copy's cell: the reference it follows, then, while that is protected, the reference's
     // years as secondary text (QA 2026-09-29, #1).
     glance: {
@@ -1567,7 +1581,7 @@ export const UI = {
       follows: (name) => `Follows ${name}`,
       referenceUntil: (name, from, to) => `${name}'s: until ${from === to ? from : `${from}–${to}`}`,
       orphan: (year) => `Orphan exclusivity until ${year}`,
-      link: ", see the estimate below",
+      link: ", see the estimate in More details",
     },
     orphan: (condition, date, source, ended) =>
       `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)} ${source === "register" ? "(register)" : "(estimate)"}`,

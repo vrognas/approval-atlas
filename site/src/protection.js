@@ -81,7 +81,7 @@ const paediatricUse = (row, pumaRow) => withEvidence(COPY.paediatricUse(row.coun
 // A copy (a generic, biosimilar or hybrid, EMA-flagged or curated) has no protection of its own:
 // its row's status and dates are its reference's (follows_reference), or unknown (no central
 // reference). QA 2026-09-29 (#1): chip and strip never show them as the copy's own.
-const isCopy = (row) => row.basis === "follows_reference" || row.basis === "reference_not_found";
+export const isCopy = (row) => row.basis === "follows_reference" || row.basis === "reference_not_found";
 
 // The answer strip's short form (step 3, #7): { value: "Until 2031–2032" | "Ended" | "Unclear"
 // (the status; the years of the market protection range while protected), reference: null,
