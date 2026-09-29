@@ -67,6 +67,17 @@ export function copiesSummary(row, setRows, groupOf) {
   return { copy: COPY_TYPES.includes(row.medicine_type), copies, others: authorized.length, first: before };
 }
 
+// Step 4: a hybrid (EMA type Other; R's curated hybrid list) shares its reference's protection:
+// its estimate follows the reference (follows_reference), or finds no central one
+// (reference_not_found), as a generic's. Its card then reads as a copy's (Liraglutide STADA, a
+// hybrid of Victoza: the "same active substance" line, not the originator's "No generic or
+// biosimilar authorized yet."). protectionRow: its ema_medicine_protection.json row (undefined
+// while loading). Returns summary, with copy true for such an estimate.
+const COPY_BASES = ["follows_reference", "reference_not_found"];
+export function followsReference(summary, protectionRow) {
+  return !summary.copy && COPY_BASES.includes(protectionRow?.basis) ? { ...summary, copy: true } : summary;
+}
+
 // The set's first central approval as the medicine card names it ({ name, date, number }, or null
 // when this medicine came first): the set's first dated medicine before this one (copiesSummary()),
 // named by the protection estimate's reference when that was approved the same day, so card and

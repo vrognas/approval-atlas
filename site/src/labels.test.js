@@ -393,7 +393,8 @@ test("lookup headlines answer whether it is authorized; 'not' and counts are ton
   // Phase 4c review: EMA's therapeutic-area tags, not indications; narrower terms count too.
   assert.equal(plain(headline.condition("Psoriasis", 52, true)), "52 authorized medicines are tagged by EMA with Psoriasis or a narrower condition.");
   assert.equal(plain(headline.condition("Psoriasis", 1, false)), "1 authorized medicine is tagged by EMA with Psoriasis.");
-  assert.deepEqual(toned(headline.condition("Psoriasis", 52, true)), [["52", "number"]]);
+  // The name is a part of its own, for its MeSH explainer (owner request 2026-09-28).
+  assert.deepEqual(toned(headline.condition("Psoriasis", 52, true)), [["52", "number"], ["Psoriasis", "term"]]);
   assert.equal(plain(headline.condition("Kuru", 0, false)), "No authorized medicines are tagged by EMA with Kuru.");
   assert.equal(plain(headline.condition("Kuru", 0, true)), "No authorized medicines are tagged by EMA with Kuru or a narrower condition.");
 });
@@ -941,6 +942,14 @@ test("copies lines: a copy's card names the other medicines of its substance and
   assert.deepEqual(hyrimoz.filter((part) => typeof part !== "string"), [{ text: "adalimumab", link: "substance" }, { text: "Trudexa", link: "first" }]);
   assert.equal(partsText(copies.same(1, "sitagliptin + metformin hydrochloride", 2, null)), "1 other authorized medicine has the same active substances (sitagliptin + metformin hydrochloride).");
   assert.equal(partsText(copies.same(0, "x", 1, null)), "No other authorized medicine has the same active substance (x).");
+  // Step 4 (owner request 2026-09-28): a first approval no longer authorized says so, so "No other
+  // authorized medicine" does not read against it (Qdenga: Dengvaxia, withdrawn).
+  const qdenga = copies.same(0, "dengue tetravalent vaccine (live, attenuated)", 1, { name: "Dengvaxia", date: "2018-12-12", status: "Withdrawn" });
+  assert.equal(partsText(qdenga), "No other authorized medicine has the same active substance (dengue tetravalent vaccine (live, attenuated)); the first central approval was Dengvaxia (12 Dec 2018), since withdrawn.");
+  assert.deepEqual(qdenga.filter((part) => typeof part !== "string"), [{ text: "dengue tetravalent vaccine (live, attenuated)", link: "substance" }, { text: "Dengvaxia", link: "first" }]);
+  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Expired" })), "2 other authorized medicines have the same active substance (x); the first central approval was Y (1 Jan 2010), since expired.");
+  // Authorized, or its status unknown: as before.
+  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Authorised" })), "2 other authorized medicines have the same active substance (x); first central approval 1 Jan 2010 (Y).");
 });
 
 // Step 3 (#8): salt spellings of one substance on the substance card.
@@ -990,11 +999,27 @@ test("the sidebar splitter is named for what it resizes, with a hint", () => {
   assert.equal(labels.UI.sidebar.hint, "Drag or use the arrow keys to resize the filters; double-click to reset");
 });
 
-test("the breakdown sorts by count or by code (ATC) and name (areas, holders)", () => {
+test("the breakdown sorts by count or by code (ATC), MeSH tree order (areas) and name (holders)", () => {
   const { sort } = labels.UI.breakdown;
   assert.equal(sort.label, "Sort");
   assert.equal(sort.count, "Count");
-  assert.deepEqual(sort.key, { atc: "Code", area: "Name", mah: "Name" });
+  // Owner request 2026-09-28: the areas as the tree orders them, so not "Name".
+  assert.deepEqual(sort.key, { atc: "Code", area: "MeSH", mah: "Name" });
+  assert.equal(labels.UI.sortOrder.name("MeSH", "tree", "asc"), "MeSH, tree order");
+  assert.equal(labels.UI.sortOrder.name("MeSH", "tree", "desc"), "MeSH, tree order reversed");
+});
+
+// Owner request 2026-09-28: the therapeutic areas' MeSH explainers (mesh-notes.js builds the tip).
+test("MeSH explainers: the tooltip, and a condition page's definition with its tree numbers and NLM's credit", () => {
+  const { mesh } = labels.UI;
+  assert.equal(mesh.tip("Neoplasms", ["C04"], "New abnormal growth of tissue."), "Neoplasms (MeSH C04): New abnormal growth of tissue.");
+  assert.equal(mesh.tip("X", [], "Y."), "X: Y.");
+  assert.equal(mesh.numbers(["A01", "B02", "C03", "D04", "E05"]), "A01, B02, C03 and 2 more");
+  assert.equal(mesh.definition, "MeSH definition: ");
+  assert.equal(mesh.treeNumbers(["C04.588.180", "C17.800.090.500"]), "Tree numbers C04.588.180, C17.800.090.500.");
+  assert.equal(mesh.treeNumbers(["C04"]), "Tree number C04.");
+  assert.equal(mesh.source("MeSH 2026"), "From MeSH® (MeSH 2026), courtesy of the U.S. National Library of Medicine.");
+  assert.equal(mesh.source(null), "From MeSH®, courtesy of the U.S. National Library of Medicine.");
 });
 
 test("the holder activity card: sort buttons, column order and row names with the total", () => {

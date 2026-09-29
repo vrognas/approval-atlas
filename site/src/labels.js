@@ -397,12 +397,13 @@ export const UI = {
       : [`${capitalize(name)}: `, { text: "no medicine", tone: "negative" }, " is currently authorized through EMA ",
         { text: "(national authorizations are not included).", tone: "aside" }]),
     // EMA's therapeutic-area tags (not indications); narrower: the count includes medicines tagged
-    // with a narrower condition (Psoriasis: Arthritis, Psoriatic).
+    // with a narrower condition (Psoriasis: Arthritis, Psoriatic). The name is a part of its own
+    // (tone "term", no style of its own), which carries its MeSH explainer (lookup.js).
     condition: (name, count, narrower) => {
-      const what = `tagged by EMA with ${name}${narrower ? " or a narrower condition" : ""}.`;
+      const what = ["tagged by EMA with ", { text: name, tone: "term" }, `${narrower ? " or a narrower condition" : ""}.`];
       return count > 0
-        ? [number(count), ` authorized ${count === 1 ? "medicine is" : "medicines are"} ${what}`]
-        : [`No authorized medicines are ${what}`];
+        ? [number(count), ` authorized ${count === 1 ? "medicine is" : "medicines are"} `, ...what]
+        : ["No authorized medicines are ", ...what];
     },
   },
   kicker: { medicine: "Medicine", substance: "Substance", condition: "Condition", text: "Indication text", company: "Company" },
@@ -454,6 +455,8 @@ export const UI = {
   sortOrder: {
     count: { desc: "most first", asc: "fewest first" },
     key: { asc: "A to Z", desc: "Z to A" },
+    // The breakdown's therapeutic areas in MeSH tree order ("MeSH"), or reversed.
+    tree: { asc: "tree order", desc: "tree order reversed" },
     name: (text, kind, direction) => (direction ? `${text}, ${UI.sortOrder[kind][direction]}` : text),
   },
   // Links to other websites open in a new tab (links.js markExternal()): an icon, and the
@@ -556,8 +559,9 @@ export const UI = {
       excluded: (count) => `${plural(count, "medicine", "medicines")} without a holder ${count === 1 ? "is" : "are"} not shown.`,
     },
     empty: "No medicines match the current filters.",
-    // Bar order (UI state): most first, or ATC classes by code and areas and holders by name.
-    sort: { label: "Sort", count: "Count", key: { atc: "Code", area: "Name", mah: "Name" } },
+    // Bar order (UI state): most first, or ATC classes by code, areas in MeSH tree order (owner
+    // request 2026-09-28, as the tree) and holders by name.
+    sort: { label: "Sort", count: "Count", key: { atc: "Code", area: "MeSH", mah: "Name" } },
     // A stacked ATC bar's medicine types: [[type, count]] in stack order.
     typeSplit: (entries) => entries.map(([type, count]) => `${formatCount(count)} ${type}`).join(", "),
   },
@@ -784,6 +788,18 @@ export const UI = {
     note: "MeSH branches and their first two levels, then EMA's terms. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",
+  },
+
+  // MeSH explainers of the therapeutic areas (owner request 2026-09-28; mesh-notes.js): a tooltip
+  // wherever a term or tree node shows, "{name} (MeSH {tree numbers}): {the scope note's lead}"
+  // (three numbers, then how many more), and on a condition page NLM's full scope note with its
+  // tree numbers and the credit NLM asks for (the MeSH version: meta.json).
+  mesh: {
+    tip: (name, numbers, lead) => `${name}${numbers.length ? ` (MeSH ${UI.mesh.numbers(numbers)})` : ""}: ${lead}`,
+    numbers: (numbers) => (numbers.length > 3 ? `${numbers.slice(0, 3).join(", ")} and ${formatCount(numbers.length - 3)} more` : numbers.join(", ")),
+    definition: "MeSH definition: ",
+    treeNumbers: (numbers) => `${numbers.length === 1 ? "Tree number" : "Tree numbers"} ${numbers.join(", ")}.`,
+    source: (version) => `From MeSH®${version ? ` (${version})` : ""}, courtesy of the U.S. National Library of Medicine.`,
   },
 
   // Companies (companies part 2, user decisions 2026-09-28): holders grouped by their current owner
@@ -1035,14 +1051,30 @@ export const UI = {
     chip: (status) => `Data/market protection: ${status}`,
     // ended: the date (the range's later end) is before the data date.
     dataExclusivity: (date, ended) => `Data exclusivity ${ended ? "ended" : "ends"} (est.) ${formatDate(date)}`,
+    // Counted from another company's first approval and from the company's own (owner request
+    // 2026-09-28: data_exclusivity_end_max); ended: the later end is before the data date.
+    dataExclusivityRange: (min, max, ended) => `Data exclusivity ${ended ? "ended" : "ends"} (est.) between ${formatDate(min)} and ${formatDate(max)}`,
     marketProtection: (min, max, ended) => `Market protection ${ended ? "ended" : "ends"} (est.) ${formatDate(min)} – ${formatDate(max)}`,
     // Step 2 (#1): earlier national authorizations are not in the data.
     // name: a medicine approved that day (step 3 review: never the reference with another's date),
     // null when none is known.
     countedFrom: (substance, name, date) => `Counted from the first central EU approval of ${substance}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
     thisSubstance: "this active substance",
+    // Step 4 review: a curated copy (ema_curated_copies.json) is counted as its reference medicine
+    // is, whose substance can be another (Riulvy, tegomil fumarate: Tecfidera, dimethyl fumarate),
+    // so the line names the reference, never the copy's substance. countedFromReference: the
+    // reference was approved on that date; countedAsReference: it counts from an earlier medicine
+    // (Ablymico: Saxenda, counted from Victoza); substance: the reference's, null when unknown.
+    countedFromReference: (reference, date) => `Counted from its reference medicine ${reference}'s first central approval: ${formatDate(date)}`,
+    countedAsReference: (reference, substance, name, date) =>
+      `Counted, as for its reference medicine ${reference}, from the first central EU approval of ${substance ?? "its active substance"}: ${name ? `${name}, ` : ""}${formatDate(date)}`,
     follows: (name) => `No protection of its own; follows ${name}`,
     referenceNotFound: "No protection of its own; reference product not found in EU central authorizations",
+    // Step 4 review: a curated copy of a nationally authorized medicine (no central reference);
+    // type: the row's copy_type; then a link to the EMA page that says so (copyEvidence).
+    nationalReference: (type, name) =>
+      `No protection of its own; a ${{ hybrid: "hybrid", generic: "generic", biosimilar: "biosimilar" }[type] ?? "copy"} of ${name} (authorized nationally), whose protection dates are not in EU central data.`,
+    copyEvidence: "Source",
     // Step 3 (#6): counted from another company group's earlier medicine of the same substance set
     // (basis other_company_reference; own: the medicine's own group's first approval date, or
     // null). The status is unclear where the two estimates' statuses differ, else protected (step 3
@@ -1110,13 +1142,21 @@ export const UI = {
     ]), "."],
     // A copy's card, or a medicine whose set was approved before it (Wegovy: Ozempic): the set's
     // other authorized medicines (count), its name (substances: how many it has) and its first
-    // central approval ({ name, date }, or null when it is this medicine).
-    same: (count, substance, substances, first) => [
-      `${count === 0 ? "No other authorized medicine has" : `${plural(count, "other authorized medicine", "other authorized medicines")} ${count === 1 ? "has" : "have"}`} the same active ${substances === 1 ? "substance" : "substances"} (`,
-      { text: substance, link: "substance" }, ")",
-      first ? [`; first central approval ${formatDate(first.date)} (`, { text: first.name, link: "first" }, ")"] : [],
-      ".",
-    ].flat(),
+    // central approval ({ name, date, status (raw EMA status, or null when unknown) }, or null when
+    // it is this medicine). A first approval no longer authorized says so (owner request
+    // 2026-09-28: Qdenga's "No other authorized medicine …; first central approval … (Dengvaxia)"
+    // read against itself, Dengvaxia being withdrawn).
+    same: (count, substance, substances, first) => {
+      const ended = first?.status && statusKind(first.status) !== "authorized";
+      return [
+        `${count === 0 ? "No other authorized medicine has" : `${plural(count, "other authorized medicine", "other authorized medicines")} ${count === 1 ? "has" : "have"}`} the same active ${substances === 1 ? "substance" : "substances"} (`,
+        { text: substance, link: "substance" }, ")",
+        !first ? []
+          : ended ? ["; the first central approval was ", { text: first.name, link: "first" }, ` (${formatDate(first.date)}), since ${statusLabel(first.status).toLowerCase()}`]
+            : [`; first central approval ${formatDate(first.date)} (`, { text: first.name, link: "first" }, ")"],
+        ".",
+      ].flat();
+    },
   },
 
   condition: {

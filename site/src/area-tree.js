@@ -8,10 +8,11 @@ import { createFacetTree } from "./facet-tree.js";
 import { UI } from "./labels.js";
 
 // section: #facet-area; tree: buildAreaTree(). onToggle(key): a checkbox changed. linkOf(key): a
-// link to the area's condition page, or null (not known yet). render(model): { selected: state.area,
-// counts, exact: medicines per key and at each node itself, of the medicines matching every other
-// filter }.
-export function createAreaTree(section, { tree, onToggle, linkOf }) {
+// link to the area's condition page, or null (not known yet). tipOf(key): its MeSH explainer
+// ({ text, id }: mesh-notes.js meshTip()), or null (none, or the notes still load). render(model):
+// { selected: state.area, counts, exact: medicines per key and at each node itself, of the
+// medicines matching every other filter }.
+export function createAreaTree(section, { tree, onToggle, linkOf, tipOf = () => null }) {
   section.querySelector(".tree-note").textContent = UI.areas.note;
   return createFacetTree(section, {
     copy: {
@@ -36,6 +37,7 @@ export function createAreaTree(section, { tree, onToggle, linkOf }) {
     levelsAbove: (key) => [...tree.ancestors(key)].filter((above) => above !== key),
     name: (key) => ({ text: tree.name(key), missing: false }),
     link: linkOf,
+    tip: tipOf,
     // A selected root tag (older links) has no row of its own: its branch is only indeterminate.
     note: (model) => {
       const tags = model.selected.filter(tree.isRootTag);

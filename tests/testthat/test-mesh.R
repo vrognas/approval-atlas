@@ -203,7 +203,7 @@ test_that("a missing Last-Modified header is stored as null", {
 
 test_that("read_mesh_descriptors reads names, tree numbers and all terms", {
   mesh <- read_mesh_descriptors(fixture_mesh_path())
-  expect_named(mesh, c("descriptors", "tree_numbers", "terms"))
+  expect_named(mesh, c("descriptors", "tree_numbers", "terms", "scope_notes"))
   expect_identical(
     mesh$descriptors,
     dplyr::tibble(
@@ -232,6 +232,51 @@ test_that("read_mesh_descriptors reads names, tree numbers and all terms", {
     mesh$descriptors$descriptor_name,
     mesh$terms$term
   ))
+})
+
+test_that("read_mesh_descriptors reads the preferred concept's scope note", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  expect_identical(
+    mesh$scope_notes$descriptor_ui,
+    c("D009369", "D009422", "D001523", "D000544", "D009542")
+  )
+  # Whitespace collapsed: NLM ends each note with a line break.
+  expect_identical(
+    mesh$scope_notes$scope_note[1],
+    paste(
+      "New abnormal growth of tissue. Malignant neoplasms show a greater",
+      "degree of anaplasia and have the properties of invasion and",
+      "metastasis, compared to benign neoplasms."
+    )
+  )
+  expect_match(
+    mesh$scope_notes$scope_note[4],
+    "^A degenerative disease of the BRAIN .* pp1049-57\\)$"
+  )
+})
+
+test_that("read_mesh_descriptors skips notes of other concepts and blanks", {
+  path <- tempfile(fileext = ".xml")
+  writeLines(
+    c(
+      "<DescriptorRecordSet>",
+      "<DescriptorRecord><DescriptorUI>D1</DescriptorUI>",
+      "<DescriptorName><String>One</String></DescriptorName><ConceptList>",
+      "<Concept PreferredConceptYN=\"Y\"><ConceptName><String>One</String>",
+      "</ConceptName></Concept>",
+      "<Concept PreferredConceptYN=\"N\"><ScopeNote>Narrower.</ScopeNote>",
+      "</Concept></ConceptList></DescriptorRecord>",
+      "<DescriptorRecord><DescriptorUI>D2</DescriptorUI>",
+      "<DescriptorName><String>Two</String></DescriptorName><ConceptList>",
+      "<Concept PreferredConceptYN=\"Y\"><ScopeNote>  </ScopeNote></Concept>",
+      "</ConceptList></DescriptorRecord>",
+      "</DescriptorRecordSet>"
+    ),
+    path
+  )
+  scope_notes <- read_mesh_descriptors(path)$scope_notes
+  expect_identical(nrow(scope_notes), 0L)
+  expect_named(scope_notes, c("descriptor_ui", "scope_note"))
 })
 
 test_that("read_mesh_descriptors aborts when the file has no records", {
@@ -283,6 +328,23 @@ test_that("load_mesh_descriptors re-parses when Last-Modified changes", {
   expect_message(load_mesh_descriptors(mesh_source), "Parsing MeSH")
   mesh_source$last_modified <- NA_character_
   expect_message(load_mesh_descriptors(mesh_source), "Parsing MeSH")
+})
+
+test_that("load_mesh_descriptors re-parses a cache of an older parser", {
+  cache_directory <- seed_mesh_cache()
+  mesh_source <- list(
+    year = "2026",
+    path = file.path(cache_directory, "desc2026.xml"),
+    last_modified = "Wed, 12 Aug 2026 18:05:02 GMT"
+  )
+  # As written before scope notes were read: no parser version.
+  saveRDS(
+    list(last_modified = mesh_source$last_modified, mesh = list()),
+    file.path(cache_directory, "descriptors-2026.rds")
+  )
+  expect_message(mesh <- load_mesh_descriptors(mesh_source), "Parsing MeSH")
+  expect_named(mesh, c("descriptors", "tree_numbers", "terms", "scope_notes"))
+  expect_no_message(load_mesh_descriptors(mesh_source))
 })
 
 test_that("match_mesh_terms tries heading, entry, any case, curated", {
@@ -706,4 +768,81 @@ test_that("a matched descriptor without tree numbers still covers its term", {
     areas$therapeutic_area_mesh[areas$mesh_descriptor_ui == "D009422"],
     "Alzheimer Disease"
   )
+})
+
+test_that("build_mesh_descriptor_notes covers terms and level-1 to 3 nodes", {
+  mesh <- add_subtree_records(read_mesh_descriptors(fixture_mesh_path()))
+  # A level-4 ancestor of Niemann-Pick Diseases, which the area tree does
+  # not show, and Dementia's second tree number, as in MeSH 2026.
+  mesh$descriptors <- dplyr::add_row(
+    mesh$descriptors,
+    descriptor_ui = "D001928",
+    descriptor_name = "Brain Diseases, Metabolic"
+  )
+  mesh$tree_numbers <- dplyr::add_row(
+    mesh$tree_numbers,
+    descriptor_ui = c("D001928", "D003704"),
+    tree_number = c("C10.228.140.163", "C10.228.140.380")
+  )
+  matches <- match_mesh_terms(
+    c("Alzheimer Disease", "Cancer", asmd_term, "Psoriasis"),
+    mesh
+  )
+  notes <- build_mesh_descriptor_notes(matches, mesh)
+  expect_named(
+    notes,
+    c(
+      "mesh_descriptor_ui", "mesh_descriptor_name", "tree_numbers",
+      "scope_note", "source"
+    )
+  )
+  expect_identical(
+    notes$mesh_descriptor_ui,
+    c(
+      "D000544", "D001523", "D001927", "D002493", "D003704", "D009369",
+      "D009422", "D009542", "D019636", "D019965", "D024801"
+    )
+  )
+  alzheimer <- notes[notes$mesh_descriptor_ui == "D000544", ]
+  expect_identical(alzheimer$mesh_descriptor_name, "Alzheimer Disease")
+  expect_identical(
+    alzheimer$tree_numbers,
+    list(c("C10.228.140.380.100", "C10.574.945.249", "F03.615.400.100"))
+  )
+  expect_match(alzheimer$scope_note, "^A degenerative disease of the BRAIN")
+  # Branch roots are their descriptors; a node without a note has none.
+  expect_match(
+    notes$scope_note[notes$mesh_descriptor_ui == "D009422"],
+    "^Diseases of the central and peripheral nervous system"
+  )
+  dementia <- notes[notes$mesh_descriptor_ui == "D003704", ]
+  expect_identical(
+    dementia$tree_numbers,
+    list(c("C10.228.140.380", "F03.615.400"))
+  )
+  expect_identical(dementia$scope_note, NA_character_)
+  expect_identical(unique(notes$source), "nlm_mesh")
+})
+
+test_that("build_mesh_descriptor_notes is empty when no EMA term matches", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  notes <- build_mesh_descriptor_notes(
+    match_mesh_terms("Psoriasis", mesh),
+    mesh
+  )
+  expect_identical(nrow(notes), 0L)
+  expect_type(notes$tree_numbers, "list")
+})
+
+test_that("build_mesh_descriptor_notes gives a descriptor no tree numbers", {
+  mesh <- read_mesh_descriptors(fixture_mesh_path())
+  mesh$tree_numbers <- mesh$tree_numbers[
+    mesh$tree_numbers$descriptor_ui != "D009542",
+  ]
+  notes <- build_mesh_descriptor_notes(
+    match_mesh_terms(asmd_term, mesh),
+    mesh
+  )
+  expect_identical(notes$mesh_descriptor_ui, "D009542")
+  expect_identical(notes$tree_numbers, list(character()))
 })

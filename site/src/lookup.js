@@ -6,7 +6,7 @@ import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
 import { atcCode, atcLadder, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
-import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
+import { copiesLinePlan, copiesSummary, countedFromName, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup } from "./copies.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import {
@@ -27,6 +27,7 @@ import {
   statusesByFrequency,
 } from "./labels.js";
 import { markExternal } from "./links.js";
+import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
 import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
@@ -116,13 +117,13 @@ function atcBadge(code) {
 }
 
 // Answer strip: [label, value, wide] items (null items are left out); the wide one spans a row on
-// phones. Four items (a medicine's protection cell, step 3): in a size container, as its columns
-// follow the strip's own width (the resizable sidebar sets it), not the viewport's.
+// narrow cards. In a size container, as its columns follow the strip's own width (the resizable
+// sidebar sets it), not the viewport's (step 3 review: four items, a medicine's protection cell;
+// step 4 review: three, a substance's "13 authorized" crossed the strip's border at 1024px).
 function strip(items) {
   const shown = items.filter(Boolean);
-  const list = el("dl", { class: shown.length === 4 ? "strip strip-4" : "strip", "aria-label": UI.card.strip.label }, shown.map(([label, value, wide]) =>
-    el("div", { class: wide ? "strip-wide" : null }, el("dt", null, label), el("dd", null, value))));
-  return shown.length === 4 ? el("div", { class: "strip-frame" }, list) : list;
+  return el("div", { class: "strip-frame" }, el("dl", { class: shown.length === 4 ? "strip strip-4" : "strip", "aria-label": UI.card.strip.label }, shown.map(([label, value, wide]) =>
+    el("div", { class: wide ? "strip-wide" : null }, el("dt", null, label), el("dd", null, value)))));
 }
 
 // SmPC / EPAR as a full-width secondary button: document name (with the external-link icon), then
@@ -144,7 +145,8 @@ const byDate = (direction) => (a, b) => {
 };
 const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substance_keys)].sort().join("|") : null);
 
-export function createLookup(panel, { index, loadFile, navigate, snapshotDate }) {
+// meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
+export function createLookup(panel, { index, loadFile, navigate, snapshotDate, meshVersion = null }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
     // Rows without a code to use (atcCode()) are left out.
@@ -163,13 +165,19 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     conditions: [["mesh_descriptor_areas.json", "ema_medicine_therapeutic_areas.json", "ema_therapeutic_area_branches.json"],
       (descriptorAreaRows, areaRows, branchRows) => buildConditions(index, { descriptorAreaRows, areaRows, branchRows })],
     documents: [["ema_medicine_documents.json"], (rows) => groupBy(rows, "ema_product_number")],
-    protection: [["ema_medicine_protection.json", "ema_medicine_orphan_exclusivity.json"], (rows, orphanRows) => ({
+    // Step 4 review: the curated copies (their national references and evidence) with it; none
+    // when that file is missing (older data).
+    protection: [["ema_medicine_protection.json", "ema_medicine_orphan_exclusivity.json", { optional: "ema_curated_copies.json" }], (rows, orphanRows, copyRows) => ({
       byProduct: new Map(rows.map((row) => [row.ema_product_number, row])),
       orphan: groupBy(orphanRows, "ema_product_number"),
+      curatedCopies: new Map((copyRows ?? []).map((row) => [row.ema_product_number, row])),
     })],
     register: [["ema_medicine_register_status.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
     // Step 3 (#7, #8): substance spellings checked by hand as one substance (copies.js).
     equivalents: [["ema_substance_equivalents.json"], substanceEquivalents],
+    // MeSH scope notes (mesh-notes.js): the therapeutic areas' explainers, loaded on first use
+    // (the dashboard asks for them after its first render).
+    meshNotes: [["mesh_descriptor_notes.json"], buildMeshNotes],
     // Companies part 2: holders by company group (the dashboard loads the same files); the search
     // counts a group's medicines with status Authorised, as the other suggestion groups.
     companies: [["companies.json", "ema_medicine_companies.json"], (rows, medicineRows) => buildCompanies(rows, medicineRows, {
@@ -188,12 +196,14 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     if (timeline && timeline.container.clientWidth !== timeline.width) drawTimeline();
   });
 
-  // Value, FAILED, or undefined while loading (the first call starts the load).
+  // Value, FAILED, or undefined while loading (the first call starts the load). A file given as
+  // { optional } is null when it fails to load (a newer file missing from older data).
+  const loadRows = (file) => (typeof file === "string" ? loadFile(file) : loadFile(file.optional).catch(() => null));
   function need(name) {
     if (values.has(name)) return values.get(name);
     values.set(name, undefined);
     const [files, build] = DATASETS[name];
-    Promise.all(files.map(loadFile)).then((rows) => build(...rows), () => FAILED).then((value) => {
+    Promise.all(files.map(loadRows)).then((rows) => build(...rows), () => FAILED).then((value) => {
       values.set(name, value);
       for (const listener of listeners) listener(name);
       if (lastState) render(lastState, true);
@@ -419,18 +429,22 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     if (!ready(protection)) return el("section", { class: "card-section" }, heading(null), pending(protection));
     const names = row.substances ? row.substances.split("; ") : [];
     const protectionRow = protection.byProduct.get(row.ema_product_number);
+    const reference = protectionRow?.copy_source === "curated" ? index.byNumber.get(protectionRow.reference_product_number) : undefined;
     const summary = protectionSummary(
       protectionRow,
       protection.orphan.get(row.ema_product_number) ?? [],
       names.length ? names.join(" + ") : UI.protection.thisSubstance,
       snapshotDate,
-      countedFromName(row, firstOfSet(row, protectionRow), protectionRow, referenceDate(protectionRow)),
+      countedFromOf(row, protectionRow, protection),
+      { curated: protection.curatedCopies.get(row.ema_product_number), referenceSubstance: reference?.substances?.split("; ").join(" + ") ?? null },
     );
     if (!summary) return null;
     return el("section", { class: "card-section protection" },
       heading(summary.status),
       el("p", { class: "muted protection-basis" }, UI.protection.basisNote),
-      summary.lines.map((line) => el("p", null, line)),
+      summary.lines.map((line) => el("p", null, Array.isArray(line)
+        ? line.map((part) => (typeof part === "string" ? part : externalLink(part.text, part.url)))
+        : line)),
       summary.orphan.map((line) => el("p", null, line)),
       el("p", null, UI.protection.patents, " ", externalLink(UI.protection.espacenet, espacenetUrl(names[0] ?? row.name_of_medicine))),
       el("details", { "data-key": "caveats" },
@@ -479,10 +493,25 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
   // protection section's lines.
   const firstOfSet = (row, protectionRow) => firstApprovalShown(row, copiesSummary(row, setRowsOf(row, equivalentsNow() ?? NO_EQUIVALENTS), null),
     protectionRow, referenceDate(protectionRow));
+  // The medicine the estimate is counted from, as its lines name it (countedFromName()). A curated
+  // copy is counted as its reference is (R: the reference's counted_from), whose substance set can
+  // be another (Riulvy, tegomil fumarate: Tecfidera), so it is named by the reference's estimate,
+  // never by the copy's own set: the reference when approved that day, else the medicine the
+  // reference's card names (Ablymico: Saxenda, counted from Victoza), else none.
+  function countedFromOf(row, protectionRow, protection) {
+    if (protectionRow?.copy_source !== "curated" || !protectionRow.reference_product_number) {
+      return countedFromName(row, firstOfSet(row, protectionRow), protectionRow, referenceDate(protectionRow));
+    }
+    if (referenceDate(protectionRow) === protectionRow.counted_from) return protectionRow.reference_name;
+    const reference = index.byNumber.get(protectionRow.reference_product_number);
+    const referenceRow = protection.byProduct.get(protectionRow.reference_product_number);
+    if (!reference || referenceRow?.counted_from !== protectionRow.counted_from) return null;
+    return countedFromName(reference, firstOfSet(reference, referenceRow), referenceRow, referenceDate(referenceRow));
+  }
 
   // Under the strip (step 3, #7): the authorized generics and biosimilars of the medicine's
   // substance set (medicines approved but not copies themselves; named as the substance's when this
-  // medicine is not its first), then, on a copy's card or when the set was first approved as
+  // medicine is not its first), then, on a copy's card (a hybrid's too) or when the set was first approved as
   // another medicine more than 30 days before (Wegovy: Ozempic; copiesLinePlan()), the set's other authorized medicines
   // and that approval, so "Since 2024" does not read as a new substance. Counted by substance set
   // with equivalent spellings joined, company groups once the companies have loaded.
@@ -492,9 +521,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const keys = [...new Set(row.substance_keys)];
     const substanceLabel = (row.substances ? row.substances.split("; ") : keys).join(" + ");
     const groupOf = ready(companies) ? (number) => companies.entry(number)?.group?.key ?? null : null;
-    const summary = copiesSummary(row, setRowsOf(row, equivalents), groupOf);
-    // The set's first approval, named as the protection estimate names it where it can be.
+    // The set's first approval, named as the protection estimate names it where it can be; a hybrid
+    // following a reference reads as a copy (followsReference()).
     const protectionRow = ready(protection) ? protection.byProduct.get(row.ema_product_number) : undefined;
+    const summary = followsReference(copiesSummary(row, setRowsOf(row, equivalents), groupOf), protectionRow);
     // A twin's first approval (Humira's Trudexa) is not named: the copies line covers it.
     const { copies, first, same } = copiesLinePlan(row, summary, firstApprovalShown(row, summary, protectionRow, referenceDate(protectionRow)));
     const lines = [];
@@ -507,7 +537,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         : UI.copies.none);
     }
     if (same) {
-      lines.push(partNodes(UI.copies.same(summary.others, substanceLabel, keys.length, first), (link) => (link === "first"
+      // A first approval no longer authorized says so (Qdenga: Dengvaxia, since withdrawn).
+      const firstShown = first ? { ...first, status: index.byNumber.get(first.number)?.medicine_status ?? null } : null;
+      lines.push(partNodes(UI.copies.same(summary.others, substanceLabel, keys.length, firstShown), (link) => (link === "first"
         ? { med: first.number }
         : keys.length === 1 ? { sub: keys[0] } : null)));
     }
@@ -612,12 +644,30 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     });
   }
 
+  // A condition page link explained by its MeSH scope note once the notes have loaded (a tooltip,
+  // and the link's description; mesh-notes.js); ui: the descriptor.
+  function conditionLink(text, ui, className = null, label = null) {
+    const notes = need("meshNotes");
+    return addMeshTip(internalLink(text, { cond: ui }, className, label), ready(notes) ? notes.byUi.get(ui) : null);
+  }
+
   // Condition page links for EMA terms (plain text where the descriptor is unknown), "; " between them.
   function termLinks(terms, conditions) {
     return terms.map((term, position) => {
       const ui = ready(conditions) ? conditions.termUi.get(term) : null;
-      return [ui ? internalLink(term, { cond: ui }) : term, position < terms.length - 1 ? "; " : ""];
+      return [ui ? conditionLink(term, ui) : term, position < terms.length - 1 ? "; " : ""];
     });
+  }
+
+  // A condition page's MeSH definition: NLM's full scope note, its tree numbers and the credit NLM
+  // asks for (with the MeSH version); nothing without a note (or while the notes load).
+  function meshDefinition(ui) {
+    const notes = need("meshNotes");
+    const note = ready(notes) ? notes.byUi.get(ui) : null;
+    if (!note?.scope_note) return null;
+    return el("p", { class: "mesh-definition" },
+      el("span", { class: "mesh-definition-label" }, UI.mesh.definition), note.scope_note, " ",
+      el("span", { class: "muted" }, note.tree_numbers?.length ? `${UI.mesh.treeNumbers(note.tree_numbers)} ` : null, UI.mesh.source(meshVersion)));
   }
 
   // entries: search-index rows (+ snippet, + terms: the narrower conditions a row is tagged with, +
@@ -775,7 +825,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     const shown = terms.slice(0, NARROWER_SHOWN);
     return el("p", { class: "dek" },
       UI.condition.narrowerLead(terms.length),
-      shown.map(({ term, ui }, position) => [ui ? internalLink(term, { cond: ui }) : term, position < shown.length - 1 ? "; " : ""]),
+      shown.map(({ term, ui }, position) => [ui ? conditionLink(term, ui) : term, position < shown.length - 1 ? "; " : ""]),
       terms.length > shown.length ? UI.condition.narrowerMore(terms.length - shown.length) : null,
       ".");
   }
@@ -838,6 +888,10 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       const narrowerCounted = [...descriptor.narrowerByProduct.keys()].some((number) =>
         !descriptor.ownProducts.has(number) && index.byNumber.get(number)?.medicine_status === "Authorised");
       heading = headlineNodes(UI.headline.condition(descriptor.name, descriptor.authorized, narrowerCounted));
+      // The condition's name explained on hover or tap (its full definition follows the deks).
+      const notes = need("meshNotes");
+      const name = heading.find((node) => node.classList?.contains("tone-term"));
+      if (name && ready(notes)) addMeshTip(name, notes.byUi.get(ui), null);
       phrases = conditionPhrases(descriptor);
     } else {
       heading = UI.condition.textHeading(query);
@@ -876,7 +930,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
       // Both counts of the lists below (phase 4f): tagged by EMA, and only mentioned in the indication.
       descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll)) : null,
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
-        related.map((condition) => [internalLink(condition.name, { cond: condition.ui }), " "])) : null,
+        related.map((condition) => [conditionLink(condition.name, condition.ui), " "])) : null,
+      // What the condition is: NLM's scope note (owner request 2026-09-28).
+      descriptor ? meshDefinition(ui) : null,
       toggle,
       timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined),
       descriptor
@@ -999,7 +1055,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
         el("h3", null, UI.companies.areas),
         el("ol", { class: "condition-list company-mix" }, rows.map(([term, count]) => {
           const ui = ready(conditions) ? conditions.termUi.get(term) : null;
-          return mixRow(ui ? internalLink(term, { cond: ui }, null, UI.companies.mixLink(term, count)) : el("span", null, term), count, rows[0][1]);
+          return mixRow(ui ? conditionLink(term, ui, null, UI.companies.mixLink(term, count)) : el("span", null, term), count, rows[0][1]);
         }))) : null;
     }
 
@@ -1129,6 +1185,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate })
     medicines: () => (ready(values.get("medicines")) ? values.get("medicines") : null),
     // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
     documents: () => (ready(values.get("documents")) ? values.get("documents") : null),
+    // MeSH scope notes (buildMeshNotes()): null until need("meshNotes") has loaded them (or failed).
+    meshNotes: () => (ready(values.get("meshNotes")) ? values.get("meshNotes") : null),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [values.get("atc"), values.get("atcCounts")];

@@ -6,14 +6,19 @@
 // decision 2026-09-28: rootTerms()), neither a leaf nor the branch itself: the branch's static row
 // counts the medicines tagged only with such tags there. Keys: branch codes ("C04"), tree numbers
 // ("C04.588.180") and EMA's terms ("Psoriasis"); the filter (state.area) holds any of them, a term
-// that is a node as that key (canonical()). No DOM.
+// that is a node as that key (canonical()). Every level in MeSH tree order (owner request
+// 2026-09-28, as the ATC tree by code): branches by code, nodes by tree number, a term by its
+// descriptor's tree number under that parent (mesh_descriptor_notes.json, which can load later:
+// setNotes()), terms without one last by name. No DOM.
 import { UI } from "./labels.js";
 import { foldSearchText } from "./search.js";
 
-const byName = (entries) => (a, b) => entries.get(a).name.localeCompare(entries.get(b).name) || a.localeCompare(b);
+// Tree numbers ("C04.588.180": three-character parts) sort as strings.
+const byCode = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-// branchRows: ema_therapeutic_area_branches.json; subtreeRows: ema_therapeutic_area_subtree.json.
-export function buildAreaTree(branchRows, subtreeRows) {
+// branchRows: ema_therapeutic_area_branches.json; subtreeRows: ema_therapeutic_area_subtree.json;
+// noteRows: mesh_descriptor_notes.json (its tree_numbers order the terms), or null.
+export function buildAreaTree(branchRows, subtreeRows, noteRows = null) {
   // key -> { kind: "branch" | "node" | "term", name, parent (nodes), children, parents (terms),
   // exact (nodes: the terms that are the node), roots (branches: the terms matched at the root),
   // above (terms: every branch and node above or at it) }
@@ -25,11 +30,13 @@ export function buildAreaTree(branchRows, subtreeRows) {
     return entries.get(key);
   };
   const descriptorName = new Map();
+  const descriptorUi = new Map();
   for (const row of branchRows) {
     if (row.branch === null) continue;
     add(row.branch, { kind: "branch", name: row.branch_name ?? row.branch });
     add(row.therapeutic_area_mesh, { kind: "term", name: row.therapeutic_area_mesh }).above.add(row.branch);
     descriptorName.set(row.therapeutic_area_mesh, row.mesh_descriptor_name);
+    if (row.mesh_descriptor_ui) descriptorUi.set(row.therapeutic_area_mesh, row.mesh_descriptor_ui);
   }
   const rowsByTerm = new Map();
   for (const row of subtreeRows) {
@@ -62,8 +69,24 @@ export function buildAreaTree(branchRows, subtreeRows) {
     for (const row of rows) if (!entries.get(row.node).exact.has(term.key) && !parents.has(row.node)) place(row.node, term);
   }
 
-  const order = byName(entries);
-  const children = new Map([...entries.values()].map((entry) => [entry.key, [...entry.children].sort(order)]));
+  // A child's place under parent: a branch's or node's key; a term's descriptor's tree number under
+  // parent (the smallest there), else null (last, by name).
+  let termNumbers = new Map();
+  const numberUnder = (key, parent) => (entries.get(key).kind !== "term" ? key
+    : (termNumbers.get(key) ?? []).filter((number) => number === parent || number.startsWith(`${parent}.`)).sort(byCode)[0] ?? null);
+  const treeOrder = (parent) => (a, b) => {
+    const [first, second] = [numberUnder(a, parent), numberUnder(b, parent)];
+    if (first !== null && second !== null && first !== second) return byCode(first, second);
+    if ((first === null) !== (second === null)) return first === null ? 1 : -1;
+    return entries.get(a).name.localeCompare(entries.get(b).name) || byCode(a, b);
+  };
+  let children = new Map();
+  const setNotes = (rows) => {
+    const numbersByUi = new Map((rows ?? []).filter((row) => row.mesh_descriptor_ui).map((row) => [row.mesh_descriptor_ui, row.tree_numbers ?? []]));
+    termNumbers = new Map([...descriptorUi].map(([term, ui]) => [term, numbersByUi.get(ui) ?? []]));
+    children = new Map([...entries.values()].map((entry) => [entry.key, [...entry.children].sort(treeOrder(entry.key))]));
+  };
+  setNotes(noteRows);
   const parents = new Map([...entries.values()].map((entry) => [entry.key, entry.kind === "term" ? [...entry.parents].sort() : entry.parent ? [entry.parent] : []]));
   const ancestors = new Map();
   for (const entry of entries.values()) {
@@ -99,7 +122,7 @@ export function buildAreaTree(branchRows, subtreeRows) {
     return [...branches].filter((branch) => terms.every((term) => entries.get(branch).roots.has(term) || !(ancestors.get(term) ?? NONE).has(branch)));
   };
   const tree = {
-    roots: [...entries.values()].filter((entry) => entry.kind === "branch").map((entry) => entry.key).sort(order),
+    roots: [...entries.values()].filter((entry) => entry.kind === "branch").map((entry) => entry.key).sort(byCode),
     names: new Map([...entries.values()].map((entry) => [entry.key, entry.name])),
     has: (key) => entries.has(key),
     isTerm: (key) => entries.get(key)?.kind === "term",
@@ -109,8 +132,11 @@ export function buildAreaTree(branchRows, subtreeRows) {
     isRootTag: (key) => rootTags.has(key),
     label,
     labels: new Map([...entries.keys()].map((key) => [key, label(key)])),
-    // The keys one level below (the branches for null), by name.
+    // The keys one level below (the branches for null), in tree order.
     children: (key) => (key === null ? tree.roots : children.get(key) ?? []),
+    // The descriptors' tree numbers arrived (mesh_descriptor_notes.json rows; null: none): the
+    // terms go in tree order.
+    setNotes,
     // A term's parents in tree order (a root tag's: its branch); a node's one parent; none for a branch.
     parents: (key) => parents.get(key) ?? [],
     parent: (key) => parents.get(key)?.[0] ?? null,
@@ -224,14 +250,15 @@ export function areaTreeSearch(tree, visible, query) {
 // medicine counts once in every child it touches; products: { areaKeys, areaExact }), most first
 // (ties by name), the top n then one Other row counting each medicine in the rest once; then the
 // medicines at parent itself (a static row, areaExactLabel()) when it has children. A leaf (a
-// term, or a node without children) has none: the breakdown shows it alone.
+// term, or a node without children) has none: the breakdown shows it alone. rank: a row's place in
+// tree order (the Sort control's MeSH order, sortBreakdownRows()).
 export function areaBreakdownRows(tree, parent, products, n = 20) {
-  const level = new Set(tree.children(parent));
-  const keysOf = (product) => product.areaKeys.filter((key) => level.has(key));
+  const rank = new Map(tree.children(parent).map((key, index) => [key, index]));
+  const keysOf = (product) => product.areaKeys.filter((key) => rank.has(key));
   const counts = new Map();
   for (const product of products) for (const key of keysOf(product)) counts.set(key, (counts.get(key) ?? 0) + 1);
   const rows = [...counts]
-    .map(([key, count]) => ({ key, label: tree.name(key), count }))
+    .map(([key, count]) => ({ key, label: tree.name(key), count, rank: rank.get(key) }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   if (rows.length === 0) return [];
   let result = rows;

@@ -2604,6 +2604,17 @@ td.status-cell {
   cursor: help;
 }
 
+/* Condition links and area tree rows with a MeSH explainer keep their own cursors (step 4 review:
+   "help" made links and checkboxes read as help-only text); the condition heading's name keeps
+   help. */
+a.mesh-tip[data-tip] {
+  cursor: pointer;
+}
+
+.atc-row.mesh-tip[data-tip] {
+  cursor: auto;
+}
+
 [data-tip]:hover::after,
 [data-tip]:focus-visible::after,
 [data-tip]:has(:focus-visible)::after {
@@ -2615,6 +2626,13 @@ td.status-cell {
   [data-tip]:focus-within::after {
     content: attr(data-tip);
     content: attr(data-tip) / "";
+  }
+
+  /* A tap on a control with a MeSH explainer acts (opens a condition, checks an area, drills a bar):
+     no tip then covers the rows below it (step 4 review; the condition page shows the definition).
+     The condition heading's name (no control) keeps its tap tip. */
+  .mesh-tip:is(a, button, .atc-row)[data-tip]:is(:hover, :focus-within)::after {
+    content: none;
   }
 }
 
@@ -2674,6 +2692,106 @@ td.status-cell {
   right: 0;
   width: auto;
   max-width: none;
+}
+
+/* The therapeutic areas' MeSH explainers (mesh-notes.js; up to about 260 characters): wider, and
+   on hover shown only after a pause, so a pointer moving down a table column or the bars does not
+   open one per row. Keyboard focus shows it at once. A pointer click on its carrier hides it until
+   the pointer reaches another carrier (setupTips() in main.js; step 4 review: the tip covered the
+   next rows, and as it is hoverable a pointer moving down stayed caught in it). */
+.mesh-tip[data-tip]::after {
+  max-width: min(22rem, calc(100vw - 32px));
+}
+
+/* Area tree rows (the whole row: expand button, checkbox and condition page link, so the tip's
+   bridge below never covers the link) are narrow: in a sheet the tip spans the tree's section,
+   under the row (--tip-top, set by setupTips()), as in the filter sentence. */
+#facet-area {
+  position: relative;
+}
+
+#facet-area .atc-row.mesh-tip[data-tip] {
+  position: static;
+}
+
+#facet-area .atc-row.mesh-tip[data-tip]::after {
+  right: 0;
+  width: auto;
+  max-width: none;
+}
+
+/* In the desktop sidebar the tip goes beside it, level with its row, so it covers no other row
+   (step 4 review). Fixed (no ancestor is a containing block for it, so the sidebar's scrolling does
+   not clip it): --tip-x, --tip-y (top) or --tip-y-end (bottom, lower rows) from setupTips()
+   (besidePanel() in tips.js); on hover a bridge (--bridge-*) spans from the row's right edge to it
+   (WCAG 1.4.13). The sidebar's scrollbar lies on the way and takes the pointer from the bridge, so
+   the tip holds for a moment when the pointer leaves its row to the right (.tip-hold, setupTips()).
+   While a row's tip shows, the sidebar is stacked over the main column and the splitter, so the
+   tip shows over the cards and the pointer can cross the splitter onto it. */
+@media (min-width: 1024px) {
+  .facets:has(#facet-area .mesh-tip:is(:hover, :focus-within, .tip-hold)) {
+    z-index: 5;
+  }
+
+  /* Held: shown without the pause, also when the pointer is back on the row, its bridge or tip. */
+  .facets #facet-area .atc-row.mesh-tip.tip-hold[data-tip]::after {
+    content: attr(data-tip);
+    content: attr(data-tip) / "";
+    animation: none;
+  }
+
+  .facets #facet-area .atc-row.mesh-tip[data-tip]::after {
+    position: fixed;
+    top: var(--tip-y, auto);
+    right: auto;
+    bottom: var(--tip-y-end, auto);
+    left: var(--tip-x, 0);
+    width: max-content;
+    max-width: min(22rem, calc(100vw - var(--tip-x, 0px) - 16px));
+  }
+}
+
+@media (min-width: 1024px) and (hover: hover) {
+  .facets #facet-area .atc-row.mesh-tip[data-tip]:is(:hover, .tip-hold)::before {
+    content: "";
+    position: fixed;
+    z-index: 4;
+    top: var(--bridge-y, 0);
+    left: var(--bridge-x, 0);
+    width: var(--bridge-w, 0);
+    height: var(--bridge-h, 0);
+  }
+
+  .facets #facet-area .atc-row.mesh-tip.tip-hold[data-tip]::before {
+    animation: none;
+  }
+}
+
+@media (hover: hover) {
+  .mesh-tip[data-tip]:hover::before,
+  .mesh-tip[data-tip]:hover::after {
+    animation: tip-pause 0s 600ms both;
+  }
+}
+
+@keyframes tip-pause {
+  from {
+    visibility: hidden;
+  }
+}
+
+/* Above its carrier when its scroll box (the medicines table's) has no room for it below (step 4
+   review: in the last visible row most of it was clipped; setupTips(), tipAbove() in tips.js). */
+.tip-above[data-tip]::after {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+@media (hover: hover) {
+  .tip-above[data-tip]:hover::before {
+    top: auto;
+    bottom: 100%;
+  }
 }
 
 /* The filter sentence and the result tables' Type cells: the tooltip is placed in the sentence or
@@ -3500,11 +3618,13 @@ table.activity {
   margin-top: 0;
 }
 
-/* Answer strip: Holder, Since, Status. Not clipped: the status's explanation shows below it. */
+/* Answer strip: Holder, Since, Status. Not clipped: the status's explanation shows below it. Two
+   columns on narrow cards (phones): the second (Status) at least as wide as its pill (a substance's "2 authorized"
+   crossed the strip's border at 320px), the date beside it wrapping if it must. */
 .strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 16px 0;
+  grid-template-columns: minmax(0, 1fr) minmax(min-content, 1fr);
+  margin: 0;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -3516,6 +3636,13 @@ table.activity {
   gap: 2px;
   min-width: 0;
   padding: 8px 14px;
+}
+
+/* 320px: room for a date beside a status pill ("20 Nov 2006" beside "2 authorized"). */
+@media (max-width: 360px) {
+  .strip > div {
+    padding-inline: 11px;
+  }
 }
 
 .strip-wide {
@@ -3543,9 +3670,18 @@ table.activity {
   overflow-wrap: anywhere;
 }
 
-@media (min-width: 721px) {
+/* Every strip's frame is a size container, as the resizable sidebar, not the viewport, sets the
+   card's width (step 3 review; step 4 review: at 1024px with a 460px sidebar a substance's
+   "13 authorized" crossed the three-cell strip's border by 39px). Three cells in three columns
+   from a 560px frame, Status at least as wide as its pill. */
+.strip-frame {
+  container-type: inline-size;
+  margin: 16px 0;
+}
+
+@container (min-width: 560px) {
   .strip {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(min-content, 1fr);
   }
 
   .strip-wide {
@@ -3558,18 +3694,11 @@ table.activity {
   }
 }
 
-/* A medicine's strip with its protection cell (step 3): its frame is a size container, as the
-   resizable sidebar, not the viewport, sets the card's width. Company, then Since | Status, then
+/* A medicine's strip with its protection cell (step 3): Company, then Since | Status, then
    Protection across; four columns from 840px, where a small column holds the status pill (123px)
    and "Until 2028–2033" (137px). The selectors outweigh the three-cell strip's rules. */
-.strip-frame {
-  container-type: inline-size;
-  margin: 16px 0;
-}
-
 .strip.strip-4 {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(min-content, 1fr);
 }
 
 .strip.strip-4 > .strip-wide {
@@ -3628,6 +3757,18 @@ table.activity {
 .card .protection-basis {
   margin: 4px 0 8px;
   font-size: 0.875rem;
+}
+
+/* A condition page's MeSH definition (NLM's scope note, its tree numbers and credit), small, under
+   the deks. */
+.card .mesh-definition {
+  max-width: 72ch;
+  margin: 8px 0 12px;
+  font-size: 0.875rem;
+}
+
+.mesh-definition-label {
+  font-weight: 600;
 }
 
 /* The SmPC and EPAR as full-width secondary buttons. */

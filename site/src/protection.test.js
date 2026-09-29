@@ -104,6 +104,24 @@ test("protection counted from another company's medicine says so before the date
   assert.equal(both.lines[0], "The first central EU approval of x was another company's medicine (23 Aug 2012); counted from this company's own first approval, protection would end later, so the market protection range covers both.");
 });
 
+// Step 4 (owner request 2026-09-28): R writes the data exclusivity counted from the company's own
+// first approval as data_exclusivity_end_max on other_company_reference rows; the line then gives
+// the range (MenQuadfi, Sanofi, after GSK's Menveo; dates from the rows' rule, 8 years).
+test("data exclusivity counted from another company's medicine is a range when R gives its later end", () => {
+  const menQuadfi = {
+    ...own, ema_product_number: "EMEA/H/C/005084", basis: "other_company_reference", reference_product_number: "EMEA/H/C/001095",
+    reference_name: "Menveo", counted_from: "2010-03-15", own_reference_product_number: "EMEA/H/C/005084", own_counted_from: "2020-11-18",
+    data_exclusivity_end: "2018-03-15", data_exclusivity_end_max: "2028-11-18", market_protection_end_min: "2020-03-15", market_protection_end_max: "2031-11-18", status: "unclear",
+  };
+  const lines = protectionSummary(menQuadfi, [], "meningococcal group a, c, w-135 and y conjugate vaccine", "2026-09-28", "Menveo").lines;
+  assert.equal(lines[1], "Data exclusivity ends (est.) between 15 Mar 2018 and 18 Nov 2028");
+  assert.equal(protectionSummary({ ...menQuadfi, data_exclusivity_end_max: "2026-01-01" }, [], "x", "2026-09-28").lines[1],
+    "Data exclusivity ended (est.) between 15 Mar 2018 and 1 Jan 2026");
+  // Null (older data, other rows) or the same date: one date, as before.
+  assert.equal(protectionSummary({ ...menQuadfi, data_exclusivity_end_max: null }, [], "x", "2026-09-28").lines[1], "Data exclusivity ended (est.) 15 Mar 2018");
+  assert.equal(protectionSummary({ ...menQuadfi, data_exclusivity_end_max: "2018-03-15" }, [], "x", "2026-09-28").lines[1], "Data exclusivity ended (est.) 15 Mar 2018");
+});
+
 // Step 3 review: counted_from is the set's first approval date, not always the reference's own
 // (Iscover 14 Jul 1998, whose reference Plavix came a day later): the line names a medicine
 // approved that day (copies.js countedFromName()), or the date alone.
@@ -116,6 +134,96 @@ test("the counted-from line names the medicine approved that day, or the date al
   assert.equal(protectionSummary(iscover, [], "clopidogrel", "2026-09-28", null).lines.at(-1), "Counted from the first central EU approval of clopidogrel: 14 Jul 1998");
   // Without a name passed: the reference's.
   assert.equal(protectionSummary(iscover, [], "clopidogrel", "2026-09-28").lines.at(-1), "Counted from the first central EU approval of clopidogrel: Plavix, 14 Jul 1998");
+});
+
+// Step 4 review (rFix a): a curated copy (copy_source "curated", a row of ema_curated_copies.json)
+// follows its reference medicine, whose substance can be another: Riulvy (tegomil fumarate) is a
+// hybrid of Tecfidera (dimethyl fumarate). Its counted-from line names the reference, never "the
+// first central EU approval of tegomil fumarate", which is Riulvy itself (real rows 2026-09-29).
+const curatedFollower = {
+  basis: "follows_reference", copy_source: "curated", own_reference_product_number: null, own_counted_from: null,
+  data_exclusivity_end_max: null, status: "ended", source: "estimate_from_ema_dates",
+};
+const riulvy = {
+  ...curatedFollower, ema_product_number: "EMEA/H/C/006427", reference_product_number: "EMEA/H/C/002601", reference_name: "Tecfidera",
+  counted_from: "2014-01-30", data_exclusivity_end: "2022-01-30", market_protection_end_min: "2024-01-30", market_protection_end_max: "2025-01-30",
+};
+const liraglutideStada = {
+  ...curatedFollower, ema_product_number: "EMEA/H/C/006615", reference_product_number: "EMEA/H/C/001026", reference_name: "Victoza",
+  counted_from: "2009-06-30", data_exclusivity_end: "2017-06-30", market_protection_end_min: "2019-06-30", market_protection_end_max: "2020-06-30",
+};
+
+test("a curated copy's counted-from line names its reference medicine, not its own substance", () => {
+  const summary = protectionSummary(riulvy, [], "tegomil fumarate", "2026-09-29", "Tecfidera", { referenceSubstance: "dimethyl fumarate" });
+  assert.equal(summary.status, "Data/market protection: Ended");
+  assert.deepEqual(summary.lines, [
+    "No protection of its own; follows Tecfidera",
+    "Data exclusivity ended (est.) 30 Jan 2022",
+    "Market protection ended (est.) 30 Jan 2024 – 30 Jan 2025",
+    "Counted from its reference medicine Tecfidera's first central approval: 30 Jan 2014",
+  ]);
+  assert.ok(summary.lines.every((line) => !line.includes("tegomil")));
+  // Liraglutide STADA, a hybrid of Victoza (same substance): the reference too, not "of liraglutide".
+  assert.equal(protectionSummary(liraglutideStada, [], "liraglutide", "2026-09-29", "Victoza", { referenceSubstance: "liraglutide" }).lines.at(-1),
+    "Counted from its reference medicine Victoza's first central approval: 30 Jun 2009");
+  // Without a name passed: the reference's.
+  assert.equal(protectionSummary(liraglutideStada, [], "liraglutide", "2026-09-29").lines.at(-1),
+    "Counted from its reference medicine Victoza's first central approval: 30 Jun 2009");
+  // A copy EMA flags keeps the substance's line (Dimethyl fumarate Neuraxpharm, a generic of Tecfidera).
+  assert.equal(protectionSummary({ ...riulvy, ema_product_number: "EMEA/H/C/005950", copy_source: "ema_flag" }, [], "dimethyl fumarate", "2026-09-29", "Tecfidera").lines.at(-1),
+    "Counted from the first central EU approval of dimethyl fumarate: Tecfidera, 30 Jan 2014");
+});
+
+// Ablymico, a hybrid of Saxenda (approved 23 Mar 2015), is counted as Saxenda is: from Victoza's
+// 30 Jun 2009, the first central approval of liraglutide (real row 2026-09-29), so "its reference
+// medicine Saxenda's first central approval" would give Saxenda another medicine's date.
+test("a curated copy whose reference is counted from another medicine names both", () => {
+  const ablymico = { ...liraglutideStada, ema_product_number: "EMEA/H/C/006620", reference_product_number: "EMEA/H/C/003780", reference_name: "Saxenda" };
+  assert.equal(protectionSummary(ablymico, [], "liraglutide", "2026-09-29", "Victoza", { referenceSubstance: "liraglutide" }).lines.at(-1),
+    "Counted, as for its reference medicine Saxenda, from the first central EU approval of liraglutide: Victoza, 30 Jun 2009");
+  assert.equal(protectionSummary(ablymico, [], "liraglutide", "2026-09-29", null, { referenceSubstance: "liraglutide" }).lines.at(-1),
+    "Counted, as for its reference medicine Saxenda, from the first central EU approval of liraglutide: 30 Jun 2009");
+  assert.equal(protectionSummary(ablymico, [], "liraglutide", "2026-09-29", null).lines.at(-1),
+    "Counted, as for its reference medicine Saxenda, from the first central EU approval of its active substance: 30 Jun 2009");
+});
+
+// Step 4 review (rFix b): a curated copy of a nationally authorized medicine has no central
+// reference (reference_not_found); its ema_curated_copies.json row names the reference and the EMA
+// page that says so (Buprenorphine Neuraxpharm, a hybrid of Subutex; real rows 2026-09-29).
+const buprenorphineNeuraxpharm = {
+  ema_product_number: "EMEA/H/C/006188", basis: "reference_not_found", copy_source: "curated", reference_product_number: null, reference_name: null,
+  counted_from: null, own_reference_product_number: null, own_counted_from: null, data_exclusivity_end: null, data_exclusivity_end_max: null,
+  market_protection_end_min: null, market_protection_end_max: null, status: "unclear", source: "estimate_from_ema_dates",
+};
+const buprenorphineNeuraxpharmCopy = {
+  ema_product_number: "EMEA/H/C/006188", copy_type: "hybrid", reference_product_number: null, reference_name: "Subutex",
+  evidence_url: "https://www.ema.europa.eu/en/medicines/human/EPAR/buprenorphine-neuraxpharm",
+  evidence_quote: "Buprenorphine Neuraxpharm contains the active substance buprenorphine and is a ‘hybrid medicine’.",
+  checked_date: "2026-09-29", note: null, source: "curated",
+};
+
+test("a curated copy of a nationally authorized medicine names its reference and the evidence", () => {
+  const summary = protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: buprenorphineNeuraxpharmCopy });
+  assert.equal(summary.status, "Data/market protection: Unclear");
+  assert.deepEqual(summary.lines, [[
+    "No protection of its own; a hybrid of Subutex (authorized nationally), whose protection dates are not in EU central data.",
+    " ",
+    { text: "Source", url: "https://www.ema.europa.eu/en/medicines/human/EPAR/buprenorphine-neuraxpharm" },
+  ]]);
+  // The copy type as the row gives it (Sugammadex Adroiq is a generic, Tuznue a biosimilar).
+  assert.equal(protectionSummary(buprenorphineNeuraxpharm, [], "x", "2026-09-29", null, { curated: { ...buprenorphineNeuraxpharmCopy, copy_type: "generic" } }).lines[0][0],
+    "No protection of its own; a generic of Subutex (authorized nationally), whose protection dates are not in EU central data.");
+  // No https evidence: the sentence alone.
+  assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "x", "2026-09-29", null, { curated: { ...buprenorphineNeuraxpharmCopy, evidence_url: "http://example.org" } }).lines,
+    ["No protection of its own; a hybrid of Subutex (authorized nationally), whose protection dates are not in EU central data."]);
+});
+
+test("without its curated row (older data, a missing file) a copy without a central reference reads as before", () => {
+  const generic = "No protection of its own; reference product not found in EU central authorizations";
+  assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null).lines, [generic]);
+  assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: undefined }).lines, [generic]);
+  // A generic EMA flags whose reference is national has no curated row either.
+  assert.deepEqual(protectionSummary({ ...buprenorphineNeuraxpharm, copy_source: "ema_flag" }, [], "x", "2026-09-29", null, { curated: buprenorphineNeuraxpharmCopy }).lines, [generic]);
 });
 
 test("protectionGlance: the answer strip's short form of the estimate", () => {

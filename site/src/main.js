@@ -52,6 +52,7 @@ import { createIntro } from "./intro.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
+import { addMeshTip, areaNote, meshTip } from "./mesh-notes.js";
 import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { createSearchBox } from "./search-box.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
@@ -59,6 +60,7 @@ import { createSheet } from "./sheet.js";
 import { createSidebarResize } from "./sidebar-resize.js";
 import { createTable } from "./table.js";
 import { renderTiles } from "./tiles.js";
+import { besidePanel, tipAbove, tipHeightEstimate, tipShift } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -292,40 +294,135 @@ function renderTypeTips() {
 // The type and status tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides
 // them (and does nothing else, so the sidebar's Escape waits for the next press) until the pointer
 // reaches another carrier or focus moves; a pointer click on a tip only hides it, as it lies over
-// other controls. A carrier whose tip is anchored to its row (static: lookup rows, the sentence)
-// puts the tip under its own line (--tip-top, CSSOM); a tip starting at its carrier that would
-// cross the viewport's right edge (a status near the right of a phone) moves left (--tip-left).
+// other controls, and a pointer click on a MeSH explainer's carrier hides it too (step 4 review: it
+// covered the next rows, so checking one row and moving to the next took two clicks). A carrier
+// whose tip is anchored to its row (static: lookup rows, the sentence, the area tree in a sheet)
+// puts the tip under its own line (--tip-top, CSSOM); the area tree's rows in the desktop sidebar
+// put it beside the sidebar (fixed; besidePanel()); a tip starting at its carrier that would cross
+// the viewport's right edge (a status near the right of a phone) or its scroll box's (the medicines
+// table) moves left (--tip-left), and goes above it where the box has no room below (.tip-above).
 function setupTips() {
   const root = document.documentElement;
   let hiddenOn = null; // the carrier under the pointer when the tips were hidden
+  // Where a pointer click hid them: until the pointer moves, pointerover there comes from the page
+  // changing under it (a drilled breakdown's new bars), and focus from a click or a script (a
+  // label's checkbox, the first new bar), neither of which shows them again.
+  let clickedAt = null;
   const carrierOf = (target) => (target instanceof Element ? target.closest("[data-tip]") : null);
   const showing = () => [...document.querySelectorAll("[data-tip]:hover, [data-tip]:focus-within")]
     .some((carrier) => getComputedStyle(carrier, "::after").content !== "none");
-  function hide() {
+  const fixed = (carrier) => getComputedStyle(carrier, "::after").position === "fixed";
+  // A scroll box's visible area inside its borders and scrollbars and the viewport, in viewport
+  // pixels.
+  function scrollArea(box) {
+    const rect = box.getBoundingClientRect();
+    const top = rect.top + box.clientTop;
+    return {
+      top: Math.max(top, 0),
+      bottom: Math.min(top + box.clientHeight, root.clientHeight),
+      right: rect.left + box.clientLeft + box.clientWidth,
+    };
+  }
+  function hide(at = null) {
     hiddenOn = document.querySelector("[data-tip]:hover");
+    clickedAt = at;
     root.classList.add("tips-hidden");
+  }
+  let beside = null; // the carrier placed beside the sidebar last, and where: { carrier, row, x }
+  function placeBeside(carrier) {
+    const panel = carrier.closest(".facets") ?? carrier;
+    const row = carrier.getBoundingClientRect();
+    const place = besidePanel(row, panel.getBoundingClientRect().right, root.clientHeight);
+    beside = { carrier, row, x: place.x };
+    const set = (name, value) => carrier.style.setProperty(name, value === null ? "auto" : `${value}px`);
+    set("--tip-x", place.x);
+    set("--tip-y", place.top);
+    set("--tip-y-end", place.bottom);
+    set("--bridge-x", place.bridge.left);
+    set("--bridge-y", place.bridge.top);
+    set("--bridge-w", place.bridge.width);
+    set("--bridge-h", place.bridge.height);
   }
   function show(carrier) {
     hiddenOn = null;
+    clickedAt = null;
     root.classList.remove("tips-hidden");
     if (!carrier) return;
+    if (fixed(carrier)) {
+      placeBeside(carrier);
+      return;
+    }
     if (getComputedStyle(carrier).position === "static") {
       carrier.style.setProperty("--tip-top", `${carrier.offsetTop + carrier.offsetHeight}px`);
       return;
     }
     carrier.style.removeProperty("--tip-left");
+    carrier.classList.remove("tip-above");
     // Its width once shown (a tip spanning its carrier, as on tiles and facet rows, never moves),
-    // else the widest it can be (style.css max-width).
-    const measured = parseFloat(getComputedStyle(carrier, "::after").width);
-    const width = Number.isFinite(measured) ? measured : Math.min(16 * parseFloat(getComputedStyle(root).fontSize), root.clientWidth - 32);
-    const overflow = carrier.getBoundingClientRect().left + width - (root.clientWidth - 16);
-    if (overflow > 0) carrier.style.setProperty("--tip-left", `${-Math.ceil(overflow)}px`);
+    // else the widest it can be (its style.css max-width: wider for the MeSH explainers).
+    const tip = getComputedStyle(carrier, "::after");
+    const measured = parseFloat(tip.width);
+    const widest = parseFloat(tip.maxWidth);
+    const width = Number.isFinite(measured) ? measured
+      : Number.isFinite(widest) ? widest : Math.min(16 * parseFloat(getComputedStyle(root).fontSize), root.clientWidth - 32);
+    // It starts where the carrier's first line does (a link wrapping in a narrow cell) and stays
+    // inside the scroll box that clips it, within its scrollbars (step 4 review: the medicines
+    // table's ended 17px before the viewport's limit).
+    const scroller = carrier.closest(".table-scroll, .activity-scroll");
+    const clip = scroller ? scrollArea(scroller) : null;
+    const start = (carrier.getClientRects()[0] ?? carrier.getBoundingClientRect()).left;
+    const shift = tipShift(start, width, Math.min(root.clientWidth - 16, clip ? clip.right - 8 : Infinity));
+    if (shift) carrier.style.setProperty("--tip-left", `${shift}px`);
+    if (!clip) return;
+    const measuredHeight = parseFloat(tip.height);
+    const height = Number.isFinite(measuredHeight) ? measuredHeight : tipHeightEstimate(carrier.dataset.tip.length, width);
+    if (tipAbove(carrier.getBoundingClientRect(), height, clip)) carrier.classList.add("tip-above");
   }
+  // A tip beside the sidebar holds when the pointer leaves its row toward it (.tip-hold: shown
+  // without its pause, style.css): the sidebar's scrollbar, on the way, takes the pointer from the
+  // bridge. The hold ends after a moment unless the pointer is back on the row, its bridge or tip,
+  // and when it leaves them otherwise or reaches another carrier. Only a tip already shown (its
+  // pause over) holds. No style or layout is read here: a style update between the row losing
+  // :hover and the class arriving would drop the tip and restart its pause.
+  const PAUSE_MS = 600;
+  let entered = { carrier: null, at: 0 };
+  let held = null;
+  let holdTimer = 0;
+  function release() {
+    clearTimeout(holdTimer);
+    held?.classList.remove("tip-hold");
+    held = null;
+  }
+  document.addEventListener("pointerout", (event) => {
+    const carrier = carrierOf(event.target);
+    if (!carrier || carrier.contains(event.relatedTarget)) return;
+    const shown = held === carrier || (entered.carrier === carrier && event.timeStamp - entered.at >= PAUSE_MS);
+    const row = beside?.carrier === carrier ? beside.row : null;
+    const towardTip = row && event.clientX >= row.right - 1 && event.clientX < beside.x && event.clientY >= row.top && event.clientY <= row.bottom;
+    if (!shown || !towardTip || root.classList.contains("tips-hidden")) {
+      if (held === carrier) release();
+      return;
+    }
+    release();
+    held = carrier;
+    carrier.classList.add("tip-hold");
+    holdTimer = setTimeout(() => {
+      if (!held?.matches(":hover")) release();
+    }, 500);
+  });
   document.addEventListener("pointerover", (event) => {
     const carrier = carrierOf(event.target);
-    if (carrier && carrier !== hiddenOn) show(carrier);
+    if (entered.carrier !== carrier) entered = { carrier, at: event.timeStamp };
+    if (!carrier) return;
+    if (carrier !== held) release();
+    if (carrier === hiddenOn) return;
+    if (clickedAt && event.clientX === clickedAt.x && event.clientY === clickedAt.y) return;
+    show(carrier);
   });
-  document.addEventListener("focusin", (event) => show(carrierOf(event.target)));
+  document.addEventListener("focusin", (event) => {
+    if (clickedAt && !event.target.matches(":focus-visible")) return;
+    show(carrierOf(event.target));
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || root.classList.contains("tips-hidden") || !showing()) return;
     event.preventDefault();
@@ -336,10 +433,19 @@ function setupTips() {
     const carrier = carrierOf(event.target);
     if (!carrier || event.detail === 0) return;
     const box = carrier.getBoundingClientRect();
-    if (event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) return;
+    const at = { x: event.clientX, y: event.clientY };
+    if (at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom) {
+      if (carrier.classList.contains("mesh-tip")) hide(at);
+      return;
+    }
     event.preventDefault();
-    hide();
+    hide(at);
   }, true);
+  // A sidebar scrolled under a resting pointer (or a focused row) moves the row away from its tip.
+  document.addEventListener("scroll", () => {
+    const carrier = document.querySelector(".mesh-tip:hover, .mesh-tip:has(:focus-visible)");
+    if (carrier && fixed(carrier)) placeBeside(carrier);
+  }, { capture: true, passive: true });
 }
 
 // Filled before any data loads, so it shows even when the data files are missing: the header's
@@ -513,7 +619,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
   showOfflineNote(meta);
 
   const index = buildLookupIndex(searchRows, entryTermRows);
-  lookup = createLookup($("#result"), { index, loadFile, navigate, snapshotDate: meta.snapshot_date });
+  lookup = createLookup($("#result"), { index, loadFile, navigate, snapshotDate: meta.snapshot_date, meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null });
   addSearchIcon();
   renderTryLinks();
   const input = $("#lookup-input");
@@ -594,6 +700,11 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   // A therapeutic area term as a link to its condition page (a lookup: ?cond=), or null when its
   // descriptor is unknown.
   const conditionLink = (term) => (descriptorOf.get(term) ? lookup.link(term, { cond: descriptorOf.get(term) }) : null);
+  // A therapeutic area's MeSH explainer ({ text, id }: mesh-notes.js meshTip(); owner request
+  // 2026-09-28) for its tree row, breakdown bar, table link or common-condition link: a term by its
+  // descriptor, a branch or node by the descriptor of its tree number; null until the notes have
+  // loaded (after the first render) or without a scope note.
+  const areaTip = (key) => meshTip(areaNote(lookup.meshNotes(), key, (term) => descriptorOf.get(term)));
   // A small icon link to a condition page (ui: its descriptor) after a row: sidebar area rows,
   // therapeutic area group bars. name: the condition, for its accessible name and tooltip.
   const conditionIconLink = (ui, name) => {
@@ -680,7 +791,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
   const openArea = (key) => setState({ area: key === null ? [] : meshTree.canonical(key) });
   // Exactly one area selected: the area the breakdown drills into and the activity card splits.
   const drillArea = () => (state.area.length === 1 && meshTree.has(state.area[0]) ? state.area[0] : null);
-  const areaFacet = createAreaTree($("#facet-area"), { tree: meshTree, onToggle: toggleAreaKey, linkOf: areaRowLink });
+  const areaFacet = createAreaTree($("#facet-area"), { tree: meshTree, onToggle: toggleAreaKey, linkOf: areaRowLink, tipOf: areaTip });
   // Companies (companies part 2): the tree adds or removes one value (toggleCompany()); drill-downs,
   // paths and "Up one level" show one value alone (none: all), as the tree selects it (canonical()).
   const toggleCompanyValue = (value) => setState({ mah: toggleCompany(companies, state.mah, value) });
@@ -775,16 +886,16 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     activityOrder[activityMode] = nextSort(activityOrder[activityMode], event.currentTarget.dataset.order);
     scheduleRender();
   });
-  // A segmented sort button (key: its data-sort / data-order value; current: the sort in force):
-  // its text, then an arrow for the order in force, else for the order it starts in; pressed, its
-  // name says that order.
-  function renderSortButton(button, text, key, current) {
+  // A segmented sort button (key: its data-sort / data-order value; current: the sort in force;
+  // kind: how its name says the order, UI.sortOrder, the key by default): its text, then an arrow
+  // for the order in force, else for the order it starts in; pressed, its name says that order.
+  function renderSortButton(button, text, key, current, kind = key) {
     const pressed = current.key === key;
     const direction = pressed ? current.direction : defaultSortDirection(key);
     const node = d3.select(button)
       .text(text)
       .attr("aria-pressed", String(pressed))
-      .attr("aria-label", pressed ? UI.sortOrder.name(text, key, direction) : null);
+      .attr("aria-label", pressed ? UI.sortOrder.name(text, kind, direction) : null);
     appendSortIcon(node, direction === "asc");
   }
   // "Approvals per year": stacked by medicine type, ATC class, holder or status (UI state, not in the URL).
@@ -808,6 +919,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     // company groups their company page.
     medicineLink: (product) => lookup.link(product.name_of_medicine, { med: product.ema_product_number }, "medicine-name"),
     conditionLink,
+    termTip: areaTip,
     holderOf,
     // A segment adds its class to the ATC filter; pressed again, it removes it.
     onAtcSelect: toggleAtc,
@@ -1014,7 +1126,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     list.selectChildren().remove();
     for (const row of rows) {
       const item = list.append("li");
-      if (row.descriptorUi) item.append(() => lookup.link(row.term, { cond: row.descriptorUi }));
+      if (row.descriptorUi) item.append(() => addMeshTip(lookup.link(row.term, { cond: row.descriptorUi }), lookup.meshNotes()?.byUi.get(row.descriptorUi) ?? null));
       else item.append("span").text(row.term);
       item.append("span").attr("class", "bar-track").attr("aria-hidden", "true")
         .append("span").attr("class", "bar-fill").style("width", `${(100 * row.count) / rows[0].count}%`);
@@ -1032,7 +1144,8 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     });
     d3.selectAll("#breakdown-sort button").each(function sortButton() {
       const { sort } = this.dataset;
-      renderSortButton(this, sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[state.by], sort, breakdownSort);
+      // Areas by key: MeSH tree order ("MeSH, tree order"), not A to Z.
+      renderSortButton(this, sort === "count" ? UI.breakdown.sort.count : UI.breakdown.sort.key[state.by], sort, breakdownSort, sort === "key" && state.by === "area" ? "tree" : sort);
     });
     const card = $("#breakdown").closest(".chart-card");
     const hadFocus = card.contains(document.activeElement);
@@ -1054,7 +1167,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     $("#breakdown-legend").hidden = legendTypes.length === 0;
     renderBreakdownPath(state.by, tree.current);
     const rows = sortBreakdownRows(tree.rows, breakdownSort.key, state.by, breakdownSort.direction);
-    let options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink };
+    let options = { isSelected: tree.isSelected, onToggle: tree.onToggle, linkOf: areaLink, tipOf: (row) => (row.incomplete ? null : areaTip(row.key)) };
     if (atc) options = { isSelected: atc.isSelected, onToggle: atc.onToggle, badgeOf: (row) => ({ text: row.key, hue: atcHue(row.key), level: atcLevel(row.key) }) };
     // Company groups carry their monogram badge; groups and companies link to their page.
     else if (state.by === "mah") {
@@ -1332,7 +1445,7 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     });
 
     const undated = filtered.filter((product) => product.year === null).length;
-    safely(cardOf("#medicines-table"), () => table(newestFirst(filtered), UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents()));
+    safely(cardOf("#medicines-table"), () => table(newestFirst(filtered), UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes()));
   }
 
   dashboard = { domain, render: renderDashboard, title: () => classTitle };
@@ -1354,11 +1467,15 @@ function startDashboard(meta, [medicines, areaRows, substanceRows, atcRows, atcC
     scheduleRender();
   }, () => {});
   // The table's PI and EPAR links: the documents index (~5 MB, shared with the cards) in the
-  // background; the therapeutic area groups' condition page links: the conditions data.
+  // background; the therapeutic area groups' condition page links: the conditions data; the
+  // therapeutic areas' MeSH explainers and the tree's order of EMA's terms (their tree numbers):
+  // the MeSH notes.
   lookup.onData((name) => {
-    if (name === "documents" || name === "conditions") scheduleRender();
+    if (name === "meshNotes") meshTree.setNotes(lookup.meshNotes()?.rows ?? null);
+    if (name === "documents" || name === "conditions" || name === "meshNotes") scheduleRender();
   });
   lookup.need("documents");
+  lookup.need("meshNotes");
 }
 
 // Desktop: the sidebar starts below the fixed header, whose height follows its text (the offline

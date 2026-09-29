@@ -25,6 +25,8 @@
         <ConceptName>
           <String>Neoplasms</String>
         </ConceptName>
+        <ScopeNote>New abnormal growth of tissue. Malignant neoplasms show a greater degree of anaplasia and have the properties of invasion and metastasis, compared to benign neoplasms.
+        </ScopeNote>
         <TermList>
           <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
             <TermUI>T027926</TermUI>
@@ -74,6 +76,8 @@
         <ConceptName>
           <String>Nervous System Diseases</String>
         </ConceptName>
+        <ScopeNote>Diseases of the central and peripheral nervous system. This includes disorders of the brain, spinal cord, cranial nerves, peripheral nerves, nerve roots, autonomic nervous system, neuromuscular junction, and muscle.
+        </ScopeNote>
         <TermList>
           <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
             <TermUI>T028092</TermUI>
@@ -111,6 +115,8 @@
         <ConceptName>
           <String>Mental Disorders</String>
         </ConceptName>
+        <ScopeNote>Psychiatric illness or diseases manifested by breakdowns in the adaptational process expressed primarily as abnormalities of thought, feeling, and behavior producing either distress or impairment of function.
+        </ScopeNote>
         <TermList>
           <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
             <TermUI>T004427</TermUI>
@@ -160,6 +166,8 @@
         <ConceptName>
           <String>Alzheimer Disease</String>
         </ConceptName>
+        <ScopeNote>A degenerative disease of the BRAIN characterized by the insidious onset of DEMENTIA. Impairment of MEMORY, judgment, attention span, and problem solving skills are followed by severe APRAXIAS and a global loss of cognitive abilities. The condition primarily occurs after age 60, and is marked pathologically by severe cortical atrophy and the triad of SENILE PLAQUES; NEUROFIBRILLARY TANGLES; and NEUROPIL THREADS. (From Adams et al., Principles of Neurology, 6th ed, pp1049-57)
+        </ScopeNote>
         <TermList>
           <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="EPO" RecordPreferredTermYN="Y">
             <TermUI>T001655</TermUI>
@@ -201,6 +209,8 @@
         <ConceptName>
           <String>Niemann-Pick Diseases</String>
         </ConceptName>
+        <ScopeNote>A group of autosomal recessive disorders in which harmful quantities of lipids accumulate in the viscera and the central nervous system. They can be caused by deficiencies of enzyme activities (SPHINGOMYELIN PHOSPHODIESTERASE) or defects in intracellular transport, resulting in the accumulation of SPHINGOMYELINS and CHOLESTEROL. There are various subtypes based on their clinical and genetic differences.
+        </ScopeNote>
         <TermList>
           <Term ConceptPreferredTermYN="Y" IsPermutedTermYN="N" LexicalTag="NON" RecordPreferredTermYN="Y">
             <TermUI>T365793</TermUI>
