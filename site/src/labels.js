@@ -244,7 +244,7 @@ const orphanEstimate = (orphanEnd) => (orphanEnd.source === "register" ? "" : " 
 
 export const UI = {
   // Under the wordmark, always shown (landing, user-approved design 2026-09-28): what the site is for.
-  tagline: "Heard of a drug at a talk, a poster or anywhere? Look it up in seconds: EU approval, what it's for, who owns it, how long it's protected.",
+  tagline: "Look up the regulatory status of any drug in the EU.",
   // The scope (step 2, #1): EMA's central procedure, every status; national authorizations are not in
   // it. The header shows it alone until the data's date is known.
   scopeLine: "Human medicines, EMA central procedure",

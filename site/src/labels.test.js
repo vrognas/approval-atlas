@@ -1008,7 +1008,7 @@ test("search copy: retried and empty lists, did you mean, the indication-text op
 
 test("the header's tagline and the intro card say what the site is for and what it covers", () => {
   const { UI } = labels;
-  assert.equal(UI.tagline, "Heard of a drug at a talk, a poster or anywhere? Look it up in seconds: EU approval, what it's for, who owns it, how long it's protected.");
+  assert.equal(UI.tagline, "Look up the regulatory status of any drug in the EU.");
   assert.equal(UI.intro.link, "What is this?");
   // Owner decision 2026-09-29: three onboarding cards (a bold title, one plain sentence, an example to
   // try) in place of the two lists, then one quiet line on scope and use.
