@@ -5163,9 +5163,10 @@ table.activity {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Documents across; Status too when no Protection block follows it (never approved) or it is
-     the only block (the substance card). */
+  /* Documents and Indication across; Status too when no Protection block follows it (never
+     approved) or it is the only block (the substance card). */
   .card-blocks > .block-documents,
+  .card-blocks > .block-indication,
   .card-blocks > .block-status:has(+ .block-documents),
   .card-blocks > .card-block:only-child {
     grid-column: 1 / -1;
@@ -5635,14 +5636,14 @@ details > summary {
   margin: 0;
 }
 
-.what-for .indication > summary {
+.block-indication .indication > summary {
   margin-top: 4px;
   color: var(--link);
   font-size: 0.875rem;
   font-weight: 400;
 }
 
-.what-for .indication > p {
+.block-indication .indication > p {
   margin: 8px 0 0;
 }
 
