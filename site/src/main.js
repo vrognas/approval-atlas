@@ -13,7 +13,7 @@ import {
 } from "./approvals.js";
 import { appendSortIcon, renderActivity } from "./activity.js";
 import { createAreaTree, renderAreaPath } from "./area-tree.js";
-import { areaBreakdownRows, areaCategoryTip, areaDrillVia, areaExactLabel, areaUpLevel, buildAreaTree, inAreas, toggleArea } from "./areas.js";
+import { areaBreakdownRows, areaCategoryTip, areaDrillVia, areaExactLabel, areaUpLevel, buildAreaTree, inAreas, termBranches, toggleArea } from "./areas.js";
 import { atcChildren, atcClassesAt, atcCode, atcExactCounts, atcIncompleteAt, atcLevel, atcPrefixCounts, atcPrefixes, toggleAtcCode } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
@@ -810,6 +810,10 @@ function startLookup([meta, searchRows, entryTermRows]) {
     snapshotDate: meta.snapshot_date,
     meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null,
     decision: days(medianDays) ? { median: medianDays, p90: days(p90Days) } : null,
+    // A card's branch chip (owner decision 2026-09-29): its branch toggled in the area filter, as in
+    // the table, and the overview it filters shown (one history entry; before the dashboard's data
+    // has loaded, the branch alone).
+    onAreaChip: (branch) => navigate({ area: dashboard ? dashboard.toggleArea(branch) : [branch] }),
   });
   addSearchIcon();
   renderTryLinks();
@@ -1089,6 +1093,11 @@ function startDashboard(meta, [
     if (DESKTOP.matches) facetSections.reveal("atc");
     (DESKTOP.matches ? atcTree.focusTarget() : $('#filter-sentence [data-sheet="atc"]'))?.focus();
   };
+  // The same for the therapeutic area tree (a clicked branch chip whose row is gone).
+  const focusAreaFilter = () => {
+    if (DESKTOP.matches) facetSections.reveal("area");
+    (DESKTOP.matches ? areaFacet.focusTarget() : $('#filter-sentence [data-sheet="area"]'))?.focus();
+  };
 
   const readout = $("#year-readout");
   const showReadout = (from, to) => {
@@ -1168,6 +1177,11 @@ function startDashboard(meta, [
     // A segment adds its class to the ATC filter; pressed again, it removes it.
     onAtcSelect: toggleAtc,
     focusFallback: focusAtcFilter,
+    // A term's branch chip adds its branch to the area filter (as the tree: toggleArea()); pressed
+    // again, it removes it (owner decision 2026-09-29).
+    branches: termBranches(branchRows),
+    onAreaSelect: toggleAreaKey,
+    focusAreaFallback: focusAreaFilter,
   });
   // "Download CSV" (#18): every medicine the table lists (all that match the filters, not only the
   // pages shown), in its order, named by the data's date.
@@ -1862,10 +1876,11 @@ function startDashboard(meta, [
 
     const undated = filtered.filter((product) => product.year === null).length;
     tableRows = newestFirst(filtered);
-    safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes()));
+    safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area));
   }
 
-  dashboard = { domain, render: renderDashboard, title: () => classTitle };
+  // toggleArea(key): the area filter with key toggled (a card's branch chip; as the tree's).
+  dashboard = { domain, render: renderDashboard, title: () => classTitle, toggleArea: (key) => toggleArea(meshTree, state.area, key) };
   applyUrl();
   scheduleUrlWrite(state); // canonical form, invalid values removed
   d3.select("#app-loading").attr("hidden", "");

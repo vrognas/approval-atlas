@@ -3,6 +3,8 @@
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
+import { areaChips, chipTogglable, fillTerm, markAreaChips } from "./area-chips.js";
+import { termBranches } from "./areas.js";
 import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusFlags, statusHue, typeBadges } from "./badges.js";
 import { buildCompanies } from "./companies.js";
@@ -37,9 +39,12 @@ import { espacenetUrl, protectionGlance, protectionSummary } from "./protection.
 import { endingByYear, protectionEnding } from "./protection-calendar.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
+import { toolbarKeydown } from "./toolbar.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
 
 const formatNumber = new Intl.NumberFormat("en-US").format;
+// The medicine card's therapeutic areas shown on phones before "Show n more" (areaLinks()).
+const CARD_AREAS = 3;
 
 function el(tag, props, ...children) {
   const node = document.createElement(tag);
@@ -184,7 +189,8 @@ const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substanc
 // meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
 // decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
 // opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
-export function createLookup(panel, { index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null }) {
+// onAreaChip(branch): a condition's branch chip was clicked (owner decision 2026-09-29).
+export function createLookup(panel, { index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null, onAreaChip = () => {} }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
     // Rows without a code to use (atcCode()) are left out.
@@ -200,8 +206,9 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       return atcPrefixCounts(medicines.filter(isAuthorizedNow).map((medicine) => ({ atc: byProduct.get(medicine.ema_product_number) ?? [] })));
     }],
     areas: [["ema_medicine_therapeutic_areas.json"], (rows) => groupBy(rows, "ema_product_number")],
+    // With the terms' MeSH branches, for their chips (areas.js termBranches()).
     conditions: [["mesh_descriptor_areas.json", "ema_medicine_therapeutic_areas.json", "ema_therapeutic_area_branches.json"],
-      (descriptorAreaRows, areaRows, branchRows) => buildConditions(index, { descriptorAreaRows, areaRows, branchRows })],
+      (descriptorAreaRows, areaRows, branchRows) => ({ ...buildConditions(index, { descriptorAreaRows, areaRows, branchRows }), branches: termBranches(branchRows) })],
     documents: [["ema_medicine_documents.json"], (rows) => groupBy(rows, "ema_product_number")],
     // Step 4 review: the curated copies (their national references and evidence) with it, and the
     // curated pediatric-use marketing authorizations (their evidence); none when a file is missing
@@ -234,6 +241,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   let renderedKey = null;
   let showAll = false;
   let showAllKey = null; // the lookup view the "Show all statuses" choice belongs to
+  const expandedAreas = new Set(); // medicine cards whose areas beyond the first CARD_AREAS were shown (phones)
   let focusNext = false;
   let timeline = null;
   const resizeObserver = new ResizeObserver(() => {
@@ -249,6 +257,15 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   });
   const { need } = datasets;
   const ready = (value) => value !== undefined && value !== FAILED;
+
+  // Branch chips (area-chips.js): a click toggles the branch (the caller's), unless it is included
+  // through a selected category (disabled, as the tree's row); the arrow keys move within a
+  // condition's chips.
+  panel.addEventListener("click", (event) => {
+    const chip = event.target.closest("button.area-chip");
+    if (chip && chipTogglable(chip)) onAreaChip(chip.dataset.area);
+  });
+  panel.addEventListener("keydown", (event) => toolbarKeydown(event, "button.area-chip"));
   const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
   // The substance equivalents (step 3): none when the file is missing (older data), undefined while
@@ -485,9 +502,28 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
       others.map((other) => el("p", { class: "muted" }, UI.atc.classed(other.names, other.code))));
   }
 
+  // The medicine card's therapeutic areas with their branch chips. On phones the first CARD_AREAS,
+  // the rest (.term-extra) hidden by CSS behind "Show n more" (review 2026-09-29: with chips, a long
+  // list pushed the product information button below the first screen); a card whose rest was
+  // shown (expandedAreas) keeps it across re-renders.
   function areaLinks(number, areas, conditions) {
     if (!ready(areas)) return pending(areas);
-    return termLinks((areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh), conditions);
+    const terms = (areas.get(number) ?? []).map((row) => row.therapeutic_area_mesh);
+    const groups = termLinks(terms, conditions, { chips: true }).flat();
+    if (terms.length <= CARD_AREAS) return groups;
+    const extras = groups.filter((node) => node.classList?.contains("term")).slice(CARD_AREAS);
+    for (const group of extras) group.classList.add("term-extra");
+    const more = UI.card.moreAreas(extras.length);
+    const list = el("span", { class: expandedAreas.has(number) ? "card-areas areas-all" : "card-areas" }, groups, " ",
+      el("button", { type: "button", class: "toggle areas-more", onclick: () => {
+        expandedAreas.add(number);
+        list.classList.add("areas-all");
+        // The button goes: focus to the first condition it showed (its link, else its chips).
+        const target = extras[0].querySelector("a, button.area-chip[tabindex='0']") ?? extras[0];
+        if (target === extras[0]) target.tabIndex = -1;
+        target.focus();
+      } }, more.text, el("span", { class: "visually-hidden" }, more.hidden)));
+    return list;
   }
 
   // The documents list below the SmPC / EPAR buttons. groups: groupDocuments() output; rest: the
@@ -797,10 +833,17 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   }
 
   // Condition page links for EMA terms (plain text where the descriptor is unknown), "; " between them.
-  function termLinks(terms, conditions) {
+  // chips (the medicine card, the substance card's table; owner decision 2026-09-29): each term a
+  // group in the flow (span.term, area-chips.js fillTerm()) followed by its branch chips.
+  function termLinks(terms, conditions, { chips = false } = {}) {
     return terms.map((term, position) => {
       const ui = ready(conditions) ? conditions.termUi.get(term) : null;
-      return [ui ? conditionLink(term, ui) : term, position < terms.length - 1 ? "; " : ""];
+      const name = ui ? conditionLink(term, ui) : term;
+      const last = position === terms.length - 1;
+      if (!chips) return [name, last ? "" : "; "];
+      const group = el("span", { class: "term" });
+      fillTerm(group, name, ready(conditions) ? areaChips(term, conditions.branches, lastState?.area ?? []) : null, last);
+      return last ? group : [group, " "];
     });
   }
 
@@ -845,7 +888,7 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
             mentions ? el("span", { class: "matched-terms" }, UI.condition.rowMentions(mentions)) : null,
             documentLinks(row.name_of_medicine, urls)),
           areas
-            ? cell("result-areas", ready(areaRows) ? termLinks((areaRows.get(row.ema_product_number) ?? []).map((item) => item.therapeutic_area_mesh), conditions) : null)
+            ? cell("result-areas", ready(areaRows) ? termLinks((areaRows.get(row.ema_product_number) ?? []).map((item) => item.therapeutic_area_mesh), conditions, { chips: true }) : null)
             : null,
           cell("result-atc", atcCodes(row.ema_product_number, atc)),
           cell("status-cell", statusBadge(row.medicine_status, false, undefined, medicine?.opinion_status ?? null), dates ? el("span", { class: "status-date" }, dates) : null,
@@ -1295,6 +1338,8 @@ export function createLookup(panel, { index, loadFile, navigate, snapshotDate, m
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
   function render(state, force = false) {
     lastState = state;
+    // The branch chips follow the area filter (the desktop sidebar can change it under a card).
+    markAreaChips(panel, state.area ?? []);
     const view = lookupView(state);
     const key = JSON.stringify(view);
     const sameView = key === renderedKey;

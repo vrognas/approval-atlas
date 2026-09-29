@@ -3454,8 +3454,112 @@ td.area {
   hyphens: auto;
 }
 
-.term {
+.term-name {
   cursor: help;
+}
+
+/* Branch chips (owner decision 2026-09-29; area-chips.js): the conditions in one flow (tables, the
+   medicine card), each a group (.term, an inline block, so a condition and its chips wrap together
+   unless it is longer than the line; review 2026-09-29: one per line made the lists up to 2.8 times
+   taller) closed by the ";" before the next (.term-sep, kept with the chips): its name, then its
+   MeSH branches as small mono chips in the area tree's branch shade (slate, level 2), filter toggles
+   pressed as the ATC segments (the accent underline), then "+n" naming the rest. Chips and "+n" keep
+   together and wrap below the name when it leaves them no room. The visible chip is the button's
+   fill (.area-chip-fill): at least 24px (WCAG 2.5.8); on phones the button adds a transparent rim
+   (below). */
+.term {
+  display: inline-block;
+}
+
+/* Top-aligned (about level with the text beside it) and 2px clear of the next line (its margin box:
+   26px), so a line of chips is never taller than 26px nor touches the lines around it. */
+.term-branches {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-block: 0 2px;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.term-branches > .term-sep {
+  margin-left: -3px;
+}
+
+.area-chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+button.area-chip {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.area-chip-fill {
+  display: block;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--slate-2);
+  color: var(--slate-text);
+  font: 500 0.75rem/24px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+button.area-chip:not([aria-disabled="true"]):hover .area-chip-fill {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+button.area-chip[aria-pressed="true"] .area-chip-fill {
+  box-shadow: inset 0 -2px var(--accent);
+}
+
+/* Included through a selected category (review 2026-09-29): pressed and disabled, as the tree's
+   row; its tooltip says why a click does nothing. */
+button.area-chip[aria-disabled="true"] {
+  cursor: help;
+}
+
+/* The focus ring goes round the fill, not the phones' rim. */
+button.area-chip:focus-visible {
+  outline: none;
+}
+
+button.area-chip:focus-visible .area-chip-fill {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.area-more {
+  color: var(--ink-secondary);
+  font: 500 0.75rem var(--font-mono);
+}
+
+/* The medicine card on phones: the first three conditions, the rest behind "Show n more"
+   (lookup.js areaLinks(); review 2026-09-29), so the product information button stays near the
+   first screen. */
+.areas-more {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .card-areas:not(.areas-all) > .term-extra {
+    display: none;
+  }
+
+  .card-areas:not(.areas-all) > .areas-more {
+    display: inline-block;
+    min-height: 24px;
+  }
 }
 
 .toggle {
@@ -5135,6 +5239,42 @@ mark {
     padding: 13px 0;
   }
 
+  /* Branch chips: the button's transparent rim around its fill makes the hit area 44px tall (the
+     negative margin keeps the line) and about 42px wide, the fill staying 24px; the rims of
+     neighbouring chips meet without overlapping. The rims only take free space (review 2026-09-29:
+     they took taps meant for the condition name above, the ATC segments and "Show indication"):
+     every fill, and every control a rim can reach, stands above every rim (position and z-index;
+     raised further while its own tip shows, so no fill covers the tip). */
+  button.area-chip {
+    padding: 10px 6px;
+    margin: -10px 0;
+  }
+
+  .area-chips {
+    gap: 0;
+  }
+
+  /* The ";" next to the last chip's fill, over its rim. */
+  .area-chips + .term-sep {
+    margin-left: -9px;
+  }
+
+  .area-chip-fill {
+    position: relative;
+    z-index: 1;
+  }
+
+  :is(.term a, .area-more, .areas-more),
+  :is(#medicines-table, .result-table) :is(a, .atc-badge, .toggle, [data-tip]:not(.area-chip)) {
+    position: relative;
+    z-index: 1;
+  }
+
+  :is(.term a, .area-more):is(:hover, :focus-within),
+  :is(#medicines-table, .result-table) [data-tip]:not(.area-chip):is(:hover, :focus-within) {
+    z-index: 5;
+  }
+
   /* The answer strip's "Protection (est.)" link (step 3). */
   a.strip-link {
     display: inline-flex;
@@ -5223,8 +5363,10 @@ code {
     outline-offset: 2px;
   }
 
-  /* Not an outline: the focus ring is the (inset) outline, and the badge clips anything outside. */
-  button.atc-seg[aria-pressed="true"] {
+  /* Not an outline: the focus ring is the (inset) outline, and the badge clips anything outside.
+     Branch chips as the segments. */
+  button.atc-seg[aria-pressed="true"],
+  button.area-chip[aria-pressed="true"] .area-chip-fill {
     text-decoration-line: underline;
     text-decoration-thickness: 2px;
     text-decoration-color: SelectedItem;

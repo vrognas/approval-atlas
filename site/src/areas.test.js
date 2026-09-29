@@ -13,8 +13,12 @@ import {
   areaTreeKeys,
   areaTreeSearch,
   areaUpLevel,
+  branchChips,
+  branchIncludedIn,
+  branchSelected,
   buildAreaTree,
   inAreas,
+  termBranches,
   toggleArea,
 } from "./areas.js";
 import { tokenLabel } from "./facets.js";
@@ -385,6 +389,81 @@ test("inAreas: a term within the selection (itself or under a selected node)", (
   assert.equal(inAreas(tree, ["C04"], "Psoriasis"), false);
 });
 
+// Owner decision 2026-09-29: in the tables and on the medicine card each condition is followed by
+// chips for its MeSH branches (at most 2, then "+n"), each a filter toggle.
+test("branch chips: a term's MeSH branches, distinct, in code order, with their names", () => {
+  const rows = [
+    branch("Adrenoleukodystrophy", "Adrenoleukodystrophy", "C18", "Nutritional and Metabolic Diseases"),
+    branch("Adrenoleukodystrophy", "Adrenoleukodystrophy", "C10", "Nervous System Diseases"),
+    branch("Adrenoleukodystrophy", "Adrenoleukodystrophy", "C16", "Congenital, Hereditary, and Neonatal Diseases and Abnormalities"),
+    branch("Adrenoleukodystrophy", "Adrenoleukodystrophy", "C19", "Endocrine System Diseases"),
+    branch("Adrenoleukodystrophy", "Adrenoleukodystrophy", "C10", "Nervous System Diseases"),
+    ...branchRows,
+  ];
+  const branches = termBranches(rows);
+  assert.deepEqual(branches.of("Adrenoleukodystrophy"), ["C10", "C16", "C18", "C19"]);
+  assert.deepEqual(branches.of("Breast Neoplasms"), ["C04", "C17"]);
+  // A tag matched at a branch root has that branch.
+  assert.deepEqual(branches.of("Cancer"), ["C04"]);
+  // Terms without a branch: none.
+  assert.deepEqual(branches.of("Unmatched term"), []);
+  assert.deepEqual(branches.of("Not in the data"), []);
+  assert.equal(branches.name("C10"), "Nervous System Diseases");
+  assert.equal(branches.name("C17"), "Skin and Connective Tissue Diseases");
+});
+
+test("branch chips: at most two, the rest behind +n", () => {
+  assert.deepEqual(branchChips(["C10", "C16", "C18", "C19"]), { shown: ["C10", "C16"], rest: ["C18", "C19"] });
+  assert.deepEqual(branchChips(["C10", "C16", "C18"]), { shown: ["C10", "C16"], rest: ["C18"] });
+  assert.deepEqual(branchChips(["C04", "C17"]), { shown: ["C04", "C17"], rest: [] });
+  assert.deepEqual(branchChips(["C04"]), { shown: ["C04"], rest: [] });
+  assert.deepEqual(branchChips([]), { shown: [], rest: [] });
+});
+
+test("branch chips: pressed when the branch or its category is selected, as inAreas()", () => {
+  assert.equal(branchSelected(["C17"], "C17"), true);
+  assert.equal(branchSelected(["C04", "C17"], "C17"), true);
+  // A branch under a selected category shows as selected too.
+  assert.equal(branchSelected(["C"], "C17"), true);
+  // An area under the branch, or another branch: not the whole branch.
+  assert.equal(branchSelected(["C17.800"], "C17"), false);
+  assert.equal(branchSelected(["Psoriasis"], "C17"), false);
+  assert.equal(branchSelected(["C04"], "C17"), false);
+  assert.equal(branchSelected([], "C17"), false);
+  for (const selected of [[], ["C"], ["C04"], ["C17"], ["C17.800"], ["C04.588.180"], ["Psoriasis"], ["Cancer"], ["C04", "C05"]]) {
+    for (const key of tree.branches) assert.equal(branchSelected(selected, key), inAreas(tree, selected, key), `${selected} ${key}`);
+  }
+});
+
+// Review 2026-09-29: a chip pressed only because its category is selected mirrors the tree's
+// included row (checked and disabled, "included in Diseases"): a click would not toggle it.
+test("branch chips: included through a selected category, as the tree's included rows", () => {
+  assert.equal(branchIncludedIn(["C"], "C17"), "C");
+  assert.equal(branchIncludedIn(["C", "F03"], "C17"), "C");
+  // Selected itself, or not within the selection: not included.
+  assert.equal(branchIncludedIn(["C17"], "C17"), null);
+  assert.equal(branchIncludedIn(["C04"], "C17"), null);
+  assert.equal(branchIncludedIn(["C17.800"], "C17"), null);
+  assert.equal(branchIncludedIn(["F"], "C17"), null);
+  assert.equal(branchIncludedIn([], "C17"), null);
+  for (const selected of [[], ["C"], ["C04"], ["C17"], ["C17.800"], ["Psoriasis"], ["C04", "C05"], ["C", "C17"]]) {
+    for (const key of tree.branches) {
+      const included = areaCheckState(tree, key, selected) === "included";
+      assert.equal(branchIncludedIn(selected, key) !== null, included, `${selected} ${key}`);
+      if (included) assert.equal(branchIncludedIn(selected, key), areaIncludedIn(tree, key, selected));
+    }
+  }
+});
+
+test("branch chips: a click toggles the branch as the tree does (toggleArea())", () => {
+  assert.deepEqual(toggleArea(tree, [], "C17"), ["C17"]);
+  assert.deepEqual(toggleArea(tree, ["C17"], "C17"), []);
+  assert.deepEqual(toggleArea(tree, ["C04"], "C17"), ["C04", "C17"]);
+  // In place of an area under it, or of its category (pressed, as included: the chip narrows to it).
+  assert.deepEqual(toggleArea(tree, ["Psoriasis", "C05"], "C17"), ["C05", "C17"]);
+  assert.deepEqual(toggleArea(tree, ["C"], "C17"), ["C17"]);
+});
+
 test("area tree nodes: those with medicines plus the selection and its ancestors", () => {
   const counts = new Map([["C17", 2], ["C17.800", 2], ["C17.800.859", 2], ["Psoriasis", 2], ["C04", 0]]);
   const keys = areaTreeKeys(tree, counts, ["Triple Negative Breast Neoplasms"]);
@@ -545,5 +624,26 @@ test(
     assert.deepEqual(real.rootTerms("C04"), ["Neoplasms", "Cancer"]);
     assert.deepEqual(rootTags.filter((term) => keys.some((key) => real.children(key).includes(term))), []);
     assert.deepEqual(rootTags.filter((term) => real.canonical(term).join() !== term), []);
+  },
+);
+
+test(
+  "branch chips (real data): Adrenoleukodystrophy's four branches; pressed exactly as inAreas() for every branch",
+  { skip: realFiles.every(existsSync) ? false : "therapeutic area data files not found" },
+  () => {
+    const [branches, subtree] = realFiles.map((file) => JSON.parse(readFileSync(file, "utf8")));
+    const real = buildAreaTree(branches, subtree);
+    const chips = termBranches(branches);
+    assert.deepEqual(chips.of("Adrenoleukodystrophy"), ["C10", "C16", "C18", "C19"]);
+    assert.deepEqual(branchChips(chips.of("Adrenoleukodystrophy")).rest, ["C18", "C19"]);
+    assert.deepEqual(chips.of("Cancer"), ["C04"]);
+    // Every term's chips are the branches above it in the tree.
+    const terms = [...new Set(branches.map((row) => row.therapeutic_area_mesh))];
+    const differs = terms.filter((term) => chips.of(term).join() !== [...real.ancestors(term)].filter((key) => real.branches.includes(key)).sort().join());
+    assert.deepEqual(differs, []);
+    for (const selected of [[], ["C"], ["F"], ["C04"], ["C10", "F03"], ["C04.588"], ["Psoriasis"], ["Cancer"]]) {
+      assert.deepEqual(real.branches.filter((key) => branchSelected(selected, key) !== inAreas(real, selected, key)), [], String(selected));
+      assert.deepEqual(real.branches.filter((key) => (branchIncludedIn(selected, key) !== null) !== (areaCheckState(real, key, selected) === "included")), [], String(selected));
+    }
   },
 );

@@ -918,6 +918,16 @@ export const UI = {
     note: "MeSH categories, their branches and the branches' first two levels, then EMA's terms, each with its MeSH tree number. A medicine counts in every area it is tagged with or under, so the areas below one need not add up to it.",
     all: "All therapeutic areas",
     path: "Therapeutic area path",
+    // Branch chips after each condition (owner decision 2026-09-29; area-chips.js): a toolbar of
+    // filter toggles per condition, then "+n" naming the branches behind it (tooltip, hidden text).
+    chips: (term) => `MeSH branches of ${term}`,
+    chipFilter: (code, name) => `Filter by therapeutic area ${code} ${name}`,
+    chipsMore: (count) => `+${count}`,
+    chipsRest: (branches) => `Also in ${branches.map(({ code, name }) => `${code} ${name}`).join("; ")}`,
+    // A chip under a selected category (review 2026-09-29): pressed and disabled, as the tree's
+    // included row; its description (a hidden element) and its tooltip.
+    chipIncluded: (category) => `included in ${category}`,
+    chipIncludedTip: (name, category) => `${name}, included in ${category}`,
   },
 
   // Modality (M2 phase 2, spec 2026-09-29; modalities.js): group › modality. Names (U.S. spelling;
@@ -1291,6 +1301,9 @@ export const UI = {
     areas: "Therapeutic areas",
     indication: "Indication",
     fullIndication: "Show full indication",
+    // Phones (review 2026-09-29): the first three conditions, the rest behind this button, so the
+    // product information button stays near the first screen; hidden: the rest of its name.
+    moreAreas: (count) => ({ text: `Show ${formatCount(count)} more`, hidden: count === 1 ? " therapeutic area" : " therapeutic areas" }),
     // Another medicine with the same name (the refused and the authorized Mylotarg): a link to its
     // card, then its status; documents: the namesake's documents EMA lists under this one.
     namesake: {

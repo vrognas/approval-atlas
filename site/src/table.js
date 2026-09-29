@@ -1,9 +1,11 @@
 import * as d3 from "d3";
+import { areaChips, chipTogglable, fillTerm, markAreaChips } from "./area-chips.js";
 import { atcBadgeTip, atcCode, atcLevelNames, atcOrigin, atcRowIncomplete } from "./atc.js";
 import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
 import { UI, atcOriginFlag, atcOriginText, statusDateLine, statusLabel, statusTipText } from "./labels.js";
 import { documentLinks } from "./lookup.js";
+import { focusToolbarButton, toolbarKeydown } from "./toolbar.js";
 
 const PAGE_SIZE = 100;
 const HEADERS = UI.table.headers;
@@ -119,32 +121,37 @@ function renderStatusCell(cell, product, register) {
   flag.append("span").attr("class", "visually-hidden").text(text);
 }
 
-// Each term links to its condition page where its MeSH descriptor is known (conditionLink()), and is
-// explained (explainTerms()).
-function renderAreaCell(cell, product, branchNamesByTerm, conditionLink, termTip) {
+// The terms in one flow, "; " between them, each a group (fillTerm()): its name, a link to its
+// condition page where its MeSH descriptor is known (conditionLink()) and explained
+// (explainTerms()), then its branch chips (area-chips.js; owner decision 2026-09-29), which wrap
+// below the name when it leaves them no room.
+function renderAreaCell(cell, product, branchNamesByTerm, conditionLink, termTip, branches, selectedArea) {
   cell.selectAll("span.term")
     .data(product.areas)
     .join("span")
     .attr("class", "term")
     .each(function term(value, index) {
-      const link = conditionLink(value);
-      if (link) this.append(link);
-      else this.append(value);
-      if (index < product.areas.length - 1) this.append("; ");
+      const name = document.createElement("span");
+      name.className = "term-name";
+      name.append(conditionLink(value) ?? value);
+      const last = index === product.areas.length - 1;
+      fillTerm(this, name, areaChips(value, branches, selectedArea), last);
+      if (!last) this.after(" ");
     });
   explainTerms(cell, branchNamesByTerm, termTip);
 }
 
 // A term's MeSH explainer on its link once the notes have loaded (termTip(term): { text, id } or
 // null; owner request 2026-09-28): a tooltip, and the link's description. Until then, or without
-// one, its branch names as the term's tooltip, one per line, with the explainers' pause (a data-tip
-// on the term; owner feedback 2026-09-29: it was a native title; never both). A term without a
-// link takes a tap (tabindex -1), as the type badges.
+// one, its branch names as the name's tooltip, one per line, with the explainers' pause (a data-tip
+// on the name only, so it never shows over the chips' own tips; owner feedback 2026-09-29: it was a
+// native title; never both). A name without a link takes a tap (tabindex -1), as the type badges.
 function explainTerms(cell, branchNamesByTerm, termTip) {
   cell.selectAll("span.term").each(function explain(term) {
-    const link = this.querySelector("a");
+    const name = this.querySelector(".term-name");
+    const link = name.querySelector("a");
     const tip = link ? termTip(term) : null;
-    d3.select(this)
+    d3.select(name)
       .attr("data-tip", tip ? null : (branchNamesByTerm.get(term) ?? []).join("\n") || UI.table.noBranch)
       .classed("mesh-tip tip-lines", !tip)
       .attr("tabindex", tip || link ? null : "-1");
@@ -159,15 +166,23 @@ function explainTerms(cell, branchNamesByTerm, termTip) {
 // its MeSH explainer ({ text, id }), or null (none, or the notes still load).
 // holderOf(product): its Company · Holder cell's content (holders.js holderDisplay(); companies
 // part 2), a node or text. onAtcSelect(code): an ATC segment was clicked; focusFallback(): where
-// focus goes when the clicked segment's row is gone after the update.
+// focus goes when the clicked segment's row is gone after the update. branches: the terms' MeSH
+// branches (areas.js termBranches()); onAreaSelect(branch): a branch chip was clicked;
+// focusAreaFallback(): as focusFallback() for a chip.
 // All text goes through .text() or text nodes: decoded indications contain literal "<" and ">".
-export function createTable(table, moreButton, captionNode, { substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, termTip = () => null, holderOf, onAtcSelect, focusFallback }) {
+export function createTable(table, moreButton, captionNode, {
+  substanceIndex, atcNames, atcRetiredYears, branchNamesByTerm, medicineLink, conditionLink, termTip = () => null, holderOf, onAtcSelect, focusFallback,
+  branches, onAreaSelect, focusAreaFallback,
+}) {
   let current = null;
   let shown = 0;
-  let refocus = null; // { number, code } of a clicked ATC segment, until the next update
+  // A clicked ATC segment or branch chip, until the next update: { number, selector (the button),
+  // within (a chip's term, as the same branch can follow several), fallback }.
+  let refocus = null;
 
-  // Pressed: the segments whose class is selected in the ATC filter. Each badge's one tab stop: the
-  // first pressed segment, else the last (the full code).
+  // Pressed: the segments whose class is selected in the ATC filter, and the branch chips whose
+  // branch is within the area filter. Each badge's one tab stop: the first pressed segment, else the
+  // last (the full code); each chip toolbar's: markAreaChips().
   function markPressed() {
     for (const badge of table.querySelectorAll(".atc-badge[role=toolbar]")) {
       const segments = [...badge.querySelectorAll("button.atc-seg")];
@@ -177,42 +192,39 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
         segment.tabIndex = segment === (pressed ?? segments.at(-1)) ? 0 : -1;
       }
     }
-  }
-
-  // Focus one segment and make it its badge's tab stop.
-  function focusSegment(button) {
-    for (const segment of button.parentNode.querySelectorAll("button.atc-seg")) segment.tabIndex = segment === button ? 0 : -1;
-    button.focus();
+    markAreaChips(table, current.selectedArea);
   }
 
   d3.select(table).on("click", (event) => {
-    const button = event.target.closest("button.atc-seg");
+    const button = event.target.closest("button.atc-seg, button.area-chip");
     if (!button) return;
-    refocus = { number: d3.select(button.closest("tbody")).datum().ema_product_number, code: button.dataset.code };
+    const number = d3.select(button.closest("tbody")).datum().ema_product_number;
+    if (button.matches(".area-chip")) {
+      // Included through a selected category: disabled, as the tree's row (area-chips.js).
+      if (!chipTogglable(button)) return;
+      const term = button.closest("span.term");
+      const index = [...term.parentNode.children].indexOf(term);
+      refocus = { number, selector: `button.area-chip[data-area="${button.dataset.area}"]`, within: `td.area > span.term:nth-child(${index + 1})`, fallback: focusAreaFallback };
+      onAreaSelect(button.dataset.area);
+      return;
+    }
+    refocus = { number, selector: `button.atc-seg[data-code="${button.dataset.code}"]`, within: null, fallback: focusFallback };
     onAtcSelect(button.dataset.code);
   });
 
-  // Toolbar keys: Left/Right to the neighboring segment, Home/End to the first/last.
-  d3.select(table).on("keydown", (event) => {
-    const button = event.target.closest("button.atc-seg");
-    if (!button) return;
-    const segments = [...button.parentNode.querySelectorAll("button.atc-seg")];
-    const index = segments.indexOf(button);
-    const target = segments[{ ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: segments.length - 1 }[event.key]];
-    if (!target) return;
-    event.preventDefault();
-    focusSegment(target);
-  });
+  // Toolbar keys (the ATC segments, the branch chips): Left/Right to the neighboring button,
+  // Home/End to the first/last.
+  d3.select(table).on("keydown", (event) => toolbarKeydown(event, "button.atc-seg, button.area-chip"));
 
-  // The rows are rebuilt: back to the same segment of the same medicine, else of any medicine.
+  // The rows are rebuilt: back to the same button of the same medicine (a chip: of the same term),
+  // else of any medicine.
   function restoreFocus() {
-    const { number, code } = refocus;
+    const { number, selector, within, fallback } = refocus;
     refocus = null;
-    const selector = `button.atc-seg[data-code="${code}"]`;
-    const row = d3.select(table).selectAll("tbody").filter((product) => product.ema_product_number === number);
-    const target = row.select(selector).node() ?? table.querySelector(selector);
-    if (target) focusSegment(target);
-    else focusFallback();
+    const row = d3.select(table).selectAll("tbody").filter((product) => product.ema_product_number === number).node();
+    const target = (within ? row?.querySelector(`${within} ${selector}`) : null) ?? row?.querySelector(selector) ?? table.querySelector(selector);
+    if (target) focusToolbarButton(target);
+    else fallback();
   }
 
   // One tbody per medicine keeps its full-width indication row directly beneath it. Explicit roles
@@ -236,7 +248,7 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
       renderAtcCell(d3.select(this), product, atcNames, atcRetiredYears);
     });
     rows.append("td").attr("class", "area").each(function areaCell(product) {
-      renderAreaCell(d3.select(this), product, branchNamesByTerm, conditionLink, termTip);
+      renderAreaCell(d3.select(this), product, branchNamesByTerm, conditionLink, termTip, branches, current.selectedArea);
     });
     rows.append("td").attr("class", "indication-cell")
       .filter(hasIndication)
@@ -279,13 +291,15 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
   // product, null until loaded) changed, so resizes keep the pages already shown. selectedAtc: the
   // ATC codes selected in the filter, shown as pressed segments. documents: the documents index by
   // product (null until loaded); its arrival adds the links in place. notes: the MeSH notes (null
-  // until loaded); their arrival adds the terms' explainers in place (termTip()).
-  return function update(products, caption, register, selectedAtc, documents, notes = null) {
+  // until loaded); their arrival adds the terms' explainers in place (termTip()). selectedArea: the
+  // area filter (state.area), shown as pressed branch chips.
+  return function update(products, caption, register, selectedAtc, documents, notes = null, selectedArea = []) {
     const unchanged = current !== null && current.caption === caption && current.register === register &&
       current.products.length === products.length && current.products.every((product, index) => product === products[index]);
     if (unchanged) {
-      if (String(current.selectedAtc) !== String(selectedAtc)) {
+      if (String(current.selectedAtc) !== String(selectedAtc) || String(current.selectedArea) !== String(selectedArea)) {
         current.selectedAtc = selectedAtc;
+        current.selectedArea = selectedArea;
         markPressed();
       }
       if (current.documents !== documents) {
@@ -303,7 +317,7 @@ export function createTable(table, moreButton, captionNode, { substanceIndex, at
       if (refocus) restoreFocus();
       return;
     }
-    current = { products, caption, register, selectedAtc, documents, notes };
+    current = { products, caption, register, selectedAtc, documents, notes, selectedArea };
     shown = 0;
     const root = d3.select(table);
     root.selectChildren().remove();

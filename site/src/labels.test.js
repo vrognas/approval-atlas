@@ -540,6 +540,19 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(areas.categories.E, "Analytical, Diagnostic and Therapeutic Techniques, and Equipment");
   assert.equal(areas.categories.I, "Anthropology, Education, Sociology, and Social Phenomena");
   assert.match(areas.note, /^MeSH categories/);
+  // Owner decision 2026-09-29: branch chips after each condition (tables, medicine card), filter
+  // toggles in one toolbar per condition; "+n" names the branches behind it.
+  assert.equal(areas.chips("Adrenoleukodystrophy"), "MeSH branches of Adrenoleukodystrophy");
+  assert.equal(areas.chipFilter("C10", "Nervous System Diseases"), "Filter by therapeutic area C10 Nervous System Diseases");
+  assert.equal(areas.chipsMore(2), "+2");
+  assert.equal(
+    areas.chipsRest([{ code: "C18", name: "Nutritional and Metabolic Diseases" }, { code: "C19", name: "Endocrine System Diseases" }]),
+    "Also in C18 Nutritional and Metabolic Diseases; C19 Endocrine System Diseases",
+  );
+  // Review 2026-09-29: a chip included through a selected category (checked and disabled, as the
+  // tree's row): its description and tooltip say so.
+  assert.equal(areas.chipIncluded("Diseases"), "included in Diseases");
+  assert.equal(areas.chipIncludedTip("Nervous System Diseases", "Diseases"), "Nervous System Diseases, included in Diseases");
   assert.equal(labels.UI.breakdown.area.titleIn("Neoplasms"), "Medicines in Neoplasms by therapeutic area");
   assert.equal(labels.UI.breakdown.area.titleLeaf("Psoriasis"), "Medicines in Psoriasis");
   assert.equal(labels.UI.breakdown.area.titleLeaf("Neoplasms", true), "Medicines tagged Neoplasms");
@@ -1319,6 +1332,10 @@ test("an indication's lead: the whole text when short, else its first sentence, 
   assert.ok(long.startsWith(lead.slice(0, -1)), lead);
   assert.ok(!lead.slice(0, -1).endsWith(" "), lead);
   assert.equal(labels.UI.card.fullIndication, "Show full indication");
+  // Review 2026-09-29: on phones the card shows its first three conditions, the rest behind a button
+  // whose name ends in what it shows.
+  assert.deepEqual(labels.UI.card.moreAreas(7), { text: "Show 7 more", hidden: " therapeutic areas" });
+  assert.deepEqual(labels.UI.card.moreAreas(1), { text: "Show 1 more", hidden: " therapeutic area" });
 });
 
 // Phase 4c review: the tab's title names the view (WCAG 2.4.2); the dashboard under a lookup result
