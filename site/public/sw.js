@@ -69,7 +69,7 @@ async function cacheThenRefresh(event) {
 
 const isSameOrigin = (url) => url.origin === self.location.origin;
 const isAsset = (url) => isSameOrigin(url) && url.pathname.startsWith("/assets/");
-const isPageOrData = (url) => isSameOrigin(url) && (["/", "/index.html", "/manifest.webmanifest", "/icon.svg"].includes(url.pathname) || /^\/data\/[^/]+\.json$/.test(url.pathname));
+const isPageOrData = (url) => isSameOrigin(url) && (["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/favicon.ico"].includes(url.pathname) || /^\/data\/[^/]+\.json$/.test(url.pathname));
 const isThemeScript = (url) => isSameOrigin(url) && url.pathname === "/theme-init.js";
 
 self.addEventListener("fetch", (event) => {
