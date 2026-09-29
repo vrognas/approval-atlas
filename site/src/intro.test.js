@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { introCardPatch, introVisible, isOverview, readIntroClosed, storeIntroClosed, tryLineVisible } from "./intro.js";
+import { introCardPatch, introSpent, introVisible, isOverview, readIntroClosed, readIntroSeen, storeIntroClosed, storeIntroSeen, tryLineVisible } from "./intro.js";
 import { UI } from "./labels.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, areaState, encodeUrl } from "./url.js";
 
@@ -77,6 +77,37 @@ test("the intro stays while a filter popover opened on it is open", () => {
   assert.equal(introVisible({ overview: false, closed: false, requested: false, held: true }), true);
   assert.equal(introVisible({ overview: false, closed: true, requested: false, held: true }), false);
   assert.equal(introVisible({ overview: false, closed: false, requested: false, held: false }), false);
+});
+
+// Paradox of the active user (2026-09-29): the card shows on the first visit only, until the viewer
+// does anything (a lookup or a filter); then, and on later visits, "What is this?" alone brings it.
+test("the intro has its turn on the first visit, until the viewer leaves the untouched overview", () => {
+  // First visit, still on the untouched overview: not spent.
+  assert.equal(introSpent({ seenBefore: false, spent: false, overview: true }), false);
+  // A lookup or a filter spends it for the rest of the visit, back on the overview too.
+  assert.equal(introSpent({ seenBefore: false, spent: false, overview: false }), true);
+  assert.equal(introSpent({ seenBefore: false, spent: true, overview: true }), true);
+  // Seen on an earlier visit.
+  assert.equal(introSpent({ seenBefore: true, spent: false, overview: true }), true);
+  // Spent: hidden on the overview, but still shown where the viewer asks for it.
+  assert.equal(introVisible({ overview: true, closed: false, requested: false, spent: true }), false);
+  assert.equal(introVisible({ overview: true, closed: false, requested: true, spent: true }), true);
+  assert.equal(introVisible({ overview: false, closed: false, requested: true, spent: true }), true);
+  assert.equal(introVisible({ overview: true, closed: false, requested: false, spent: false }), true);
+});
+
+test("a visit is remembered per viewer; blocked or missing storage shows the card each visit", () => {
+  const kept = storage();
+  assert.equal(readIntroSeen(kept), false);
+  storeIntroSeen(kept);
+  assert.equal(kept.items.get("approval-atlas:intro-seen"), "1");
+  assert.equal(readIntroSeen(kept), true);
+  assert.equal(readIntroSeen(storage({ "approval-atlas:intro-seen": "yes" })), false);
+  const blocked = storage({}, true);
+  assert.equal(readIntroSeen(blocked), false);
+  assert.doesNotThrow(() => storeIntroSeen(blocked));
+  assert.equal(readIntroSeen(undefined), false);
+  assert.doesNotThrow(() => storeIntroSeen(undefined));
 });
 
 // Owner decision 2026-09-29: the cards' examples stand in for the Try line while the card shows; the

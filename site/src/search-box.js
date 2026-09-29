@@ -14,7 +14,10 @@ const COPY = UI.lookup;
 // the query the groups are for (the retried one), which Enter compares labels with. No options and
 // no note: closed. onPick(groupKey, value) for a chosen option (or, on Enter without one, the
 // suggestion the text names or the only one: submitChoice()); onSubmit(text) for Enter otherwise.
-export function createSearchBox(input, listbox, status, { suggestionsFor, onPick, onSubmit }) {
+// recent (2026-09-29): { group(), clear() } for the viewer's recently viewed, listed while the field
+// is focused and empty: group() gives the group (recent.js recentGroup(), null when empty), whose
+// options open as picked suggestions but the last, Clear (action "clear": clear(), focus kept).
+export function createSearchBox(input, listbox, status, { suggestionsFor, onPick, onSubmit, recent = null }) {
   let options = [];
   let active = -1;
   let timer = 0;
@@ -33,7 +36,8 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
 
   function renderList() {
     requested = true;
-    const result = suggestionsFor(input.value);
+    const recentGroup = input.value.trim() === "" ? recent?.group() ?? null : null;
+    const result = recentGroup ? { groups: [recentGroup], note: null } : suggestionsFor(input.value);
     const groups = result.groups.filter((group) => group.options.length > 0);
     options = [];
     // The note is announced through the status element, so it is hidden from the listbox's tree
@@ -59,11 +63,14 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
         list.className = `group-${group.key}`;
       }
       for (const option of group.options) {
-        const index = options.push({ ...option, group: option.pick ?? group.key, counted: group.key !== "text" }) - 1;
+        const index = options.push({ ...option, group: option.pick ?? group.key, counted: group.key !== "text" && !option.action }) - 1;
         const item = list.appendChild(document.createElement("li"));
         item.id = `lookup-opt-${index}`;
         item.setAttribute("role", "option");
         item.setAttribute("aria-selected", "false");
+        // An action (Clear) is named in full ("Clear recently viewed") and looks like one.
+        if (option.name) item.setAttribute("aria-label", option.name);
+        if (option.action) item.className = `option-action option-${option.action}`;
         item.appendChild(document.createElement("span")).textContent = option.label;
         if (option.meta) {
           const meta = item.appendChild(document.createElement("span"));
@@ -81,7 +88,8 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     listbox.hidden = !open;
     input.setAttribute("aria-expanded", String(open));
     const count = options.filter((option) => option.counted).length;
-    status.textContent = input.value.trim().length < 2 ? "" : COPY.status(result.note, count) || COPY.noMatches;
+    if (recentGroup) status.textContent = COPY.recent.status(count);
+    else status.textContent = input.value.trim().length < 2 ? "" : COPY.status(result.note, count) || COPY.noMatches;
   }
 
   function setActive(index) {
@@ -95,6 +103,11 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
   function pick(index) {
     const option = options[index];
     close();
+    if (option.action === "clear") {
+      recent.clear();
+      status.textContent = COPY.recent.cleared;
+      return;
+    }
     onPick(option.group, option.value);
   }
 
@@ -131,6 +144,10 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     event.preventDefault();
   });
   input.addEventListener("blur", close);
+  // Focused and empty: the viewer's recently viewed (none: nothing opens).
+  input.addEventListener("focus", () => {
+    if (input.value.trim() === "") renderList();
+  });
 
   return {
     // New background data (conditions, drug classes) arrived: refresh an open list in place, or

@@ -1,14 +1,18 @@
 // The landing intro (user-approved design 2026-09-28): a card between the search and the headline
 // that says what the site is for, so a first-time visitor gets it in seconds. It shows on the
-// untouched overview (no lookup, no filter) until the viewer closes it (×; kept in localStorage,
-// every access wrapped, and the page works without it), and wherever the viewer asks for it (the
-// header's "What is this?", which also undoes the close) until the view changes or it is closed.
+// untouched overview (no lookup, no filter) on the viewer's first visit only (2026-09-29, the
+// paradox of the active user: people start using a site at once, so the card has one turn), until
+// the viewer does any lookup or filter or closes it (×); later visits start with it collapsed to
+// the header's "What is this?", which shows it (and undoes the close) wherever the viewer asks
+// until the view changes or it is closed. The visit and the close are kept in localStorage, every
+// access wrapped, and the page works without it.
 // Owner decision 2026-09-29: three onboarding cards (icon on a tint, bold title, one plain sentence,
 // an example to try) and one quiet line on scope and use, in place of the two lists.
 import { UI } from "./labels.js";
 import { DEFAULT_STATE, areaState, encodeUrl, filterIsSet, lookupView } from "./url.js";
 
 const STORAGE_KEY = "approval-atlas:intro-closed";
+const SEEN_KEY = "approval-atlas:intro-seen";
 // The breakdown's mode ("by") is not a filter.
 const FILTER_KEYS = Object.keys(DEFAULT_STATE).filter((key) => key !== "by");
 
@@ -22,12 +26,18 @@ export function isOverview(state, pendingFilters = null) {
   return pendingFilters === null || [...pendingFilters.keys()].every((key) => key === "by");
 }
 
+// Pure: whether the card has had its turn: the viewer saw it on an earlier visit (seenBefore), or has
+// left the untouched overview on this one (any lookup or filter; spent: the last answer).
+export function introSpent({ seenBefore, spent, overview }) {
+  return seenBefore || spent || !overview;
+}
+
 // Pure: whether the card shows. overview: isOverview(); closed: the viewer closed it; requested: the
-// viewer asked for it on the view shown; held: it showed when a filter popover opened, which is still
-// open (review of F · Spacious phase 1: hiding it moved the chip bar and the popover under the
-// pointer), so it stays until the popover closes.
-export function introVisible({ overview, closed, requested, held = false }) {
-  return requested || ((overview || held) && !closed);
+// viewer asked for it on the view shown; spent: introSpent(); held: it showed when a filter popover
+// opened, which is still open (review of F · Spacious phase 1: hiding it moved the chip bar and the
+// popover under the pointer), so it stays until the popover closes, spent or not.
+export function introVisible({ overview, closed, requested, held = false, spent = false }) {
+  return requested || (((overview && !spent) || held) && !closed);
 }
 
 // Pure (owner decision 2026-09-29): the Try line under the search hides while the card shows, whose
@@ -57,6 +67,23 @@ export function storeIntroClosed(storage, closed) {
     else storage?.removeItem(STORAGE_KEY);
   } catch {
     // Blocked storage: the choice lasts for this visit only.
+  }
+}
+
+// The first visit: "1" once the page has started (on this device and browser).
+export function readIntroSeen(storage) {
+  try {
+    return storage?.getItem(SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function storeIntroSeen(storage) {
+  try {
+    storage?.setItem(SEEN_KEY, "1");
+  } catch {
+    // Blocked storage: every visit is a first one.
   }
 }
 
@@ -149,6 +176,10 @@ export function createIntro(card, link, { link: exampleLink, tryLine }) {
   const copy = UI.intro;
   const storage = browserStorage();
   let closed = readIntroClosed(storage);
+  // Read before this visit marks itself, so the card has its turn on this one.
+  const seenBefore = readIntroSeen(storage);
+  storeIntroSeen(storage);
+  let spent = seenBefore;
   let requested = null; // the view (encodeUrl()) the viewer asked for the card on
   let last = null; // the last render's { state, pendingFilters }
 
@@ -170,7 +201,9 @@ export function createIntro(card, link, { link: exampleLink, tryLine }) {
     if (!last) return;
     if (requested !== null && requested !== view()) requested = null; // the view changed
     const held = last.hold && !card.hidden;
-    const shown = introVisible({ overview: isOverview(last.state, last.pendingFilters), closed, requested: requested !== null, held });
+    const overview = isOverview(last.state, last.pendingFilters);
+    spent = introSpent({ seenBefore, spent, overview });
+    const shown = introVisible({ overview, closed, requested: requested !== null, held, spent });
     card.hidden = !shown;
     tryLine.hidden = !tryLineVisible(shown, lookupView(last.state).kind !== null);
   }

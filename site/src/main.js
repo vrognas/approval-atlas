@@ -65,6 +65,7 @@ import { renderOverTime, renderOverTimeLegend } from "./over-time.js";
 import { renderProtectionCalendar } from "./protection-calendar-card.js";
 import { calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
+import { createRecent, recentEntry } from "./recent.js";
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
 import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
@@ -164,6 +165,10 @@ createThemeToggle($("#theme-toggle"), { onChange: () => lookup && scheduleRender
 // as the Try line's), made on the first render.
 const intro = createIntro($("#intro"), $("#intro-link"), { link: (...args) => lookup.link(...args), tryLine: $("#lookup-try") });
 
+// The viewer's recently viewed (recent.js; this device only): each medicine, substance, condition,
+// company or class view once named (updateTitle()), offered by the search while it is empty.
+const recent = createRecent();
+
 const files = new Map();
 function loadFile(file) {
   if (!files.has(file)) {
@@ -246,7 +251,9 @@ function applyUrl() {
 // The tab's title names the view (a card, condition, search or drug class), so history, tabs and
 // bookmarks tell them apart and screen readers hear the change (WCAG 2.4.2).
 function updateTitle() {
-  document.title = UI.pageTitle(lookupView(state).kind !== null ? lookup.title(state) : dashboard?.title() ?? null);
+  const name = lookupView(state).kind !== null ? lookup.title(state) : dashboard?.title() ?? null;
+  document.title = UI.pageTitle(name);
+  recent.view(recentEntry(state, name));
 }
 
 function render() {
@@ -834,6 +841,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
+    recent,
   });
   // Conditions, drug classes and companies join the suggestions once their background data has
   // loaded (and a condition or company page's title its name); so do EMA's opinions (a negative
