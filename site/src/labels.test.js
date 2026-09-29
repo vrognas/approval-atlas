@@ -535,6 +535,13 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(areas.tagNote(["Cancer"]), "Also filtering by the tag “Cancer”.");
   assert.equal(areas.tagNote(["Neoplasms", "Cancer"]), "Also filtering by the tags “Neoplasms” or “Cancer”.");
   assert.equal(areas.all, "All therapeutic areas");
+  // Owner decision 2026-09-29: the tree is grouped by MeSH category, NLM's names verbatim (MeSH Tree
+  // Structures), every category letter MeSH has.
+  assert.deepEqual(Object.keys(areas.categories), [..."ABCDEFGHIJKLMNVZ"]);
+  assert.equal(areas.categories.C, "Diseases");
+  assert.equal(areas.categories.E, "Analytical, Diagnostic and Therapeutic Techniques, and Equipment");
+  assert.equal(areas.categories.I, "Anthropology, Education, Sociology, and Social Phenomena");
+  assert.match(areas.note, /^MeSH categories/);
   assert.equal(labels.UI.breakdown.area.titleIn("Neoplasms"), "Medicines in Neoplasms by therapeutic area");
   assert.equal(labels.UI.breakdown.area.titleLeaf("Psoriasis"), "Medicines in Psoriasis");
   assert.equal(labels.UI.breakdown.area.titleLeaf("Neoplasms", true), "Medicines tagged Neoplasms");
@@ -910,6 +917,8 @@ test("the area headline counts the medicines in one therapeutic area and those c
   assert.equal(plain(area(0, 0, "Neoplasms")), "No medicines in the EMA data are in Neoplasms.");
   assert.equal(plain(area(2, 2, "Neoplasms", true)), "2 medicines tagged Neoplasms, all of them currently authorized.");
   assert.equal(plain(area(0, 0, "Cancer", true)), "No medicines in the EMA data are tagged Cancer.");
+  // A MeSH category (owner decision 2026-09-29) by its name, as any area.
+  assert.equal(plain(area(1800, 1200, "Diseases")), "1,800 medicines in Diseases, 1,200 of them currently authorized.");
 });
 
 test("the ATC breakdown copy counts medicines of every status", () => {

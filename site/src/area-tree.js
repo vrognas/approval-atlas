@@ -1,11 +1,16 @@
 // The facet sidebar's therapeutic area section (the phone sheet borrows it; phase 4f): one tree of
-// MeSH branch › level 2 › level 3 › EMA's terms (areas.js, facet-tree.js), each row with its name,
-// count and a link to its condition page once known. Checked areas combine with OR (state.area).
-// Also the path of areas of the breakdown and the one-area headline (renderAreaPath()).
+// MeSH category › branch › level 2 › level 3 › EMA's terms (areas.js, facet-tree.js), each row with
+// its name, count and a link to its condition page once known (none for a category). Checked areas
+// combine with OR (state.area). Diseases starts open (owner decision 2026-09-29), the other
+// categories closed. Also the path of areas of the breakdown and the one-area headline
+// (renderAreaPath()).
 import * as d3 from "d3";
 import { areaCheckState, areaExactLabel, areaIncludedIn, areaTreeChildren, areaTreeKeys, areaTreeSearch } from "./areas.js";
 import { createFacetTree } from "./facet-tree.js";
 import { UI } from "./labels.js";
+
+// The category open at first (owner decision 2026-09-29): Diseases.
+const OPEN_CATEGORY = "C";
 
 // section: #facet-area; tree: buildAreaTree(). onToggle(key): a checkbox changed. linkOf(key): a
 // link to the area's condition page, or null (not known yet). tipOf(key): its MeSH explainer
@@ -25,9 +30,10 @@ export function createAreaTree(section, { tree, onToggle, linkOf, tipOf = () => 
       row: (key, count) => UI.areas.count(tree.name(key), count),
       included: (key, count, ancestor) => UI.areas.included(tree.name(key), count, tree.name(ancestor)),
     },
-    // Only rows with children get a child list id: branch codes and tree numbers ("C04.588"), valid
-    // and unique; terms (spaces, several parents) never have children.
+    // Only rows with children get a child list id: category letters, branch codes and tree numbers
+    // ("C04.588"), valid and unique; terms (spaces, several parents) never have children.
     idPrefix: "area-children-",
+    open: [OPEN_CATEGORY],
     visible: (model) => areaTreeKeys(tree, model.counts, model.selected),
     children: (parent, visible) => areaTreeChildren(tree, parent, visible),
     exact: (parent, model) => model.exact.get(parent) ?? 0,

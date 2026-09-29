@@ -118,8 +118,9 @@ test("buildProducts joins holder, year, MeSH terms, branches and ATC rows", () =
   assert.deepEqual([second.areas, second.branches], [[], []]);
   // Phase 4f: the therapeutic area tree keys (terms and every branch and node above them) and the
   // nodes a term is itself; no subtree rows here, so each term is matched at its branch roots: the
-  // product is tagged only at those roots (phase 4g: the branches' static rows).
-  assert.deepEqual([...first.areaKeys].sort(), ["C04", "C15", "C20", "Leukemia", "Lymphoma", "Unmatched term"]);
+  // product is tagged only at those roots (phase 4g: the branches' static rows). The branches'
+  // MeSH category too (owner decision 2026-09-29), once.
+  assert.deepEqual([...first.areaKeys].sort(), ["C", "C04", "C15", "C20", "Leukemia", "Lymphoma", "Unmatched term"]);
   assert.deepEqual([...first.areaExact].sort(), ["C04", "C15", "C20"]);
   assert.deepEqual([second.areaKeys, second.areaExact], [[], []]);
   // Companies part 2: without company rows, no company or group; mah stays EMA's holder name.
@@ -154,7 +155,7 @@ test("buildProducts: tree keys from the subtree rows, and the nodes a product's 
     ],
     atcRows: [],
   });
-  assert.deepEqual([...product.areaKeys].sort(), ["Breast Neoplasms", "C04", "C04.588", "C04.588.180"]);
+  assert.deepEqual([...product.areaKeys].sort(), ["Breast Neoplasms", "C", "C04", "C04.588", "C04.588.180"]);
   assert.deepEqual(product.areaExact, ["C04.588.180"]);
 });
 

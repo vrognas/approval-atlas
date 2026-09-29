@@ -1534,6 +1534,13 @@ input::placeholder {
   height: 44px;
 }
 
+/* The therapeutic area tree is five levels deep since its MeSH categories (2026-09-29): with the
+   44px expand and link columns, 14px per level left EMA's terms 94px for their names at 320px. 8px
+   per level in the sheet gives them 118px, more than the 108px before the categories. */
+.sheet .area-tree .atc-tree {
+  padding-left: 8px;
+}
+
 .sheet .atc-static {
   min-height: 48px;
   font-size: 1rem;

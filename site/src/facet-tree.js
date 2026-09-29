@@ -39,6 +39,7 @@ const formatCount = d3.format(",");
 //     .facet-more button shows (the company tree's hundreds of groups); rows whose checkbox is not
 //     unchecked always show, and during a search every match. Optional: without them every row
 //     shows.
+//   open: the keys open at first (the therapeutic areas' Diseases category); optional
 export function createFacetTree(section, spec, { onToggle }) {
   const search = section.querySelector(".facet-search");
   const status = section.querySelector(".facet-live");
@@ -51,7 +52,7 @@ export function createFacetTree(section, spec, { onToggle }) {
   // Rows toggled here stay listed (unchecked, at count 0, past the limit) until the search or "Show
   // …" changes, so the checkbox that had focus is still there (as the flat facet lists' keep).
   const kept = new Set();
-  const expanded = new Set();
+  const expanded = new Set(spec.open ?? []);
   // Levels the search opened that the user closed again (until the search changes).
   const closed = new Set();
   let seen = new Set();
