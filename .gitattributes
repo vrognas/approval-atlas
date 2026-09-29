@@ -1,0 +1,2 @@
+# Committed inputs are LF on every OS (their tests check it).
+data-raw/*.json text eol=lf
