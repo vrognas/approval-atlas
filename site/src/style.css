@@ -901,7 +901,10 @@ button {
   color: var(--accent);
 }
 
+/* Positioned: the name and "|" it hides on phones (and its hidden colon) stay inside it, not beside
+   the chip row, whose sideways scroll they would widen the page with. */
 .chip-open {
+  position: relative;
   display: inline-flex;
   align-items: center;
   min-width: 0;
