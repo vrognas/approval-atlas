@@ -12,8 +12,9 @@ const TIPS = { type: typeTip, status: statusTip, mod: modalityTip };
 
 // sheetOf(key): the filter a token opens (tokens opening the same one share it; none for the year
 // tokens, which focus the approval-years slider); popup: tokens with a sheet open a dialog (the
-// sheets below 1024px); onOpen(key), onRemove(token) (token.value: remove only that ATC class),
-// onReset().
+// sheets below 1024px); onOpen(key, focusKey) (focusKey: the token's own, so focus can go back to
+// it and not to another token opening the same sheet), onRemove(token) (token.value: remove only
+// that ATC class), onReset().
 export function renderSentence(container, parts, { anyActive, sheetOf, popup, onOpen, onRemove, onReset }) {
   const active = container.contains(document.activeElement) ? document.activeElement : null;
   container.replaceChildren(); // text nodes too
@@ -28,7 +29,7 @@ export function renderSentence(container, parts, { anyActive, sheetOf, popup, on
     .attr("aria-label", UI.sentence.tokenName(part.key, part.text))
     .attr("aria-haspopup", popup && sheetOf(part.key) ? "dialog" : null)
     .text(part.text)
-    .on("click", () => onOpen(part.key));
+    .on("click", () => onOpen(part.key, keyOf(part, "open")));
   // The year range ("[1995]–[2026]") does not break across lines.
   let parent = root;
   for (const part of parts) {

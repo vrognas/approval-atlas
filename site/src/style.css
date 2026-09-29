@@ -827,11 +827,6 @@ button {
   transform: rotate(45deg);
 }
 
-/* The year tokens only move focus to the slider: no dropdown chevron. */
-.token:not([data-sheet])::after {
-  display: none;
-}
-
 .token-pill {
   display: inline-flex;
   align-items: center;
@@ -889,33 +884,11 @@ button {
   }
 }
 
-/* Approval years (main column, every width): a slim one-colour per-year histogram above a
-   two-thumb slider — two native range inputs over one track; only their thumbs take the pointer
-   (track clicks reach the slider, year-slider.js). --thumb is the thumb's box, --thumb-edge its
-   transparent rim (the phone hit area around the visible circle);
+/* Approval year (the sidebar's last section, or a sheet's; owner decision 2026-09-29): a slim
+   one-colour per-year histogram above a two-thumb slider — two native range inputs over one track;
+   only their thumbs take the pointer (track clicks reach the slider, year-slider.js). --thumb is
+   the thumb's box, --thumb-edge its transparent rim (the touch hit area around the visible circle);
    year-slider.js reads --thumb so each bar sits right above its year's thumb position. */
-.year-strip {
-  margin: 8px 0 0;
-  padding: 8px 16px;
-  border: 1px solid var(--grid);
-  border-radius: 12px;
-  background: var(--surface);
-}
-
-.year-strip-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.year-strip-head h2 {
-  margin: 0;
-  color: var(--ink-secondary);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-}
-
 .year-hist {
   /* 36px of bars and 18px of year labels (TICK_HEIGHT). */
   height: 54px;
@@ -1084,7 +1057,15 @@ button {
   outline-offset: calc(2px - var(--thumb-edge));
 }
 
-/* Phones: 28px of bars; 28px visible thumbs in a 44px hit area. */
+/* Reset under the slider, at its right (after the thumbs in tab order). */
+.year-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+/* Phones: 28px of bars; 28px visible thumbs in a 44px hit area; in a sheet (touch, tablets too)
+   the same thumbs. */
 @media (max-width: 720px) {
   .year-hist {
     height: 46px;
@@ -1095,6 +1076,12 @@ button {
     --thumb-edge: 8px;
     margin: 0;
   }
+}
+
+.sheet .year-slider {
+  --thumb: 44px;
+  --thumb-edge: 8px;
+  margin: 0;
 }
 
 /* Facet sections: the desktop sidebar, or a sheet that borrows them. Each heading is a disclosure
@@ -1824,54 +1811,53 @@ input::placeholder {
   font-size: 0.875rem;
 }
 
-/* Tiles: two wide tiles (medicines, currently authorized), then four compact ones (2 x 2). */
-.tiles {
-  margin-top: 16px;
+/* The top row (owner decision 2026-09-29): "Authorized over time" at half the main column's width,
+   the four type tiles 2 x 2 beside it, filling the other half (the tiles as tall as the card), from
+   a main column of 800px, so the chart keeps at least 350px (a phone's); under it (phones, a 768px
+   tablet, a wide sidebar on a small desktop) the card, then the tiles. The frame is the size
+   container: the main column's width, which the resizable sidebar sets on desktop, not the
+   viewport's. */
+.top-row-frame {
+  container-type: inline-size;
+  margin: 16px 0 0;
+}
+
+.top-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
-/* The tiles follow the main column's width (their frame is a size container), which on desktop
-   the resizable sidebar sets, not the viewport's. */
-.tiles-frame {
-  container-type: inline-size;
+.top-row > .chart-card {
+  margin: 0;
 }
 
-/* Tablets and desktops: the compact tiles in one row under the wide ones; in a narrow main
-   column (a wide sidebar on a small desktop) 2 x 2; in a wide one, beside the wide tiles. */
-@media (min-width: 721px) {
-  .tiles {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .tiles .tile-group {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  @container (max-width: 599px) {
-    .tiles .tile-group {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @container (min-width: 896px) {
-    .tiles {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
-    }
-
-    .tiles .tile-group {
-      grid-column: auto;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-}
-
-.tile-group {
+.tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: 12px;
+}
+
+@container (min-width: 800px) {
+  .top-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  /* Tiles as tall as the card: a larger figure. */
+  .tiles .tile-compact .tile-value {
+    font-size: 2rem;
+    line-height: 2.5rem;
+  }
+}
+
+/* Under 300px (320px phones): one tile per row, as two columns would cut the "Advanced therapy"
+   badge (121px in a 104px tile). */
+@container (max-width: 299px) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .tile {
@@ -1898,21 +1884,14 @@ input::placeholder {
   font-variant-numeric: tabular-nums;
 }
 
-.tile-wide .tile-value {
-  color: var(--accent);
-  font-size: 2.25rem;
-  line-height: 2.75rem;
-  letter-spacing: -0.02em;
-}
-
 .tile-caption {
   color: var(--ink-secondary);
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
 
-/* A wide tile stretched to the compact block's height keeps its caption at the bottom. */
-.tile-wide .tile-caption {
+/* A tile stretched to the card's height (side by side) keeps its caption at the bottom. */
+.tile .tile-caption {
   margin-top: auto;
 }
 
@@ -1950,29 +1929,6 @@ input::placeholder {
   height: 100%;
   border-radius: 2px;
   background: var(--accent);
-}
-
-@media (min-width: 721px) {
-  .tile-wide .tile-value {
-    font-size: 2.75rem;
-    line-height: 3.25rem;
-  }
-
-  /* Desktop compact tiles are one-liners (the badge names them), so the 2 x 2 block is about as
-     tall as the wide tiles; the caption stays for screen readers. */
-  .tile-compact {
-    padding: 10px 16px 8px;
-    gap: 2px;
-  }
-
-  .tile-compact .tile-caption {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }
 
 /* Cards: surface, hairline, no shadow. */

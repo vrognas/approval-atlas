@@ -6,7 +6,7 @@ import { OTHER_KEY, STACK_HUES, topWithOther } from "./facets.js";
 
 // WCAG 2.2 contrast of the style.css tokens, light and dark: text >= 4.5:1 on every background
 // it is used on, chart marks >= 3:1. Status dots and the per-year chart's status stacks (Stack by
-// Status) use the hue mids, checked as chart marks; the approval-years strip's bars are --bar.
+// Status) use the hue mids, checked as chart marks; the approval year filter's bars are --bar.
 const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
 
 function declarations(block) {

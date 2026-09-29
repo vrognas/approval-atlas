@@ -20,8 +20,20 @@ function storage(initial = {}, throwing = false) {
 
 const KEY = "approval-atlas:facets-open";
 
+// Owner decision 2026-09-29 (layout): the approval year filter is a section again, the last one.
 test("the sidebar's sections, in page order", () => {
-  assert.deepEqual(FACET_SECTIONS, ["type", "modality", "atc", "area", "mah", "status"]);
+  assert.deepEqual(FACET_SECTIONS, ["type", "modality", "atc", "area", "mah", "status", "years"]);
+});
+
+// The slider's controls live in the section's body (year-slider.js finds them there).
+test("index.html: the approval year section holds the histogram and the two-thumb slider", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const body = html.slice(html.indexOf('<div id="facet-years-body"'), html.indexOf("</aside>"));
+  for (const id of ["year-hist", "year-hist-summary", "year-start-value", "year-end-value", "year-start", "year-end", "year-reset"]) {
+    assert.match(body, new RegExp(`id="${id}"`), id);
+  }
+  // No main-column strip any more.
+  assert.doesNotMatch(html, /id="year-strip"/);
 });
 
 // The group keeps its title alone as its name; the button holds the title and the summary.

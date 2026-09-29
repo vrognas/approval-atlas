@@ -372,9 +372,9 @@ export const UI = {
   },
   allYears: "All years",
   yearRange: (from, to) => (from === to ? `${from}` : `${from}–${to}`),
-  // The approval-years strip in the main column: a slim one-colour histogram of every medicine with
-  // an approval date (aria-hidden; the summary is read instead; a tooltip per bar,
-  // UI.years.tooltipTitle()) above a two-thumb slider.
+  // The approval year filter (the sidebar's last section, owner decision 2026-09-29): a slim
+  // one-colour histogram of every medicine with an approval date (aria-hidden; the summary is read
+  // instead; a tooltip per bar, UI.years.tooltipTitle()) above a two-thumb slider.
   yearStrip: {
     start: "Start year",
     end: "End year",
@@ -452,11 +452,9 @@ export const UI = {
   },
   kicker: { medicine: "Medicine", substance: "Substance", condition: "Condition", text: "Indication text", company: "Company" },
 
-  // The medicines matching the filters (every status) and those currently authorized, then the four
-  // types with their share of the medicines. captionFiltered: the caption while a filter is active.
+  // The four types with their share of the medicines matching the filters (every status); the
+  // headline states those medicines and the currently authorized ones (owner decision 2026-09-29).
   tiles: [
-    { key: "products", label: "Medicines", caption: "Every status in the EMA data", captionFiltered: "Every status, matching the filters" },
-    { key: "authorized", label: "Currently authorized", caption: "Status Authorized, with an approval date" },
     { key: "orphan", label: "Orphan", caption: "Medicines with an orphan designation" },
     { key: "biosimilar", label: "Biosimilar", caption: "Biosimilar medicines" },
     { key: "generic", label: "Generic", caption: "Generic medicines" },
@@ -571,7 +569,7 @@ export const UI = {
     // Neutral: either source can be the one behind (e.g. Suboxone: EMA withdrawn, register still active).
     note: "EMA and the Commission's Union Register (the legal record) show different statuses; either can lag behind a recent decision.",
     marker: "⚠ register differs",
-    // Under the tiles: of the "Currently authorized" medicines.
+    // Under the top row (over time, tiles): of the medicines currently authorized.
     notAuthorized: (count) =>
       `${formatCount(count)} of the medicines EMA lists as currently authorized ${count === 1 ? "is" : "are"} no longer authorized according to the EU Union Register.`,
   },

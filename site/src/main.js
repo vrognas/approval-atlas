@@ -114,8 +114,8 @@ const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah", mod: "mod" };
 // The facet sidebar from this width; below it, the sentence's tokens open bottom sheets.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
 // Facet sections (index.html #facet-{key}) each sheet shows, the sheet each sentence token
-// opens, and the filter keys each section sets. The year tokens have no sheet: they focus the
-// approval-years strip's thumbs (YEAR_THUMBS), which is in the main column at every width.
+// opens, and the filter keys each section sets. The year tokens open the approval year section
+// (owner decision 2026-09-29: back in the sidebar, the main column's strip removed).
 const SHEET_SECTIONS = {
   type: ["type"],
   mod: ["modality"],
@@ -123,16 +123,26 @@ const SHEET_SECTIONS = {
   mah: ["mah"],
   area: ["area"],
   status: ["status"],
-  all: ["type", "modality", "atc", "area", "mah", "status"],
+  years: ["years"],
+  all: ["type", "modality", "atc", "area", "mah", "status", "years"],
 };
-const TOKEN_SHEETS = { type: "type", mod: "mod", atc: "atc", mah: "mah", area: "area", status: "status" };
-const SECTION_KEYS = { type: ["type"], modality: ["mod"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"] };
-const YEAR_THUMBS = { from: "start", to: "end", year: "start", years: "start" };
+const TOKEN_SHEETS = {
+  type: "type", mod: "mod", atc: "atc", mah: "mah", area: "area", status: "status", from: "years", to: "years", year: "years", years: "years",
+};
+const SECTION_KEYS = { type: ["type"], modality: ["mod"], atc: ["atc"], mah: ["mah"], area: ["area"], status: ["status"], years: ["from", "to"] };
+// The dimension a collapsed section's summary names (facets.js sectionSummary()): its filter key,
+// the approval years both ends at once.
+const SECTION_SUMMARIES = { years: "years" };
 // Desktop: the control each token focuses, the first one of its own section (the ATC, therapeutic
-// area and company trees: their first checked row, else their search: facet-tree.js focusTarget()).
+// area and company trees: their first checked row, else their search: facet-tree.js focusTarget();
+// the year tokens: the slider's Start or End thumb).
 const TOKEN_TARGETS = {
   type: "#facet-type input",
   status: "#facet-status input",
+  from: "#year-start",
+  to: "#year-end",
+  year: "#year-start",
+  years: "#year-start",
 };
 // The checklist sections (facet-panel.js); the ATC classes, therapeutic areas and companies are trees.
 const FACETS = ["type", "status"];
@@ -976,9 +986,9 @@ function startDashboard(meta, [
     if (DESKTOP.matches) sheet.close(); // its sections go back to the sidebar
     scheduleRender(); // tokens open a dialog only below 1024px
   });
-  // Approval years: the main column's strip (histogram + two-thumb slider); the per-year chart's
+  // Approval years: the sidebar's last section (histogram + two-thumb slider); the per-year chart's
   // brush also sets the range, and both follow state.from/to.
-  const yearStrip = createYearStrip($("#year-strip"), { years: approvalYears, onRange: (range) => setState(range) });
+  const yearStrip = createYearStrip($("#facet-years"), { years: approvalYears, onRange: (range) => setState(range) });
   // The ATC selection: codes (any level) and, from older links, class-name queries, with OR.
   const atcSelection = () => splitAtcValues(state.atc);
   // Exactly one ATC code and no name query: the class the breakdown drills into, the class
@@ -1028,15 +1038,16 @@ function startDashboard(meta, [
   // splits (a group into its modalities).
   const drillModality = () => (modalityTree && state.mod.length === 1 && modalityTree.has(state.mod[0]) ? state.mod[0] : null);
   const modalityFacet = modalityTree ? createModalityTree($("#facet-modality"), { tree: modalityTree, onToggle: toggleModalityKey }) : null;
+  // The token that opened a filter (its focus key, looked up again as tokens are rebuilt), else a
+  // token opening the same sheet (the range's other year, the other ATC pill), else null.
+  const openerToken = ({ focusKey, sheetKey }) => $(`#filter-sentence [data-focus-key="${CSS.escape(focusKey)}"]`)
+    ?? $(`#filter-sentence [data-sheet="${CSS.escape(sheetKey)}"]`);
   // The token whose sidebar section has focus (desktop): Escape goes back to it.
   let opener = null;
-  // A sentence token (its key) or All filters ("all"): on desktop, the token's own section and
-  // control; below that, a sheet with its sections. Year tokens focus the strip's thumbs.
-  function openFilters(key) {
-    if (YEAR_THUMBS[key]) {
-      yearStrip.focus(YEAR_THUMBS[key]);
-      return;
-    }
+  // A sentence token (its key and focus key) or All filters ("all"): on desktop, the token's own
+  // section and control (the year tokens: a thumb of the approval year slider); below that, a
+  // sheet with its sections. Focus goes back to the token that opened it (WCAG 2.4.3).
+  function openFilters(key, focusKey = `${key}:open`) {
     const sheetKey = TOKEN_SHEETS[key] ?? key;
     const sections = SHEET_SECTIONS[sheetKey].map((section) => $(`#facet-${section}`));
     if (DESKTOP.matches) {
@@ -1046,7 +1057,7 @@ function startDashboard(meta, [
       const target = (trees[key] ? trees[key].focusTarget() : $(TOKEN_TARGETS[key])) ?? sections[0];
       target.closest(".facet").scrollIntoView({ block: "start" });
       target.focus({ preventScroll: true });
-      opener = key;
+      opener = { focusKey, sheetKey };
       return;
     }
     // One section: shown open, its heading hidden (the sheet's title names it); All filters: the
@@ -1057,7 +1068,7 @@ function startDashboard(meta, [
       sections,
       // All filters clears every filter, the years too (as the sidebar's Reset all).
       clears: sheetKey === "all" ? FILTER_KEYS : SHEET_SECTIONS[sheetKey].flatMap((section) => SECTION_KEYS[section]),
-      restore: () => $(`#filter-sentence [data-sheet="${sheetKey}"]`) ?? $("#all-filters"),
+      restore: () => openerToken({ focusKey, sheetKey }) ?? $("#all-filters"),
       onOpen: () => facetSections.solo(solo),
       onClose: () => facetSections.solo(null),
     });
@@ -1066,7 +1077,7 @@ function startDashboard(meta, [
   // A search with text clears first (the browser's own Escape).
   $("#facets").addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.defaultPrevented || (event.target.type === "search" && event.target.value)) return;
-    ($(`#filter-sentence [data-focus-key="${opener}:open"]`) ?? $(`#filter-sentence [data-sheet="${TOKEN_SHEETS[opener]}"]`) ?? $("#headline")).focus();
+    ((opener && openerToken(opener)) ?? $("#headline")).focus();
   });
   const allFilters = $("#all-filters");
   allFilters.textContent = UI.sentence.allFilters;
@@ -1779,12 +1790,14 @@ function startDashboard(meta, [
         counts: Object.fromEntries(FACETS.map((dimension) => [dimension, facetCounts(products, predicates, dimension, FACET_VALUES[dimension])])),
         activeCount,
       });
-      facetSections.summarize(Object.fromEntries(Object.entries(SECTION_KEYS).map(([section, [dimension]]) => [section, sectionSummary(dimension, state, selectionNames)])));
+      facetSections.summarize(Object.fromEntries(Object.entries(SECTION_KEYS).map(([section, [dimension]]) => [
+        section, sectionSummary(SECTION_SUMMARIES[section] ?? dimension, state, selectionNames),
+      ])));
     });
-    // The per-year chart, the strip and the over-time line ignore the approval-year filter and
-    // mark the range instead.
+    // The per-year chart, the year filter's bars and the over-time line ignore the approval-year
+    // filter and mark the range instead.
     const withoutDateFilter = filterProducts(products, predicates, "date");
-    safely($("#year-strip"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
+    safely($("#facet-years-body"), () => yearStrip.render({ rows: yearHistogram(products, predicates, approvalYears), from: state.from, to: state.to }));
     safely($(".sentence-row"), () => renderSentence($("#filter-sentence"), sentenceParts(state, selectionNames), {
       anyActive: activeCount > 0,
       sheetOf: (key) => TOKEN_SHEETS[key],
@@ -1832,7 +1845,13 @@ function startDashboard(meta, [
     sheet.update(filtered.length);
     const undatedAuthorized = filtered.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
     safely($(".answer"), () => renderHeadline(predicates, filtered, atcCounts, areaCounts, undatedAuthorized.length));
-    safely($(".tiles-frame"), () => renderTiles($("#tiles"), { ...countTiles(filtered), authorized: authorizedNow.length }, activeCount > 0));
+    // The top row: "Authorized over time" beside the four type tiles (owner decision 2026-09-29).
+    safely(cardOf("#over-time"), () => {
+      renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
+      const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
+      d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
+    });
+    safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered)));
     showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
     showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
     safely(cardOf("#breakdown"), () => renderBreakdownCard(predicates, withoutAtcFilter, atcCounts, atcExact, atcIncomplete));
@@ -1840,12 +1859,6 @@ function startDashboard(meta, [
     safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
     safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, activeCount > 0));
     safely(cardOf("#conditions-list"), () => renderConditions(filtered, activeCount > 0));
-
-    safely(cardOf("#over-time"), () => {
-      renderOverTime($("#over-time"), authorizedSeries(withoutDateFilter, seriesDates), state);
-      const excluded = withoutDateFilter.filter((product) => product.series_exclusion === "ended_without_end_date");
-      d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
-    });
 
     const undated = filtered.filter((product) => product.year === null).length;
     tableRows = newestFirst(filtered);

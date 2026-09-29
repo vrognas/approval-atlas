@@ -1,4 +1,4 @@
-// Pure: counts for the facet sidebar and sheets, the approval-years strip, the filter sentence's
+// Pure: counts for the facet sidebar and sheets, the approval year filter, the filter sentence's
 // tokens, the most common conditions and the holder activity of the filtered medicines. No DOM.
 // Products come from buildProducts(); every status counts (one dashboard, phase 4a).
 import { byStatusOrder } from "./approvals.js";
@@ -44,7 +44,7 @@ export function facetCounts(products, predicates, dimension, valuesOf) {
   return keyCounts(filterProducts(products, predicates, dimension), valuesOf);
 }
 
-// The approval-years strip's histogram: products per approval year by the facet rule (every
+// The approval year filter's histogram: products per approval year by the facet rule (every
 // filter but the year filter), one row per year of [first, last] (the status stacks are the
 // per-year chart's, Stack by Status).
 export function yearHistogram(products, predicates, [first, last]) {
@@ -226,8 +226,14 @@ export function tokenLabel(dimension, state, { years, areaNames, atcNames, mahNa
 // A collapsed sidebar section's summary after its title (owner decision 2026-09-29 (2)), so no
 // active filter is hidden: its one value named as the sentence's token names it (a status by its
 // label alone), several rows of one company by that company (lookups.mahSelection), else how many
-// are selected; null without a filter. dimension: a filter key (type, mod, atc, area, mah, status).
+// are selected; null without a filter. dimension: a filter key (type, mod, atc, area, mah, status),
+// or "years": the approval year range (owner decision 2026-09-29, a section again), open ends at
+// the data's bounds, one year alone.
 export function sectionSummary(dimension, state, lookups) {
+  if (dimension === "years") {
+    if (state.from === null && state.to === null) return null;
+    return UI.yearRange(state.from ?? lookups.years[0], state.to ?? lookups.years[1]);
+  }
   const values = state[dimension];
   if (values.length === 0) return null;
   if (values.length === 1) return dimension === "status" ? statusLabel(values[0]) : tokenLabel(dimension, state, lookups);
