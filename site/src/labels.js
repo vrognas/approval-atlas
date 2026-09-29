@@ -66,16 +66,31 @@ export function statusDateLine(status, approved, ended) {
 }
 
 // Why a medicine is not authorized, from EMA's own date for its status (statusDate() in
-// approvals.js) and, for opinions, EMA's opinion status. Nothing is inferred.
-export function statusSentence(status, date, opinion) {
-  if (statusKind(status) === "authorized") return null;
+// approvals.js) and, for opinions, EMA's opinion status. Nothing is inferred. Step 4: an authorized
+// medicine's sentence names a conditional authorization or exceptional circumstances (#9; flags: a
+// search-index or ema_medicines row, null while unknown), and a positive opinion how many days the
+// EU decision usually takes (#12; decision: meta.json opinion_to_decision as { median, p90 } days,
+// null in older data) and, once past that, how long it has waited by the data's date (asOf).
+export function statusSentence(status, date, opinion, { decision = null, asOf = null, flags = null } = {}) {
+  if (statusKind(status) === "authorized") {
+    if (flags?.conditional_approval === true) return UI.card.qualifiers.conditional_approval;
+    return flags?.exceptional_circumstances === true ? UI.card.qualifiers.exceptional_circumstances : null;
+  }
   const on = date ? ` on ${formatDate(date)}` : "";
   if (status === "Opinion under re-examination") {
     return opinion === "Negative" ? `Negative opinion${on}; under re-examination at the company's request.` : "Opinion under re-examination; not yet authorized.";
   }
   if (status === "Opinion") {
     if (opinion === "Negative") return `Negative opinion${on}.`;
-    return `${opinion === "Positive" ? "Positive opinion" : "Opinion adopted"}${on}; not yet authorized.`;
+    const sentence = `${opinion === "Positive" ? "Positive opinion" : "Opinion adopted"}${on}; not yet authorized.`;
+    if (opinion !== "Positive" || !decision) return sentence;
+    // ISO dates parse as UTC midnight, so the difference is whole days.
+    const waited = date && asOf ? Math.round((Date.parse(asOf) - Date.parse(date)) / 86400000) : null;
+    return [
+      sentence,
+      UI.card.decisionUsually(decision.median),
+      waited !== null && waited > decision.median ? UI.card.waited(waited, decision.p90 !== null && waited > decision.p90) : null,
+    ].filter(Boolean).join(" ");
   }
   return `${statusLabel(status)}${on}.`;
 }
@@ -586,12 +601,15 @@ export const UI = {
   // condition page (a lookup, ?cond=) where its MeSH descriptor is known.
   conditions: {
     title: "Most common conditions",
-    // Each row counts every status, then the authorized ones (the list a condition page opens with).
+    // Each row counts every status, then the authorized ones (the list a condition page opens with)
+    // and their distinct active substances (step 4, #10: substance sets, so a combination counts on
+    // its own and the copy says so; review of step 4: HIV Infections has 40 sets of 27 substances).
     // within: a therapeutic area filter is set, and only the terms within it are listed.
     subtitle: (count, filtered, within = false) => `${filtered
       ? `Therapeutic areas of the ${plural(count, "medicine", "medicines")} matching the filters`
-      : `Therapeutic areas of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}: medicines of every status, then those authorized`,
+      : `Therapeutic areas of all ${plural(count, "medicine", "medicines")} in the EMA data`}${within ? ", within the selected areas" : ""}: medicines of every status, then those authorized and their active substances or combinations`,
     authorized: (count) => `${formatCount(count)} authorized`,
+    substances: (count) => plural(count, "active substance or combination", "active substances or combinations"),
     hint: "Open a condition to see its approval timeline.",
     // count: the medicines shown, none of which has a therapeutic area.
     empty: (count) => {
@@ -673,8 +691,9 @@ export const UI = {
       status: "each medicine counted once, by its current status",
       mod: "a medicine whose substances have several modalities is counted in each",
     },
+    // Step 4 (#17): EMA's annual reports count CHMP opinions (by the opinion's year), so their totals differ.
     note: (counting) =>
-      `Year of EU marketing authorization; ${counting}. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
+      `Year of EU marketing authorization; ${counting}. EMA's annual reports count CHMP opinions instead, so their yearly totals differ. Click a year to show only that year (again for all years), or drag across the chart to select several; the approval-years slider is the keyboard path.`,
     // The segment on top of the stacks beyond the top ones.
     other: { atc: "Other classes", mah: "Other companies" },
     // The segment on top for the medicines a mode cannot place, so every mode gives the same yearly
@@ -717,6 +736,26 @@ export const UI = {
     incompleteTitle: "Incomplete code: fewer than 7 characters or not a valid ATC code",
     source: (source) => `Source: ${SOURCE_LABELS[source] ?? source}`,
     noBranch: "No MeSH branch matched",
+  },
+
+  // "Download CSV" by the medicines table (#18, csv.js): every medicine the table lists. The first
+  // line acknowledges EMA (its reuse terms) and the WHOCC (the ATC codes; its terms require the
+  // reference, and the file travels without the site's footer; review of step 4) as one cell a tool
+  // can skip as a comment, so it has no comma or quote; codes, never WHO's ATC names (not ours to
+  // redistribute).
+  csv: {
+    button: "Download CSV",
+    source: (date) =>
+      `# Source: European Medicines Agency (EMA) medicines data as of ${date} (https://www.ema.europa.eu/en/medicines/download-medicine-data). © EMA. ` +
+      "ATC codes © WHO Collaborating Centre for Drug Statistics Methodology (https://atcddd.fhi.no); not for commercial distribution. " +
+      "Exported from Approval Atlas: company groups and some ATC codes are its additions; the compilation is licensed CC BY-SA 4.0 and values from other sources keep their own terms. " +
+      "Not affiliated with or endorsed by EMA.",
+    headers: [
+      "EMA product number", "Medicine", "Active substances", "Status", "Approval date", "Medicine type", "Orphan",
+      "Company group", "Holder (EMA)", "ATC codes", "Therapeutic areas",
+    ],
+    yes: "Yes",
+    no: "No",
   },
 
   // ATC filtering at every level: table badge segments, the tree, the breakdown, ladders.
@@ -1191,6 +1230,44 @@ export const UI = {
       prime_priority_medicine: "PRIME",
       accelerated_assessment: "Accelerated assessment",
     },
+    // Step 4 (#9): the symbol of additional monitoring (EMA's black inverted triangle), before the
+    // chip's name (hidden from screen readers, which read the name).
+    blackTriangle: "▼",
+    // The dek of a medicine authorized with a qualifier (statusSentence()): one short clause, as the
+    // chip beside the status explains it on hover and tap (UI.flagTips; review of step 4: longer
+    // sentences took 4 lines at 320px and pushed the product information a screen down).
+    qualifiers: {
+      conditional_approval: "Conditionally authorized: renewed yearly until full data are provided.",
+      exceptional_circumstances: "Authorized under exceptional circumstances: reviewed yearly.",
+    },
+    // Step 4 (#12): after a positive opinion's sentence; days: meta.json opinion_to_decision.median_days.
+    decisionUsually: (days) => `The EU decision usually comes about ${formatCount(days)} days after the opinion.`,
+    // Review of step 4: a positive opinion past the median, by the data's date; beyondMost: past the
+    // 90th percentile of the last 5 years' decisions (opinion_to_decision.p90_days).
+    waited: (days, beyondMost) => `This one has waited ${formatCount(days)} days so far${beyondMost ? ", longer than 9 in 10 decisions of the last 5 years took" : ""}.`,
+    // Step 4 (#15): the SmPC, EPAR and overview buttons (the documents list keeps UI.documents).
+    buttons: {
+      productInformation: "Product information (SmPC and package leaflet)",
+      epar: "EPAR public assessment report",
+      overview: "Plain-language overview",
+    },
+  },
+  // Step 4 (#9): the approval flags' explanations, on hover and tap (the chips beside the status and
+  // among the card's facts, the result tables' markers); at most 12 words. Orphan is a type badge.
+  flagTips: {
+    conditional_approval: "Approved on less complete data for an unmet need; renewed yearly.",
+    exceptional_circumstances: "Full data cannot be collected, e.g. very rare disease; reviewed yearly.",
+    additional_monitoring: "Black triangle ▼: monitored more closely; report any suspected side effects.",
+    prime_priority_medicine: "EMA's priority medicines scheme: early support for an unmet need.",
+    accelerated_assessment: "Assessed in 150 days instead of the usual 210.",
+  },
+  // The result tables' compact markers beside an authorized medicine's status: the visible text
+  // (aria-hidden) and the name read instead. Each shows a word (review of step 4: a bare "▼" meant
+  // nothing to a keyboard user, who cannot bring up its tip, or to a lay reader).
+  flagMarkers: {
+    conditional_approval: { text: "Conditional", name: "Conditional approval" },
+    exceptional_circumstances: { text: "Exceptional", name: "Exceptional circumstances" },
+    additional_monitoring: { text: "▼ Additional monitoring", name: "Additional monitoring" },
   },
 
   documents: {
@@ -1335,7 +1412,12 @@ export const UI = {
     // indication's own spelling), and the dek gives both counts of the lists shown (every: "Show
     // all statuses" is on; mentioned: null while the indication texts load).
     rowMentions: (text) => `Indication mentions “${text}”`,
-    counts: (tagged, mentioned, every) => `${every ? "Every status" : "Authorized"}: ${plural(tagged, "medicine", "medicines")} tagged by EMA${mentioned === null
+    // Step 4 (#10): substances: the tagged medicines' distinct active substances (substance sets,
+    // equivalent spellings joined, a combination on its own, so named as UI.conditions.substances();
+    // null while they load).
+    counts: (tagged, mentioned, every, substances = null) => `${every ? "Every status" : "Authorized"}: ${plural(tagged, "medicine", "medicines")} tagged by EMA${tagged && substances !== null
+      ? ` (${UI.conditions.substances(substances)})`
+      : ""}${mentioned === null
       ? ""
       : ` and ${formatCount(mentioned)}${tagged ? " more" : ""} mentioned in the indication text`}.`,
     alsoMentioned: "Also mentioned in indication text",
@@ -1355,6 +1437,9 @@ export const UI = {
 
   timeline: {
     caption: "One dot per medicine; lines join medicines with the same active substances (reference, generics, biosimilars). Tap or point at a dot for its name.",
+    // Step 4 (#17): after the caption on condition and indication-text pages ("this use": an
+    // indication-text search is not a condition; review of step 4).
+    firstApproval: "Dots show each medicine's first approval, not when this use was added to its indication.",
     // Condition pages: a legend of the dots, filled (tagged by EMA) and hollow (found only in the
     // indication text; phase 4f), and the hollow dot's tooltip line.
     legend: { tagged: "Tagged by EMA", mentioned: "Mentioned in the indication" },

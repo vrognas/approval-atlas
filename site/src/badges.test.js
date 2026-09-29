@@ -6,12 +6,14 @@ import {
   ATC_GROUP_HUES,
   ATC_PREFIX_LENGTHS,
   BRAND_HUES,
+  STATUS_FLAGS,
   atcHue,
   companyHue,
   companySeriesColors,
   atcSegments,
   oklab,
   statusColor,
+  statusFlags,
   statusHue,
   statusTip,
   statusTipId,
@@ -89,6 +91,20 @@ test("type badges: Generic, Biosimilar and Advanced therapy get a badge, Other n
   ]);
   assert.deepEqual(typeBadges({ medicine_type: "Other", orphan_medicine: true }), [{ label: "Orphan", hue: "pink" }]);
   assert.deepEqual(typeBadges({ medicine_type: "Other", orphan_medicine: false }), []);
+});
+
+// Step 4 (#9): what qualifies a current authorization shows beside its status (Tecartus:
+// conditional, under additional monitoring); an ended one keeps its flags among the card's facts.
+test("status flags: conditional or exceptional, then additional monitoring, for an authorized medicine only", () => {
+  const tecartus = { conditional_approval: true, exceptional_circumstances: false, additional_monitoring: true, prime_priority_medicine: true };
+  assert.deepEqual(statusFlags("Authorised", tecartus), ["conditional_approval", "additional_monitoring"]);
+  assert.deepEqual(statusFlags("Authorised", { exceptional_circumstances: true }), ["exceptional_circumstances"]);
+  assert.deepEqual(statusFlags("Authorised", { conditional_approval: false }), []);
+  assert.deepEqual(statusFlags("Withdrawn", tecartus), []);
+  assert.deepEqual(statusFlags("Opinion", tecartus), []);
+  // Flags not loaded (older search index, ema_medicines.json still loading).
+  assert.deepEqual(statusFlags("Authorised", null), []);
+  assert.deepEqual(STATUS_FLAGS, ["conditional_approval", "exceptional_circumstances", "additional_monitoring"]);
 });
 
 // Status colours (phase 4a review): one damped hue per status for dots, pills and the stacked strip.

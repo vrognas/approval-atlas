@@ -199,3 +199,57 @@ test_that("build_authorized_series ignores products without a substance key", {
   expect_identical(series$authorized_products, c(2L, 2L))
   expect_identical(series$authorized_substances, c(1L, 1L))
 })
+
+opinion_medicines <- function() {
+  dplyr::tibble(
+    ema_product_number = sprintf("P%02d", 1:10),
+    medicine_status = c(
+      "Authorised", "Withdrawn", "Authorised", "Expired", "Authorised",
+      "Authorised", "Authorised", "Application withdrawn", "Authorised",
+      "Opinion"
+    ),
+    opinion_adopted_date = as.Date(c(
+      "2021-09-26", "2022-01-27", "2023-03-01", "2024-10-17", "2026-07-23",
+      "2021-09-25", "2023-08-16", "2024-01-01", NA, "2026-09-17"
+    )),
+    marketing_authorisation_date = as.Date(c(
+      "2021-11-22", "2022-01-27", "2023-04-25", "2024-12-23", "2026-09-21",
+      "2021-10-25", "2021-11-22", "2024-02-10", "2024-05-01", NA
+    ))
+  )
+}
+
+test_that("opinion to decision counts days for opinions of the last 5 years", {
+  summary <- summarise_opinion_to_decision(
+    opinion_medicines(),
+    as.Date("2026-09-26")
+  )
+  # Days 57, 0, 55, 67 and 60: the first five rows. Left out: an opinion a
+  # day before the window, a later opinion (after the authorisation), a
+  # medicine never authorized, and rows without one of the two dates.
+  expect_identical(
+    summary,
+    list(
+      median_days = 57L,
+      p90_days = 64L,
+      medicines = 5L,
+      opinions_from = "2021-09-26"
+    )
+  )
+})
+
+test_that("opinion to decision is null without any counted medicine", {
+  summary <- summarise_opinion_to_decision(
+    opinion_medicines()[6:10, ],
+    as.Date("2026-09-26")
+  )
+  expect_identical(
+    summary,
+    list(
+      median_days = NA_integer_,
+      p90_days = NA_integer_,
+      medicines = 0L,
+      opinions_from = "2021-09-26"
+    )
+  )
+})

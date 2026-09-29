@@ -22,6 +22,8 @@ import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart.js";
 import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, suggestCompanies, toggleCompany } from "./companies.js";
 import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
+import { equivalentSetKey } from "./copies.js";
+import { csvFileName, medicinesCsv } from "./csv.js";
 import { createFacetPanel } from "./facet-panel.js";
 import {
   FACET_VALUES,
@@ -164,6 +166,25 @@ function loadFile(file) {
     }));
   }
   return files.get(file);
+}
+
+// Saves text as a file on the viewer's device through a Blob link (same origin, so the CSP allows
+// it; nothing is sent anywhere). The URL is released later, as some browsers read it after click().
+function saveFile(text, fileName, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 40000);
+}
+
+// Runs callback once the page is idle (Safari has no requestIdleCallback: after 2 seconds).
+function whenIdle(callback) {
+  if ("requestIdleCallback" in window) window.requestIdleCallback(callback, { timeout: 10000 });
+  else setTimeout(callback, 2000);
 }
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
@@ -636,7 +657,18 @@ function startLookup([meta, searchRows, entryTermRows]) {
   showOfflineNote(meta);
 
   const index = buildLookupIndex(searchRows, entryTermRows);
-  lookup = createLookup($("#result"), { index, loadFile, navigate, snapshotDate: meta.snapshot_date, meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null });
+  // Step 4 (#12): the days from a positive opinion to the EU decision, median and 90th percentile
+  // (none in older data).
+  const days = (value) => (Number.isInteger(value) && value > 0 ? value : null);
+  const { median_days: medianDays, p90_days: p90Days } = meta.opinion_to_decision ?? {};
+  lookup = createLookup($("#result"), {
+    index,
+    loadFile,
+    navigate,
+    snapshotDate: meta.snapshot_date,
+    meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null,
+    decision: days(medianDays) ? { median: medianDays, p90: days(p90Days) } : null,
+  });
   addSearchIcon();
   renderTryLinks();
   const input = $("#lookup-input");
@@ -951,8 +983,9 @@ function startDashboard(meta, [
       scheduleRender();
     });
 
+  const substanceIndex = buildSubstanceIndex(substanceRows);
   const table = createTable($("#medicines-table"), $("#table-more"), $("#table-caption"), {
-    substanceIndex: buildSubstanceIndex(substanceRows),
+    substanceIndex,
     atcNames,
     atcRetiredYears,
     branchNamesByTerm,
@@ -965,6 +998,20 @@ function startDashboard(meta, [
     // A segment adds its class to the ATC filter; pressed again, it removes it.
     onAtcSelect: toggleAtc,
     focusFallback: focusAtcFilter,
+  });
+  // "Download CSV" (#18): every medicine the table lists (all that match the filters, not only the
+  // pages shown), in its order, named by the data's date.
+  let tableRows = [];
+  const dataDate = meta.snapshot_date ?? meta.source_timestamp.slice(0, 10);
+  const download = $("#table-download");
+  download.textContent = UI.csv.button;
+  download.addEventListener("click", () => {
+    const text = medicinesCsv(tableRows, {
+      substancesOf: (product) => substanceIndex.get(product.ema_product_number) ?? [],
+      groupNameOf: (product) => (product.group_key ? companies.name(product.group_key) : null),
+      dataDate,
+    });
+    saveFile(text, csvFileName(dataDate), "text/csv;charset=utf-8");
   });
 
   // After a therapeutic area's bar: its condition page (areaDescriptor(): for a branch or tree node
@@ -1198,9 +1245,14 @@ function startDashboard(meta, [
   // hint that the pages exist; a line instead when none of the medicines has one. With a therapeutic
   // area filter, only the terms within it (phase 4f). Rebuilt on every render: a focused link keeps
   // its focus.
+  // Step 4 (#10): each row adds its authorized medicines' distinct active substances (substance
+  // sets, equivalent spellings joined once they have loaded).
+  const NO_EQUIVALENTS = new Map();
   function renderConditions(filtered, anyFilter) {
     const within = state.area.length ? (term) => inAreas(meshTree, state.area, term) : null;
-    const rows = topAreas(filtered, descriptorOf, 8, within);
+    const equivalents = lookup.equivalents() ?? NO_EQUIVALENTS;
+    const setKeyOf = (product) => equivalentSetKey(product.substance_set_key?.split("|"), equivalents);
+    const rows = topAreas(filtered, descriptorOf, 8, within, setKeyOf);
     d3.select("#conditions-title").text(UI.conditions.title);
     d3.select("#conditions-subtitle").text(UI.conditions.subtitle(filtered.length, anyFilter, within !== null));
     d3.select("#conditions-hint").text(rows.some((row) => row.descriptorUi) ? UI.conditions.hint : "");
@@ -1217,6 +1269,7 @@ function startDashboard(meta, [
       const value = item.append("span").attr("class", "bar-value");
       value.append("span").text(d3.format(",")(row.count));
       value.append("span").attr("class", "bar-authorized").text(UI.conditions.authorized(row.authorized));
+      if (row.authorized) value.append("span").attr("class", "bar-substances").text(UI.conditions.substances(row.substances));
     }
     if (focused !== null) [...list.node().querySelectorAll("a")].find((link) => link.textContent === focused)?.focus();
   }
@@ -1578,7 +1631,8 @@ function startDashboard(meta, [
     });
 
     const undated = filtered.filter((product) => product.year === null).length;
-    safely(cardOf("#medicines-table"), () => table(newestFirst(filtered), UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes()));
+    tableRows = newestFirst(filtered);
+    safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes()));
   }
 
   dashboard = { domain, render: renderDashboard, title: () => classTitle };
@@ -1605,10 +1659,16 @@ function startDashboard(meta, [
   // the MeSH notes.
   lookup.onData((name) => {
     if (name === "meshNotes") meshTree.setNotes(lookup.meshNotes()?.rows ?? null);
-    if (name === "documents" || name === "conditions" || name === "meshNotes") scheduleRender();
+    if (name === "documents" || name === "conditions" || name === "meshNotes" || name === "equivalents") scheduleRender();
   });
   lookup.need("documents");
   lookup.need("meshNotes");
+  // The most common conditions' substance counts (step 4, #10): the substance equivalents (small).
+  lookup.need("equivalents");
+  // Conference Wi-Fi (#13): the medicine card's protection and orphan exclusivity files (about
+  // 61 KB gzipped) once the page is idle, so a card opened later, offline or on a slow network,
+  // has them (the service worker keeps what was loaded).
+  whenIdle(() => lookup.need("protection"));
 }
 
 // Desktop: the sidebar starts below the fixed header, whose height follows its text (the offline

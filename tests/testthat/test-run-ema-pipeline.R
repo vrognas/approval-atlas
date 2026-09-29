@@ -160,6 +160,13 @@ test_that("run_ema_pipeline writes every table and meta.json from caches", {
   expect_identical(meta$source_timestamp, "2026-09-26T06:02:29Z")
   expect_identical(meta$row_counts, lapply(tables, nrow))
   expect_identical(meta$snapshot_date, "2026-09-26")
+  # Fluad 29 days, Boey 55, Mounjaro 56 and Tyruko 64.
+  expect_identical(meta$opinion_to_decision, list(
+    median_days = 56L,
+    p90_days = 62L,
+    medicines = 4L,
+    opinions_from = "2021-09-26"
+  ))
   expect_identical(
     vapply(meta$sources[1:6], function(source) source$version, character(1)),
     c(

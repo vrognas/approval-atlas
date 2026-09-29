@@ -18,7 +18,10 @@ build_search_index <- function(medicines, substances, active_substances) {
       "medicine_status",
       "marketing_authorisation_date",
       "medicine_type",
-      "orphan_medicine"
+      "orphan_medicine",
+      "conditional_approval",
+      "exceptional_circumstances",
+      "additional_monitoring"
     ) |>
     dplyr::left_join(
       substance_summary,
@@ -45,7 +48,11 @@ build_search_index <- function(medicines, substances, active_substances) {
       "medicine_status",
       "marketing_authorisation_date",
       "medicine_type",
-      "orphan_medicine"
+      "orphan_medicine",
+      # For the medicine card's first screen, before ema_medicines.json loads.
+      "conditional_approval",
+      "exceptional_circumstances",
+      "additional_monitoring"
     ) |>
     dplyr::arrange(.data$ema_product_number)
 }

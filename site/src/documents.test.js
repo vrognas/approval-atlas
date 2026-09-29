@@ -61,16 +61,27 @@ test("EMA's archive file of a document type is flagged so its link can be told a
   assert.deepEqual(group.rows.map((row) => [row.title === current.title, row.archive]), [[true, false], [false, true]]);
 });
 
-test("the newest SmPC and the standard EPAR become the primary links; everything else stays in the list", () => {
+// Step 4 (#15): the newest plain-language overview (EMA's "Medicine overview", older "Summary for
+// the public") is a button too, after the SmPC and EPAR.
+test("the newest SmPC, the standard EPAR and the newest overview become the primary links; everything else stays in the list", () => {
   const groups = groupDocuments([
     doc("product-information", "2026-09-03"),
     { ...doc("assessment-report", "2008-04-17"), title: "Mylotarg : EPAR - Refusal public assessment report" },
     { ...doc("assessment-report", "2018-05-04"), title: "Mylotarg : EPAR - Public Assessment Report" },
     doc("overview", "2025-01-01"),
+    doc("overview", "2018-05-04"),
   ]);
   const { primary, rest } = primaryDocuments(groups);
-  assert.deepEqual(primary.map(({ key, row }) => [key, row.last_updated_date]), [["productInformation", "2026-09-03"], ["epar", "2018-05-04"]]);
-  assert.deepEqual(rest.map((group) => [group.key, group.rows.map((row) => row.last_updated_date)]), [["epar", ["2008-04-17"]], ["overview", ["2025-01-01"]]]);
+  assert.deepEqual(primary.map(({ key, row }) => [key, row.last_updated_date]), [["productInformation", "2026-09-03"], ["epar", "2018-05-04"], ["overview", "2025-01-01"]]);
+  assert.deepEqual(rest.map((group) => [group.key, group.rows.map((row) => row.last_updated_date)]), [["epar", ["2008-04-17"]], ["overview", ["2018-05-04"]]]);
+});
+
+test("a medicine never authorized has no overview button; an ended one keeps it", () => {
+  const overview = doc("overview", "2025-01-01");
+  for (const status of ["Refused", "Application withdrawn", "Opinion"]) {
+    assert.deepEqual(primaryDocuments(groupDocuments([overview]), status).primary, [], status);
+  }
+  assert.deepEqual(primaryDocuments(groupDocuments([overview]), "Withdrawn").primary.map(({ key }) => key), ["overview"]);
 });
 
 test("archive files and non-standard assessment reports are never primary links", () => {
@@ -83,6 +94,7 @@ test("archive files and non-standard assessment reports are never primary links"
   assert.deepEqual(primaryDocuments([]), { primary: [], rest: [] });
 });
 
+// The overview is a card button only: rows keep the compact "PI" and "EPAR".
 test("quick links: the URLs of the primary SmPC and EPAR, each only when EMA lists one", () => {
   const pi = doc("product-information", "2026-09-03");
   const epar = { ...doc("assessment-report", "2018-05-04"), title: "Wegovy : EPAR - Public assessment report" };

@@ -77,6 +77,10 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
     ema$meta$timestamp,
     tables,
     snapshot_date = snapshot_date,
+    opinion_to_decision = summarise_opinion_to_decision(
+      tables$ema_medicines,
+      snapshot_date
+    ),
     sources = c(list(
       ema_source_entry(ema$meta$timestamp, cache_path),
       mesh_source_entry(mesh_source),
