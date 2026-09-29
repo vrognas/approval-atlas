@@ -1856,6 +1856,12 @@ function startDashboard(meta, [
       : UI.years.undated(undated));
   }
 
+  // The charts that follow their width (the year bars: their popover's or sheet's, once shown there),
+  // and the width each was last drawn at.
+  const CHART_SELECTORS = ["#chart", "#over-time", "#year-hist"];
+  const chartWidths = new Map();
+  const chartWidth = (element) => Math.round(element.getBoundingClientRect().width);
+
   // Draft (loss-of-exclusivity calendar): the currently authorized medicines matching the filters
   // whose estimated market protection runs, by the year it ends at the earliest (this year, the next
   // four, later); a year's medicines listed below, or (calendarYear ORPHAN_ONLY) those whose orphan
@@ -2096,6 +2102,12 @@ function startDashboard(meta, [
       const undated = filtered.filter((product) => product.year === null).length;
       safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area));
     }
+    // The widths the charts were drawn at (the ResizeObserver below re-renders only on a change).
+    for (const selector of CHART_SELECTORS) {
+      const element = $(selector);
+      const width = chartWidth(element);
+      if (width > 0) chartWidths.set(element, width);
+    }
   }
 
   // toggleArea(key): the area filter with key toggled (a card's branch chip; as the tree's). The
@@ -2108,8 +2120,16 @@ function startDashboard(meta, [
   d3.select("#app-loading").attr("hidden", "");
   d3.select("#app").attr("hidden", null);
   // The charts follow their width (the year bars: their popover's or sheet's, once shown there).
-  const resizeObserver = new ResizeObserver(() => scheduleRender());
-  for (const selector of ["#chart", "#over-time", "#year-hist"]) resizeObserver.observe($(selector));
+  // Only a width that changed since it was drawn re-renders (review of F phase 2: showing a tab
+  // unhid its charts, width 0 to their width, and rendered twice): a hidden chart (width 0) is
+  // skipped, and every render notes the widths it drew at (renderDashboard()).
+  const resizeObserver = new ResizeObserver((entries) => {
+    if (entries.some((entry) => {
+      const width = chartWidth(entry.target);
+      return width > 0 && width !== chartWidths.get(entry.target);
+    })) scheduleRender();
+  });
+  for (const selector of CHART_SELECTORS) resizeObserver.observe($(selector));
   render();
   loadFile(REGISTER_FILE).then((rows) => {
     register = new Map(rows.map((row) => [row.ema_product_number, row]));

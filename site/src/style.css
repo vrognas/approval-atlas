@@ -2307,6 +2307,13 @@ input::placeholder {
   flex: none;
 }
 
+/* The row gives the 44px height on phones: no taller hit area of its own (the phone rule for
+   holder displays' company links would make a wrapped name 66px, over its neighbours). */
+.preview-row a.company-link {
+  margin: 0;
+  padding: 0;
+}
+
 .preview-bar {
   display: block;
   height: 8px;
@@ -6181,9 +6188,27 @@ code {
 
   .bar-fill,
   .meter-fill,
-  .year-track-fill {
+  .year-track-fill,
+  .preview-fill {
     forced-color-adjust: none;
     background: CanvasText;
+  }
+
+  /* The Overview's preview bars: the track outlined (its fill is dropped). */
+  .preview-bar {
+    outline: 1px solid GrayText;
+  }
+
+  /* The tabs (F · Spacious, phase 2): the strip's hairline and the shown tab's underline are inset
+     shadows, dropped here: a border and a text underline instead (review of phase 2). */
+  .tabs {
+    border-bottom: 1px solid GrayText;
+  }
+
+  .tab[aria-current="page"] {
+    text-decoration-line: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 6px;
   }
 
   /* Approval years: bars outside the range outlined, inside filled (as the breakdown's bars); the

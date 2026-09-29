@@ -38,9 +38,11 @@ test(
 
 test("the untouched overview: no lookup and no filter", () => {
   assert.equal(isOverview(home), true);
-  // The breakdown's mode and the tab (F · Spacious, phase 2) are not filters.
+  // The breakdown's mode is not a filter; a tab other than the Overview (F · Spacious, phase 2) is
+  // no filter either, but leaves the untouched overview (review of phase 2: the card had its turn).
   assert.equal(isOverview({ ...home, by: "area" }), true);
-  assert.equal(isOverview({ ...home, tab: "medicines" }), true);
+  assert.equal(isOverview({ ...home, tab: "overview" }), true);
+  assert.equal(isOverview({ ...home, tab: "medicines" }), false);
   // One letter typed and submitted opens no result.
   assert.equal(isOverview({ ...home, q: "k" }), true);
   for (const lookup of [{ q: "wegovy" }, { med: "EMEA/H/C/005422" }, { sub: "semaglutide" }, { cond: "D011565" }, { co: "g.roche" }]) {
@@ -57,7 +59,7 @@ test("the untouched overview: no lookup and no filter", () => {
 test("filters still loading count as filters; the breakdown's mode does not", () => {
   assert.equal(isOverview(home, new URLSearchParams("")), true);
   assert.equal(isOverview(home, new URLSearchParams("by=mah")), true);
-  assert.equal(isOverview(home, new URLSearchParams("by=mah&tab=companies")), true);
+  assert.equal(isOverview(home, new URLSearchParams("by=mah&tab=companies")), false);
   assert.equal(isOverview(home, new URLSearchParams("atc=L04AC")), false);
   assert.equal(isOverview(home, new URLSearchParams("status=all")), false);
   // Links from before phase 4f carry therapeutic areas under "branch".

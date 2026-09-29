@@ -13,17 +13,18 @@ import { DEFAULT_STATE, FILTER_KEYS, areaState, encodeUrl, filterIsSet, lookupVi
 
 const STORAGE_KEY = "approval-atlas:intro-closed";
 const SEEN_KEY = "approval-atlas:intro-seen";
-// The keys that are views, not filters (the breakdown's mode, the tab): url.js FILTER_KEYS.
-const VIEW_KEYS = new Set(Object.keys(DEFAULT_STATE).filter((key) => !FILTER_KEYS.includes(key)));
-
-// Pure: no lookup open and no filter set. pendingFilters: the URL's filter part kept verbatim while
-// the dashboard's data loads (main.js), whose keys count as filters (every key but the views, "by"
-// and "tab": links from before phase 4f carry areas as "branch"); null once the data has loaded.
+// Pure: no lookup open, no filter set (url.js FILTER_KEYS: the breakdown's mode and the tab are
+// views, not filters) and the Overview tab shown (review of F · Spacious phase 2: a tab other than
+// the Overview leaves the untouched overview too, so the card has had its turn). pendingFilters: the
+// URL's filter part kept verbatim while the dashboard's data loads (main.js), whose keys count as
+// leaving it (every key but "by": a "tab" key names a tab other than the Overview; links from
+// before phase 4f carry areas as "branch"); null once the data has loaded.
 export function isOverview(state, pendingFilters = null) {
   if (lookupView(state).kind !== null) return false;
   // The default status (authorized) is no filter (owner decision 2026-09-29).
   if (FILTER_KEYS.some((key) => filterIsSet(state, key))) return false;
-  return pendingFilters === null || [...pendingFilters.keys()].every((key) => VIEW_KEYS.has(key));
+  if ((state.tab ?? DEFAULT_STATE.tab) !== DEFAULT_STATE.tab) return false;
+  return pendingFilters === null || [...pendingFilters.keys()].every((key) => key === "by");
 }
 
 // Pure: whether the card has had its turn: the viewer saw it on an earlier visit (seenBefore), or has
