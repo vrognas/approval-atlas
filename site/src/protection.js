@@ -90,15 +90,21 @@ export const glanceIsEstimate = (row) => Boolean(row) && !isCopy(row) && row.sta
 // The medicine card's protection lead (step 3, #7; the answer strip's cell before F · Spacious,
 // phase 4): { value: "Until 2031–2032" | "Ended" | "Unclear"
 // (the status; the years of the market protection range while protected), reference: null,
-// orphan: the latest orphan market exclusivity still running ("Orphan exclusivity until 2033") or
-// null }; null without a row. A copy: value "Follows Ibrance" (a reference by name, else "None of
+// orphan: the latest orphan market exclusivity still running ("Orphan exclusivity until 2033
+// (est.)", no "(est.)" when the Union Register publishes that end) or null }; null without a row. A copy: value "Follows Ibrance" (a reference by name, else "None of
 // its own"), reference: the reference's years while it is protected ("Ibrance's: until
 // 2026–2027"), else null.
+// Orphan rows by their exclusivity end, on the same day the register's (exact) after a computed one,
+// so the latest is the register's where both end then.
+export const byOrphanEnd = (a, b) =>
+  a.exclusivity_end.localeCompare(b.exclusivity_end) || Number(a.end_source === "register") - Number(b.end_source === "register");
+
 export function protectionGlance(row, orphanRows, snapshotDate) {
   if (!row) return null;
   const year = (date) => Number(date.slice(0, 4));
-  const running = orphanRows.map((orphan) => orphan.exclusivity_end).filter((end) => end && end >= snapshotDate).sort().at(-1);
-  const orphan = running ? COPY.glance.orphan(year(running)) : null;
+  const running = orphanRows.filter((orphan) => orphan.exclusivity_end && orphan.exclusivity_end >= snapshotDate)
+    .sort(byOrphanEnd).at(-1);
+  const orphan = running ? COPY.glance.orphan(year(running.exclusivity_end), running.end_source ?? null) : null;
   const range = [row.market_protection_end_min, row.market_protection_end_max].map((date) => (date ? year(date) : null));
   if (isCopy(row)) {
     const follows = row.basis === "follows_reference" && row.reference_name;

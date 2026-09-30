@@ -217,7 +217,57 @@ test("the calendar's labels: year buttons name the year and the count first (WCA
   assert.equal(copy.range("2027-03-12", "2027-03-12"), "Market protection ends (est.) 12 Mar 2027");
   // The list's heading names the earliest end; the legend names what the segments differ in.
   assert.equal(copy.listTitle("2027", 11), "Earliest estimated end of market protection in 2027: 11 medicines");
-  assert.deepEqual(copy.legend, { protection: "No later orphan market exclusivity", orphan: "Orphan market exclusivity (est.) runs later" });
+  assert.equal(copy.legend.protection, "No later orphan market exclusivity");
+  assert.equal(copy.legend.orphan([{ source: "computed" }]), "Orphan market exclusivity (est.) runs later");
+});
+
+// Owner decision 2026-09-30 ("be specific where you can, else estimate"): a label covering several
+// orphan ends says "(est.)" when all are computed, nothing when all are the register's (exact), and
+// "(partly est.)" when they mix; with none it keeps "(est.)".
+test("the calendar's labels: a label over several orphan ends is marked by their sources", () => {
+  const copy = UI.protectionCalendar;
+  const computed = { end: "2031-01-01", source: "computed" };
+  const register = { end: "2031-01-01", source: "register" };
+  assert.equal(copy.legend.orphan([computed, computed]), "Orphan market exclusivity (est.) runs later");
+  assert.equal(copy.legend.orphan([register]), "Orphan market exclusivity runs later");
+  assert.equal(copy.legend.orphan([register, computed]), "Orphan market exclusivity (partly est.) runs later");
+  assert.equal(copy.legend.orphan([]), "Orphan market exclusivity (est.) runs later");
+  assert.equal(copy.yearName("2029", 3, 2, [register, register]), "2029: 3 medicines, 2 with orphan market exclusivity running later");
+  assert.equal(copy.yearName("2029", 3, 2, [register, computed]), "2029: 3 medicines, 2 with orphan market exclusivity (partly est.) running later");
+  assert.equal(copy.orphanOnlyLine(2, 2029, 2031, [register, register]),
+    "2 more medicines have orphan market exclusivity running after their estimated market protection, ending 2029–2031. Not counted above.");
+  assert.equal(copy.orphanOnlyTitle(2, [computed, register]), "Orphan market exclusivity (partly est.) after market protection: 2 medicines");
+  assert.equal(copy.orphanOnlyTitle(2, [computed, computed]), "Orphan market exclusivity (est.) after market protection: 2 medicines");
+});
+
+test("calendarBuckets: each year keeps its medicines' orphan ends, whose sources mark its labels", () => {
+  const computed = { end: "2033-01-01", source: "computed" };
+  const register = { end: "2030-01-01", source: "register" };
+  const rows = [
+    { min: "2026-11-01", max: "2027-11-01", orphanEnd: computed },
+    { min: "2026-12-01", max: "2027-12-01", orphanEnd: null },
+    { min: "2027-02-01", max: "2028-02-01", orphanEnd: register },
+  ];
+  const [y2026, y2027] = calendarBuckets(rows, 2026, 5);
+  assert.deepEqual([y2026.count, y2026.orphanLater, y2026.orphanEnds], [2, 1, [computed]]);
+  assert.deepEqual([y2027.count, y2027.orphanLater, y2027.orphanEnds], [1, 1, [register]]);
+});
+
+test("orphanLater: on the same day, the register's exact end wins over a computed one", () => {
+  const rows = [
+    { exclusivity_end: "2031-03-01", end_source: "register" },
+    { exclusivity_end: "2031-03-01", end_source: "computed" },
+  ];
+  assert.deepEqual(orphanLater(rows, "2026-09-29"), { end: "2031-03-01", source: "register" });
+  assert.deepEqual(orphanLater([...rows].reverse(), "2026-09-29"), { end: "2031-03-01", source: "register" });
+});
+
+// The labels read end_source: every dated orphan end names one ("register", exact, or "computed",
+// an estimate), so none is marked by default.
+test("real data: every orphan exclusivity end says whether it is the register's or computed", { skip: !existsSync(new URL("../public/data/ema_medicine_orphan_exclusivity.json", import.meta.url)) }, () => {
+  const rows = JSON.parse(readFileSync(new URL("../public/data/ema_medicine_orphan_exclusivity.json", import.meta.url), "utf8"));
+  const unnamed = rows.filter((row) => row.exclusivity_end && row.end_source !== "register" && row.end_source !== "computed");
+  assert.deepEqual(unnamed.map((row) => row.ema_product_number), []);
 });
 
 // Orphan market exclusivity ends computed from the link date (every one after the data date on

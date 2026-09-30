@@ -83,12 +83,13 @@ export function activityTakeaway(rows, columns) {
 // protection runs, min its earliest end, orphanEnd its orphan market exclusivity running after it,
 // or null), how many may lose it by the end of firstYear + span, and how many of those have orphan
 // market exclusivity running later (review of phase 3: so "lose market protection" is not read as
-// "open to copies").
+// "open to copies"); those orphan ends' sources decide its "(est.)" (owner decision 2026-09-30).
 export function protectionTakeaway(rows, firstYear, span = 2) {
   if (!rows.length) return null;
   const year = firstYear + span;
   const ending = rows.filter((row) => Number(row.min.slice(0, 4)) <= year);
-  return COPY.protection(ending.length, rows.length, year, ending.filter((row) => row.orphanEnd).length);
+  const orphanEnds = ending.map((row) => row.orphanEnd).filter(Boolean);
+  return COPY.protection(ending.length, rows.length, year, orphanEnds.length, orphanEnds);
 }
 
 // Conditions: rows (facets.js conditionRows(), every condition ranked, most treatments first), the

@@ -7,6 +7,8 @@
 // or reference_not_found) have no protection of their own: a generic follows its reference's, so
 // counting it would count one loss of exclusivity twice.
 
+import { byOrphanEnd } from "./protection.js";
+
 export const LATER = "later";
 // The list of medicines whose orphan market exclusivity alone runs on (a key like a year's).
 export const ORPHAN_ONLY = "orphan-only";
@@ -15,10 +17,11 @@ const COPY_BASES = new Set(["follows_reference", "reference_not_found"]);
 const yearOf = (date) => Number(date.slice(0, 4));
 
 // The latest orphan market exclusivity end after the date (an ISO date) as { end, source }
-// (source: its end_source, "register" or "computed", an estimate), else null.
+// (source: its end_source, "register" (exact, the Union Register's EndDate, which R prefers to a
+// computed end) or "computed", an estimate; on the same day the register's), else null.
 export function orphanLater(orphanRows, after) {
   const latest = orphanRows.filter((row) => row.exclusivity_end && row.exclusivity_end > after)
-    .sort((a, b) => a.exclusivity_end.localeCompare(b.exclusivity_end)).at(-1);
+    .sort(byOrphanEnd).at(-1);
   return latest ? { end: latest.exclusivity_end, source: latest.end_source ?? null } : null;
 }
 
@@ -67,13 +70,20 @@ export function protectionEnding(products, protection, today) {
 }
 
 // rows: protectionEnding() rows. One bucket per year from firstYear (the data's year) for `years`
-// years, zeros kept, then LATER: { key, year (LATER: its first year), rows, count, orphanLater }.
+// years, zeros kept, then LATER: { key, year (LATER: its first year), rows, count, orphanLater,
+// orphanEnds (those medicines' orphan ends, { end, source }: their sources decide the labels' "(est.)") }.
 export function calendarBuckets(rows, firstYear, years = 5) {
   const buckets = Array.from({ length: years }, (_, offset) => ({ key: String(firstYear + offset), year: firstYear + offset, rows: [] }));
   buckets.push({ key: LATER, year: firstYear + years, rows: [] });
   for (const row of rows) buckets[Math.min(Math.max(yearOf(row.min) - firstYear, 0), years)].rows.push(row);
-  return buckets.map((bucket) => ({ ...bucket, count: bucket.rows.length, orphanLater: bucket.rows.filter((row) => row.orphanEnd).length }));
+  return buckets.map((bucket) => {
+    const orphanEnds = orphanEndsOf(bucket.rows);
+    return { ...bucket, count: bucket.rows.length, orphanLater: orphanEnds.length, orphanEnds };
+  });
 }
+
+// The orphan ends of protectionEnding() rows or orphanOnly entries that have one.
+export const orphanEndsOf = (rows) => rows.map((row) => row.orphanEnd).filter(Boolean);
 
 // Bar lengths in percent: { plain (no orphan exclusivity running later), orphan, clamped }. The
 // scale is the widest single year, as the later bucket spans many years; a later bar longer than
