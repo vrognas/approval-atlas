@@ -1716,9 +1716,9 @@ export const UI = {
     auto: "Extracted automatically from the product information; check the source.",
     caveat: "Results come from different trials, populations and comparators; not a head-to-head comparison.",
     teaser: (trial, endpoint, effect, comparator) =>
-      `${trial ? `Pivotal trial ${trial}` : "Pivotal trial"}: ${endpoint} ${effect}${comparator ? ` vs ${comparator}` : ""}`,
+      [`${trial ? `Pivotal trial ${trial}` : "Pivotal trial"}:`, endpoint, effect, comparator ? `vs ${comparator}` : ""].filter(Boolean).join(" "),
     teaserSingleArm: (trial, endpoint, effect) =>
-      `${trial ? `Pivotal trial ${trial}` : "Pivotal trial"}: ${endpoint} ${effect}, single-arm`,
+      [`${trial ? `Pivotal trial ${trial}` : "Pivotal trial"}:`, endpoint, `${effect},`, "single-arm"].filter(Boolean).join(" "),
     moreIndications: (count) => `and results for ${formatCount(count)} more ${count === 1 ? "indication" : "indications"}`,
     subgroup: "subgroup (matches EU indication)",
     broader: "whole trial (EU indication is narrower)",

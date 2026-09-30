@@ -17,7 +17,7 @@ export function formatEffect(row) {
   const lead = {
     hr: `${efficacy.effectHr} ${row.value}`,
     hr_noninferiority: `${efficacy.effectHr} ${row.value}`,
-    rate_difference: `${efficacy.effectDifference} ${row.value} ${efficacy.percentagePoints}`,
+    rate_difference: `${efficacy.effectDifference} ${row.value}${/(%|pp)$/i.test(String(row.value).trim()) ? "" : ` ${efficacy.percentagePoints}`}`,
     single_arm_rate: `${efficacy.effectResponseRate} ${row.value}`,
     single_arm_median: `${efficacy.effectMedian} ${row.value}`,
   }[row.effect_type] ?? String(row.value ?? "");
@@ -30,7 +30,7 @@ export function formatArms(row) {
   if (!present(row.arm_treatment) || !present(row.arm_control)) return null;
   const measure = present(row.arm_measure) ? String(row.arm_measure) : "";
   if (/^median/i.test(measure)) {
-    const unit = measure.replace(/^median/i, "").replace(/\(.*$/, "").trim();
+    const unit = measure.replace(/^median[\s,:;-]*/i, "").replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
     return `${UI.efficacy.effectMedian} ${row.arm_treatment} ${UI.efficacy.vs} ${row.arm_control}${unit ? ` ${unit}` : ""}`;
   }
   const pair = `${row.arm_treatment} ${UI.efficacy.vs} ${row.arm_control}`;
@@ -47,13 +47,15 @@ export function groupEfficacy(rows) {
     byIndication.get(key).push(row);
   }
   const order = (row) => row.row_order ?? Infinity;
+  const earliest = (group) => Math.min(order(group.lead), ...group.more.map(order));
+  const compare = (a, b) => (a === b ? 0 : a < b ? -1 : 1);
   return [...byIndication.entries()]
     .map(([indication, members]) => {
       const sorted = [...members].sort((a, b) => order(a) - order(b));
       const lead = sorted.find((row) => row.lead === true) ?? sorted[0];
       return { indication, lead, more: sorted.filter((row) => row !== lead) };
     })
-    .sort((a, b) => Math.min(order(a.lead), ...a.more.map(order)) - Math.min(order(b.lead), ...b.more.map(order)));
+    .sort((a, b) => compare(earliest(a), earliest(b)));
 }
 
 export function teaserText(groups, contextIndication = null) {
@@ -61,8 +63,11 @@ export function teaserText(groups, contextIndication = null) {
   const context = present(contextIndication) ? String(contextIndication).toLowerCase() : null;
   const group = (context && groups.find((item) => item.indication?.toLowerCase().includes(context))) || groups[0];
   const { lead } = group;
-  const endpoint = UI.efficacy.endpointNames[lead.endpoint] ?? lead.endpoint ?? "";
+  const { endpointNames } = UI.efficacy;
+  const named = Object.hasOwn(endpointNames, lead.endpoint) ? endpointNames[lead.endpoint] : (lead.endpoint ?? "");
   const effect = formatEffect(lead);
+  // "response rate 37.1 ..." already names the endpoint: do not say it twice.
+  const endpoint = named && effect.toLowerCase().startsWith(String(named).toLowerCase()) ? "" : named;
   return SINGLE_ARM.has(lead.effect_type)
     ? UI.efficacy.teaserSingleArm(lead.trial, endpoint, effect)
     : UI.efficacy.teaser(lead.trial, endpoint, effect, lead.comparator);

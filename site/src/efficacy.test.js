@@ -68,3 +68,38 @@ test("the teaser follows the condition in context, else the first group", () => 
 test("no rows, no teaser", () => {
   assert.equal(teaserText([]), null);
 });
+test("the ORR single-arm teaser does not repeat the endpoint name", () => {
+  const single = groupEfficacy([row({ comparator: null, effect_type: "single_arm_rate", endpoint: "ORR", value: "37.1", ci_low: "28.6", ci_high: "46.2" })]);
+  assert.equal(teaserText(single), "Pivotal trial FLAURA: response rate 37.1 (95% CI 28.6–46.2), single-arm");
+});
+
+test("a missing CI level reads CI, never null", () => {
+  assert.equal(formatEffect(row({ ci_level: null })), "HR 0.46 (CI 0.37–0.57)");
+});
+
+test("a comparative lead without a comparator drops the comparison, not guessing one", () => {
+  assert.equal(teaserText(groupEfficacy([row({ comparator: null })])), "Pivotal trial FLAURA: progression-free survival HR 0.46 (95% CI 0.37–0.57)");
+});
+
+test("a null trial or an unknown endpoint leaves no double spaces or inherited names", () => {
+  const text = teaserText(groupEfficacy([row({ trial: null, endpoint: "constructor" })]));
+  assert.equal(text, "Pivotal trial: constructor HR 0.46 (95% CI 0.37–0.57) vs gefitinib or erlotinib");
+  assert.equal(teaserText(groupEfficacy([row({ endpoint: null })])).includes("  "), false);
+});
+
+test("the context match ignores case; no match, or a null-indication group, falls back to the first", () => {
+  const groups = groupEfficacy([row({ indication: null }), row({ indication: "Melanoma", trial: "KEYNOTE", row_order: 2 })]);
+  assert.match(teaserText(groups, "MELANOMA"), /KEYNOTE/);
+  assert.match(teaserText(groups, "asthma"), /FLAURA/);
+  assert.match(teaserText(groups, "melanoma"), /KEYNOTE/);
+});
+
+test("a rate difference already printed with % or pp gets no unit text", () => {
+  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6%", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6% (99% CI 13.0–30.3)");
+  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6 pp", ci_low: null, ci_high: null })), "difference 21.6 pp");
+});
+
+test("median arm measures keep the unit, whatever the punctuation", () => {
+  assert.equal(formatArms(row({ arm_measure: "Median, months" })), "median 18.9 vs 10.2 months");
+  assert.equal(formatArms(row({ arm_measure: "median (95% CI) months" })), "median 18.9 vs 10.2 months");
+});
