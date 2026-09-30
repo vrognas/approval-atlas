@@ -185,6 +185,10 @@ export function createTable(table, moreButton, captionNode, {
   // A clicked ATC segment or branch chip, until the next update: { number, selector (the button),
   // within (a chip's term, as the same branch can follow several), fallback }.
   let refocus = null;
+  // The sticky header's height (--thead-h), so a focused control keeps clear of it (style.css
+  // scroll-margin-top; WCAG 2.4.11, audit 2026-09-30, M2). It follows the header's wrapping and text
+  // spacing.
+  const headerSize = new ResizeObserver(([entry]) => table.style.setProperty("--thead-h", `${entry.target.offsetHeight}px`));
 
   // Pressed: the segments whose class is selected in the ATC filter, and the branch chips whose
   // branch is within the area filter. Each badge's one tab stop: the first pressed segment, else the
@@ -337,6 +341,8 @@ export function createTable(table, moreButton, captionNode, {
       .attr("scope", "col")
       .attr("role", "columnheader")
       .text((header) => header);
+    headerSize.disconnect();
+    headerSize.observe(root.select("thead").node());
     showMore();
     if (refocus) restoreFocus();
   };

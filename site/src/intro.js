@@ -150,8 +150,8 @@ function icon(name, className, size = 24) {
   return svg;
 }
 
-// One card: its icon on the hue's tint, the title (a heading under the card's hidden one), the
-// sentence and the example link. link(text, patch, className): lookup.link (a pushState link, as the
+// One card: its icon on the hue's tint, the title (bold text, not a heading: the card comes before
+// the page's h1, audit 2026-09-30, S2), the sentence and the example link. link(text, patch, className): lookup.link (a pushState link, as the
 // Try line's). The space between sentence and link shows where they run on in one line (phone rows);
 // side by side, the link is at the card's foot.
 function introCard(card, link) {
@@ -160,7 +160,7 @@ function introCard(card, link) {
   tile.append(icon(card.icon, "intro-icon-svg"));
   const body = element("div", "intro-card-body");
   body.append(
-    element("h3", "intro-card-title", card.title),
+    element("p", "intro-card-title", card.title),
     element("p", "intro-card-text", card.text),
     " ",
     link([card.action, icon("arrow", "intro-arrow", 16)], introCardPatch(card), "intro-action"),
@@ -184,7 +184,9 @@ export function createIntro(card, link, { link: exampleLink, tryLine }) {
   let requested = null; // the view (encodeUrl()) the viewer asked for the card on
   let last = null; // the last render's { state, pendingFilters }
 
-  const title = element("h2", "visually-hidden", copy.title);
+  // The card's name (a region: landmark navigation finds it). Not a heading, as the card comes before
+  // the page's h1 (audit 2026-09-30, S2).
+  const title = element("p", "visually-hidden", copy.title);
   title.id = "intro-title";
   const close = element("button", "intro-close", "×");
   close.type = "button";
