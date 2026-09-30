@@ -152,6 +152,7 @@ build_ema_tables <- function(clean_medicines,
     atc_sources$retired_codes,
     atc_sources$curated_codes
   )
+  documents <- build_documents_table(epar_documents, medicines)
   list(
     ema_medicines = medicines,
     ema_medicine_therapeutic_areas = therapeutic_areas,
@@ -171,7 +172,8 @@ build_ema_tables <- function(clean_medicines,
     ),
     ema_therapeutic_area_subtree = build_area_subtree_table(term_matches, mesh),
     ema_authorized_series = build_authorized_series(medicines, snapshot_date),
-    ema_medicine_documents = build_documents_table(epar_documents, medicines),
+    ema_medicine_documents = documents,
+    ema_medicine_primary_documents = build_primary_documents_table(documents),
     mesh_entry_terms = build_mesh_entry_terms(
       find_relevant_descriptors(term_matches$mesh_descriptor_ui, mesh),
       mesh

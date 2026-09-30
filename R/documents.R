@@ -155,6 +155,60 @@ build_documents_table <- function(documents, medicines) {
     )
 }
 
+# The rows the medicine card's buttons and the tables' PI / EPAR links can
+# show (site/src/documents.js primaryDocuments()), so a phone gets them from a
+# small file instead of the whole documents index: per medicine and type, the
+# newest current (not "(archive)") product information, standard EPAR and
+# overview, and the newest refusal report (an assessment report whose own
+# title names a refusal: a refused medicine's EPAR). The frontend still picks
+# by the medicine's status. Ties on the date go by title, then URL, as the
+# frontend sorts the documents index.
+build_primary_documents_table <- function(documents) {
+  documents |>
+    dplyr::filter(
+      .data$document_type %in% primary_document_types,
+      startsWith(.data$url, "https://"),
+      !grepl("\\(archive\\)\\s*$", .data$title, ignore.case = TRUE)
+    ) |>
+    dplyr::mutate(
+      own_title = .data$document_type == "assessment-report" &
+        !grepl(
+          "EPAR - Public assessment report\\s*$",
+          .data$title,
+          ignore.case = TRUE
+        ),
+      refusal_report = .data$own_title &
+        grepl("refusal", .data$title, ignore.case = TRUE)
+    ) |>
+    dplyr::filter(!.data$own_title | .data$refusal_report) |>
+    dplyr::arrange(
+      .data$ema_product_number,
+      .data$document_type,
+      .data$refusal_report,
+      dplyr::desc(.data$last_updated_date),
+      .data$title,
+      .data$url,
+      .locale = "en"
+    ) |>
+    dplyr::slice_head(
+      n = 1,
+      by = c("ema_product_number", "document_type", "refusal_report")
+    ) |>
+    dplyr::select(
+      "ema_product_number",
+      "document_type",
+      "refusal_report",
+      "url",
+      "last_updated_date"
+    )
+}
+
+primary_document_types <- c(
+  "product-information",
+  "assessment-report",
+  "overview"
+)
+
 report_documents_coverage <- function(documents, medicines) {
   authorised <- medicines[medicines$medicine_status == "Authorised", ]
   has_type <- function(types) {

@@ -120,7 +120,7 @@ const MODALITY_FILES = ["modalities.json", "ema_medicine_modalities.json"];
 // tables (lookup.need("atc")).
 const ATC_EXPLANATION_FILES = ["atc_class_explanations.json"];
 // Loaded after the dashboard's first render; shared with the medicine card (same loadFile promise),
-// as is the documents index (lookup.need("documents")).
+// as are the primary documents (lookup.need("primaryDocuments")).
 const REGISTER_FILE = "ema_medicine_register_status.json";
 // The filter each breakdown ignores and toggles.
 const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah", mod: "mod" };
@@ -183,10 +183,17 @@ const recent = createRecent(undefined, (entry) => {
   return lookup.title(lookupState) !== null;
 });
 
+// A shared medicine link (?med=, the phone lookup during a talk): once the search works, the
+// card's document buttons (the small primary-documents file) load before any other file, which
+// waits for it (or its failure), so the buttons do not share the network with the dashboard's
+// megabyte (audit 2026-09-30, S5). null: no file waits.
+const PRIMARY_DOCUMENTS_FILE = "ema_medicine_primary_documents.json";
+let firstFile = null;
 const files = new Map();
 function loadFile(file) {
   if (!files.has(file)) {
-    files.set(file, d3.json(`/data/${file}`).catch((error) => {
+    const request = () => d3.json(`/data/${file}`);
+    files.set(file, (firstFile && file !== PRIMARY_DOCUMENTS_FILE ? firstFile.then(request) : request()).catch((error) => {
       files.delete(file); // a failed load (flaky network) is retried by the next caller
       throw error;
     }));
@@ -868,6 +875,12 @@ function renderTryLinks() {
 }
 
 function startLookup([meta, searchRows, entryTermRows]) {
+  if (new URLSearchParams(window.location.search).has("med")) {
+    const done = () => {
+      firstFile = null;
+    };
+    firstFile = loadFile(PRIMARY_DOCUMENTS_FILE).then(done, done);
+  }
   d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
   renderFooter(meta);
   showOfflineNote(meta);
@@ -2233,15 +2246,15 @@ function startDashboard(meta, [
     register = new Map(rows.map((row) => [row.ema_product_number, row]));
     scheduleRender();
   }, () => {});
-  // The table's PI and EPAR links: the documents index (~5 MB, shared with the cards) in the
-  // background; the therapeutic area groups' condition page links: the conditions data; the
-  // therapeutic areas' MeSH explainers and the tree's order of EMA's terms (their tree numbers):
-  // the MeSH notes.
+  // The table's PI and EPAR links: the primary documents (small, shared with the cards; the
+  // documents index where that file is missing) in the background; the therapeutic area groups'
+  // condition page links: the conditions data; the therapeutic areas' MeSH explainers and the
+  // tree's order of EMA's terms (their tree numbers): the MeSH notes.
   lookup.onData((name) => {
     if (name === "meshNotes") meshTree.setNotes(lookup.meshNotes()?.rows ?? null);
-    if (name === "documents" || name === "conditions" || name === "meshNotes" || name === "equivalents" || name === "protection") scheduleRender();
+    if (name === "primaryDocuments" || name === "documents" || name === "conditions" || name === "meshNotes" || name === "equivalents" || name === "protection") scheduleRender();
   });
-  lookup.need("documents");
+  lookup.need("primaryDocuments");
   lookup.need("meshNotes");
   // The most common conditions' substance counts (step 4, #10): the substance equivalents (small).
   lookup.need("equivalents");
@@ -2249,6 +2262,10 @@ function startDashboard(meta, [
   // 61 KB gzipped) once the page is idle, so a card opened later, offline or on a slow network,
   // has them (the service worker keeps what was loaded).
   whenIdle(() => lookup.need("protection"));
+  // The full documents index (~5 MB, 300 KB gzipped): the cards' documents lists, and the table's
+  // links where the primary documents are missing (older data); a card asks for it at once where
+  // it needs it (lookup.js medicineCard()).
+  whenIdle(() => lookup.need("documents"));
   // Draft (loss-of-exclusivity calendar): or as soon as its card comes near the viewport.
   new IntersectionObserver((entries, observer) => {
     if (!entries.some((entry) => entry.isIntersecting)) return;

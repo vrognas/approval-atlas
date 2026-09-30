@@ -260,6 +260,125 @@ test_that("build_documents_table sorts by product, type and newest first", {
   )
 })
 
+# Rows of the documents table as the pipeline built them on 2026-09-29:
+# Mylotarg's first application (refused in 2008; EMA lists the authorized
+# 004204's documents under it too), Ledaga's two overviews of the same day and
+# title, and a Kinzalkomb referral report.
+real_document_rows <- function() {
+  dplyr::tibble(
+    ema_product_number = paste0(
+      "EMEA/H/C/",
+      c("000415", "000705", "000705", "000705", "000705", "000705",
+        "002826", "002826")
+    ),
+    document_type = c(
+      "assessment-report", "assessment-report", "assessment-report",
+      "overview", "product-information", "rmp-summary", "overview", "overview"
+    ),
+    title = c(
+      "Kinzalkomb-H-C-415-A31-0084 : EPAR - Assessment Report - Article 31",
+      "Mylotarg : EPAR - Public assessment report",
+      "Mylotarg : EPAR - Refusal public assessment report",
+      "Mylotarg : EPAR - Summary for the public",
+      "Mylotarg : EPAR - Product Information",
+      "Mylotarg : EPAR - Risk-management-plan summary",
+      "Ledaga : EPAR - Summary for the public",
+      "Ledaga : EPAR - Summary for the public"
+    ),
+    url = epar_url(c(
+      paste0(
+        "assessment-report/kinzalkomb-h-c-415-a31-0084-epar-assessment-report-",
+        "article-31_en.pdf"
+      ),
+      "assessment-report/mylotarg-epar-public-assessment-report_en.pdf",
+      "assessment-report/mylotarg-epar-refusal-public-assessment-report_en.pdf",
+      "overview/mylotarg-epar-summary-public_en.pdf",
+      "product-information/mylotarg-epar-product-information_en.pdf",
+      "rmp-summary/mylotarg-epar-risk-management-plan-summary_en.pdf",
+      "overview/ledaga-epar-summary-public_en.pdf-0",
+      "overview/ledaga-epar-summary-public_en.pdf"
+    )),
+    first_published_date = as.Date(c(
+      "2014-10-03", "2018-05-04", "2008-04-17", "2018-05-04", "2018-05-04",
+      "2022-07-21", "2017-03-16", "2017-03-16"
+    )),
+    last_updated_date = as.Date(c(
+      "2014-10-03", "2018-05-04", "2008-04-17", "2018-05-04", "2025-09-17",
+      "2022-07-21", "2017-03-16", "2017-03-16"
+    )),
+    link_method = "product_number",
+    source = "ema_epar_documents"
+  )
+}
+
+test_that("primary documents keep the newest of each kind the card can show", {
+  primary <- build_primary_documents_table(real_document_rows())
+  expect_named(
+    primary,
+    c(
+      "ema_product_number", "document_type", "refusal_report", "url",
+      "last_updated_date"
+    )
+  )
+  # Mylotarg: its product information, standard EPAR, refusal report and
+  # overview (the frontend picks by status); no referral report or RMP summary.
+  mylotarg <- primary[primary$ema_product_number == "EMEA/H/C/000705", ]
+  expect_identical(
+    mylotarg$document_type,
+    c(
+      "assessment-report", "assessment-report", "overview",
+      "product-information"
+    )
+  )
+  expect_identical(mylotarg$refusal_report, c(FALSE, TRUE, FALSE, FALSE))
+  expect_identical(
+    mylotarg$last_updated_date,
+    as.Date(c("2018-05-04", "2008-04-17", "2018-05-04", "2025-09-17"))
+  )
+  expect_false("EMEA/H/C/000415" %in% primary$ema_product_number)
+  # Ledaga: two overviews of the same day and title; the first by URL.
+  ledaga <- primary[primary$ema_product_number == "EMEA/H/C/002826", ]
+  expect_identical(
+    ledaga$url,
+    epar_url("overview/ledaga-epar-summary-public_en.pdf")
+  )
+})
+
+test_that("primary documents skip archive files and non-https links", {
+  rows <- real_document_rows()
+  mylotarg_rows <- rows$ema_product_number == "EMEA/H/C/000705"
+  newer <- rows[mylotarg_rows & rows$document_type == "product-information", ]
+  newer$title <- paste(newer$title, "(archive)")
+  newer$url <- sub("_en", "-archive_en", newer$url, fixed = TRUE)
+  newer$last_updated_date <- as.Date("2026-06-06")
+  insecure <- rows[mylotarg_rows & rows$document_type == "overview", ]
+  insecure$url <- sub("https://", "http://", insecure$url, fixed = TRUE)
+  insecure$last_updated_date <- as.Date("2026-01-01")
+  primary <- build_primary_documents_table(
+    dplyr::bind_rows(rows, newer, insecure)
+  )
+  mylotarg <- primary[primary$ema_product_number == "EMEA/H/C/000705", ]
+  expect_identical(
+    mylotarg$url[mylotarg$document_type == "product-information"],
+    epar_url("product-information/mylotarg-epar-product-information_en.pdf")
+  )
+  expect_identical(
+    mylotarg$url[mylotarg$document_type == "overview"],
+    epar_url("overview/mylotarg-epar-summary-public_en.pdf")
+  )
+})
+
+test_that("primary documents of the fixture pipeline are one row per kind", {
+  primary <- build_primary_documents_table(fixture_documents_table())
+  expect_identical(
+    anyDuplicated(
+      primary[c("ema_product_number", "document_type", "refusal_report")]
+    ),
+    0L
+  )
+  expect_setequal(primary$document_type, primary_document_types)
+})
+
 test_that("report_documents_coverage counts and warns without failing", {
   medicines <- document_medicines()
   documents <- fixture_documents_table(medicines)

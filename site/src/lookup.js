@@ -219,6 +219,11 @@ export function createLookup(panel, {
     conditions: [["mesh_descriptor_areas.json", "ema_medicine_therapeutic_areas.json", "ema_therapeutic_area_branches.json"],
       (descriptorAreaRows, areaRows, branchRows) => ({ ...buildConditions(index, { descriptorAreaRows, areaRows, branchRows }), branches: termBranches(branchRows) })],
     documents: [["ema_medicine_documents.json"], (rows) => groupBy(rows, "ema_product_number")],
+    // The card's SmPC / EPAR / overview buttons and the tables' PI and EPAR links from the
+    // pipeline's few rows per medicine (about 75 KB gzipped against the index's 300 KB; audit
+    // 2026-09-30, S5), so a phone need not wait for the whole index; null when the file is missing
+    // (older data: the index gives them, quickDocumentRows()).
+    primaryDocuments: [[{ optional: "ema_medicine_primary_documents.json" }], (rows) => (rows ? groupBy(rows, "ema_product_number") : null)],
     // Step 4 review: the curated copies (their national references and evidence) with it, and the
     // curated pediatric-use marketing authorizations (their evidence); none when a file is missing
     // (older data).
@@ -265,6 +270,15 @@ export function createLookup(panel, {
   });
   const { need } = datasets;
   const ready = (value) => value !== undefined && value !== FAILED;
+
+  // Document rows by product for the buttons and the PI / EPAR links: the primary-documents file,
+  // else (older data, or it failed) the full documents index; undefined while loading, or FAILED.
+  // peek: without starting a load (the medicines table's links).
+  function quickDocumentRows(peek = false) {
+    const get = peek ? datasets.peek : need;
+    const primary = get("primaryDocuments");
+    return primary === null || primary === FAILED ? get("documents") : primary;
+  }
 
   // Branch chips (area-chips.js): a click toggles the branch (the caller's), unless it is included
   // through a selected category (disabled, as the tree's row) or the area filter is still unknown;
@@ -757,7 +771,7 @@ export function createLookup(panel, {
     if (!row) return notFound("medicine", number);
     const medicines = need("medicines");
     const medicine = ready(medicines) ? medicines.get(number) : null;
-    const [atc, atcCounts, areas, conditions, documents] = [need("atc"), need("atcCounts"), need("areas"), need("conditions"), need("documents")];
+    const [atc, atcCounts, areas, conditions] = [need("atc"), need("atcCounts"), need("areas"), need("conditions")];
     const authorized = statusKind(row.medicine_status) === "authorized";
     // Step 4 (#9): EMA's flags from the search index (since step 4), else once ema_medicines.json
     // has loaded. Those qualifying a current authorization (conditional, exceptional
@@ -776,9 +790,18 @@ export function createLookup(panel, {
     const namesakes = namesakesOf(row);
     // EMA can list a later namesake's documents under a medicine never authorized: left out here.
     const later = laterNamesake(row, namesakes);
+    // The buttons come from the primary-documents file (quickDocumentRows()); the documents list
+    // needs the full index (need("documents")): at once where that file cannot give the buttons (a
+    // later namesake's documents to leave out) or gives none (the list is the Documents block),
+    // else when More details opens or the page is idle (main.js). Once loaded, all comes from it.
+    const quick = later ? null : quickDocumentRows();
+    const quickPrimary = quick && ready(quick) ? primaryDocuments(groupDocuments(quick.get(number) ?? []), row.medicine_status).primary : null;
+    const documents = quick !== undefined && !quickPrimary?.length ? need("documents") : datasets.peek("documents");
     const split = ready(documents) ? splitNamesakeDocuments(documents.get(number) ?? [], later?.marketing_authorisation_date ?? null) : null;
     const groups = split ? groupDocuments(split.own) : [];
-    const { primary, rest } = primaryDocuments(groups, row.medicine_status);
+    const full = primaryDocuments(groups, row.medicine_status);
+    const primary = split ? full.primary : quickPrimary ?? [];
+    const { rest } = full;
     const namesakeDocuments = split?.namesake.length
       ? el("p", { class: "muted" }, UI.card.namesake.documents(split.namesake.length),
         internalLink(UI.card.namesake.documentsLink(later.name_of_medicine), { med: later.ema_product_number }), ".")
@@ -824,7 +847,8 @@ export function createLookup(panel, {
     const documentsBlock = cardBlock("documents", primary.length
       ? el("div", { class: "doc-buttons" }, primary.map(documentButton))
       : documentsList(documents, groups, rest, medicine, namesakeDocuments));
-    const more = el("details", { class: "more-details", "data-key": "more-details" },
+    // Opened (by a click, openMore() or a re-render keeping it open): its documents list loads.
+    const more = el("details", { class: "more-details", "data-key": "more-details", ontoggle: (event) => event.currentTarget.open && need("documents") },
       el("summary", null, el("span", { class: "more-title" }, UI.card.more.summary), " ", el("span", { class: "more-hint" }, UI.card.more.hint(primary.length > 0))),
       el("section", { class: "card-section" },
         el("h2", null, UI.card.more.about),
@@ -912,14 +936,14 @@ export function createLookup(panel, {
   // mentions: on a condition page, the indication's words that matched) -> a table, one tbody per
   // medicine: Medicine (the name opens its card; substances, unless they are the card's own
   // substance (sameSubstance(row)); the narrower terms or the words mentioned; PI and EPAR once the
-  // documents index has loaded), with areas (substance cards: what each medicine is for) its
-  // therapeutic areas, ATC, Approved · Status, Type, Holder, then the matched indication text in a
-  // full-width row. Phones stack the rows (style.css; with areas, .with-areas, below a wider width:
-  // six columns need more room); explicit roles keep the table semantics there. labelledBy: the
-  // heading's id.
+  // primary documents have loaded: quickDocumentRows()), with areas (substance cards: what each
+  // medicine is for) its therapeutic areas, ATC, Approved · Status, Type, Holder, then the matched
+  // indication text in a full-width row. Phones stack the rows (style.css; with areas, .with-areas,
+  // below a wider width: six columns need more room); explicit roles keep the table semantics
+  // there. labelledBy: the heading's id.
   function resultTable(entries, medicines, labelledBy, { areas = false, sameSubstance = () => false } = {}) {
     if (!entries.length) return el("p", { class: "muted" }, UI.condition.none);
-    const [documents, atc] = [need("documents"), need("atc")];
+    const [documents, atc] = [quickDocumentRows(), need("atc")];
     const [areaRows, conditions] = areas ? [need("areas"), need("conditions")] : [null, null];
     const headers = areas ? [UI.results.headers[0], UI.results.areas, ...UI.results.headers.slice(1)] : UI.results.headers;
     const cell = (className, ...content) => el("td", { class: className, role: "cell" }, content);
@@ -1474,8 +1498,12 @@ export function createLookup(panel, {
     companies: () => (ready(datasets.peek("companies")) ? datasets.peek("companies") : null),
     // ema_medicines rows by product (EMA's opinion in the suggestions): null until need("medicines").
     medicines: () => (ready(datasets.peek("medicines")) ? datasets.peek("medicines") : null),
-    // Document rows by product (the table's PI and EPAR links): null until need("documents") has loaded them.
-    documents: () => (ready(datasets.peek("documents")) ? datasets.peek("documents") : null),
+    // Document rows by product for the table's PI and EPAR links (quickDocumentRows(): the
+    // primary-documents file, else the full index): null until loaded.
+    documents: () => {
+      const rows = quickDocumentRows(true);
+      return ready(rows) ? rows : null;
+    },
     // MeSH scope notes (buildMeshNotes()): null until need("meshNotes") has loaded them (or failed).
     meshNotes: () => (ready(datasets.peek("meshNotes")) ? datasets.peek("meshNotes") : null),
     // Substance equivalents (substanceEquivalents()): null until need("equivalents") has loaded them
