@@ -1,14 +1,16 @@
 // A toolbar's items (role="toolbar": the medicines table's ATC badge segments, the branch chips
 // after each condition): one tab stop, Left/Right to the neighboring item, Home/End to the first
-// and last (the WAI-ARIA toolbar pattern). Its items are its buttons and any .toolbar-item: a span
-// the arrows reach but that is never the tab stop (the branch chips' "+n", whose tooltip had no
-// keyboard path; chips review 2026-09-29). DOM only.
-const ITEMS = "button, .toolbar-item";
+// and last (the WAI-ARIA toolbar pattern). Its items are its buttons and links (the lookup cards'
+// branch chips link to condition pages; Laws of UX, second pass, 2026-09-30) and any .toolbar-item:
+// a span the arrows reach but that is never the tab stop (the branch chips' "+n", whose tooltip had
+// no keyboard path; chips review 2026-09-29). DOM only.
+const CONTROLS = "button, a[href]";
+const ITEMS = `${CONTROLS}, .toolbar-item`;
 
-// Focus one item; a button becomes its toolbar's tab stop (a .toolbar-item keeps tabindex -1).
+// Focus one item; a button or link becomes its toolbar's tab stop (a .toolbar-item keeps tabindex -1).
 export function focusToolbarButton(item) {
-  if (item.matches("button")) {
-    for (const other of item.closest("[role=toolbar]").querySelectorAll("button")) other.tabIndex = other === item ? 0 : -1;
+  if (item.matches(CONTROLS)) {
+    for (const other of item.closest("[role=toolbar]").querySelectorAll(CONTROLS)) other.tabIndex = other === item ? 0 : -1;
   }
   item.focus();
 }

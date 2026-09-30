@@ -306,13 +306,14 @@ function render() {
     pageTitle.replaceWith(heading);
     pageTitle = heading;
   }
-  pageTitle.textContent = lookupOpen ? UI.explore.title : UI.page.title;
-  // The overview heading's scope line; "Explore EMA medicines" names the source itself. With the
-  // status filter widened it no longer says "authorized" (owner decision 2026-09-30); before the
-  // dashboard's data has loaded, the URL's status values are still verbatim (pendingFilters).
+  // The overview heading and its scope line; "Explore EMA medicines" names the source itself. With
+  // the status filter widened neither says "approved" or "authorized" (owner decisions 2026-09-30);
+  // before the dashboard's data has loaded, the URL's status values are still verbatim
+  // (pendingFilters).
   const widened = dashboard
     ? !isDefaultStatus(state.status)
     : pendingFilters.getAll("status").some((value) => !DEFAULT_STATE.status.includes(value));
+  pageTitle.textContent = lookupOpen ? UI.explore.title : UI.page.title(SOURCES, { widened });
   const scope = $("#page-scope");
   scope.hidden = lookupOpen;
   scope.textContent = UI.page.scope(SOURCES, { widened });
@@ -747,7 +748,7 @@ function setupTips() {
 // versions and dates until meta.json has loaded: renderFooter(meta)).
 function renderAbout() {
   d3.select("#data-date").text(UI.dataDate(null));
-  d3.select("#page-title").text(UI.page.title);
+  d3.select("#page-title").text(UI.page.title(SOURCES));
   d3.select("#page-scope").text(UI.page.scope(SOURCES));
   d3.select("#filter-bar-label").text(UI.filters.label);
   d3.select("#lookup-label").text(UI.lookup.label);
@@ -925,13 +926,6 @@ function startLookup([meta, searchRows, entryTermRows]) {
     snapshotDate: meta.snapshot_date,
     meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null,
     decision: days(medianDays) ? { median: medianDays, p90: days(p90Days) } : null,
-    // A card's branch chip (owner decision 2026-09-29): its branch toggled in the area filter, as in
-    // the table, and the overview it filters shown (one history entry). Before the dashboard's data
-    // has loaded the filter is unknown (the URL's filters are kept verbatim: pendingFilters), so the
-    // chips are inert and unpressed until then (chips review 2026-09-29: a click set the branch alone,
-    // replacing the link's area values, and its pressed state could disagree).
-    areaFilter: () => (dashboard ? state.area : null),
-    onAreaChip: (branch) => navigate({ area: dashboard.toggleArea(branch) }),
   });
   addSearchIcon();
   renderTryLinks();

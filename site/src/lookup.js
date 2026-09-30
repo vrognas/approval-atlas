@@ -3,7 +3,7 @@
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
 import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
-import { areaChips, chipTogglable, fillTerm, markAreaChips } from "./area-chips.js";
+import { areaChips, fillTerm } from "./area-chips.js";
 import { termBranches } from "./areas.js";
 import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, buildAtcExplanations, mainAtcCode } from "./atc.js";
 import { atcHue, atcSegments, statusFlags, statusHue, typeBadges } from "./badges.js";
@@ -198,11 +198,8 @@ const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substanc
 // meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
 // decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
 // opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
-// onAreaChip(branch): a condition's branch chip was clicked (owner decision 2026-09-29).
-// areaFilter(): the area filter its chips show and toggle, null while it is unknown (before the
-// dashboard's data has loaded: the chips are inert then; chips review 2026-09-29).
 export function createLookup(panel, {
-  index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null, onAreaChip = () => {}, areaFilter = () => null,
+  index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null,
 }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
@@ -290,14 +287,9 @@ export function createLookup(panel, {
     return primary === null || primary === FAILED ? get("documents") : primary;
   }
 
-  // Branch chips (area-chips.js): a click toggles the branch (the caller's), unless it is included
-  // through a selected category (disabled, as the tree's row) or the area filter is still unknown;
-  // the arrow keys move within a condition's chips and "+n".
-  panel.addEventListener("click", (event) => {
-    const chip = event.target.closest("button.area-chip");
-    if (chip && chipTogglable(chip)) onAreaChip(chip.dataset.area);
-  });
-  panel.addEventListener("keydown", (event) => toolbarKeydown(event, "button.area-chip, .area-more"));
+  // Branch chips (area-chips.js): links to their branch's condition page here (termLinks()); the
+  // arrow keys move within a condition's chips and "+n".
+  panel.addEventListener("keydown", (event) => toolbarKeydown(event, ".area-chip, .area-more"));
   const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
   // The substance equivalents (step 3): none when the file is missing (older data), undefined while
@@ -760,7 +752,7 @@ export function createLookup(panel, {
   }
 
   // The Protection and copies block's lead (F · Spacious, phase 4; the answer strip's "Protection
-  // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after "Until …" (glanceIsEstimate()),
+  // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after "Market protection until …" (glanceIsEstimate()),
   // as a link to the estimate in More details, then, muted, a copy's reference's years and orphan
   // exclusivity still running. Medicines never approved have no estimate (null).
   function protectionLead(row) {
@@ -770,9 +762,19 @@ export function createLookup(panel, {
     const protectionRow = protection.byProduct.get(row.ema_product_number);
     const glance = protectionGlance(protectionRow, protection.orphan.get(row.ema_product_number) ?? [], snapshotDate);
     if (!glance) return null;
+    // "Market protection" in the body type before the link, what follows ("until 2028–2029", "ended")
+    // in the answer's as the link (Laws of UX, second pass: at 20px the whole phrase took three lines
+    // on a 390px phone). The link is named by the whole phrase (the visible label aria-hidden, a
+    // hidden copy in the link), so it reads once and stands alone in a list of links.
+    const { label } = UI.protection.glance;
+    const labelled = glance.value.startsWith(`${label} `);
+    const shown = labelled ? glance.value.slice(label.length + 1) : glance.value;
     return el("div", { class: "protection-lead" },
       el("p", { class: "answer-value" },
-        el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection }, glance.value, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
+        labelled ? [el("span", { class: "lead-label", "aria-hidden": "true" }, label), " "] : null,
+        el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
+          labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
+          shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
         glanceIsEstimate(protectionRow) ? [" ", el("span", { class: "lead-estimate" }, UI.card.estimate)] : null),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
       glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,
@@ -993,9 +995,18 @@ export function createLookup(panel, {
     return addMeshTip(internalLink(text, { cond: ui }, className, label), ready(notes) ? notes.byUi.get(ui) : null);
   }
 
+  // A branch chip's link (Laws of UX, second pass, owner decision 2026-09-30): its branch's condition
+  // page, the descriptor of the branch's name (as main.js areaDescriptor() and the area tree's
+  // "Open condition page" link for a branch); null without one (a plain label then).
+  const branchLink = (conditions) => (code, name, fill) => {
+    const ui = conditions.uiByName.get(name);
+    return ui ? internalLink(fill, { cond: ui }) : null;
+  };
+
   // Condition page links for EMA terms (plain text where the descriptor is unknown), "; " between them.
   // chips (the medicine card, the substance card's table; owner decision 2026-09-29): each term a
-  // group in the flow (span.term, area-chips.js fillTerm()) followed by its branch chips.
+  // group in the flow (span.term, area-chips.js fillTerm()) followed by its branch chips, each a link
+  // to its branch's condition page (branchLink(); on the dashboard they filter).
   function termLinks(terms, conditions, { chips = false } = {}) {
     return terms.map((term, position) => {
       const ui = ready(conditions) ? conditions.termUi.get(term) : null;
@@ -1003,7 +1014,7 @@ export function createLookup(panel, {
       const last = position === terms.length - 1;
       if (!chips) return [name, last ? "" : "; "];
       const group = el("span", { class: "term" });
-      fillTerm(group, name, ready(conditions) ? areaChips(term, conditions.branches, areaFilter()) : null, last);
+      fillTerm(group, name, ready(conditions) ? areaChips(term, conditions.branches, null, { link: branchLink(conditions) }) : null, last);
       return last ? group : [group, " "];
     });
   }
@@ -1509,9 +1520,6 @@ export function createLookup(panel, {
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
   function render(state, force = false) {
     lastState = state;
-    // The branch chips follow the area filter (a chip's popover can change it under a card; the
-    // dashboard's arrival makes it known).
-    markAreaChips(panel, areaFilter());
     const view = lookupView(state);
     const key = JSON.stringify(view);
     const sameView = key === renderedKey;
