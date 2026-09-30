@@ -473,9 +473,17 @@ main {
 
 /* Until the dashboard first renders, the main column holds a screen's height, so the footer is not
    in the first screen only to be pushed down twice as the search and the dashboard arrive (layout
-   shift; audit 2026-09-30, S1: CLS 0.27 desktop, 0.81 phone). */
-main:has(> #app[hidden]) {
+   shift; audit 2026-09-30, S1: CLS 0.27 desktop, 0.81 phone). Not when the data could not load
+   (.load-failed, main.js showMissingData()): the message is all there is. */
+main:has(> #app[hidden]):not(.load-failed) {
   min-height: 100svh;
+}
+
+/* The lookup result: its own formatting context, so the margin of its "Loading…" line stays inside
+   it and its top does not move when the answer replaces that line (a layout shift over the whole
+   answer: a condition page moved 4px up as its tables arrived, CLS 0.75; audit review 2026-09-30). */
+.result {
+  display: flow-root;
 }
 
 /* The search is shown once its data has loaded (main.js); until then it keeps its place, so the
@@ -4303,6 +4311,17 @@ td.area {
   display: inline-block;
 }
 
+/* Its condition link: 24px tall at every width (WCAG 2.5.8; audit 2026-09-30, M3; the negative margin
+   keeps the line), and an inline block, so a name that wraps is a box of its own and its chips start
+   on the line under it, not beside its last line, where the name's line above covered them (axe
+   target-size at 1440, 1024 and 320). Not in the conditions card, whose one-line rows (25px) have
+   their own link sizes (its chips were 1px short with these). */
+:is(#medicines-table, .card) .term a {
+  display: inline-block;
+  padding-block: 2px;
+  margin-block: -2px;
+}
+
 /* Top-aligned (about level with the text beside it) and 2px clear of the next line (its margin box:
    26px), so a line of chips is never taller than 26px nor touches the lines around it. */
 .term-branches {
@@ -6302,20 +6321,14 @@ mark {
     z-index: 5;
   }
 
-  /* The condition links of the area lists and "Show indication": at least 24px tall (WCAG 2.5.8;
-     audit 2026-09-30, M3: 18px and 21px beside the chips' rims). A link is inline, so its padding
-     enlarges its box without moving its line; the toggle's negative margin keeps its row. */
-  .term a {
-    padding-block: 3px;
-  }
-
-  /* With them, a line of chips 4px clear of the next (28px apart, not 26): a chip's rim stays at
-     least 24px tall where the links and rims of the lines around it cover it (axe target-size:
-     adalimumab's table had 26 chips at 23px). */
+  /* A line of chips 5px clear of the next (29px apart, not 26): a chip's rim stays at least 24px
+     tall where the condition links (24px, above) and rims of the lines around it cover it (axe
+     target-size, audit 2026-09-30, M3: adalimumab's table had 26 chips at 23px). */
   .term-branches {
-    margin-block: 0 4px;
+    margin-block: 0 5px;
   }
 
+  /* "Show indication": at least 24px tall (M3: 21px); the negative margin keeps its row. */
   :is(#medicines-table, .result-table) .toggle:not(.areas-more) {
     padding-block: 2px;
     margin-block: -2px;

@@ -359,6 +359,10 @@ function showMissingData() {
     .call((message) => message.append("code").text(command))
     .call((message) => message.append("span").text(after));
   d3.select("#app-loading").attr("hidden", "");
+  // The main column no longer holds a screen's height for the dashboard, and the search, which kept
+  // its place in the top bar while loading (style.css), shows, disabled: there is nothing to search.
+  d3.select("main").classed("load-failed", true);
+  $("#lookup").hidden = false;
 }
 
 // Copy parts (labels.js UI.footer, UI.about) into an element: text as text nodes, { text, url } as a
