@@ -392,26 +392,16 @@ test("a positive opinion past the usual time says how long it has waited", () =>
   assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision, asOf: null }), `Positive opinion on 25 Jun 2026: EMA recommended approval. ${usually}`);
 });
 
-// Step 4 (#9): of the authorized medicines 45 are conditional and 45 authorized under exceptional
-// circumstances; "X is authorized in the EU." alone leaves that out. flags: a search-index or
-// ema_medicines row. Review of step 4: one short clause (the longer sentences took 4 lines at
-// 320px and pushed the product information a screen down); the chip's tooltip has the detail.
-test("an authorized medicine's dek names a conditional authorization or exceptional circumstances", () => {
+// Step 4 (#9) put a conditional authorization or exceptional circumstances in the sentence too;
+// owner decision 2026-09-30: the chips beside the status say it once (their tooltips explain it), so
+// an authorized medicine has no status sentence, whatever its flags.
+test("an authorized medicine has no status sentence; its qualifiers are chips", () => {
   const { statusSentence } = labels;
-  assert.equal(
-    statusSentence("Authorised", "2020-12-14", null, { flags: { conditional_approval: true, exceptional_circumstances: false } }),
-    "Conditionally authorized: renewed yearly until full data are provided.",
-  );
-  assert.equal(
-    statusSentence("Authorised", "2006-01-08", null, { flags: { conditional_approval: false, exceptional_circumstances: true } }),
-    "Authorized under exceptional circumstances: reviewed yearly.",
-  );
-  for (const sentence of Object.values(labels.UI.card.qualifiers)) assert.ok(sentence.split(" ").length <= 10, sentence);
-  // Additional monitoring alone is a chip beside the status, not a sentence.
-  assert.equal(statusSentence("Authorised", "2022-01-06", null, { flags: { additional_monitoring: true } }), null);
-  // Flags not known yet, or an ended authorization: none.
-  assert.equal(statusSentence("Authorised", "2020-12-14", null, { flags: null }), null);
-  assert.equal(statusSentence("Withdrawn", "2023-01-01", null, { flags: { conditional_approval: true } }), "Withdrawn on 1 Jan 2023.");
+  assert.equal(statusSentence("Authorised", "2020-12-14", null), null);
+  assert.equal(statusSentence("Authorised", "2006-01-08", null, { decision: { median: 57, p90: 69 }, asOf: "2026-09-28" }), null);
+  assert.equal(labels.UI.card.qualifiers, undefined);
+  for (const flag of ["conditional_approval", "exceptional_circumstances"]) assert.ok(labels.UI.flagTips[flag], flag);
+  assert.equal(statusSentence("Withdrawn", "2023-01-01", null), "Withdrawn on 1 Jan 2023.");
 });
 
 // Step 4 (#9): the flags' explanations (the chips beside the status, the result tables' markers,
