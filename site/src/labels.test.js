@@ -1376,7 +1376,10 @@ test("protection copy: strip cell, basis note and the other-company reason", () 
   assert.equal(card.estimate, "(est.)");
   assert.equal(protection.glance.until(2031, 2032), "Until 2031–2032");
   assert.equal(protection.glance.until(2031, 2031), "Until 2031");
-  assert.equal(protection.glance.orphan(2033), "Orphan exclusivity until 2033");
+  // Owner decision 2026-09-30: "(est.)" unless the Union Register publishes the end.
+  assert.equal(protection.glance.orphan(2033, "computed"), "Orphan exclusivity until 2033 (est.)");
+  assert.equal(protection.glance.orphan(2033, "register"), "Orphan exclusivity until 2033");
+  assert.equal(protection.glance.orphan(2033, null), "Orphan exclusivity until 2033 (est.)");
   assert.equal(protection.basisNote, "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.");
   assert.ok(!protection.caveats.includes("Based only on EU central authorization dates."));
   for (const text of [card.estimate, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {

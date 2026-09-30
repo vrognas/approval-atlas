@@ -8,7 +8,7 @@
 // attributes).
 import * as d3 from "d3";
 import { UI } from "./labels.js";
-import { ORPHAN_ONLY, barShares } from "./protection-calendar.js";
+import { ORPHAN_ONLY, barShares, orphanEndsOf } from "./protection-calendar.js";
 
 const COPY = UI.protectionCalendar;
 // The selected year lists its first medicines; "Show all" the rest.
@@ -40,7 +40,7 @@ export function renderProtectionCalendar(container, view, actions = {}) {
     container.append(
       node("ul", "legend pc-legend",
         node("li", null, node("span", "swatch pc-swatch pc-protection"), COPY.legend.protection),
-        node("li", null, node("span", "swatch pc-swatch pc-orphan"), COPY.legend.orphan)),
+        node("li", null, node("span", "swatch pc-swatch pc-orphan"), COPY.legend.orphan(buckets.flatMap((bucket) => bucket.orphanEnds)))),
       ...bars(buckets, selected, actions).filter(Boolean),
     );
   }
@@ -65,7 +65,7 @@ function orphanOnlyLine(orphanOnly, pressed, { onSelect }) {
   toggle.setAttribute("aria-pressed", String(pressed));
   toggle.setAttribute("aria-controls", "pc-list");
   toggle.addEventListener("click", () => onSelect(ORPHAN_ONLY));
-  return node("p", "muted pc-unclear pc-orphan-only", COPY.orphanOnlyLine(orphanOnly.length, Math.min(...years), Math.max(...years)), " ", toggle);
+  return node("p", "muted pc-unclear pc-orphan-only", COPY.orphanOnlyLine(orphanOnly.length, Math.min(...years), Math.max(...years), orphanEndsOf(orphanOnly)), " ", toggle);
 }
 
 function bars(buckets, selected, { onSelect }) {
@@ -91,7 +91,7 @@ function bars(buckets, selected, { onSelect }) {
     button.dataset.focusKey = `year-${bucket.key}`;
     button.setAttribute("aria-pressed", String(bucket.key === selected));
     button.setAttribute("aria-controls", "pc-list");
-    button.setAttribute("aria-label", COPY.yearName(label, bucket.count, bucket.orphanLater));
+    button.setAttribute("aria-label", COPY.yearName(label, bucket.count, bucket.orphanLater, bucket.orphanEnds));
     button.addEventListener("click", () => onSelect(bucket.key));
     group.append(button);
   }
@@ -113,7 +113,7 @@ function medicineList(list, bucket, showAll, filtered, actions) {
 // The medicines whose orphan market exclusivity alone runs on, by its end: their market protection
 // estimate (ended, or its range) and the orphan end.
 function orphanOnlyList(list, orphanOnly, showAll, actions) {
-  listOf(list, COPY.orphanOnlyTitle(orphanOnly.length), orphanOnly, showAll, actions, (entry) => [
+  listOf(list, COPY.orphanOnlyTitle(orphanOnly.length, orphanEndsOf(orphanOnly)), orphanOnly, showAll, actions, (entry) => [
     node("span", "pc-item-range", entry.status === "copy" ? COPY.copyNoOwn : entry.status === "ended" ? COPY.ended(entry.max) : COPY.range(entry.min, entry.max)),
     node("span", "pc-item-orphan", COPY.orphanOnlyUntil(entry.orphanEnd)),
   ]);

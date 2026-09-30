@@ -346,8 +346,8 @@ test("protectionGlance: a copy follows its reference and never shows the referen
     reference_name: "Ibrance", counted_from: "2016-11-09", data_exclusivity_end: "2024-11-09", market_protection_end_min: "2026-11-09",
     market_protection_end_max: "2027-11-09", status: "protected",
   };
-  assert.deepEqual(protectionGlance(palbociclibViatris, [], "2026-09-29"), { value: "Follows Ibrance", reference: "Ibrance's protection until 2026–2027", orphan: null });
-  assert.equal(protectionGlance({ ...palbociclibViatris, market_protection_end_min: "2027-01-01" }, [], "2026-09-29").reference, "Ibrance's protection until 2027");
+  assert.deepEqual(protectionGlance(palbociclibViatris, [], "2026-09-29"), { value: "Follows Ibrance", reference: "Ibrance's protection until 2026–2027 (est.)", orphan: null });
+  assert.equal(protectionGlance({ ...palbociclibViatris, market_protection_end_min: "2027-01-01" }, [], "2026-09-29").reference, "Ibrance's protection until 2027 (est.)");
   // Once the reference's protection has ended (or is unclear): the reference alone.
   assert.deepEqual(protectionGlance({ ...palbociclibViatris, status: "ended" }, [], "2026-09-29"), { value: "Follows Ibrance", reference: null, orphan: null });
   assert.equal(protectionGlance({ ...palbociclibViatris, status: "unclear" }, [], "2026-09-29").reference, null);
@@ -392,6 +392,23 @@ test("protectionGlance: orphan market exclusivity still running is named with it
   ];
   assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Ended", reference: null, orphan: "Orphan exclusivity until 2033" });
   assert.equal(protectionGlance({ ...own, status: "ended" }, orphan.slice(0, 1), "2026-09-28").orphan, null);
+});
+
+// Owner decision 2026-09-30 ("be specific where you can, else estimate"): the lead's orphan line
+// says "(est.)" after an end computed from the link date (Soliris, Vyndaqel on 2026-09-29), not
+// after one the Union Register publishes; on the same day the register's end is the one named.
+test("protectionGlance: the orphan line marks a computed end as an estimate, a register end as exact", () => {
+  const computed = [
+    { condition: "A", exclusivity_end: "2019-06-22", end_source: "register" },
+    { condition: "B", exclusivity_end: "2029-08-28", end_source: "computed" },
+  ];
+  assert.equal(protectionGlance({ ...own, status: "ended" }, computed, "2026-09-29").orphan, "Orphan exclusivity until 2029 (est.)");
+  const sameDay = [
+    { condition: "A", exclusivity_end: "2030-02-19", end_source: "register" },
+    { condition: "B", exclusivity_end: "2030-02-19", end_source: "computed" },
+  ];
+  assert.equal(protectionGlance({ ...own, status: "ended" }, sameDay, "2026-09-29").orphan, "Orphan exclusivity until 2030");
+  assert.equal(protectionGlance({ ...own, status: "ended" }, [...sameDay].reverse(), "2026-09-29").orphan, "Orphan exclusivity until 2030");
 });
 
 test("the Espacenet link searches the first INN", () => {
