@@ -12,6 +12,10 @@ export function destinationOf(url) {
   return { name: UI.external.destinations[host] ?? host, host };
 }
 
+// Pure: whether a url opens another website (https: a new tab, marked by markExternal()) or not
+// (mailto: the operator's email opens the viewer's mail app, in place, unmarked).
+export const isWebLink = (url) => new URL(url).protocol === "https:";
+
 function icon(className, paths) {
   const svg = document.createElementNS(SVG, "svg");
   for (const [name, value] of Object.entries({ class: className, viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false" })) {

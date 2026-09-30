@@ -57,7 +57,7 @@ import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
 import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
-import { markExternal, openIcon } from "./links.js";
+import { isWebLink, markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
 import { areaNote, describedTip, meshTip } from "./mesh-notes.js";
 import { NOT_CLASSIFIED, buildModalityTree, modalityBreakdownRows, modalityTip, modalityTipId, toggleModality } from "./modalities.js";
@@ -367,7 +367,8 @@ function showMissingData() {
 }
 
 // Copy parts (labels.js UI.footer, UI.about) into an element: text as text nodes, { text, url } as a
-// link to another website (new tab, no opener or referrer, marked by markExternal()), never parsed as HTML.
+// link to another website (new tab, no opener or referrer, marked by markExternal()) or, a mailto:
+// url, an email link (isWebLink(): in place, unmarked), never parsed as HTML.
 function appendParts(element, parts) {
   for (const part of parts) {
     if (typeof part === "string") {
@@ -376,10 +377,11 @@ function appendParts(element, parts) {
     }
     const anchor = document.createElement("a");
     anchor.href = part.url;
-    anchor.target = "_blank";
-    anchor.rel = "noopener noreferrer";
     anchor.textContent = part.text;
     element.append(anchor);
+    if (!isWebLink(part.url)) continue;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
     markExternal(anchor);
   }
 }

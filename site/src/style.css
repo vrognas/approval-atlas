@@ -2552,11 +2552,11 @@ input::placeholder {
 }
 
 /* Von Restorff (phase 3): strong colour for status and protection only. In the cards where they are
-   decoration (the code or monogram already names the class or company), ATC and company badges are
-   the neutral slate (their level shades kept: they tell the levels apart); type badges keep their
-   hues, which are the charts' type colours, and so do the per-year chart's legend badges (its
-   series colours). slate-text on slate-1..5 is a checked pair (palette.test.js). */
-.neutral-badges :is(.letter-badge, .code-badge, .company-badge, .atc-badge) {
+   decoration (the code already names the class), ATC badges are the neutral slate (their level
+   shades kept: they tell the levels apart); type badges keep their hues, which are the charts' type
+   colours. Company monograms keep their group's brand or hashed colour everywhere (owner decision
+   2026-09-30: "brand colors"). slate-text on slate-1..5 is a checked pair (palette.test.js). */
+.neutral-badges :is(.letter-badge, .code-badge, .atc-badge) {
   --hue-1: var(--slate-1);
   --hue-2: var(--slate-2);
   --hue-3: var(--slate-3);
@@ -5001,15 +5001,15 @@ table.activity {
 
 /* The landing intro (intro.js; user-approved design 2026-09-28; owner decision 2026-09-29: three
    onboarding cards and a quiet line): between the Try line and the headline, on the untouched
-   overview. A size container, so its layout follows its own width (the resizable sidebar sets the
-   main column's on desktop): the cards side by side from 640px, else compact rows (icon left, text
-   right); the close button in the corner. */
+   overview. A size container, so its layout follows its own width: the cards side by side from
+   640px, else compact rows (icon left, text right); the close button in the corner. The dashboard
+   cards' frame (owner decision 2026-09-30: aligned with the rest of the site): the main column's
+   full width, 24px padding (16px on phones), 12px corners, a hairline, 24px below. */
 .intro {
   position: relative;
   container-type: inline-size;
-  max-width: 880px;
   margin: 0 0 24px;
-  padding: 10px 10px 8px;
+  padding: 16px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5182,7 +5182,7 @@ table.activity {
     top: 0;
     right: 0;
     align-items: flex-start;
-    padding-top: 5px;
+    padding-top: 11px;
   }
 }
 
@@ -5288,7 +5288,7 @@ table.activity {
 
 @media (min-width: 721px) {
   .intro {
-    padding: 20px 20px 16px;
+    padding: 24px;
   }
 }
 
@@ -5297,10 +5297,6 @@ table.activity {
 @media (max-width: 1023px) {
   .try {
     margin: 0 0 16px;
-  }
-
-  .intro {
-    margin-bottom: 16px;
   }
 }
 
@@ -5588,12 +5584,6 @@ table.activity {
   color: var(--ink-secondary);
   font-size: 0.75rem;
   white-space: normal;
-}
-
-/* A company monogram in a block: neutral (the slate hue), not its brand colour. */
-.card-block .company-badge {
-  --hue-1: var(--slate-1);
-  --hue-text: var(--slate-text);
 }
 
 .block-protection .copies {
