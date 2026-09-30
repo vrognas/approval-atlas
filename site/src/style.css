@@ -5442,12 +5442,12 @@ table.activity {
 }
 
 /* F · Spacious, phase 4 (Miller's Law / chunking, Law of Common Region): the medicine card's blocks,
-   Status, Documents, Indication and Protection and copies, each a framed region under its heading
+   Status, Documents, Protection and copies and Indication, each a framed region under its heading
    (lookup.js cardBlock()). One column on phones; from a 720px frame (a size container, as the page's
    width, not the viewport's, sets the card's) two columns in reading order (2026-09-30, Documents
-   second): Status beside Documents, Indication beside Protection; a last block alone in its row
-   goes across (a medicine never approved has no Protection block; the substance card has only
-   Status). */
+   second): Status beside Documents, Protection beside Indication, the two of a row as tall as each
+   other (a grid reads calmer than ragged ends); a last block alone in its row goes across (a medicine
+   never approved has no Protection block; the substance card has only Status). */
 .card-blocks-frame {
   container-type: inline-size;
   margin: 16px 0 0;
@@ -5576,6 +5576,11 @@ table.activity {
   gap: 4px;
 }
 
+/* A qualifier chip's short name: on 320px phones only, in the Status lead (below). */
+.flag-short {
+  display: none;
+}
+
 .status-flags .chip {
   border: 1px solid var(--grid);
   border-radius: 8px;
@@ -5684,11 +5689,35 @@ table.activity {
   }
 }
 
-/* 320px phones (2026-09-30: the product information button was below a 320x640 screen): the
-   headline a size smaller, the blocks 2px narrower at their sides, and the Status lead's pill, "since"
-   and date a size smaller, so the pill and "since 16 Dec 2019" (or "approved 26 May 2016") share a
-   line as on wider phones. */
+/* 320px phones (2026-09-30: the product information button was below a 320x640 screen): every
+   lookup card's headline a size smaller, the blocks 2px narrower at their sides, the Status lead's
+   pill, "since" and date a size smaller, so the pill and "since 16 Dec 2019" (or "approved 26 May
+   2016") share a line as on wider phones, and its qualifier chips by their short names, so two share
+   a line (the full name visually hidden, still the one read; the short one aria-hidden). And 12px
+   less above the headline (the page's top 16px, the kicker 4px above it): the second document button
+   of 25 more authorized medicines was within 12px of the fold. */
 @media (max-width: 359px) {
+  main {
+    padding-top: 16px;
+  }
+
+  .card .kicker {
+    margin-bottom: 4px;
+  }
+
+  .status-lead .flag-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .status-lead .flag-short {
+    display: inline;
+  }
+
   .card h1 {
     font-size: 1.625rem;
     line-height: 2rem;
