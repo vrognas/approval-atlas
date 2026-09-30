@@ -74,7 +74,7 @@ const NATIONAL_REGISTERS_URL = "https://www.ema.europa.eu/en/medicines/national-
 // Third-party URLs: https only, new tab, no opener or referrer; marked as leaving the site.
 function externalLink(text, url) {
   if (!url?.startsWith("https://")) return text;
-  return markExternal(el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text, PDF_URL.test(url) ? el("span", { class: "pdf" }, UI.card.pdf) : null));
+  return markExternal(el("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, text, PDF_URL.test(url) ? [el("span", { class: "visually-hidden" }, ", "), el("span", { class: "pdf" }, UI.card.pdf)] : null));
 }
 
 // "PI" and "EPAR": compact links to a medicine's current product information and latest public
@@ -1215,12 +1215,12 @@ export function createLookup(panel, {
       toggle,
       timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined, UI.timeline.firstApproval),
       descriptor
-        ? [el("h3", { id: "results-tagged" }, UI.condition.taggedOwn(descriptor.name, own.length)), resultTable(own.map((row) => ({ row })), medicines, "results-tagged")]
+        ? [el("h2", { id: "results-tagged" }, UI.condition.taggedOwn(descriptor.name, own.length)), resultTable(own.map((row) => ({ row })), medicines, "results-tagged")]
         : null,
       narrower.length
-        ? [el("h3", { id: "results-narrower" }, UI.condition.taggedNarrower(narrower.length)), resultTable(narrower, medicines, "results-narrower")]
+        ? [el("h2", { id: "results-narrower" }, UI.condition.taggedNarrower(narrower.length)), resultTable(narrower, medicines, "results-narrower")]
         : null,
-      el("h3", { id: "results-mentioned" }, mentioned
+      el("h2", { id: "results-mentioned" }, mentioned
         ? `${descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned} (${mentioned.length})`
         : descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned),
       mentioned ? (empty ? emptyState(query, matches.length) : resultTable(mentioned, medicines, "results-mentioned")) : pending(medicines));
@@ -1303,7 +1303,7 @@ export function createLookup(panel, {
       ? internalLink(UI.companies.sameName, filtered(holder.values), null, UI.companies.sameNameLabel(holder.name))
       : internalLink(holder.name, filtered(holder.values)));
     const names = el("section", { class: "card-section" },
-      el("h3", null, UI.companies.names),
+      el("h2", null, UI.companies.names),
       el("p", { class: "muted" }, UI.companies.namesHint),
       el("ul", { class: "plain company-names" }, structure.map((company) => {
         const own = company.holders.length === 1 && company.holders[0].name === companies.name(company.key) && !company.unnamed;
@@ -1321,7 +1321,7 @@ export function createLookup(panel, {
     if (ready(atc)) {
       const rows = mixCounts(numbers, (number) => (atc.byProduct.get(number) ?? []).flatMap((item) => atcPrefixes(atcCode(item)).slice(0, 1)));
       atcMix = rows.length ? el("section", { class: "card-section" },
-        el("h3", null, UI.companies.atc),
+        el("h2", null, UI.companies.atc),
         el("p", { class: "muted" }, UI.companies.atcHint),
         el("ol", { class: "condition-list company-mix" }, rows.map(([code, count]) => mixRow(
           internalLink([el("span", { class: `letter-badge hue-${atcHue(code)}` }, code), " ", el("span", null, atcName(atc.names.get(code)))],
@@ -1335,7 +1335,7 @@ export function createLookup(panel, {
     if (ready(areas)) {
       const rows = mixCounts(numbers, (number) => (areas.get(number) ?? []).map((item) => item.therapeutic_area_mesh)).slice(0, MIX_AREAS);
       areaMix = rows.length ? el("section", { class: "card-section" },
-        el("h3", null, UI.companies.areas),
+        el("h2", null, UI.companies.areas),
         el("ol", { class: "condition-list company-mix" }, rows.map(([term, count]) => {
           const ui = ready(conditions) ? conditions.termUi.get(term) : null;
           return mixRow(ui ? conditionLink(term, ui, null, UI.companies.mixLink(term, count)) : el("span", null, term), count, rows[0][1]);
@@ -1365,7 +1365,7 @@ export function createLookup(panel, {
       ];
     }
     const protectionEndingSection = el("section", { class: "card-section" },
-      el("h3", null, endingCopy.company.title),
+      el("h2", null, endingCopy.company.title),
       el("p", { class: "muted" }, endingCopy.company.note),
       protectionEndingPart);
 
@@ -1386,7 +1386,7 @@ export function createLookup(panel, {
     const noted = numbers.map((number) => [number, companies.entry(number)]).filter(([, entry]) => entry?.groupNote && entry.group);
     const ownershipPart = ownership.length || noted.length
       ? [
-        el("h4", { class: "sources-part" }, UI.companies.ownership),
+        el("h3", { class: "sources-part" }, UI.companies.ownership),
         el("ul", { class: "plain company-ownership" },
           ownership.map((item) => el("li", null, UI.companies.ownershipNote(item.holders, item.note), evidence(item.url))),
           noted.map(([number, entry]) => el("li", null,
@@ -1395,7 +1395,7 @@ export function createLookup(panel, {
       ]
       : null;
     const sources = el("section", { class: "card-section" },
-      el("h3", null, UI.companies.sources),
+      el("h2", null, UI.companies.sources),
       gleifUrl ? el("p", null, externalLink(UI.companies.lei(row.lei), gleifUrl), row.gleif_legal_name ? [" ", UI.companies.legalName(row.gleif_legal_name)] : null) : null,
       row.gleif_ultimate_parent && row.gleif_ultimate_parent !== row.gleif_legal_name ? el("p", null, UI.companies.parent(row.gleif_ultimate_parent)) : null,
       el("p", null, UI.companies.from(row.sources.map((source) => UI.companies.sourceNames[source] ?? source))),
@@ -1413,7 +1413,7 @@ export function createLookup(panel, {
       atcMix,
       areaMix,
       protectionEndingSection,
-      el("h3", { id: "results-company" }, UI.companies.medicines(shown.length, everyStatus)),
+      el("h2", { id: "results-company" }, UI.companies.medicines(shown.length, everyStatus)),
       toggle,
       resultTable(shown.map((item) => ({ row: item })), medicines, "results-company"),
       sources);

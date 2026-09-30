@@ -471,6 +471,20 @@ main {
   padding-bottom: 32px;
 }
 
+/* Until the dashboard first renders, the main column holds a screen's height, so the footer is not
+   in the first screen only to be pushed down twice as the search and the dashboard arrive (layout
+   shift; audit 2026-09-30, S1: CLS 0.27 desktop, 0.81 phone). */
+main:has(> #app[hidden]) {
+  min-height: 100svh;
+}
+
+/* The search is shown once its data has loaded (main.js); until then it keeps its place, so the
+   top bar does not grow and push the page down when it appears (S1). */
+.lookup[hidden] {
+  display: block !important;
+  visibility: hidden;
+}
+
 footer {
   padding-bottom: 32px;
 }
@@ -486,6 +500,14 @@ footer {
     grid-template-areas: "brand actions" "search search" "note note";
     column-gap: 8px;
     padding: 8px 16px 12px;
+  }
+
+  /* Focused from the keyboard (Tab wrapping from the page's end, Shift+Tab from the search), the
+     first row comes back into view with its control, which it would otherwise keep above the
+     viewport (WCAG 2.4.11; audit 2026-09-30, M1). A tap or click does not match :focus-visible, so
+     the bar never moves under a pointer. */
+  .topbar:has(#home-link:focus-visible, .topbar-actions :focus-visible) {
+    top: 0;
   }
 
   .topbar-actions {
@@ -2732,7 +2754,7 @@ td.result-holder .holder-main .company-badge {
 
 /* The company page's Sources: its Ownership part (the curated notes and the medicines moved to
    their current owner, each with its evidence link). */
-.card h4.sources-part {
+.card h3.sources-part {
   margin: 12px 0 4px;
   font-size: 0.875rem;
   font-weight: 600;
@@ -3594,6 +3616,15 @@ table.conditions-table {
   position: relative;
   max-height: 70vh;
   overflow: auto;
+}
+
+/* A focused control scrolls clear of the sticky header (WCAG 2.4.11; audit 2026-09-30, M2: Shift+Tab
+   left it under the header): the header's height (--thead-h, set by table.js) and 8px. Phones stack
+   the rows without a visible header (below). */
+@container (min-width: 600px) {
+  #medicines-table tbody :is(a, button, [tabindex]) {
+    scroll-margin-top: calc(var(--thead-h, 40px) + 8px);
+  }
 }
 
 /* Narrow (under 600px: phones): no box scrolling both ways inside the page; each medicine stacks:
@@ -5221,8 +5252,8 @@ table.activity {
   outline: none;
 }
 
-/* A card's section headings: h2 under the medicine and substance cards' h1 (F · Spacious, phase 4),
-   h3 on the other lookup pages. */
+/* A card's section headings: h2 under every lookup page's h1 (the condition and company pages' too
+   since the audit of 2026-09-30, S2; h3 below them). */
 .card :is(h2, h3) {
   margin: 16px 0 4px;
   font-size: 1rem;
@@ -6271,6 +6302,31 @@ mark {
     z-index: 5;
   }
 
+  /* The condition links of the area lists and "Show indication": at least 24px tall (WCAG 2.5.8;
+     audit 2026-09-30, M3: 18px and 21px beside the chips' rims). A link is inline, so its padding
+     enlarges its box without moving its line; the toggle's negative margin keeps its row. */
+  .term a {
+    padding-block: 3px;
+  }
+
+  /* With them, a line of chips 4px clear of the next (28px apart, not 26): a chip's rim stays at
+     least 24px tall where the links and rims of the lines around it cover it (axe target-size:
+     adalimumab's table had 26 chips at 23px). */
+  .term-branches {
+    margin-block: 0 4px;
+  }
+
+  :is(#medicines-table, .result-table) .toggle:not(.areas-more) {
+    padding-block: 2px;
+    margin-block: -2px;
+  }
+
+  /* The substance page's rows: the chips' rims (10px above their fill) clear of the PI and EPAR
+     links above them, which covered 4px of them (audit 2026-09-30, M3). */
+  .result-table td.result-areas {
+    margin-top: 4px;
+  }
+
   /* The medicine card's Status block: "and n more" (F · Spacious, phase 4). */
   .toggle.areas-more {
     display: inline-block;
@@ -6484,6 +6540,12 @@ code {
   .stack-legend .swatch {
     forced-color-adjust: none;
     border: 1px solid CanvasText;
+  }
+
+  /* "Authorized over time": the legend's line keys keep the series colours, as the chart's lines do
+     (audit 2026-09-30, S3: forced to Canvas, they vanished). */
+  .line-key {
+    forced-color-adjust: none;
   }
 
   /* The timeline's dot legend: filled and hollow stay told apart. */
