@@ -2063,7 +2063,7 @@ export const UI = {
       { text: "CC BY-SA 3.0", url: LINKS.ccBySa3 },
       ".",
     ],
-    use: "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI or GLEIF.",
+    use: "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI, GLEIF or Anthropic.",
     licence: [
       "Data ",
       { text: "CC BY-SA 4.0", url: LINKS.ccBySa4 },

@@ -240,7 +240,7 @@ test("the footer's three lines: sources with their licences, use and non-affilia
   );
   assert.equal(
     footer.use,
-    "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI or GLEIF.",
+    "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI, GLEIF or Anthropic.",
   );
   assert.equal(
     partsText(footer.licence),

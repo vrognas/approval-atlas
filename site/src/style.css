@@ -6057,18 +6057,12 @@ details > summary {
 }
 
 /* Pivotal results (lookup.js efficacyTeaser(), efficacySection()): the Indication block's line,
-   wrapping (never nowrap) over two lines at most, an ellipsis where it is longer (a long comparator,
-   "and results for 6 more indications"; the whole text is read, and the section holds it), then, in
-   More details, a block per indication under a hairline. Results are never coloured or ranked: the
-   effect is in the ink, only its weight sets it apart. Long trial names and populations break
-   rather than widen the card. */
+   wrapping in full (never nowrap, never clamped: an ellipsis could cut an interval or a comparator
+   mid-number, ruling R16), then, in More details, a block per indication under a hairline. Results
+   are never coloured or ranked: the effect is in the ink, only its weight sets it apart. Long trial
+   names and populations break rather than widen the card. */
 .card .efficacy-teaser {
-  display: -webkit-box;
   margin: 8px 0 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
   overflow-wrap: anywhere;
 }
 
@@ -6675,8 +6669,8 @@ mark {
     margin: -10px 0;
   }
 
-  /* The pivotal results' teaser: inline, so it wraps with the line (two lines at most, above), its
-     target the two lines (48px); 14px, so the effect and its interval fit them on a 320px phone. */
+  /* The pivotal results' teaser: inline, so it wraps with the text in full (its lines, 24px each,
+     are its target); 14px, so it takes fewer lines on a phone. */
   .card .efficacy-teaser {
     margin-top: 12px;
     font-size: 0.875rem;

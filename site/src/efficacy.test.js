@@ -6,20 +6,20 @@ import { analysisLine, efficacySourceUrl, endpointLine, formatArms, formatEffect
 const row = (fields) => ({ indication: "NSCLC first line", trial: "FLAURA", endpoint: "PFS", effect_type: "hr", value: "0.46", ci_low: "0.37", ci_high: "0.57", ci_level: 95, ci_is_range: false, comparator: "gefitinib or erlotinib", arm_treatment: "18.9", arm_control: "10.2", arm_measure: "median months (95% CI)", lead: true, row_order: 1, ...fields });
 
 test("an HR reads with its CI level as printed", () => {
-  assert.equal(formatEffect(row({})), "HR 0.46 (95% CI 0.37–0.57)");
-  assert.equal(formatEffect(row({ ci_level: 97.38, value: "0.63", ci_low: "0.43", ci_high: "0.91" })), "HR 0.63 (97.38% CI 0.43–0.91)");
+  assert.equal(formatEffect(row({})), "HR 0.46 (95% CI 0.37–\u20600.57)");
+  assert.equal(formatEffect(row({ ci_level: 97.38, value: "0.63", ci_low: "0.43", ci_high: "0.91" })), "HR 0.63 (97.38% CI 0.43–\u20600.91)");
 });
 
 test("a range printed like a CI says range; no significance words are added", () => {
   const text = formatEffect(row({ effect_type: "single_arm_median", value: "11.1", ci_low: "6.9", ci_high: "15.0", ci_is_range: true, ci_level: null }));
-  assert.equal(text.includes("range 6.9–15.0"), true);
+  assert.equal(text.includes("range 6.9–\u206015.0"), true);
   assert.equal(/significan/i.test(formatEffect(row({}))), false);
 });
 
 test("other effect types, and values without a CI", () => {
-  assert.equal(formatEffect(row({ effect_type: "hr_noninferiority", value: "0.94", ci_low: "0.84", ci_high: "1.05" })), "HR 0.94 (95% CI 0.84–1.05), non-inferiority");
-  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6 percentage points (99% CI 13.0–30.3)");
-  assert.equal(formatEffect(row({ effect_type: "single_arm_rate", value: "37%", ci_low: "29", ci_high: "47" })), "response rate 37% (95% CI 29–47)");
+  assert.equal(formatEffect(row({ effect_type: "hr_noninferiority", value: "0.94", ci_low: "0.84", ci_high: "1.05" })), "HR 0.94 (95% CI 0.84–\u20601.05), non-inferiority");
+  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6 percentage points (99% CI 13.0–\u206030.3)");
+  assert.equal(formatEffect(row({ effect_type: "single_arm_rate", value: "37%", ci_low: "29", ci_high: "47" })), "response rate 37% (95% CI 29–\u206047)");
   assert.equal(formatEffect(row({ effect_type: "single_arm_rate", value: "37.1", ci_low: null, ci_high: null })), "response rate 37.1");
   assert.equal(formatEffect(row({ ci_low: null, ci_high: null })), "HR 0.46");
 });
@@ -55,7 +55,7 @@ test("groups follow the lowest row_order; a group without a lead takes its first
 
 test("the teaser names the trial, the effect and the comparator; single-arm says so", () => {
   const groups = groupEfficacy([row({})]);
-  assert.equal(teaserText(groups), "Pivotal trial FLAURA: progression-free survival HR 0.46 (95% CI 0.37–0.57) vs gefitinib or erlotinib");
+  assert.equal(teaserText(groups), "Pivotal trial FLAURA: progression-free survival HR 0.46 (95% CI 0.37–\u20600.57) vs gefitinib or erlotinib");
   const single = groupEfficacy([row({ comparator: null, effect_type: "single_arm_rate", endpoint: "ORR", value: "37.1", ci_low: "28.6", ci_high: "46.2" })]);
   assert.match(teaserText(single), /single-arm$/);
 });
@@ -71,20 +71,20 @@ test("no rows, no teaser", () => {
 });
 test("the ORR single-arm teaser does not repeat the endpoint name", () => {
   const single = groupEfficacy([row({ comparator: null, effect_type: "single_arm_rate", endpoint: "ORR", value: "37.1", ci_low: "28.6", ci_high: "46.2" })]);
-  assert.equal(teaserText(single), "Pivotal trial FLAURA: response rate 37.1 (95% CI 28.6–46.2), single-arm");
+  assert.equal(teaserText(single), "Pivotal trial FLAURA: response rate 37.1 (95% CI 28.6–\u206046.2), single-arm");
 });
 
 test("a missing CI level reads CI, never null", () => {
-  assert.equal(formatEffect(row({ ci_level: null })), "HR 0.46 (CI 0.37–0.57)");
+  assert.equal(formatEffect(row({ ci_level: null })), "HR 0.46 (CI 0.37–\u20600.57)");
 });
 
 test("a comparative lead without a comparator drops the comparison, not guessing one", () => {
-  assert.equal(teaserText(groupEfficacy([row({ comparator: null })])), "Pivotal trial FLAURA: progression-free survival HR 0.46 (95% CI 0.37–0.57)");
+  assert.equal(teaserText(groupEfficacy([row({ comparator: null })])), "Pivotal trial FLAURA: progression-free survival HR 0.46 (95% CI 0.37–\u20600.57)");
 });
 
 test("a null trial or an unknown endpoint leaves no double spaces or inherited names", () => {
   const text = teaserText(groupEfficacy([row({ trial: null, endpoint: "constructor" })]));
-  assert.equal(text, "Pivotal trial: constructor HR 0.46 (95% CI 0.37–0.57) vs gefitinib or erlotinib");
+  assert.equal(text, "Pivotal trial: constructor HR 0.46 (95% CI 0.37–\u20600.57) vs gefitinib or erlotinib");
   assert.equal(teaserText(groupEfficacy([row({ endpoint: null })])).includes("  "), false);
 });
 
@@ -96,7 +96,7 @@ test("the context match ignores case; no match, or a null-indication group, fall
 });
 
 test("a rate difference already printed with % or pp gets no unit text", () => {
-  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6%", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6% (99% CI 13.0–30.3)");
+  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6%", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6% (99% CI 13.0–\u206030.3)");
   assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6 pp", ci_low: null, ci_high: null })), "difference 21.6 pp");
 });
 
@@ -156,4 +156,19 @@ test("every product in the data file has exactly one lead per indication and htt
   // Every indication has its lead (the card's teaser and each block start with it).
   const indications = new Set(rows.map((row) => `${row.ema_product_number}|${row.indication}`));
   assert.equal(leads.size, indications.size);
+});
+
+// Fix round 1 of Task 9 review: an interval never breaks after its dash (word joiner, U+2060).
+test("an interval keeps its dash with the upper bound", () => {
+  assert.equal(formatEffect(row({})).includes("0.37–\u2060" + "0.57"), true);
+  assert.equal(formatEffect(row({ effect_type: "single_arm_median", ci_is_range: true })).includes("range 0.37–\u2060" + "0.57"), true);
+});
+
+test("a single-arm median prints the unit its measure states, never an invented one", () => {
+  const median = (fields) => formatEffect(row({ effect_type: "single_arm_median", value: "11.1", ci_low: null, ci_high: null, arm_treatment: null, arm_control: null, comparator: null, ...fields }));
+  assert.equal(median({ arm_measure: "median months (95% CI)" }), "median 11.1 months");
+  assert.equal(median({ arm_measure: "Median DoR, weeks" }), "median 11.1 weeks");
+  assert.equal(median({ arm_measure: null }), "median 11.1");
+  assert.equal(median({ arm_measure: "median (95% CI)" }), "median 11.1");
+  assert.equal(median({ arm_measure: "median months", ci_low: "6.9", ci_high: "15.0", ci_is_range: true }), "median 11.1 months (range 6.9–\u2060" + "15.0)");
 });

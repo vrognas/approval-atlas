@@ -669,16 +669,14 @@ export function createLookup(panel, {
   // More details › Pivotal results: the labels (extracted automatically; not a head-to-head
   // comparison), then per indication its lead result and, behind "More results", the rest (later
   // analyses, the whole trial, other endpoints). The heading is the teaser's target (focusable, kept
-  // focused across re-renders). None without rows, or without the file.
+  // focused across re-renders). None without rows, without the file, or while it loads (no
+  // "Loading…" flash for the many medicines without rows; the teaser, the only way to jump here,
+  // appears only once it has loaded).
   function efficacySection(number) {
-    const efficacy = need("efficacy");
-    if (efficacy === null) return null;
-    const heading = el("h2", { id: "efficacy", tabindex: "-1", "data-focus-key": "efficacy" }, UI.efficacy.title);
-    if (!ready(efficacy)) return el("section", { class: "card-section" }, heading, pending(efficacy));
     const groups = efficacyGroups(number);
     if (!groups.length) return null;
     return el("section", { class: "card-section efficacy" },
-      heading,
+      el("h2", { id: "efficacy", tabindex: "-1", "data-focus-key": "efficacy" }, UI.efficacy.title),
       el("p", { class: "muted" }, UI.efficacy.auto),
       el("p", { class: "muted" }, UI.efficacy.caveat),
       groups.map((group, position) => el("div", { class: "efficacy-indication" },

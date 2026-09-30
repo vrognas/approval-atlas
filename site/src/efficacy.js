@@ -6,10 +6,18 @@ import { UI } from "./labels.js";
 const present = (value) => value !== null && value !== undefined && value !== "";
 const SINGLE_ARM = new Set(["single_arm_rate", "single_arm_median"]);
 
+// The en-dash is followed by a word joiner (U+2060), so "0.37–0.57" never breaks after the dash.
 function interval(row) {
   if (!present(row.ci_low) || !present(row.ci_high)) return null;
-  const bounds = `${row.ci_low}–${row.ci_high}`;
+  const bounds = `${row.ci_low}–⁠${row.ci_high}`;
   return row.ci_is_range ? `${UI.efficacy.range} ${bounds}` : `${UI.efficacy.ci(row.ci_level ?? null)} ${bounds}`;
+}
+
+// A single-arm median's unit, as its arm_measure states it ("median months (95% CI)": " months");
+// "" when it states none (never invented).
+function timeUnit(measure) {
+  const unit = present(measure) ? String(measure).match(/\b(hours?|days?|weeks?|months?|years?)\b/i) : null;
+  return unit ? ` ${unit[1].toLowerCase()}` : "";
 }
 
 export function formatEffect(row) {
@@ -19,7 +27,7 @@ export function formatEffect(row) {
     hr_noninferiority: `${efficacy.effectHr} ${row.value}`,
     rate_difference: `${efficacy.effectDifference} ${row.value}${/(%|pp)$/i.test(String(row.value).trim()) ? "" : ` ${efficacy.percentagePoints}`}`,
     single_arm_rate: `${efficacy.effectResponseRate} ${row.value}`,
-    single_arm_median: `${efficacy.effectMedian} ${row.value}`,
+    single_arm_median: `${efficacy.effectMedian} ${row.value}${timeUnit(row.arm_measure)}`,
   }[row.effect_type] ?? String(row.value ?? "");
   const range = interval(row);
   const text = range ? `${lead} (${range})` : lead;
