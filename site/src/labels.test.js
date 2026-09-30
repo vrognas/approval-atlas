@@ -1782,3 +1782,18 @@ test("companies: provenance, why a medicine sits under its group, a sponsor, a g
   assert.equal(external.destinations["en.wikipedia.org"], "Wikipedia");
   assert.equal(external.destinations["www.sec.gov"], "SEC website");
 });
+
+// Review of PR #39: the phone search list's expander names what a click adds, never "all" (a group
+// holds at most MAX_SUGGESTIONS, so more can match), with singular and plural.
+test("the phone search list's expander names how many more it shows", () => {
+  const { lookup } = labels.UI;
+  assert.equal(lookup.showMore(5, "medicines"), "Show 5 more medicines");
+  assert.equal(lookup.showMore(1, "classes"), "Show 1 more drug class");
+  assert.equal(lookup.showMore(2, "companies"), "Show 2 more companies");
+  assert.equal(lookup.expanded(5, "conditions"), "Showing 5 more conditions");
+  assert.equal(lookup.expanded(1, "substances"), "Showing 1 more substance");
+  for (const group of ["medicines", "substances", "conditions", "classes", "companies"]) {
+    assert.doesNotMatch(lookup.showMore(5, group), /\ball\b/);
+    assert.ok(lookup.groupNouns[group], group);
+  }
+});

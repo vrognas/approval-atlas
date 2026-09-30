@@ -1576,9 +1576,15 @@ export const UI = {
     },
     // Laws of UX, second pass (owner decision 2026-09-30): on phones a group shows a few suggestions,
     // then this option expanding it in place (search.js collapseGroups()), announced when it does.
-    groupNouns: { medicines: "medicines", substances: "substances", conditions: "conditions", classes: "drug classes", companies: "companies" },
-    showAll: (count, group) => `Show all ${formatCount(count)} ${UI.lookup.groupNouns[group] ?? "suggestions"}`,
-    expanded: (count, group) => `Showing all ${formatCount(count)} ${UI.lookup.groupNouns[group] ?? "suggestions"}`,
+    // count: the suggestions it adds, not "all" (review of PR #39: a group is capped at
+    // MAX_SUGGESTIONS, so more can match than the list holds).
+    groupNouns: {
+      medicines: ["medicine", "medicines"], substances: ["substance", "substances"], conditions: ["condition", "conditions"],
+      classes: ["drug class", "drug classes"], companies: ["company", "companies"],
+    },
+    moreOf: (count, group) => `${formatCount(count)} more ${(UI.lookup.groupNouns[group] ?? ["suggestion", "suggestions"])[count === 1 ? 0 : 1]}`,
+    showMore: (count, group) => `Show ${UI.lookup.moreOf(count, group)}`,
+    expanded: (count, group) => `Showing ${UI.lookup.moreOf(count, group)}`,
     // opinion: EMA's opinion (statusOpinionLabel()), once ema_medicines.json has loaded.
     medicineMeta: (status, year, opinion = null) => [statusOpinionLabel(status, opinion), year].filter(Boolean).join(" · "),
     // synonym: another name of the substance that matched (#19: "adrenaline" for epinephrine).

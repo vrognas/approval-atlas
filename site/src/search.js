@@ -333,8 +333,8 @@ export function submitChoice(groups, query) {
 // Laws of UX, second pass (owner decision 2026-09-30; Hick's Law, Choice Overload): on a phone, with
 // the keyboard up, the list had up to 8 options in each of 5 groups. There each group of suggestions
 // shows at most PHONE_GROUP_LIMIT, the ones the query names first (as submitChoice() reads them), and
-// how many it leaves out (hidden), for a "Show all" option that expands the group in place (the
-// search box's). A group one longer than the limit is shown whole ("Show all 4" would take the same
+// how many it leaves out (hidden), for a "Show 5 more" option that expands the group in place (the
+// search box's). A group one longer than the limit is shown whole ("Show 1 more" would take the same
 // row); "did you mean", the indication-text search and the recently viewed list are never collapsed.
 // An expanded group keeps that order, so the options it adds follow those shown. groups: the search
 // box's; query: the one the labels are compared with.
