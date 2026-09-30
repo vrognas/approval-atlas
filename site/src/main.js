@@ -307,8 +307,15 @@ function render() {
     pageTitle = heading;
   }
   pageTitle.textContent = lookupOpen ? UI.explore.title : UI.page.title;
-  // The overview heading's scope line; "Explore EMA medicines" names the source itself.
-  $("#page-scope").hidden = lookupOpen;
+  // The overview heading's scope line; "Explore EMA medicines" names the source itself. With the
+  // status filter widened it no longer says "authorized" (owner decision 2026-09-30); before the
+  // dashboard's data has loaded, the URL's status values are still verbatim (pendingFilters).
+  const widened = dashboard
+    ? !isDefaultStatus(state.status)
+    : pendingFilters.getAll("status").some((value) => !DEFAULT_STATE.status.includes(value));
+  const scope = $("#page-scope");
+  scope.hidden = lookupOpen;
+  scope.textContent = UI.page.scope(SOURCES, { widened });
   $("#explore-note").hidden = !lookupOpen;
   // The intro card, and the Try line with it. Before the dashboard's data has loaded, the URL's
   // filters are still verbatim (pendingFilters). While a filter popover is open it stays as it is.

@@ -696,14 +696,17 @@ button {
   color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.125rem;
+  text-wrap: balance;
 }
 
 .page-scope[hidden] {
   display: none;
 }
 
-/* 320px phones: 12px keeps it on one line (283px of 288 in Geist, 2026-09-30). */
-@media (max-width: 359px) {
+/* Phones: 12px keeps the default line on one line down to 320px (283px of 288 in Geist, 2026-09-30),
+   and the widened one ("Human medicines, EU-wide through EMA's central procedure", 331px) from 375px;
+   below that it takes two balanced lines. */
+@media (max-width: 399px) {
   .page-scope {
     font-size: 0.75rem;
   }

@@ -303,8 +303,10 @@ const TEXT_RULE_WORDS = {
 
 // The regulators whose data the overview covers, as the page header's scope line names them (owner
 // decision 2026-09-30): one phrase each, so another source (a national agency, the FDA) joins the
-// line without a redesign. Only sources the data has: never one that is planned.
-export const SOURCES = [{ key: "ema", scope: "EU-wide through EMA" }];
+// line without a redesign. Only sources the data has: never one that is planned. `scope` says where
+// its medicines are authorized (the default overview shows authorized ones only); `neutral` names the
+// source without "authorized", for an overview widened to other statuses (owner decision 2026-09-30).
+export const SOURCES = [{ key: "ema", scope: "EU-wide through EMA", neutral: "EU-wide through EMA's central procedure" }];
 
 // The footer's and About's links (https): sources, licenses, the repository.
 const LINKS = {
@@ -333,10 +335,15 @@ export const UI = {
   dataDate: (date) => (date ? `EMA data as of ${formatDate(date)}` : "EMA data"),
   // The dashboard's page heading (F · Spacious, phase 1): the answer headline is its lead paragraph.
   // Source-neutral since 2026-09-30 (owner decision: other regulators' data may follow); the scope
-  // line under it names the sources (SOURCES): "Human medicines authorized EU-wide through EMA".
+  // line under it names the sources (SOURCES): "Human medicines authorized EU-wide through EMA", or,
+  // with the status filter widened (every status, or a choice of statuses), the neutral "Human
+  // medicines, EU-wide through EMA's central procedure" (owner decision 2026-09-30).
   page: {
     title: "Approved medicines",
-    scope: (sources) => `Human medicines authorized ${listing(sources.map((source) => source.scope))}`,
+    scope: (sources, { widened = false } = {}) =>
+      widened
+        ? `Human medicines, ${listing(sources.map((source) => source.neutral))}`
+        : `Human medicines authorized ${listing(sources.map((source) => source.scope))}`,
   },
   // The dashboard's tabs (F · Spacious, phase 2; url.js TABS): a tablist under the chip bar (the
   // WAI-ARIA tabs pattern since 2026-09-30); label names it.

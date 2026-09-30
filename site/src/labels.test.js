@@ -1319,6 +1319,7 @@ test("substance and condition answers name EMA or the central procedure", () => 
     UI.intro.scope,
     UI.about.scope,
     UI.page.scope(labels.SOURCES),
+    UI.page.scope(labels.SOURCES, { widened: true }),
   ];
   for (const text of texts) assert.match(text, /\bEMA\b|\bcentral/, text);
   assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11 Feb 2003 (Avandamet)");
@@ -1332,10 +1333,19 @@ test("the page heading is source-neutral; its scope line names the sources", () 
   assert.equal(UI.page.title, "Approved medicines");
   assert.deepEqual(SOURCES.map((source) => source.key), ["ema"]);
   assert.equal(UI.page.scope(SOURCES), "Human medicines authorized EU-wide through EMA");
+  // With the status filter widened (every status, or a choice of statuses) it is neutral.
+  assert.equal(UI.page.scope(SOURCES, { widened: true }), "Human medicines, EU-wide through EMA's central procedure");
+  assert.doesNotMatch(UI.page.scope(SOURCES, { widened: true }), /authori/);
+  const other = { key: "other", scope: "in another place", neutral: "from another agency" };
   assert.equal(
-    UI.page.scope([...SOURCES, { key: "other", scope: "in another place" }]),
+    UI.page.scope([...SOURCES, other]),
     "Human medicines authorized EU-wide through EMA and in another place",
   );
+  assert.equal(
+    UI.page.scope([...SOURCES, other], { widened: true }),
+    "Human medicines, EU-wide through EMA's central procedure and from another agency",
+  );
+  for (const source of SOURCES) assert.ok(source.scope && source.neutral, source.key);
 });
 
 // Owner decision 2026-09-30: the per-year chart's hint where Stack by Status is not offered.
