@@ -91,9 +91,9 @@ export const glanceIsEstimate = (row) => Boolean(row) && !isCopy(row) && row.sta
 // phase 4): { value: "Until 2031–2032" | "Ended" | "Unclear"
 // (the status; the years of the market protection range while protected), reference: null,
 // orphan: the latest orphan market exclusivity still running ("Orphan exclusivity until 2033
-// (est.)", no "(est.)" when the Union Register publishes that end) or null }; null without a row. A copy: value "Follows Ibrance" (a reference by name, else "None of
-// its own"), reference: the reference's years while it is protected ("Ibrance's: until
-// 2026–2027"), else null.
+// (est.)", no "(est.)" when the Union Register publishes that end) or null }; null without a row.
+// A copy: value "Follows Ibrance" (a reference by name, else "None of its own"), reference: the
+// reference's years while it is protected ("Ibrance's: until 2026–2027"), else null.
 // Orphan rows by their exclusivity end, on the same day the register's (exact) after a computed one,
 // so the latest is the register's where both end then.
 export const byOrphanEnd = (a, b) =>
