@@ -30,25 +30,39 @@ escape_regex <- function(text) {
   gsub("([.\\\\+*?^$(){}|\\[\\]])", "\\\\\\1", text, perl = TRUE)
 }
 
-token_in <- function(token, text) {
-  pattern <- paste0("(?<![0-9.])", escape_regex(token), "(?![0-9.])")
-  grepl(pattern, text, perl = TRUE)
+is_absent <- function(value) {
+  is.null(value) || length(value) == 0 || is.na(value) ||
+    (is.character(value) && !nzchar(trimws(value)))
 }
 
-is_absent <- function(value) {
-  is.null(value) || length(value) == 0 || is.na(value)
+# A number must not be a prefix or suffix of a longer one ("0.03" in "0.031"),
+# but may end a sentence ("p-value of 0.0106.").
+bounded_number <- function(escaped) {
+  paste0("(?<![0-9])(?<![0-9]\\.)", escaped, "(?![0-9]|\\.[0-9])")
+}
+
+contains_bounded <- function(value, text) {
+  grepl(bounded_number(escape_regex(value)), text, perl = TRUE)
+}
+
+normalise_number_fields <- function(row) {
+  for (field in efficacy_number_fields) {
+    if (!is_absent(row[[field]])) {
+      row[[field]] <- normalise_efficacy_text(as.character(row[[field]]))
+    }
+  }
+  row
 }
 
 check_number_field <- function(field, value, quotes_text) {
   if (is_absent(value)) {
     return(list(error = NULL, warning = NULL))
   }
-  value <- normalise_efficacy_text(as.character(value))
-  if (grepl(value, quotes_text, fixed = TRUE)) {
+  if (contains_bounded(value, quotes_text)) {
     return(list(error = NULL, warning = NULL))
   }
   tokens <- number_tokens(value)
-  all_present <- purrr::map_lgl(tokens, token_in, text = quotes_text)
+  all_present <- purrr::map_lgl(tokens, contains_bounded, text = quotes_text)
   if (length(tokens) > 0 && all(all_present)) {
     return(list(
       error = NULL,
@@ -73,9 +87,9 @@ value_bound_to_ci <- function(row, quotes) {
     return(TRUE)
   }
   pattern <- paste0(
-    "(?<![0-9.])", escape_regex(value), "(?![0-9.]).{0,40}?",
-    "(?<![0-9.])", escape_regex(ci_low), "[^0-9]{1,6}", escape_regex(ci_high),
-    "(?![0-9.])"
+    bounded_number(escape_regex(value)), ".{0,40}?",
+    bounded_number(escape_regex(ci_low)), "[^0-9]{1,6}",
+    bounded_number(escape_regex(ci_high))
   )
   any(grepl(pattern, quotes, perl = TRUE))
 }
@@ -114,9 +128,14 @@ quote_in_a_section <- function(quote, sections) {
 verify_efficacy_row <- function(row, section_text) {
   sections <- purrr::map_chr(section_text, normalise_efficacy_text)
   all_sections <- paste(sections, collapse = " ")
+  row <- normalise_number_fields(row)
   quotes <- purrr::map_chr(row[["quotes"]], normalise_efficacy_text)
+  quotes <- quotes[nzchar(quotes)]
   found <- purrr::map_lgl(quotes, quote_in_a_section, sections = sections)
   errors <- sprintf("quote not in the text: %s", substr(quotes[!found], 1, 80))
+  if (length(quotes) == 0) {
+    errors <- "no quote: every row needs at least one verbatim quote"
+  }
   warnings <- character()
   quotes_text <- paste(quotes, collapse = " || ")
   for (field in efficacy_number_fields) {
@@ -155,6 +174,9 @@ verify_efficacy_row <- function(row, section_text) {
 efficacy_quote_page <- function(quote, page_texts) {
   quote <- normalise_efficacy_text(quote)
   pages <- purrr::map_chr(page_texts, normalise_efficacy_text)
+  if (!nzchar(quote) || length(pages) == 0) {
+    return(NA_integer_)
+  }
   start <- substr(quote, 1, 60)
   starts_here <- purrr::map_lgl(pages, \(page) grepl(start, page, fixed = TRUE))
   on_page <- which(starts_here)

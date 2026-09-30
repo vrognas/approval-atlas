@@ -39,19 +39,63 @@ test_that("every gold row of the pilot verifies against its section text", {
   }
 })
 
-test_that("a shifted digit in the effect value fails (mutation test)", {
+shift_last_digit <- function(text) {
+  digits <- gregexpr("[0-9]", text)[[1]]
+  last <- digits[length(digits)]
+  shifted <- (as.integer(substr(text, last, last)) + 1L) %% 10L
+  substr(text, last, last) <- as.character(shifted)
+  text
+}
+
+test_that("a shifted digit in a number field fails (mutation test)", {
   text <- read_efficacy_section("Keytruda")
+  mutated <- 0L
   for (row in gold_rows("Keytruda")) {
-    if (is.null(row$value) || !grepl("[0-9]", row$value)) next
-    digits <- gregexpr("[0-9]", row$value)[[1]]
-    last <- digits[length(digits)]
-    shifted <- (as.integer(substr(row$value, last, last)) + 1L) %% 10L
-    substr(row$value, last, last) <- as.character(shifted)
-    result <- verify_efficacy_row(row, text)
-    expect_equal(result$status, "failed", info = row$value)
+    for (field in c("value", "ci_low", "ci_high", "p_value")) {
+      original <- row[[field]]
+      if (is.null(original) || !grepl("[0-9]", original)) next
+      row[[field]] <- shift_last_digit(original)
+      result <- verify_efficacy_row(row, text)
+      expect_equal(result$status, "failed", info = paste(field, original))
+      row[[field]] <- original
+      mutated <- mutated + 1L
+    }
   }
+  expect_gt(mutated, 0L)
 })
 
+test_that("a number that only starts or ends a longer one fails", {
+  row <- list(quotes = "HR 0.61 (0.5, 0.7) p = 0.031", value = "0.6")
+  result <- verify_efficacy_row(row, "HR 0.61 (0.5, 0.7) p = 0.031")
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "value = '0.6' not in the quotes")
+  row <- list(quotes = "HR 0.61 (0.5, 0.7) p = 0.031", p_value = "0.03")
+  result <- verify_efficacy_row(row, "HR 0.61 (0.5, 0.7) p = 0.031")
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "p_value = '0.03' not in the quotes")
+  row <- list(quotes = "median 10.5 months", arm_control = "10.5 months")
+  row$arm_treatment <- "0.5"
+  expect_equal(
+    verify_efficacy_row(row, "median 10.5 months")$status, "failed"
+  )
+})
+
+test_that("a number may end a sentence", {
+  quote <- "the hazard ratio was 0.59 (0.40, 0.89), p-value of 0.0106."
+  row <- list(quotes = quote, value = "0.59", ci_low = "0.40",
+              ci_high = "0.89", p_value = "0.0106")
+  expect_equal(verify_efficacy_row(row, quote)$status, "exact")
+})
+
+test_that("a row without a usable quote fails", {
+  section <- "HR 0.5 (0.4, 0.6)"
+  for (quotes in list(character(), "", c("", "  "), NULL)) {
+    row <- list(quotes = quotes)
+    result <- verify_efficacy_row(row, section)
+    expect_equal(result$status, "failed")
+    expect_match(result$errors, "no quote")
+  }
+})
 test_that("a quote that is not in the text fails", {
   row <- gold_rows("Alecensa")[[1]]
   row$quotes <- c(row$quotes, "Stratified HR 0.99 (0.10, 0.11)")
@@ -121,6 +165,13 @@ test_that("an arm value rebuilt from split table cells is only a warning", {
   expect_match(paste(result$warnings, collapse = " "), "reassembled")
 })
 
+test_that("a blank trial name is not checked", {
+  for (trial in c("", "   ")) {
+    row <- list(quotes = "HR 0.5", trial = trial)
+    expect_equal(verify_efficacy_row(row, "HR 0.5")$status, "exact")
+  }
+})
+
 test_that("null and NA fields are not checked", {
   row <- list(
     quotes = "HR 0.5", value = NA_character_, ci_low = NULL,
@@ -147,4 +198,6 @@ test_that("the page of a quote is found, also across a page break", {
   expect_equal(efficacy_quote_page("was reported in the trial", pages), 2L)
   expect_true(is.na(efficacy_quote_page("not there", pages)))
   expect_true(is.na(efficacy_quote_page("not there", "one page only")))
+  expect_true(is.na(efficacy_quote_page("", pages)))
+  expect_true(is.na(efficacy_quote_page("anything", character())))
 })
