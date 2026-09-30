@@ -1149,6 +1149,9 @@ function startDashboard(meta, [
       focusTab = false;
       $("#tabs").scrollIntoView({ block: "start" });
       current.focus({ preventScroll: true });
+    } else if (tabButtons.includes(document.activeElement) && document.activeElement !== current) {
+      // Back/forward changed the tab under a focused tab: keep focus on the selected one, the only tab stop.
+      current.focus({ preventScroll: true });
     }
   }
   // "View options": each card's secondary controls behind one disclosure (Hick's Law).
