@@ -1,11 +1,17 @@
 # Phase A0 (a few dollars): run each model on the pilot's 18 NSCLC SmPC 5.1
 # sections and score the rows against the hand-verified gold rows. Needs
 # ANTHROPIC_API_KEY and the pilot's files in .remember/efficacy (run it in the
-# repository that holds them) and a pipeline run's ema_medicines.json. Writes
-# .remember/efficacy/gold-eval-*.json and gold-eval-report.md. One request per
-# medicine and model, about 36 in all; nothing is written outside
-# .remember/efficacy. APPROVAL_ATLAS_GOLD_MODELS (comma list) overrides the
-# models.
+# repository that holds them: the whole product information texts
+# text/<medicine>-pi.layout.txt, selection.json, nsclc-rows.json) and a
+# pipeline run's ema_medicines.json. Writes .remember/efficacy/gold-eval-*.json
+# and gold-eval-report.md; nothing is written outside .remember/efficacy.
+#
+# One Message Batch per model, as the real extractor runs (half the price, no
+# request timeout; it can take up to 24 hours, usually much less). The batch id
+# is saved in .remember/efficacy/gold-pending-<model>.json when it is created:
+# if the run is stopped or gives up waiting, run the script again and it
+# collects that batch instead of submitting (and paying for) a new one.
+# APPROVAL_ATLAS_GOLD_MODELS (comma list) overrides the models.
 pkgload::load_all(quiet = TRUE)
 models <- strsplit(
   Sys.getenv("APPROVAL_ATLAS_GOLD_MODELS", "claude-sonnet-5-5,claude-opus-5-5"),

@@ -92,12 +92,17 @@ minutes_since <- function(time) {
 
 # The results URL once the batch has ended (NA when it ended without one);
 # NULL when its state could not be read for efficacy_poll_give_up_minutes.
-wait_for_efficacy_batch <- function(batch_id, poll_seconds) {
+# `batch_status` and `pending_name` let another run (the gold evaluation) use
+# its own state reader and pending file.
+wait_for_efficacy_batch <- function(batch_id,
+                                    poll_seconds,
+                                    batch_status = claude_batch_status,
+                                    pending_name = "pending-batch.json") {
   started <- current_time()
   last_read <- started
   repeat {
     state <- tryCatch(
-      claude_batch_status(batch_id),
+      batch_status(batch_id),
       error = function(error) error
     )
     wait <- poll_seconds
@@ -106,8 +111,7 @@ wait_for_efficacy_batch <- function(batch_id, poll_seconds) {
         cli::cli_warn(c(
           "Stopped waiting for batch {batch_id}:
           {conditionMessage(state)}",
-          i = "It stays in {.path pending-batch.json}; the next run collects
-          it."
+          i = "It stays in {.path {pending_name}}; the next run collects it."
         ))
         return(NULL)
       }
@@ -131,8 +135,14 @@ wait_for_efficacy_batch <- function(batch_id, poll_seconds) {
 
 # The batch's results by custom_id; NULL (the pending file stays) when they
 # could not be read.
-read_efficacy_batch_results <- function(batch_id, poll_seconds) {
-  results_url <- wait_for_efficacy_batch(batch_id, poll_seconds)
+read_efficacy_batch_results <- function(batch_id,
+                                        poll_seconds,
+                                        batch_status = claude_batch_status,
+                                        batch_results = claude_batch_results,
+                                        pending_name = "pending-batch.json") {
+  results_url <- wait_for_efficacy_batch(
+    batch_id, poll_seconds, batch_status, pending_name
+  )
   if (is.null(results_url)) {
     return(NULL)
   }
@@ -141,13 +151,12 @@ read_efficacy_batch_results <- function(batch_id, poll_seconds) {
     return(list())
   }
   results <- tryCatch(
-    claude_batch_results(results_url),
+    batch_results(results_url),
     error = function(error) {
       cli::cli_warn(c(
         "Could not read the results of batch {batch_id}:
         {conditionMessage(error)}",
-        i = "It stays in {.path pending-batch.json}; the next run collects
-        it."
+        i = "It stays in {.path {pending_name}}; the next run collects it."
       ))
       NULL
     }
