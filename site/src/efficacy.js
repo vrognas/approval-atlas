@@ -14,21 +14,37 @@ function interval(row) {
 }
 
 // A single-arm median's unit, as its arm_measure states it ("median months (95% CI)": " months");
-// "" when it states none (never invented).
-function timeUnit(measure) {
-  const unit = present(measure) ? String(measure).match(/\b(hours?|days?|weeks?|months?|years?)\b/i) : null;
+// "" when it states none (never invented), or when the value already names one ("13.9 months").
+const TIME_WORD = /\b(hours?|days?|weeks?|months?|years?)\b/i;
+function timeUnit(measure, value) {
+  if (TIME_WORD.test(String(value))) return "";
+  const unit = present(measure) ? String(measure).match(TIME_WORD) : null;
   return unit ? ` ${unit[1].toLowerCase()}` : "";
 }
 
+// A rate difference is in percentage points only where the source says so: its arms' measure is
+// in %, or a quote prints the value with %. Never for a proportion ("0.12"); nothing when the value
+// already carries its unit ("21.6%", "21.6 pp").
+function ratePoints(row) {
+  const value = String(row.value).trim();
+  if (/(%|pp)$/i.test(value)) return "";
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const withPercent = new RegExp(`(?<![0-9.])${escaped}\\s?%`);
+  const says = /%/.test(String(row.arm_measure ?? "")) || (row.quotes ?? []).some((quote) => withPercent.test(String(quote)));
+  return says ? ` ${UI.efficacy.percentagePoints}` : "";
+}
+
+// The effect as printed; null without a value (no value, no effect: never "HR null").
 export function formatEffect(row) {
+  if (!present(row.value)) return null;
   const { efficacy } = UI;
   const lead = {
     hr: `${efficacy.effectHr} ${row.value}`,
     hr_noninferiority: `${efficacy.effectHr} ${row.value}`,
-    rate_difference: `${efficacy.effectDifference} ${row.value}${/(%|pp)$/i.test(String(row.value).trim()) ? "" : ` ${efficacy.percentagePoints}`}`,
+    rate_difference: `${efficacy.effectDifference} ${row.value}${ratePoints(row)}`,
     single_arm_rate: `${efficacy.effectResponseRate} ${row.value}`,
-    single_arm_median: `${efficacy.effectMedian} ${row.value}${timeUnit(row.arm_measure)}`,
-  }[row.effect_type] ?? String(row.value ?? "");
+    single_arm_median: `${efficacy.effectMedian} ${row.value}${timeUnit(row.arm_measure, row.value)}`,
+  }[row.effect_type] ?? String(row.value);
   const range = interval(row);
   const text = range ? `${lead} (${range})` : lead;
   return row.effect_type === "hr_noninferiority" ? `${text}, ${efficacy.effectNonInferiority}` : text;
@@ -113,7 +129,7 @@ export function teaserText(groups, contextIndication = null) {
   const named = Object.hasOwn(endpointNames, lead.endpoint) ? endpointNames[lead.endpoint] : (lead.endpoint ?? "");
   const effect = formatEffect(lead);
   // "response rate 37.1 ..." already names the endpoint: do not say it twice.
-  const endpoint = named && effect.toLowerCase().startsWith(String(named).toLowerCase()) ? "" : named;
+  const endpoint = named && effect?.toLowerCase().startsWith(String(named).toLowerCase()) ? "" : named;
   return SINGLE_ARM.has(lead.effect_type)
     ? UI.efficacy.teaserSingleArm(lead.trial, endpoint, effect)
     : UI.efficacy.teaser(lead.trial, endpoint, effect, lead.comparator);

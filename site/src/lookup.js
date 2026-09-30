@@ -654,12 +654,13 @@ export function createLookup(panel, {
     const note = populationNote(row);
     const [regimen, endpoint, arms, analysis] = [regimenLine(row), endpointLine(row), formatArms(row), analysisLine(row)];
     const url = efficacySourceUrl(row);
+    const effect = formatEffect(row);
     return el("div", { class: "efficacy-result" },
       row.trial ? el("p", { class: "efficacy-trial" }, row.trial) : null,
       row.population || note ? el("p", null, row.population ?? "", row.population && note ? " " : null, note ? el("span", { class: "chip" }, note) : null) : null,
       regimen ? el("p", null, regimen) : null,
       endpoint ? el("p", null, endpoint) : null,
-      el("p", { class: "efficacy-effect" }, formatEffect(row)),
+      effect ? el("p", { class: "efficacy-effect" }, effect) : null,
       arms ? el("p", { class: "muted" }, arms) : null,
       analysis ? el("p", { class: "muted" }, analysis) : null,
       el("p", { class: "efficacy-source" }, url ? externalLink(UI.efficacy.source(row.page), url) : UI.efficacy.source(row.page)),

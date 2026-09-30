@@ -18,7 +18,7 @@ test("a range printed like a CI says range; no significance words are added", ()
 
 test("other effect types, and values without a CI", () => {
   assert.equal(formatEffect(row({ effect_type: "hr_noninferiority", value: "0.94", ci_low: "0.84", ci_high: "1.05" })), "HR 0.94 (95% CI 0.84–\u20601.05), non-inferiority");
-  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6 percentage points (99% CI 13.0–\u206030.3)");
+  assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6", ci_low: "13.0", ci_high: "30.3", ci_level: 99, arm_measure: "pCR rate (%)" })), "difference 21.6 percentage points (99% CI 13.0–\u206030.3)");
   assert.equal(formatEffect(row({ effect_type: "single_arm_rate", value: "37%", ci_low: "29", ci_high: "47" })), "response rate 37% (95% CI 29–\u206047)");
   assert.equal(formatEffect(row({ effect_type: "single_arm_rate", value: "37.1", ci_low: null, ci_high: null })), "response rate 37.1");
   assert.equal(formatEffect(row({ ci_low: null, ci_high: null })), "HR 0.46");
@@ -98,6 +98,38 @@ test("the context match ignores case; no match, or a null-indication group, fall
 test("a rate difference already printed with % or pp gets no unit text", () => {
   assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6%", ci_low: "13.0", ci_high: "30.3", ci_level: 99 })), "difference 21.6% (99% CI 13.0–\u206030.3)");
   assert.equal(formatEffect(row({ effect_type: "rate_difference", value: "21.6 pp", ci_low: null, ci_high: null })), "difference 21.6 pp");
+});
+
+test("a rate difference says percentage points only where the source says %", () => {
+  const difference = (fields) => formatEffect(row({ effect_type: "rate_difference", value: "21.6", ci_low: null, ci_high: null, arm_measure: null, quotes: [], ...fields }));
+  assert.equal(difference({ quotes: ["pCR difference 21.6% (99% CI 13.0, 30.3)"] }), "difference 21.6 percentage points");
+  assert.equal(difference({ arm_measure: "rate, %" }), "difference 21.6 percentage points");
+  assert.equal(difference({}), "difference 21.6");
+  // A proportion is no percentage, even beside a "95% CI".
+  assert.equal(difference({ value: "0.12", quotes: ["difference 0.12 (95% CI 0.05, 0.19)"] }), "difference 0.12");
+  // "121.6%" is not the value's percentage.
+  assert.equal(difference({ quotes: ["121.6% and 21.6 points"] }), "difference 21.6");
+});
+
+test("no value, no effect: nothing prints null or leaves double spaces", () => {
+  assert.equal(formatEffect(row({ value: null })), null);
+  assert.equal(formatEffect(row({ value: "" })), null);
+  const comparative = teaserText(groupEfficacy([row({ value: null })]));
+  assert.equal(comparative, "Pivotal trial FLAURA: progression-free survival vs gefitinib or erlotinib");
+  const single = teaserText(groupEfficacy([row({ value: null, comparator: null, effect_type: "single_arm_rate", endpoint: "ORR" })]));
+  assert.equal(single, "Pivotal trial FLAURA: response rate, single-arm");
+  const bare = teaserText(groupEfficacy([row({ value: null, comparator: null, effect_type: "single_arm_rate", endpoint: null })]));
+  assert.equal(bare, "Pivotal trial FLAURA: single-arm");
+  for (const text of [comparative, single, bare]) {
+    assert.equal(/null|undefined|\s{2}/.test(text), false, text);
+  }
+});
+
+test("a median whose value already names its unit gets no second one", () => {
+  const median = (fields) => formatEffect(row({ effect_type: "single_arm_median", ci_low: null, ci_high: null, comparator: null, arm_measure: "median months (95% CI)", ...fields }));
+  assert.equal(median({ value: "13.9 months" }), "median 13.9 months");
+  assert.equal(median({ value: "8 Weeks" }), "median 8 Weeks");
+  assert.equal(median({ value: "13.9" }), "median 13.9 months");
 });
 
 test("median arm measures keep the unit, whatever the punctuation", () => {
