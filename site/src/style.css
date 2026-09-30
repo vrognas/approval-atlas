@@ -4500,7 +4500,7 @@ td.area {
    their own link sizes (its chips were 1px short with these). Padded up to 24px, not by a fixed 2px
    (2026-09-30: the medicine card's 24px lines made it 28px, whose 2px below the line took from the
    next line's chip rims; the 2px stays where the lh unit is not known). */
-:is(#medicines-table, .card) .term a {
+:is(#medicines-table, .card) .term a:not(.area-chip) {
   display: inline-block;
   padding-block: 2px;
   margin-block: -2px;
@@ -4530,14 +4530,22 @@ td.area {
   gap: 4px;
 }
 
-button.area-chip {
+/* A chip: a filter toggle (a button) in the dashboard, a link to its branch's condition page on the
+   lookup's cards (Laws of UX, second pass, 2026-09-30), a plain label there without a page. */
+.area-chip {
+  display: inline-block;
   margin: 0;
   padding: 0;
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
+  text-decoration: none;
   cursor: pointer;
+}
+
+span.area-chip {
+  cursor: help;
 }
 
 .area-chip-fill {
@@ -4553,7 +4561,7 @@ button.area-chip {
   text-align: center;
 }
 
-button.area-chip:not([aria-disabled="true"]):hover .area-chip-fill {
+:is(button.area-chip:not([aria-disabled="true"]), a.area-chip):hover .area-chip-fill {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -4569,11 +4577,11 @@ button.area-chip[aria-disabled="true"] {
 }
 
 /* The focus ring goes round the fill, not the phones' rim. */
-button.area-chip:focus-visible {
+.area-chip:focus-visible {
   outline: none;
 }
 
-button.area-chip:focus-visible .area-chip-fill {
+.area-chip:focus-visible .area-chip-fill {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -5405,6 +5413,13 @@ table.activity {
   color: var(--link);
 }
 
+/* Laws of UX, second pass (2026-09-30): on phones a group's last option can be "Show all n …",
+   expanding it in place; it reads as a link. */
+.lookup [role="option"].option-expand {
+  color: var(--link);
+  font-size: 0.875rem;
+}
+
 /* Phones (review 2026-09-29): every suggestion a 44px target, its text centred in it. */
 @media (max-width: 720px) {
   .lookup [role="option"] {
@@ -5599,6 +5614,14 @@ table.activity {
   margin: 0;
 }
 
+/* The protection lead's "Market protection" (Laws of UX, second pass, 2026-09-30): the body type, so
+   "until 2028–2029" stays the answer. */
+.lead-label {
+  color: var(--ink-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
 .lead-estimate {
   color: var(--ink-secondary);
   font-size: 0.875rem;
@@ -5632,6 +5655,16 @@ table.activity {
   color: var(--ink-secondary);
   font-size: 0.75rem;
   white-space: normal;
+}
+
+/* A company monogram in a card block (the medicine and substance cards' Status blocks): the neutral
+   slate, so the status pill stays the block's one colour (Von Restorff; owner decision 2026-09-30,
+   Laws of UX second pass); its brand or hashed colour everywhere else (tables, charts, company
+   pages, previews). slate-text on slate-1 is a checked pair (palette.test.js). */
+.card-block .company-badge {
+  --hue-1: var(--slate-1);
+  --hue-mid: var(--slate-mid);
+  --hue-text: var(--slate-text);
 }
 
 .block-protection .copies {
@@ -5725,6 +5758,25 @@ table.activity {
     padding: 6px 12px;
     line-height: 1.3;
   }
+
+  /* The Status block's company in one line (Laws of UX, second pass, 2026-09-30: on a phone with
+     Safari's bars, 320x568, the EPAR button ended below the first screen for nearly every medicine):
+     its label beside the group, and the holder name EMA publishes (or the Union Register's and a
+     representative's lines) left to More details, whose Company fact shows the same holder display. */
+  .medicine-card .block-status .block-facts > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+  }
+
+  .medicine-card .block-status .block-facts dt {
+    margin: 0;
+  }
+
+  .medicine-card .block-status .holder-ema {
+    display: none;
+  }
 }
 
 /* 320px phones (2026-09-30: the product information button was below a 320x640 screen): every
@@ -5761,12 +5813,24 @@ table.activity {
     line-height: 2rem;
   }
 
+  /* And the blocks 2px tighter above and below, their titles and the Status lead 2px closer to what
+     follows, the blocks 8px apart (Laws of UX, second pass, 2026-09-30): at 320x568, a phone with
+     Safari's bars, 380 authorized medicines' second document button ended within 10px of the fold. */
+  .card-blocks {
+    gap: 8px;
+  }
+
   .card-block {
-    padding-inline: 12px;
+    padding: 8px 12px 10px;
+  }
+
+  .card .block-title {
+    margin-bottom: 4px;
   }
 
   .card .status-lead {
     column-gap: 6px;
+    margin-bottom: 8px;
   }
 
   .card .status-lead .status.pill {
@@ -6550,7 +6614,7 @@ mark {
      they took taps meant for the condition name above, the ATC segments and "Show indication"):
      every fill, and every control a rim can reach, stands above every rim (position and z-index;
      raised further while its own tip shows, so no fill covers the tip). */
-  button.area-chip {
+  .area-chip {
     padding: 10px 6px;
     margin: -10px 0;
   }
@@ -6579,13 +6643,13 @@ mark {
     z-index: 1;
   }
 
-  :is(.term a, .areas-more),
-  :is(#medicines-table, .result-table) :is(a, .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more)) {
+  :is(.term a:not(.area-chip), .areas-more),
+  :is(#medicines-table, .result-table) :is(a:not(.area-chip), .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more)) {
     position: relative;
     z-index: 1;
   }
 
-  :is(.term a, .area-more):is(:hover, :focus-within),
+  :is(.term a:not(.area-chip), .area-more):is(:hover, :focus-within),
   :is(#medicines-table, .result-table) [data-tip]:not(.area-chip):is(:hover, :focus-within) {
     z-index: 5;
   }

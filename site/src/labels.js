@@ -305,8 +305,10 @@ const TEXT_RULE_WORDS = {
 // decision 2026-09-30): one phrase each, so another source (a national agency, the FDA) joins the
 // line without a redesign. Only sources the data has: never one that is planned. `scope` says where
 // its medicines are authorized (the default overview shows authorized ones only); `neutral` names the
-// source without "authorized", for an overview widened to other statuses (owner decision 2026-09-30).
-export const SOURCES = [{ key: "ema", scope: "EU-wide through EMA", neutral: "EU-wide through EMA's central procedure" }];
+// source without "authorized", for an overview widened to other statuses (owner decision 2026-09-30);
+// `list` names its list of medicines, for the widened overview's heading (Laws of UX, second pass,
+// owner decision 2026-09-30: "Approved medicines" stood over refused and pending ones).
+export const SOURCES = [{ key: "ema", scope: "EU-wide through EMA", neutral: "EU-wide through EMA's central procedure", list: "EMA's list" }];
 
 // The footer's and About's links (https): sources, licenses, the repository.
 const LINKS = {
@@ -337,9 +339,12 @@ export const UI = {
   // Source-neutral since 2026-09-30 (owner decision: other regulators' data may follow); the scope
   // line under it names the sources (SOURCES): "Human medicines authorized EU-wide through EMA", or,
   // with the status filter widened (every status, or a choice of statuses), the neutral "Human
-  // medicines, EU-wide through EMA's central procedure" (owner decision 2026-09-30).
+  // medicines, EU-wide through EMA's central procedure" (owner decision 2026-09-30). The heading
+  // follows the same scope (Laws of UX, second pass, owner decision 2026-09-30): widened, it names
+  // the sources' lists, "Medicines in EMA's list", as the overview then holds refused and pending ones.
   page: {
-    title: "Approved medicines",
+    title: (sources, { widened = false } = {}) =>
+      (widened ? `Medicines in ${listing(sources.map((source) => source.list))}` : "Approved medicines"),
     scope: (sources, { widened = false } = {}) =>
       widened
         ? `Human medicines, ${listing(sources.map((source) => source.neutral))}`
@@ -1259,6 +1264,10 @@ export const UI = {
     // filter toggles per condition, then "+n" naming the branches behind it (tooltip, hidden text).
     chips: (term) => `MeSH branches of ${term}`,
     chipFilter: (code, name) => `Filter by therapeutic area ${code} ${name}`,
+    // On the lookup's cards a chip opens its branch's condition page (Laws of UX, second pass, owner
+    // decision 2026-09-30), as the area tree's link for the branch; without a page, its name alone.
+    chipLink: (code, name) => `Open condition page: ${code} ${name}`,
+    chipName: (code, name) => `${code} ${name}`,
     chipsMore: (count) => `+${count}`,
     chipsRest: (branches) => `Also in ${branches.map(({ code, name }) => `${code} ${name}`).join("; ")}`,
     // A chip under a selected category (review 2026-09-29): pressed and disabled, as the tree's
@@ -1565,6 +1574,17 @@ export const UI = {
       medicines: "Medicines", substances: "Substances", conditions: "Conditions", classes: "Drug classes", companies: "Companies",
       fuzzy: "Did you mean", text: "Indication text search",
     },
+    // Laws of UX, second pass (owner decision 2026-09-30): on phones a group shows a few suggestions,
+    // then this option expanding it in place (search.js collapseGroups()), announced when it does.
+    // count: the suggestions it adds, not "all" (review of PR #39: a group is capped at
+    // MAX_SUGGESTIONS, so more can match than the list holds).
+    groupNouns: {
+      medicines: ["medicine", "medicines"], substances: ["substance", "substances"], conditions: ["condition", "conditions"],
+      classes: ["drug class", "drug classes"], companies: ["company", "companies"],
+    },
+    moreOf: (count, group) => `${formatCount(count)} more ${(UI.lookup.groupNouns[group] ?? ["suggestion", "suggestions"])[count === 1 ? 0 : 1]}`,
+    showMore: (count, group) => `Show ${UI.lookup.moreOf(count, group)}`,
+    expanded: (count, group) => `Showing ${UI.lookup.moreOf(count, group)}`,
     // opinion: EMA's opinion (statusOpinionLabel()), once ema_medicines.json has loaded.
     medicineMeta: (status, year, opinion = null) => [statusOpinionLabel(status, opinion), year].filter(Boolean).join(" · "),
     // synonym: another name of the substance that matched (#19: "adrenaline" for epinephrine).
@@ -1664,7 +1684,7 @@ export const UI = {
     approvedOn: "approved",
     // A substance's Status lead: the "2 authorized" pill, then "first approved 20 Nov 2006" (the first of them).
     firstApproved: "first approved",
-    // After the protection lead of a medicine's own estimate ("Until 2028–2029 (est.)").
+    // After the protection lead of a medicine's own estimate ("Market protection until 2028–2029 (est.)").
     estimate: "(est.)",
     // Another medicine with the same name (the refused and the authorized Mylotarg): a link to its
     // card, then its status; documents: the namesake's documents EMA lists under this one.
@@ -1795,10 +1815,16 @@ export const UI = {
     // estimate in More details; F · Spacious, phase 4).
     // A copy's cell: the reference it follows, then, while that is protected, the reference's
     // years as secondary text (QA 2026-09-29, #1).
+    // Laws of UX, second pass (owner decision 2026-09-30): the lead names what runs until then, so
+    // "Until 2031–2032" is not read as "generics from 2031"; "ended" and "unclear" likewise.
+    // label: the lead's first words, in the card's body type; the rest in the answer's.
     glance: {
-      until: (from, to) => (from === to ? `Until ${from}` : `Until ${from}–${to}`),
+      label: "Market protection",
+      until: (from, to) => `Market protection until ${from === to ? from : `${from}–${to}`}`,
+      ended: "Market protection ended",
+      unclear: "Market protection unclear",
       follows: (name) => `Follows ${name}`,
-      // An estimate like the lead's "Until …" (owner decision 2026-09-30: computed dates say so).
+      // An estimate like the lead's "Market protection until …" (owner decision 2026-09-30: computed dates say so).
       referenceUntil: (name, from, to) => `${name}'s protection until ${from === to ? from : `${from}–${to}`} (est.)`,
       // source: the end's end_source ("(est.)" unless the register publishes it).
       orphan: (year, source) => `Orphan exclusivity until ${year}${orphanEstimate({ source })}`,

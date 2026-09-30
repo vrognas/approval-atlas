@@ -323,17 +323,24 @@ test("a pediatric-use marketing authorization counts from its own approval, not 
 });
 
 test("protectionGlance: a pediatric-use marketing authorization shows its own protection", () => {
-  assert.deepEqual(protectionGlance(alkindi, [], "2026-09-29"), { value: "Until 2028–2029", reference: null, orphan: null });
-  assert.deepEqual(protectionGlance(buccolam, [], "2026-09-29"), { value: "Ended", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance(alkindi, [], "2026-09-29"), { value: "Market protection until 2028–2029", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance(buccolam, [], "2026-09-29"), { value: "Market protection ended", reference: null, orphan: null });
 });
 
 test("protectionGlance: the answer strip's short form of the estimate", () => {
   const protectedRow = { ...own, market_protection_end_min: "2031-01-06", market_protection_end_max: "2032-01-06", status: "protected" };
-  assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Until 2031–2032", reference: null, orphan: null });
-  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, [], "2026-09-28"), { value: "Ended", reference: null, orphan: null });
-  assert.deepEqual(protectionGlance(own, [], "2026-09-28"), { value: "Unclear", reference: null, orphan: null });
-  assert.deepEqual(protectionGlance({ ...own, basis: "other_company_reference", status: "unclear" }, [], "2026-09-28").value, "Unclear");
+  assert.deepEqual(protectionGlance(protectedRow, [], "2026-09-28"), { value: "Market protection until 2031–2032", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, [], "2026-09-28"), { value: "Market protection ended", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance(own, [], "2026-09-28"), { value: "Market protection unclear", reference: null, orphan: null });
+  assert.deepEqual(protectionGlance({ ...own, basis: "other_company_reference", status: "unclear" }, [], "2026-09-28").value, "Market protection unclear");
   assert.equal(protectionGlance(undefined, [], "2026-09-28"), null);
+  // Laws of UX, second pass (owner decision 2026-09-30): the lead names market protection, never
+  // "patent", and stays an estimate.
+  for (const status of ["protected", "ended", "unclear"]) {
+    const { value } = protectionGlance({ ...protectedRow, status }, [], "2026-09-28");
+    assert.match(value, /^Market protection /);
+    assert.doesNotMatch(value, /patent/i);
+  }
 });
 
 // QA 2026-09-29 (#1): a copy has no protection of its own; the strip never shows its reference's
@@ -372,8 +379,8 @@ test("isCopy: a copy's estimate is its reference's (or none), never its own", ()
   for (const basis of ["own", "other_company_reference", "paediatric_use"]) assert.equal(isCopy({ basis }), false);
 });
 
-// Review of phase 4: "(est.)" follows only the "Until …" form (a medicine's own protection running),
-// not "Ended", "Unclear" or a copy's value.
+// Review of phase 4: "(est.)" follows only the "Market protection until …" form (a medicine's own
+// protection running), not "ended", "unclear" or a copy's value.
 test("glanceIsEstimate: only a medicine's own protection still running", () => {
   assert.equal(glanceIsEstimate({ basis: "own", status: "protected" }), true);
   assert.equal(glanceIsEstimate({ basis: "other_company_reference", status: "protected" }), true);
@@ -390,7 +397,7 @@ test("protectionGlance: orphan market exclusivity still running is named with it
     { condition: "C", exclusivity_end: "2031-01-01", end_source: "computed" },
     { condition: "D", exclusivity_end: null, end_source: null, designation_status: "Withdrawn" },
   ];
-  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Ended", reference: null, orphan: "Orphan exclusivity until 2033" });
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Market protection ended", reference: null, orphan: "Orphan exclusivity until 2033" });
   assert.equal(protectionGlance({ ...own, status: "ended" }, orphan.slice(0, 1), "2026-09-28").orphan, null);
 });
 
