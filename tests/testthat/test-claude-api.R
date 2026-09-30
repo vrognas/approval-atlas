@@ -19,6 +19,18 @@ test_that("the API key is read from the environment", {
   expect_equal(claude_api_key(), "test-key")
 })
 
+# A bare call at a script's top level (a fail-fast check) must not print the
+# key: Rscript prints visible top-level values.
+test_that("the API key is returned invisibly and never printed", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  expect_false(withVisible(claude_api_key())$visible)
+  scripts <- c("scripts/eval-efficacy-gold.R", "scripts/extract-efficacy.R")
+  for (script in scripts) {
+    lines <- readLines(testthat::test_path("..", "..", script))
+    expect_false(any(grepl("^claude_api_key\\(\\)", lines)), label = script)
+  }
+})
+
 test_that("a request carries the version header and redacts the key", {
   request <- claude_request("messages", key = "test-key")
   expect_equal(request$url, "https://api.anthropic.com/v1/messages")

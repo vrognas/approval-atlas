@@ -25,7 +25,7 @@ gold_path <- ".remember/efficacy/nsclc-rows.json"
 medicines_path <- "site/public/data/ema_medicines.json"
 # Fails before any request when something is missing.
 check_gold_inputs(c(selection_path, gold_path, medicines_path, text_directory))
-claude_api_key()
+invisible(claude_api_key())
 run_gold_evaluation(
   models = models,
   selection_path = selection_path,
