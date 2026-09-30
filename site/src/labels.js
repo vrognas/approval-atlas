@@ -1709,6 +1709,44 @@ export const UI = {
       overview: "Plain-language overview",
     },
   },
+  // Pivotal results (medicine card; efficacy.js): per-trial effects extracted automatically from the
+  // product information. Numbers are shown as printed there; no word about significance is added.
+  efficacy: {
+    title: "Pivotal results",
+    auto: "Extracted automatically from the product information; check the source.",
+    caveat: "Results come from different trials, populations and comparators; not a head-to-head comparison.",
+    teaser: (trial, endpoint, effect, comparator) =>
+      `${trial ? `Pivotal trial ${trial}` : "Pivotal trial"}: ${endpoint} ${effect}${comparator ? ` vs ${comparator}` : ""}`,
+    teaserSingleArm: (trial, endpoint, effect) =>
+      `${trial ? `Pivotal trial ${trial}` : "Pivotal trial"}: ${endpoint} ${effect}, single-arm`,
+    moreIndications: (count) => `and results for ${formatCount(count)} more ${count === 1 ? "indication" : "indications"}`,
+    subgroup: "subgroup (matches EU indication)",
+    broader: "whole trial (EU indication is narrower)",
+    analysis: (text) => (text ? String(text) : null),
+    source: (page) => (page ? `Source: product information, p. ${page}` : "Source: product information"),
+    more: "More results",
+    stale: (date) => `From the product information of ${formatDate(date)}; EMA has updated it since.`,
+    endpointNames: {
+      OS: "overall survival",
+      PFS: "progression-free survival",
+      EFS: "event-free survival",
+      DFS: "disease-free survival",
+      ORR: "response rate",
+      DoR: "duration of response",
+      pCR: "pathological complete response",
+      MPR: "major pathological response",
+    },
+    // Effect wording; the values and the confidence level are printed as the source gives them.
+    effectHr: "HR",
+    effectNonInferiority: "non-inferiority",
+    effectDifference: "difference",
+    percentagePoints: "percentage points",
+    effectResponseRate: "response rate",
+    effectMedian: "median",
+    ci: (level) => (level === null || level === undefined ? "CI" : `${level}% CI`),
+    range: "range",
+    vs: "vs",
+  },
   // Step 4 (#9): the approval flags' explanations, on hover and tap (the chips beside the status and
   // among the card's facts, the result tables' markers); at most 12 words. Orphan is a type badge.
   flagTips: {

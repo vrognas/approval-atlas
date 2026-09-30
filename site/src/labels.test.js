@@ -1773,3 +1773,15 @@ test("companies: provenance, why a medicine sits under its group, a sponsor, a g
   assert.equal(external.destinations["en.wikipedia.org"], "Wikipedia");
   assert.equal(external.destinations["www.sec.gov"], "SEC website");
 });
+
+test("UI.efficacy copy: no significance words, no em-dash, null analysis stays null", () => {
+  const { efficacy } = labels.UI;
+  const texts = [...textValues(efficacy)];
+  assert.ok(texts.length > 10);
+  assert.deepEqual(texts.filter((text) => /significan|authoris|—/i.test(text)), []);
+  assert.equal(efficacy.analysis(null), null);
+  assert.equal(efficacy.moreIndications(1), "and results for 1 more indication");
+  assert.equal(efficacy.moreIndications(2), "and results for 2 more indications");
+  assert.equal(efficacy.source(12), "Source: product information, p. 12");
+  assert.equal(efficacy.stale("2026-05-04"), "From the product information of 4 May 2026; EMA has updated it since.");
+});
