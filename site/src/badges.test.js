@@ -15,6 +15,7 @@ import {
   statusColor,
   statusFlags,
   statusHue,
+  statusShape,
   statusTip,
   statusTipId,
   tokenDistance,
@@ -146,6 +147,26 @@ test("a status's chart colour: its hue's mid, Authorized the darker --status-aut
   assert.equal(statusColor("Authorised"), "var(--status-authorized)");
   assert.equal(statusColor("Withdrawn"), "var(--red-mid)");
   assert.equal(statusColor("Something new"), "var(--slate-mid)");
+});
+
+// Owner decision 2026-09-30: the medicines table's status dot has a shape per status kind.
+test("a status dot's shape: one per status kind, four distinct shapes", () => {
+  const shapes = {
+    Authorised: "filled",
+    Withdrawn: "ring",
+    Expired: "ring",
+    Lapsed: "ring",
+    Suspended: "ring",
+    Revoked: "ring",
+    "Something new": "ring",
+    Opinion: "half",
+    "Opinion under re-examination": "half",
+    Refused: "cross",
+    "Application withdrawn": "cross",
+    "Withdrawn from rolling review": "cross",
+  };
+  assert.deepEqual(Object.fromEntries(Object.keys(shapes).map((status) => [status, statusShape(status)])), shapes);
+  assert.equal(new Set(Object.values(shapes)).size, 4);
 });
 
 // Companies part 2 (user decision 2026-09-28): monogram badges, the largest groups in a damped

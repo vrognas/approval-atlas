@@ -3708,6 +3708,25 @@ table.conditions-table {
   #medicines-table td.holder-cell {
     color: var(--ink-secondary);
   }
+
+  /* Name and holder first, then the status dot with its short label, "Approved {date}", type and
+     ATC side by side (owner decision 2026-09-30: the dot column leads the wide table). */
+  #medicines-table :is(td.breakable, td.holder-cell) {
+    order: -1;
+  }
+
+  #medicines-table .status-dot-label,
+  #medicines-table .approved-prefix {
+    display: inline;
+  }
+
+  #medicines-table :is(td.status-dot-cell, td.approved-cell) {
+    width: auto;
+  }
+
+  #medicines-table .status-dot {
+    justify-content: flex-start;
+  }
 }
 
 table {
@@ -3910,6 +3929,70 @@ td .doc-links {
 /* 9rem wraps no status or date line more than 10rem did (see td.holder-cell). */
 td.status-cell {
   min-width: 9rem;
+}
+
+/* The medicines table's status dot column (owner decision 2026-09-30; table.js renderStatusDot()):
+   as narrow as its dot, the mark in line with the caption's text (14px, then the carrier's 6px), so
+   the first page's table is 2px wider at min-content than with "Approved · Status" (1,020px against
+   1,018px). The dot's 24px carrier (WCAG 2.5.8) is centred on the medicine name's first line (10px
+   down, the name's 20px line 12px down); its 12px mark is the status's colour (statusColor(), set by
+   table.js) in a shape per status kind (badges.js statusShape()), drawn in currentColor, so forced
+   colors keep the shape in the text colour. The short label shows on phones only (below). */
+th.status-dot-head,
+td.status-dot-cell {
+  width: 1px;
+  padding-right: 0;
+  padding-left: 14px;
+}
+
+td.status-dot-cell {
+  padding-top: 10px;
+}
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 24px;
+  min-height: 24px;
+  vertical-align: top;
+}
+
+.status-mark {
+  display: block;
+  flex: none;
+}
+
+/* In the hue's text colour (the mark's mid is a 3:1 chart colour). */
+.status-dot-label {
+  display: none;
+  color: var(--hue-text);
+  font-weight: 500;
+}
+
+/* The Approved column: a date, or "No date", on one line; the Union Register marker under it. As
+   narrow as that (width: 1px), so the other columns take the room. */
+td.approved-cell {
+  width: 1px;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.approved-date {
+  white-space: nowrap;
+}
+
+.approved-prefix {
+  display: none;
+}
+
+td.approved-cell .register-flag {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  color: var(--ink);
+  white-space: normal;
 }
 
 .badges {

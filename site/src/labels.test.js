@@ -318,6 +318,17 @@ test("the date line of the merged status cell: approval date, or end date and ap
   assert.equal(labels.statusDateLine("Refused", null, null), null);
 });
 
+// Owner decision 2026-09-30: the medicines table's status dot names its status and dates.
+test("the status dot's name: since the approval, or the status, its end and its approval", () => {
+  assert.equal(labels.statusDotLine("Authorised", "2022-01-06", null), "Authorized since 6 Jan 2022");
+  assert.equal(labels.statusDotLine("Authorised", null, null), "Authorized, no approval date");
+  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)");
+  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", null), "Withdrawn (approved 19 Jun 2006)");
+  assert.equal(labels.statusDotLine("Withdrawn from rolling review", null, "2021-10-29"), "Withdrawn from rolling review 29 Oct 2021");
+  assert.equal(labels.statusDotLine("Refused", null, null), "Refused");
+  assert.equal(labels.statusDotLine("Opinion", null, null, "Negative"), "Opinion (negative)");
+});
+
 test("a medicine that is not authorized gets a status sentence built from EMA's dates only", () => {
   assert.equal(labels.statusSentence("Authorised", "2018-02-08", null), null);
   assert.equal(labels.statusSentence("Withdrawn", "2009-01-16", null), "Withdrawn on 16 Jan 2009.");
@@ -434,11 +445,12 @@ test("a negative opinion is labeled as such; other statuses keep their label", (
   assert.equal(labels.UI.lookup.medicineMeta("Authorised", "2018"), "Authorized · 2018");
 });
 
-test("the medicines table merges approval date and status into one column", () => {
+test("the medicines table: a status dot column first, then a narrow Approved column", () => {
   assert.deepEqual(labels.UI.table.headers, [
+    "Status",
     "Medicine",
     "Company · Holder",
-    "Approved · Status",
+    "Approved",
     "Type",
     "ATC",
     "Therapeutic area",

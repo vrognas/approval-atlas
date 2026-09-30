@@ -1,9 +1,9 @@
 import * as d3 from "d3";
 import { areaChips, chipTogglable, fillTerm, markAreaChips } from "./area-chips.js";
 import { atcBadgeTip, atcCode, atcLevelNames, atcOrigin, atcRowIncomplete } from "./atc.js";
-import { atcHue, atcSegments, statusHue, typeBadges } from "./badges.js";
+import { NEGATIVE_OPINION, atcHue, atcSegments, statusColor, statusHue, statusShape, statusTipId, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
-import { UI, atcOriginFlag, atcOriginText, statusDateLine, statusLabel, statusTipText } from "./labels.js";
+import { UI, atcOriginFlag, atcOriginText, formatDate, statusDotLine, statusOpinionLabel, statusTipText } from "./labels.js";
 import { documentLinks } from "./lookup.js";
 import { focusToolbarButton, toolbarKeydown } from "./toolbar.js";
 
@@ -106,17 +106,57 @@ function renderTypeCell(cell, product) {
     .text((badge) => badge.label);
 }
 
-// Merged "Approved · Status": dot and status label (explained on hover and on a tap, as the type
-// badges: UI.statusTips; a negative opinion its own, statusTipText()), then the date line. Union
-// Register disagreement: a visible marker, the full text as tooltip (a data-tip, shown on a tap too;
-// owner feedback 2026-09-29: it was a native title) and for screen readers.
-function renderStatusCell(cell, product, register) {
+const SVG = "http://www.w3.org/2000/svg";
+
+function svgElement(parent, name, attributes) {
+  const node = parent.appendChild(document.createElementNS(SVG, name));
+  for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+  return node;
+}
+
+// The dot's shape (statusShape()) in a 12px box, drawn in currentColor: forced colors keep the
+// shape, in the text colour.
+function statusMark(shape) {
+  const svg = document.createElementNS(SVG, "svg");
+  for (const [key, value] of Object.entries({ viewBox: "0 0 12 12", width: "12", height: "12", "aria-hidden": "true", focusable: "false", class: `status-mark mark-${shape}` })) svg.setAttribute(key, value);
+  if (shape === "filled") svgElement(svg, "circle", { cx: "6", cy: "6", r: "5", fill: "currentColor" });
+  if (shape === "ring" || shape === "half") svgElement(svg, "circle", { cx: "6", cy: "6", r: "4.25", fill: "none", stroke: "currentColor", "stroke-width": "1.5" });
+  if (shape === "half") svgElement(svg, "path", { d: "M6 1.75A4.25 4.25 0 0 0 6 10.25Z", fill: "currentColor" });
+  if (shape === "cross") svgElement(svg, "path", { d: "M2.5 2.5L9.5 9.5M9.5 2.5L2.5 9.5", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" });
+  return svg;
+}
+
+// The status dot (owner decision 2026-09-30): the status's colour (statusColor()) in a shape per
+// status kind (statusShape()), named by its status and dates ("Withdrawn 16 Jan 2009 (approved 19
+// Jun 2006)", statusDotLine(); visually hidden text), the tooltip that line and the status's
+// explanation (UI.statusTips; a negative opinion its own, statusTipText()), a 24px carrier a tap
+// shows it on (tabindex -1, no tab stop), as the type badges. On phones the status's short label
+// follows the dot (aria-hidden: the hidden line says it).
+function renderStatusDot(cell, product) {
   const status = product.medicine_status;
-  const tip = statusTipText(status, product.opinion_status);
-  const carrier = tip ? cell.append("span").attr("class", "status-tip").attr("data-tip", tip).attr("tabindex", "-1") : cell;
-  carrier.append("span").attr("class", `status hue-${statusHue(status)}`).text(statusLabel(status));
-  const dates = statusDateLine(product.medicine_status, product.authorized_from, product.authorized_until);
-  if (dates) cell.append("span").attr("class", "status-date").text(dates);
+  const opinion = product.opinion_status ?? null;
+  const line = statusDotLine(status, product.authorized_from, product.authorized_until, opinion);
+  const explanation = statusTipText(status, opinion);
+  const describedBy = opinion === "Negative" && status === "Opinion" ? statusTipId(NEGATIVE_OPINION) : UI.statusTips[status] ? statusTipId(status) : null;
+  const dot = cell.append("span")
+    .attr("class", `status-dot hue-${statusHue(status)}${explanation ? " tip-lines" : ""}`)
+    .attr("data-tip", explanation ? `${line}\n${explanation}` : line)
+    .attr("tabindex", "-1")
+    .attr("aria-describedby", describedBy)
+    .style("color", statusColor(status));
+  dot.append(() => statusMark(statusShape(status)));
+  dot.append("span").attr("class", "visually-hidden").text(line);
+  dot.append("span").attr("class", "status-dot-label").attr("aria-hidden", "true").text(statusOpinionLabel(status, opinion));
+}
+
+// The Approved column: the approval date ("No date" without one; an ended authorization's end is in
+// the dot's tooltip). On phones "Approved" goes before it (aria-hidden: the column header says it).
+// Union Register disagreement: a visible marker, the full text as tooltip (a data-tip, shown on a
+// tap too; owner feedback 2026-09-29: it was a native title) and for screen readers.
+function renderApprovedCell(cell, product, register) {
+  const date = cell.append("span").attr("class", "approved-date");
+  date.append("span").attr("class", "approved-prefix").attr("aria-hidden", "true").text(`${UI.table.approved} `);
+  date.append("span").text(formatDate(product.authorized_from) ?? UI.table.noDate);
   const row = register?.get(product.ema_product_number);
   if (row?.agrees_with_ema !== false) return;
   const text = `${UI.register.chip(row.register_status, row.register_last_decision_date)}. ${UI.register.note}`;
@@ -244,14 +284,17 @@ export function createTable(table, moreButton, captionNode, {
   function appendRows(products) {
     const groups = d3.select(table).selectAll(null).data(products).enter().append("tbody").attr("role", "rowgroup");
     const rows = groups.append("tr").attr("role", "row");
+    rows.append("td").attr("class", "status-dot-cell").each(function statusCell(product) {
+      renderStatusDot(d3.select(this), product);
+    });
     rows.append("td").attr("class", "breakable").each(function nameCell(product) {
       renderNameCell(d3.select(this), product, substanceIndex.get(product.ema_product_number) ?? [], current.documents, medicineLink);
     });
     rows.append("td").attr("class", "holder-cell").each(function holderCell(product) {
       this.append(holderOf(product));
     });
-    rows.append("td").attr("class", "status-cell").each(function statusCell(product) {
-      renderStatusCell(d3.select(this), product, current.register);
+    rows.append("td").attr("class", "approved-cell").each(function approvedCell(product) {
+      renderApprovedCell(d3.select(this), product, current.register);
     });
     rows.append("td").attr("class", "type-cell").each(function typeCell(product) {
       renderTypeCell(d3.select(this), product);
@@ -340,7 +383,12 @@ export function createTable(table, moreButton, captionNode, {
       .join("th")
       .attr("scope", "col")
       .attr("role", "columnheader")
-      .text((header) => header);
+      .attr("class", (header, index) => (index === 0 ? "status-dot-head" : null))
+      .each(function header(text, index) {
+        // The dot column's header is read, not shown: the dots name themselves.
+        if (index === 0) d3.select(this).append("span").attr("class", "visually-hidden").text(text);
+        else this.textContent = text;
+      });
     headerSize.disconnect();
     headerSize.observe(root.select("thead").node());
     showMore();

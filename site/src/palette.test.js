@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { ATC_GROUP_HUES as ATC_GROUPS, BRAND_HUES, SERIES_DISTANCE, companySeriesColors, tokenDistance } from "./badges.js";
+import { ATC_GROUP_HUES as ATC_GROUPS, BRAND_HUES, SERIES_DISTANCE, companySeriesColors, statusColor, tokenDistance } from "./badges.js";
 import { OTHER_KEY, STACK_HUES, topWithOther } from "./facets.js";
 
 // WCAG 2.2 contrast of the style.css tokens, light and dark: text >= 4.5:1 on every background
@@ -133,6 +133,19 @@ for (const [mode, tokens] of [["light", light], ["dark", dark]]) {
   test(`${mode} the Authorized status segment differs in lightness from every other status (1.5:1)`, () => {
     const others = STATUS_HUES.filter((hue) => hue !== "green");
     const failing = others.map((hue) => [hue, contrast(tokens, "--status-authorized", `--${hue}-mid`)]).filter(([, ratio]) => ratio < 1.5);
+    assert.deepEqual(failing, []);
+  });
+
+  // The medicines table's status dots (owner decision 2026-09-30): each status's mark
+  // (statusColor()) is a graphic that names the status, so 3:1 on the card and the page (WCAG
+  // 1.4.11); its shape tells the kind apart (statusShape()), not its colour alone.
+  test(`${mode} every status dot's mark reaches 3:1 on page and surface`, () => {
+    const statuses = ["Authorised", "Withdrawn", "Expired", "Lapsed", "Suspended", "Revoked", "Refused", "Application withdrawn",
+      "Withdrawn from rolling review", "Opinion", "Opinion under re-examination", "Something new"];
+    const failing = statuses.flatMap((status) => BACKGROUNDS.map((background) => {
+      const mark = statusColor(status).match(/^var\((--[\w-]+)\)$/)[1];
+      return [status, background, contrast(tokens, mark, background)];
+    })).filter(([, , ratio]) => ratio < 3);
     assert.deepEqual(failing, []);
   });
 

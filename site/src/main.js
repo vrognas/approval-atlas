@@ -19,7 +19,7 @@ import {
 } from "./atc.js";
 import { renderAtcPath } from "./atc-picker.js";
 import { createAtcTree } from "./atc-tree.js";
-import { atcHue, companySeriesColors, statusColor, statusTipId, typeTipId } from "./badges.js";
+import { NEGATIVE_OPINION, atcHue, companySeriesColors, statusColor, statusTipId, typeTipId } from "./badges.js";
 import { renderBreakdown } from "./breakdown.js";
 import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart.js";
 import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, suggestCompanies, toggleCompany } from "./companies.js";
@@ -447,6 +447,8 @@ function renderTypeTips() {
   const container = d3.select("body").append("div").attr("hidden", "");
   for (const [label, tip] of Object.entries(UI.typeTips)) container.append("p").attr("id", typeTipId(label)).text(tip);
   for (const [status, tip] of Object.entries(UI.statusTips)) container.append("p").attr("id", statusTipId(status)).text(tip);
+  // A negative opinion's: the medicines table's status dots (owner decision 2026-09-30).
+  container.append("p").attr("id", statusTipId(NEGATIVE_OPINION)).text(UI.negativeOpinionTip);
   // The modality explainers (M2 phase 2): tree rows, a filter chip, breakdown bars.
   for (const [key, tip] of Object.entries(UI.modalityTips)) container.append("p").attr("id", modalityTipId(key)).text(tip);
 }
