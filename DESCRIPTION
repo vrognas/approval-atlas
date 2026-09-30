@@ -9,6 +9,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Imports:
     cli,
+    digest,
     dplyr,
     httr2 (>= 1.3.0),
     jsonlite,
