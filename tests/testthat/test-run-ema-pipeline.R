@@ -84,7 +84,10 @@ run_fixture_pipeline <- function(output_directory,
                                  smpc_budget = 0L,
                                  equivalents = no_equivalents(),
                                  copies = no_curated_copies(),
-                                 pumas = no_curated_pumas()) {
+                                 pumas = no_curated_pumas(),
+                                 efficacy_path = file.path(
+                                   tempfile(), "efficacy-rows.json"
+                                 )) {
   # Read before the curated tables are mocked to return them.
   force(equivalents)
   force(copies)
@@ -104,7 +107,8 @@ run_fixture_pipeline <- function(output_directory,
     smpc_budget = smpc_budget,
     gleif_path = fixture_gleif_matches_path(),
     chembl_path = fixture_chembl_matches_path(),
-    explanations_path = fixture_atc_explanations_path()
+    explanations_path = fixture_atc_explanations_path(),
+    efficacy_path = efficacy_path
   )
 }
 
@@ -149,7 +153,8 @@ output_stems <- c(
   "ema_curated_pumas",
   "ema_medicine_modalities",
   "modalities",
-  "atc_class_explanations"
+  "atc_class_explanations",
+  "ema_medicine_efficacy"
 )
 
 test_that("run_ema_pipeline writes every table and meta.json from caches", {
@@ -588,6 +593,92 @@ test_that("run_ema_pipeline writes and credits the ATC class explanations", {
   expect_identical(meta$sources[[13]]$name, "ATC class explanations")
   expect_identical(meta$sources[[13]]$version, "Checked 2026-09-29")
   expect_match(meta$licence, "own plain-language summaries", fixed = TRUE)
+})
+
+efficacy_sample_path <- function() {
+  testthat::test_path("fixtures", "efficacy", "efficacy-rows-sample.json")
+}
+
+test_that("run_ema_pipeline writes an empty efficacy table without rows", {
+  forbid_network()
+  output_directory <- file.path(tempfile(), "data")
+  tables <- suppressMessages(run_fixture_pipeline(output_directory))
+  expect_identical(nrow(tables$ema_medicine_efficacy), 0L)
+  expect_identical(
+    names(tables$ema_medicine_efficacy),
+    names(build_efficacy_table(
+      read_efficacy_rows(efficacy_sample_path()),
+      dplyr::tibble(ema_product_number = "EMEA/H/C/004164")
+    ))
+  )
+  expect_identical(
+    readLines(file.path(output_directory, "ema_medicine_efficacy.json")),
+    c("[", "]")
+  )
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  expect_false(any(grepl(
+    "Pivotal results", purrr::map_chr(meta$sources, "name")
+  )))
+})
+
+test_that("run_ema_pipeline writes and credits the pivotal results", {
+  forbid_network()
+  output_directory <- file.path(tempfile(), "data")
+  # The sample's first medicine stands in for one of the fixture medicines.
+  fixture_number <- read_fixture_ema()$data$ema_product_number[1]
+  rows <- read_efficacy_rows(efficacy_sample_path())
+  rows$ema_product_number[
+    rows$ema_product_number == "EMEA/H/C/004164"
+  ] <- fixture_number
+  efficacy_path <- file.path(tempfile(), "efficacy-rows.json")
+  dir.create(dirname(efficacy_path))
+  write_json_table(rows, efficacy_path)
+  messages <- testthat::capture_messages(
+    tables <- run_fixture_pipeline(
+      output_directory,
+      efficacy_path = efficacy_path
+    )
+  )
+  expect_setequal(
+    tables$ema_medicine_efficacy$ema_product_number,
+    fixture_number
+  )
+  expect_identical(nrow(tables$ema_medicine_efficacy), 2L)
+  written <- jsonlite::fromJSON(
+    file.path(output_directory, "ema_medicine_efficacy.json")
+  )
+  expect_identical(nrow(written), 2L)
+  expect_identical(unique(written$source), "ema_smpc")
+  expect_type(written$quotes, "list")
+  expect_match(
+    messages, "Pivotal results: 1 medicines, 2 rows shown",
+    all = FALSE
+  )
+  meta <- jsonlite::fromJSON(
+    file.path(output_directory, "meta.json"),
+    simplifyVector = FALSE
+  )
+  expect_match(meta$sources[[14]]$name, "^Pivotal results")
+  expect_identical(meta$row_counts$ema_medicine_efficacy, 2L)
+})
+
+test_that("run_ema_pipeline stops on a malformed efficacy row", {
+  forbid_network()
+  rows <- read_efficacy_rows(efficacy_sample_path())
+  rows$review[1] <- "maybe"
+  efficacy_path <- file.path(tempfile(), "efficacy-rows.json")
+  dir.create(dirname(efficacy_path))
+  write_json_table(rows, efficacy_path)
+  expect_error(
+    suppressMessages(run_fixture_pipeline(
+      file.path(tempfile(), "data"),
+      efficacy_path = efficacy_path
+    )),
+    "maybe"
+  )
 })
 
 test_that("run_ema_pipeline classifies modalities and credits the sources", {
