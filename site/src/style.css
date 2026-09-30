@@ -4497,11 +4497,15 @@ td.area {
    keeps the line), and an inline block, so a name that wraps is a box of its own and its chips start
    on the line under it, not beside its last line, where the name's line above covered them (axe
    target-size at 1440, 1024 and 320). Not in the conditions card, whose one-line rows (25px) have
-   their own link sizes (its chips were 1px short with these). */
+   their own link sizes (its chips were 1px short with these). Padded up to 24px, not by a fixed 2px
+   (2026-09-30: the medicine card's 24px lines made it 28px, whose 2px below the line took from the
+   next line's chip rims; the 2px stays where the lh unit is not known). */
 :is(#medicines-table, .card) .term a {
   display: inline-block;
   padding-block: 2px;
   margin-block: -2px;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: min(0px, (1lh - 24px) / 2);
 }
 
 /* Top-aligned (about level with the text beside it) and 2px clear of the next line (its margin box:
@@ -6525,6 +6529,21 @@ mark {
     padding: 13px 0;
   }
 
+  /* The protection card's lists: the medicine link 24px tall (it was 21px; the negative margin keeps
+     the line), and a company that wraps under it 16px below, so the company link's 13px above its
+     line never covers the medicine link (axe target-size, 2026-09-30). */
+  .pc-item-head {
+    row-gap: 16px;
+  }
+
+  .pc-item-head > a {
+    display: inline-block;
+    padding-block: 2px;
+    margin-block: -2px;
+    padding-block: max(0px, (24px - 1lh) / 2);
+    margin-block: min(0px, (1lh - 24px) / 2);
+  }
+
   /* Branch chips: the button's transparent rim around its fill makes the hit area 44px tall (the
      negative margin keeps the line) and about 42px wide, the fill staying 24px; the rims of
      neighbouring chips meet without overlapping. The rims only take free space (review 2026-09-29:
@@ -6571,11 +6590,12 @@ mark {
     z-index: 5;
   }
 
-  /* A line of chips 5px clear of the next (29px apart, not 26): a chip's rim stays at least 24px
-     tall where the condition links (24px, above) and rims of the lines around it cover it (axe
-     target-size, audit 2026-09-30, M3: adalimumab's table had 26 chips at 23px). */
+  /* A line of chips 6px clear of the next (30px apart, not 26): a chip's rim stays at least 26px
+     tall where the fills and condition links (24px) of the line above and the rims of the line
+     below cover it (axe target-size, audit 2026-09-30, M3: adalimumab's table had 26 chips at 23px;
+     2026-09-30: at 29px apart the medicine card's C06 chips kept 22px, the table's 24px exactly). */
   .term-branches {
-    margin-block: 0 5px;
+    margin-block: 0 6px;
   }
 
   /* "Show indication": at least 24px tall (M3: 21px); the negative margin keeps its row. */
