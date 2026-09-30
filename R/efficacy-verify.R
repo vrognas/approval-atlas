@@ -98,8 +98,12 @@ arm_size_found <- function(n, section) {
   if (is_absent(n)) {
     return(TRUE)
   }
-  spaced <- format(n, big.mark = " ", scientific = FALSE)
-  sizes <- unique(c(as.character(n), spaced))
+  # Thousands printed with a space ("1 274") or a comma ("1,274").
+  separated <- purrr::map_chr(
+    c(" ", ","),
+    \(mark) format(n, big.mark = mark, scientific = FALSE)
+  )
+  sizes <- unique(c(as.character(n), separated))
   any(purrr::map_lgl(
     sizes,
     \(size) grepl(paste0("[nN]\\s?=\\s?", size, "\\b"), section, perl = TRUE)

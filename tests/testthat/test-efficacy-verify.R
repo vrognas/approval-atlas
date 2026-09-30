@@ -201,3 +201,12 @@ test_that("the page of a quote is found, also across a page break", {
   expect_true(is.na(efficacy_quote_page("", pages)))
   expect_true(is.na(efficacy_quote_page("anything", character())))
 })
+
+test_that("an arm size printed with a thousands comma is found", {
+  row <- list(
+    quotes = "HR 0.5 (0.4, 0.6)", value = "0.5", ci_low = "0.4",
+    ci_high = "0.6", n_treatment = 1274L
+  )
+  section <- "HR 0.5 (0.4, 0.6) (n = 1,274)"
+  expect_equal(verify_efficacy_row(row, section)$status, "exact")
+})
