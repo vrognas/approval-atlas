@@ -5442,9 +5442,12 @@ table.activity {
 }
 
 /* F · Spacious, phase 4 (Miller's Law / chunking, Law of Common Region): the medicine card's blocks,
-   Status, Protection and copies and Documents, each a framed region under its heading (lookup.js
-   cardBlock()). One column on phones; from a 720px frame (a size container, as the page's width,
-   not the viewport's, sets the card's) Status beside Protection, Documents across. */
+   Status, Documents, Indication and Protection and copies, each a framed region under its heading
+   (lookup.js cardBlock()). One column on phones; from a 720px frame (a size container, as the page's
+   width, not the viewport's, sets the card's) two columns in reading order (2026-09-30, Documents
+   second): Status beside Documents, Indication beside Protection; a last block alone in its row
+   goes across (a medicine never approved has no Protection block; the substance card has only
+   Status). */
 .card-blocks-frame {
   container-type: inline-size;
   margin: 16px 0 0;
@@ -5460,13 +5463,13 @@ table.activity {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Documents and Indication across; Status too when no Protection block follows it (never
-     approved) or it is the only block (the substance card). */
-  .card-blocks > .block-documents,
-  .card-blocks > .block-indication,
-  .card-blocks > .block-status:has(+ .block-documents),
-  .card-blocks > .card-block:only-child {
+  .card-blocks > .card-block:last-child:nth-child(odd) {
     grid-column: 1 / -1;
+  }
+
+  /* Documents in a half column: its buttons one under the other. */
+  .card-blocks > .block-documents:not(:last-child:nth-child(odd)) .doc-buttons {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -5521,6 +5524,11 @@ table.activity {
 
 .block-facts > div {
   min-width: 0;
+}
+
+/* The Indication block's therapeutic areas, under its text (2026-09-30). */
+.block-indication .block-facts {
+  margin-top: 12px;
 }
 
 .block-facts dt {
@@ -5625,8 +5633,13 @@ table.activity {
 }
 
 /* Phones: the product information and EPAR buttons end the first screen (Peak-End), so the blocks
-   are compact: tighter padding, the copies lines at 14px, the buttons' lines at 1.3. */
+   are compact: 12px under the headline, tighter padding, the copies lines at 14px, the buttons'
+   lines at 1.3. */
 @media (max-width: 720px) {
+  .card-blocks-frame {
+    margin-top: 12px;
+  }
+
   .card-blocks {
     gap: 10px;
   }
@@ -5651,6 +5664,10 @@ table.activity {
     gap: 10px 12px;
   }
 
+  .block-indication .block-facts {
+    margin-top: 10px;
+  }
+
   .block-protection .copies {
     font-size: 0.875rem;
     line-height: 1.25rem;
@@ -5664,6 +5681,38 @@ table.activity {
     min-height: 48px;
     padding: 6px 12px;
     line-height: 1.3;
+  }
+}
+
+/* 320px phones (2026-09-30: the product information button was below a 320x640 screen): the
+   headline a size smaller, the blocks 2px narrower at their sides, and the Status lead's pill, "since"
+   and date a size smaller, so the pill and "since 16 Dec 2019" (or "approved 26 May 2016") share a
+   line as on wider phones. */
+@media (max-width: 359px) {
+  .card h1 {
+    font-size: 1.625rem;
+    line-height: 2rem;
+  }
+
+  .card-block {
+    padding-inline: 12px;
+  }
+
+  .card .status-lead {
+    column-gap: 6px;
+  }
+
+  .card .status-lead .status.pill {
+    padding: 1px 9px 1px 8px;
+    font-size: 0.875rem;
+  }
+
+  .card .status-lead .status-since {
+    font-size: 0.875rem;
+  }
+
+  .card .status-lead .answer-value {
+    font-size: 1.0625rem;
   }
 }
 
@@ -6478,10 +6527,13 @@ mark {
     margin-top: 4px;
   }
 
-  /* The medicine card's Status block: "and n more" (F · Spacious, phase 4). */
+  /* The medicine card's "and n more" (F · Spacious, phase 4; in the Indication block since
+     2026-09-30): on a line of its own, its 44px box starting under the 5px gap below the chips
+     above, so it never covers their fills or the 24px a chip keeps clear (axe target-size). */
   .toggle.areas-more {
-    display: inline-block;
-    margin: -10px 0;
+    display: block;
+    width: fit-content;
+    margin: 0 0 -10px;
     padding: 10px 0;
   }
 

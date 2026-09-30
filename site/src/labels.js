@@ -86,16 +86,14 @@ export function statusDotTipLine(status, approved, ended, opinion = null) {
 }
 
 // Why a medicine is not authorized, from EMA's own date for its status (statusDate() in
-// approvals.js) and, for opinions, EMA's opinion status. Nothing is inferred. Step 4: an authorized
-// medicine's sentence names a conditional authorization or exceptional circumstances (#9; flags: a
-// search-index or ema_medicines row, null while unknown), and a positive opinion how many days the
-// EU decision usually takes (#12; decision: meta.json opinion_to_decision as { median, p90 } days,
-// null in older data) and, once past that, how long it has waited by the data's date (asOf).
-export function statusSentence(status, date, opinion, { decision = null, asOf = null, flags = null } = {}) {
-  if (statusKind(status) === "authorized") {
-    if (flags?.conditional_approval === true) return UI.card.qualifiers.conditional_approval;
-    return flags?.exceptional_circumstances === true ? UI.card.qualifiers.exceptional_circumstances : null;
-  }
+// approvals.js) and, for opinions, EMA's opinion status. Nothing is inferred. None for an authorized
+// medicine: its qualifiers (conditional, exceptional circumstances) are the chips beside its status,
+// each explained by its tooltip (owner decision 2026-09-30: step 4's sentence repeated them). Step 4:
+// a positive opinion says how many days the EU decision usually takes (#12; decision: meta.json
+// opinion_to_decision as { median, p90 } days, null in older data) and, once past that, how long it
+// has waited by the data's date (asOf).
+export function statusSentence(status, date, opinion, { decision = null, asOf = null } = {}) {
+  if (statusKind(status) === "authorized") return null;
   const on = date ? ` on ${formatDate(date)}` : "";
   if (status === "Opinion under re-examination") {
     return opinion === "Negative" ? `Negative opinion${on}; under re-examination at the company's request.` : "Opinion under re-examination at the company's request.";
@@ -1617,8 +1615,9 @@ export const UI = {
     atc: "Drug class (ATC)",
     areas: "Therapeutic areas",
     fullIndication: "Show full indication",
-    // F · Spacious, phase 4: the Status block's first three conditions, then this button, which
-    // opens More details at the full list (with their branch chips); hidden: the rest of its name.
+    // F · Spacious, phase 4: the Status block's first three conditions (with their branch chips since
+    // 2026-09-30), then this button, which opens More details at the full list; hidden: the rest of
+    // its name.
     moreAreas: (count) => ({ text: `and ${formatCount(count)} more`, hidden: count === 1 ? " therapeutic area" : " therapeutic areas" }),
     // F · Spacious, phase 4 (Miller's Law / chunking): the card's three blocks and, after them, the
     // indication's (what it is for); then one disclosure at the end holding the rest (its hint says what).
@@ -1663,13 +1662,6 @@ export const UI = {
     // Step 4 (#9): the symbol of additional monitoring (EMA's black inverted triangle), before the
     // chip's name (hidden from screen readers, which read the name).
     blackTriangle: "▼",
-    // The dek of a medicine authorized with a qualifier (statusSentence()): one short clause, as the
-    // chip beside the status explains it on hover and tap (UI.flagTips; review of step 4: longer
-    // sentences took 4 lines at 320px and pushed the product information a screen down).
-    qualifiers: {
-      conditional_approval: "Conditionally authorized: renewed yearly until full data are provided.",
-      exceptional_circumstances: "Authorized under exceptional circumstances: reviewed yearly.",
-    },
     // Step 4 (#12): after a positive opinion's sentence; days: meta.json opinion_to_decision.median_days.
     decisionUsually: (days) => `The EU decision usually comes about ${formatCount(days)} days after the opinion.`,
     // Review of step 4: a positive opinion past the median, by the data's date; beyondMost: past the
