@@ -11,7 +11,8 @@ claude_api_key <- function() {
       i = "Add it to {.file .Renviron} (gitignored) and restart R."
     ))
   }
-  key
+  # Invisible, so a bare call at a script's top level never prints the key.
+  invisible(key)
 }
 
 claude_request_to <- function(url, key) {
