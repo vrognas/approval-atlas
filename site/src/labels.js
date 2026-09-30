@@ -59,12 +59,23 @@ export function statusKind(status) {
   return STATUS_KINDS[status] ?? "ended";
 }
 
-// Second line of the merged "Approved · Status" cell: the approval date; for an authorization
-// that ended on a known date, "{end} · approved {approval}".
+// Second line of the result tables' merged "Approved · Status" cell: the approval date; for an
+// authorization that ended on a known date, "{end} · approved {approval}".
 export function statusDateLine(status, approved, ended) {
   if (statusKind(status) === "authorized") return formatDate(approved) ?? UI.card.noDate;
   if (ended) return approved ? `${formatDate(ended)} · approved ${formatDate(approved)}` : formatDate(ended);
   return approved ? `approved ${formatDate(approved)}` : null;
+}
+
+// The medicines table's status dot (owner decision 2026-09-30): its accessible name and the first
+// line of its tooltip. Authorized: since its approval; any other status: its label (a negative
+// opinion's too: statusOpinionLabel()), then the date it ended where EMA has one, then its approval
+// date where it had one: "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)", "Refused".
+export function statusDotLine(status, approved, ended, opinion = null) {
+  const label = statusOpinionLabel(status, opinion);
+  if (statusKind(status) === "authorized") return approved ? `${label} since ${formatDate(approved)}` : `${label}, ${UI.card.noDate}`;
+  const end = ended ? ` ${formatDate(ended)}` : "";
+  return `${label}${end}${approved ? ` (approved ${formatDate(approved)})` : ""}`;
 }
 
 // Why a medicine is not authorized, from EMA's own date for its status (statusDate() in
@@ -1009,10 +1020,13 @@ export const UI = {
   },
 
   table: {
+    // Owner decision 2026-09-30: a status dot column first (its header visually hidden), then a
+    // narrow "Approved" date column, in place of "Approved · Status".
     headers: [
+      "Status",
       "Medicine",
       "Company · Holder",
-      "Approved · Status",
+      "Approved",
       "Type",
       "ATC",
       "Therapeutic area",
@@ -1028,6 +1042,10 @@ export const UI = {
     // The indication toggle names what it shows: stacked rows (phones) have no visible header.
     show: "Show indication",
     hide: "Hide indication",
+    // The Approved column: a medicine without an approval date; on phones (no visible header) its
+    // date follows "Approved".
+    noDate: "No date",
+    approved: "Approved",
     incomplete: "incomplete",
     incompleteTitle: "Incomplete code: not at WHO's most specific level, or not a valid ATC code",
     source: (source) => `Source: ${SOURCE_LABELS[source] ?? source}`,

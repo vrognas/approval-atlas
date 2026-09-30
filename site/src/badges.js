@@ -1,6 +1,6 @@
 // Pure: what the ATC and medicine-type badges show and which hue they take (the hue classes and
 // their level shades are in style.css). No DOM.
-import { UI } from "./labels.js";
+import { UI, statusKind } from "./labels.js";
 
 // A valid ATC code at any level (upper case), and the lengths of ATC level 1-5 codes: the one
 // definition the other modules import.
@@ -88,6 +88,17 @@ export function statusHue(status) {
 // status stacked on it (palette.test.js).
 export function statusColor(status) {
   return status === "Authorised" ? "var(--status-authorized)" : `var(--${statusHue(status)}-mid)`;
+}
+
+// The medicines table's status dot (owner decision 2026-09-30) in statusColor(), with a shape per
+// status kind (statusKind()), so the kind is not told by colour alone (WCAG 1.4.1), in forced
+// colors too: a filled circle authorized, a ring ended (withdrawn, expired, lapsed, suspended,
+// revoked, and unknown statuses), a half-filled circle pending (an opinion, its re-examination), a
+// cross never authorized (refused, application withdrawn, withdrawn from rolling review).
+const STATUS_SHAPES = { authorized: "filled", ended: "ring", pending: "half", refused: "cross" };
+
+export function statusShape(status) {
+  return STATUS_SHAPES[statusKind(status)];
 }
 
 // Company monogram badges (companies part 2, user decision 2026-09-28; no logos): the largest
@@ -197,6 +208,8 @@ export function companySeriesColors(keys, palette = { light: {}, dark: {} }) {
 export const typeTipId = (label) => `type-tip-${label.toLowerCase().replaceAll(" ", "-")}`;
 // The same for a status's (UI.statusTips): "Application withdrawn" -> "status-tip-application-withdrawn".
 export const statusTipId = (status) => `status-tip-${status.toLowerCase().replaceAll(" ", "-")}`;
+// A negative opinion's (UI.negativeOpinionTip): statusTipId(NEGATIVE_OPINION), no EMA status of that name.
+export const NEGATIVE_OPINION = "Negative opinion";
 
 // A medicine type's or status's explanation and the id of its hidden copy (the description of a
 // focusable carrier), or null when it has none.
