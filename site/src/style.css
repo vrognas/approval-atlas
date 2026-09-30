@@ -3643,6 +3643,12 @@ table.conditions-table {
   #medicines-table tbody :is(a, button, [tabindex]) {
     scroll-margin-top: calc(var(--thead-h, 40px) + 8px);
   }
+
+  /* The indication under its medicine starts where the Medicine column's text does (the dot column's
+     14px and 24px, then the cell's 12px). */
+  #medicines-table tr.indication > td {
+    padding-left: 50px;
+  }
 }
 
 /* Narrow (under 600px: phones): no box scrolling both ways inside the page; each medicine stacks:
@@ -3709,15 +3715,20 @@ table.conditions-table {
     color: var(--ink-secondary);
   }
 
-  /* Name and holder first, then the status dot with its short label, "Approved {date}", type and
-     ATC side by side (owner decision 2026-09-30: the dot column leads the wide table). */
+  /* Name and holder first, then the status dot with its status ("Authorized", "Withdrawn 12 Jun
+     2026"), "Approved {date}" (or "No approval date"), type and ATC side by side (owner decision
+     2026-09-30: the dot column leads the wide table). The Approved cell's status text is the dot's
+     here. */
   #medicines-table :is(td.breakable, td.holder-cell) {
     order: -1;
   }
 
-  #medicines-table .status-dot-label,
-  #medicines-table .approved-prefix {
+  #medicines-table :is(.status-dot-label, .approved-prefix, .no-date-long) {
     display: inline;
+  }
+
+  #medicines-table :is(.approved-status, .no-date-short) {
+    display: none;
   }
 
   #medicines-table :is(td.status-dot-cell, td.approved-cell) {
@@ -3971,8 +3982,10 @@ td.status-dot-cell {
   font-weight: 500;
 }
 
-/* The Approved column: a date, or "No date", on one line; the Union Register marker under it. As
-   narrow as that (width: 1px), so the other columns take the room. */
+/* The Approved column: a date, or "No date", on one line; under it a status other than Authorized
+   and its end date, muted (review of the status dot, 2026-09-30: keyboard and colour-blind readers
+   had them only in the dot's tip; the words wrap, a date stays whole), and the Union Register
+   marker. As narrow as the date (width: 1px), so the other columns take the room. */
 td.approved-cell {
   width: 1px;
   color: var(--ink-secondary);
@@ -3983,16 +3996,48 @@ td.approved-cell {
   white-space: nowrap;
 }
 
-.approved-prefix {
+.approved-prefix,
+.no-date-long {
   display: none;
 }
 
+.approved-status {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+:is(.approved-status, .status-dot-label) .nowrap {
+  white-space: nowrap;
+}
+
+/* The marker wraps in the narrow column: a rounded box (6px), not a pill, when it takes two lines. */
 td.approved-cell .register-flag {
   display: block;
   width: fit-content;
   margin-top: 4px;
+  border-radius: 6px;
   color: var(--ink);
   white-space: normal;
+}
+
+/* The dots' shapes after the table's caption (table.js renderShapesKey()), in the ink colour: a key
+   to the shapes, not the colours. */
+.shapes-key {
+  display: block;
+  margin-top: 4px;
+}
+
+.shapes-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shapes-key .status-mark {
+  color: var(--ink-secondary);
 }
 
 .badges {

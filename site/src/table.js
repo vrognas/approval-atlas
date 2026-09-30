@@ -1,9 +1,9 @@
 import * as d3 from "d3";
 import { areaChips, chipTogglable, fillTerm, markAreaChips } from "./area-chips.js";
 import { atcBadgeTip, atcCode, atcLevelNames, atcOrigin, atcRowIncomplete } from "./atc.js";
-import { NEGATIVE_OPINION, atcHue, atcSegments, statusColor, statusHue, statusShape, statusTipId, typeBadges } from "./badges.js";
+import { atcHue, atcSegments, statusColor, statusHue, statusShape, statusTip, typeBadges } from "./badges.js";
 import { quickDocuments } from "./documents.js";
-import { UI, atcOriginFlag, atcOriginText, formatDate, statusDotLine, statusOpinionLabel, statusTipText } from "./labels.js";
+import { UI, atcOriginFlag, atcOriginText, formatDate, statusDotLine, statusDotTipLine, statusKind, statusLabel, statusOpinionLabel } from "./labels.js";
 import { documentLinks } from "./lookup.js";
 import { focusToolbarButton, toolbarKeydown } from "./toolbar.js";
 
@@ -126,37 +126,84 @@ function statusMark(shape) {
   return svg;
 }
 
+// The dots' shapes, on a line of their own after the caption, when the rows have a status other than
+// Authorized (review of the status dot, 2026-09-30: the shapes had no key; the default view, every
+// dot filled, needs none): each shape present, in the ink colour (a key to shapes, not colours;
+// aria-hidden), then its word, read as text.
+const SHAPE_ORDER = ["filled", "ring", "half", "cross"];
+
+function renderShapesKey(caption, products) {
+  const present = new Set(products.map((product) => statusShape(product.medicine_status)));
+  const shapes = SHAPE_ORDER.filter((shape) => present.has(shape));
+  if (!shapes.some((shape) => shape !== "filled")) return;
+  const key = caption.append("span").attr("class", "shapes-key");
+  key.append("span").text(`${UI.table.shapesKey.lead} `);
+  shapes.forEach((shape, index) => {
+    const item = key.append("span").attr("class", "shapes-key-item");
+    item.append(() => statusMark(shape));
+    item.append("span").text(`${UI.table.shapesKey[shape]}${index < shapes.length - 1 ? "," : ""}`);
+    if (index < shapes.length - 1) key.append(() => document.createTextNode(" "));
+  });
+}
+
+// A status other than Authorized as visible text (statusDotLine(): "Withdrawn 16 Jan 2009",
+// "Refused"), its end date kept on one line; aria-hidden, as the dot's hidden name says it.
+function appendStatusText(parent, className, product) {
+  const { medicine_status: status, authorized_until: ended } = product;
+  const text = parent.append("span").attr("class", className).attr("aria-hidden", "true")
+    .text(statusOpinionLabel(status, product.opinion_status ?? null));
+  if (!ended) return;
+  // The space outside the date, so the line can break there.
+  text.append(() => document.createTextNode(" "));
+  text.append("span").attr("class", "nowrap").text(formatDate(ended));
+}
+
 // The status dot (owner decision 2026-09-30): the status's colour (statusColor()) in a shape per
-// status kind (statusShape()), named by its status and dates ("Withdrawn 16 Jan 2009 (approved 19
-// Jun 2006)", statusDotLine(); visually hidden text), the tooltip that line and the status's
-// explanation (UI.statusTips; a negative opinion its own, statusTipText()), a 24px carrier a tap
-// shows it on (tabindex -1, no tab stop), as the type badges. On phones the status's short label
-// follows the dot (aria-hidden: the hidden line says it).
+// status kind (statusShape()), named by its status and end date ("Withdrawn 16 Jan 2009",
+// "Authorized since 6 Jan 2022", statusDotLine(); visually hidden text), the tooltip that line with
+// the approval date of a status other than Authorized (statusDotTipLine()) and the status's
+// explanation (statusTip(): UI.statusTips, a negative opinion its own), which also describes it; a
+// 24px carrier a tap shows it on (tabindex -1, no tab stop), as the type badges. On hover the tip
+// waits the explainers' pause (.mesh-tip; review of the status dot: sweeping down the column opened
+// one per row) and opens above the pointer (.tip-pointer-above: below, it covered the row's PI and
+// EPAR links); a tap shows it (.tap-tip). On phones the status follows the dot as text
+// (aria-hidden: the hidden name says it): "Authorized", else the Approved cell's status text.
 function renderStatusDot(cell, product) {
   const status = product.medicine_status;
   const opinion = product.opinion_status ?? null;
-  const line = statusDotLine(status, product.authorized_from, product.authorized_until, opinion);
-  const explanation = statusTipText(status, opinion);
-  const describedBy = opinion === "Negative" && status === "Opinion" ? statusTipId(NEGATIVE_OPINION) : UI.statusTips[status] ? statusTipId(status) : null;
+  const { authorized_from: approved, authorized_until: ended } = product;
+  const tip = statusTip(status, opinion);
+  const tipLine = statusDotTipLine(status, approved, ended, opinion);
   const dot = cell.append("span")
-    .attr("class", `status-dot hue-${statusHue(status)}${explanation ? " tip-lines" : ""}`)
-    .attr("data-tip", explanation ? `${line}\n${explanation}` : line)
+    .attr("class", `status-dot mesh-tip tap-tip tip-pointer-above hue-${statusHue(status)}${tip ? " tip-lines" : ""}`)
+    .attr("data-tip", tip ? `${tipLine}\n${tip.text}` : tipLine)
     .attr("tabindex", "-1")
-    .attr("aria-describedby", describedBy)
+    .attr("aria-describedby", tip?.id ?? null)
     .style("color", statusColor(status));
   dot.append(() => statusMark(statusShape(status)));
-  dot.append("span").attr("class", "visually-hidden").text(line);
-  dot.append("span").attr("class", "status-dot-label").attr("aria-hidden", "true").text(statusOpinionLabel(status, opinion));
+  dot.append("span").attr("class", "visually-hidden").text(statusDotLine(status, approved, ended, opinion));
+  if (statusKind(status) === "authorized") dot.append("span").attr("class", "status-dot-label").attr("aria-hidden", "true").text(statusLabel(status));
+  else appendStatusText(dot, "status-dot-label", product);
 }
 
-// The Approved column: the approval date ("No date" without one; an ended authorization's end is in
-// the dot's tooltip). On phones "Approved" goes before it (aria-hidden: the column header says it).
-// Union Register disagreement: a visible marker, the full text as tooltip (a data-tip, shown on a
-// tap too; owner feedback 2026-09-29: it was a native title) and for screen readers.
+// The Approved column: the approval date ("No date" without one, "No approval date" on phones,
+// where no header names the column), then, for a status other than Authorized, the status and its
+// end date as muted text (review of the status dot, 2026-09-30: a keyboard or colour-blind reader
+// had them only in the dot's tip; phones show it after the dot instead). On phones "Approved" goes
+// before a date (aria-hidden: the column header says it). Union Register disagreement: a visible
+// marker, the full text as tooltip (a data-tip, shown on a tap too; owner feedback 2026-09-29: it
+// was a native title) and for screen readers.
 function renderApprovedCell(cell, product, register) {
   const date = cell.append("span").attr("class", "approved-date");
-  date.append("span").attr("class", "approved-prefix").attr("aria-hidden", "true").text(`${UI.table.approved} `);
-  date.append("span").text(formatDate(product.authorized_from) ?? UI.table.noDate);
+  const approved = formatDate(product.authorized_from);
+  if (approved) {
+    date.append("span").attr("class", "approved-prefix").attr("aria-hidden", "true").text(`${UI.table.approved} `);
+    date.append("span").text(approved);
+  } else {
+    date.append("span").attr("class", "no-date-short").text(UI.table.noDate);
+    date.append("span").attr("class", "no-date-long").text(UI.table.noApprovalDate);
+  }
+  if (statusKind(product.medicine_status) !== "authorized") appendStatusText(cell, "approved-status", product);
   const row = register?.get(product.ema_product_number);
   if (row?.agrees_with_ema !== false) return;
   const text = `${UI.register.chip(row.register_status, row.register_last_decision_date)}. ${UI.register.note}`;
@@ -377,6 +424,7 @@ export function createTable(table, moreButton, captionNode, {
     const root = d3.select(table);
     root.selectChildren().remove();
     captionNode.textContent = caption;
+    renderShapesKey(d3.select(captionNode), products);
     root.append("thead").attr("role", "rowgroup").append("tr").attr("role", "row")
       .selectAll("th")
       .data(HEADERS)

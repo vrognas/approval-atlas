@@ -67,15 +67,22 @@ export function statusDateLine(status, approved, ended) {
   return approved ? `approved ${formatDate(approved)}` : null;
 }
 
-// The medicines table's status dot (owner decision 2026-09-30): its accessible name and the first
-// line of its tooltip. Authorized: since its approval; any other status: its label (a negative
-// opinion's too: statusOpinionLabel()), then the date it ended where EMA has one, then its approval
-// date where it had one: "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)", "Refused".
+// The medicines table's status dot (owner decision 2026-09-30): its accessible name, and, for a
+// status other than Authorized, the text under the approval date (review of the status dot: the
+// status within a kind was told by colour alone). Authorized: since its approval; any other status:
+// its label (a negative opinion's too: statusOpinionLabel()), then the date it ended where EMA has
+// one: "Withdrawn 16 Jan 2009", "Refused". The approval date is the Approved column's.
 export function statusDotLine(status, approved, ended, opinion = null) {
   const label = statusOpinionLabel(status, opinion);
   if (statusKind(status) === "authorized") return approved ? `${label} since ${formatDate(approved)}` : `${label}, ${UI.card.noDate}`;
-  const end = ended ? ` ${formatDate(ended)}` : "";
-  return `${label}${end}${approved ? ` (approved ${formatDate(approved)})` : ""}`;
+  return ended ? `${label} ${formatDate(ended)}` : label;
+}
+
+// The first line of the dot's tooltip: its name, then, for a status other than Authorized, its
+// approval date where it had one: "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)".
+export function statusDotTipLine(status, approved, ended, opinion = null) {
+  const line = statusDotLine(status, approved, ended, opinion);
+  return statusKind(status) !== "authorized" && approved ? `${line} (approved ${formatDate(approved)})` : line;
 }
 
 // Why a medicine is not authorized, from EMA's own date for its status (statusDate() in
@@ -1042,10 +1049,20 @@ export const UI = {
     // The indication toggle names what it shows: stacked rows (phones) have no visible header.
     show: "Show indication",
     hide: "Hide indication",
-    // The Approved column: a medicine without an approval date; on phones (no visible header) its
-    // date follows "Approved".
+    // The Approved column: a medicine without an approval date ("No approval date" on phones, where
+    // no header names the column); on phones a date follows "Approved".
     noDate: "No date",
+    noApprovalDate: "No approval date",
     approved: "Approved",
+    // The status dots' shapes, after the caption when the status filter is not the default (review of
+    // the status dot, 2026-09-30); keys: badges.js statusShape().
+    shapesKey: {
+      lead: "Status shapes:",
+      filled: "authorized",
+      ring: "ended",
+      half: "awaiting decision",
+      cross: "never authorized",
+    },
     incomplete: "incomplete",
     incompleteTitle: "Incomplete code: not at WHO's most specific level, or not a valid ATC code",
     source: (source) => `Source: ${SOURCE_LABELS[source] ?? source}`,

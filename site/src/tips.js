@@ -63,22 +63,25 @@ export function tipBounds(width, height, clip = null) {
 }
 
 // One axis of a tip at the pointer: after it when it fits, else before it, else as far after it as
-// fits inside [min, max].
-function pointerSide(at, length, min, max) {
+// fits inside [min, max]; beforeFirst: before it when it fits, else after it.
+function pointerSide(at, length, min, max, beforeFirst = false) {
   const after = at + POINTER_OFFSET;
-  if (after + length <= max) return after;
   const before = at - POINTER_OFFSET - length;
+  if (beforeFirst && before >= min) return before;
+  if (after + length <= max) return after;
   if (before >= min) return before;
   return Math.max(min, Math.min(after, max - length));
 }
 
 // A tip at the pointer (owner decision 2026-09-29: hover tips open at the cursor): its top-left
 // corner, in whole viewport pixels, 12px below and right of pointer ({ x, y }), flipped left or
-// above where size ({ width, height }) does not fit inside bounds (tipBounds()).
-export function atPointer(pointer, size, bounds) {
+// above where size ({ width, height }) does not fit inside bounds (tipBounds()). above: 12px above
+// the pointer where it fits, else below (the medicines table's status dots, 2026-09-30: below, the
+// tip covered the row's PI and EPAR links).
+export function atPointer(pointer, size, bounds, above = false) {
   return {
     left: Math.round(pointerSide(pointer.x, size.width, bounds.left, bounds.right)),
-    top: Math.round(pointerSide(pointer.y, size.height, bounds.top, bounds.bottom)),
+    top: Math.round(pointerSide(pointer.y, size.height, bounds.top, bounds.bottom, above)),
   };
 }
 

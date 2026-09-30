@@ -572,7 +572,9 @@ function setupTips() {
   }
   function moveTip(point) {
     const { carrier, size, origin, clip } = pointed;
-    const place = atPointer(point, size, tipBounds(root.clientWidth, root.clientHeight, clip));
+    // .tip-pointer-above: above the pointer (the medicines table's status dots, whose row's PI and
+    // EPAR links a tip below covered).
+    const place = atPointer(point, size, tipBounds(root.clientWidth, root.clientHeight, clip), carrier.classList.contains("tip-pointer-above"));
     pointed.anchor = point;
     pointed.rect = { ...place, width: size.width, height: size.height, right: place.left + size.width, bottom: place.top + size.height };
     const bridge = pointerBridge(point, pointed.rect);
