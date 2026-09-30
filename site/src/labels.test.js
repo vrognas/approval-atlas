@@ -244,7 +244,7 @@ test("the footer's three lines: sources with their licences, use and non-affilia
   );
   assert.equal(
     partsText(footer.licence),
-    "Data CC BY-SA 4.0 (third-party values keep their own terms) · Code MIT · No cookies or tracking · Run by Viktor Rognås · Contact: viktor@vrognas.com",
+    "Data CC BY-SA 4.0 (third-party values keep their own terms) · Code MIT · No cookies or tracking · Run by Viktor Rognås · Contact: viktor@vrognas.com",
   );
   assert.deepEqual(partsUrls(footer.licence), [
     "https://creativecommons.org/licenses/by-sa/4.0/",

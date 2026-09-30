@@ -1993,7 +1993,8 @@ export const UI = {
       { text: "CC BY-SA 4.0", url: LINKS.ccBySa4 },
       " (third-party values keep their own terms) · Code ",
       { text: "MIT", url: LINKS.mit },
-      " · No cookies or tracking · Run by Viktor Rognås · Contact: ",
+      // A no-break space keeps "Contact:" on the address's line.
+      " · No cookies or tracking · Run by Viktor Rognås · Contact: ",
       { text: "viktor@vrognas.com", url: LINKS.email },
     ],
   },
