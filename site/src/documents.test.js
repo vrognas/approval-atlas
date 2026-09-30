@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
 
 const doc = (document_type, last_updated_date, url = `https://www.ema.europa.eu/en/documents/${document_type}/x-${last_updated_date}_en.pdf`) => ({
@@ -150,3 +151,47 @@ test("documents first published from a namesake's approval on are the namesake's
   // No namesake approval: every document is the medicine's own.
   assert.deepEqual(splitNamesakeDocuments([refusal, pi], null), { own: [refusal, pi], namesake: [] });
 });
+
+// ema_medicine_primary_documents.json (audit 2026-09-30, S5): the pipeline's pick of the rows the
+// buttons and links can show, without titles; refusal_report marks a refusal report.
+test("primary-documents rows give the buttons their full rows give", () => {
+  const pi = doc("product-information", "2025-09-17");
+  const epar = { ...doc("assessment-report", "2018-05-04"), title: "Mylotarg : EPAR - Public assessment report" };
+  const refusal = { ...doc("assessment-report", "2008-04-17"), title: "Mylotarg : EPAR - Refusal public assessment report" };
+  const overview = doc("overview", "2018-05-04");
+  const short = (row, refusalReport = false) => ({
+    ema_product_number: row.ema_product_number, document_type: row.document_type, refusal_report: refusalReport, url: row.url, last_updated_date: row.last_updated_date,
+  });
+  const shortRows = [short(epar), short(refusal, true), short(overview), short(pi)];
+  const pick = (rows, status) => primaryDocuments(groupDocuments(rows), status).primary.map(({ key, row }) => [key, row.url, row.last_updated_date]);
+  for (const status of ["Authorised", "Withdrawn", "Refused", "Opinion", "Application withdrawn", undefined]) {
+    assert.deepEqual(pick(shortRows, status), pick([pi, epar, refusal, overview], status), status);
+    assert.deepEqual(quickDocuments(shortRows, status), quickDocuments([pi, epar, refusal, overview], status), status);
+  }
+  assert.deepEqual(quickDocuments([short(refusal, true)], "Refused"), { epar: refusal.url });
+  assert.deepEqual(quickDocuments([{ ...short(pi), url: "http://example.org/a.pdf" }]), {});
+});
+
+const dataDir = new URL("../public/data/", import.meta.url);
+const realFiles = ["ema_medicine_documents.json", "ema_medicine_primary_documents.json", "ema_search_index.json"].map((file) => new URL(file, dataDir));
+const byProduct = (rows) => rows.reduce((groups, row) => groups.set(row.ema_product_number, [...(groups.get(row.ema_product_number) ?? []), row]), new Map());
+
+// The card and the tables take their buttons and links from the small file before the full index
+// has loaded (lookup.js quickDocumentRows()): for every medicine and any status, they must agree.
+test(
+  "on the real data the primary-documents file gives every medicine the buttons of the full index",
+  { skip: realFiles.every(existsSync) ? false : "document data files not found: run the pipeline first" },
+  () => {
+    const [full, short, index] = realFiles.map((file) => JSON.parse(readFileSync(file, "utf8")));
+    const [fullBy, shortBy] = [byProduct(full), byProduct(short)];
+    const statuses = [...new Set(index.map((row) => row.medicine_status)), undefined];
+    const pick = (rows, status) => primaryDocuments(groupDocuments(rows ?? []), status).primary.map(({ key, row }) => [key, row.url, row.last_updated_date]);
+    for (const { ema_product_number: number, medicine_status: own } of index) {
+      for (const status of [own, ...statuses]) assert.deepEqual(pick(shortBy.get(number), status), pick(fullBy.get(number), status), `${number} ${status}`);
+    }
+    for (const number of shortBy.keys()) assert.ok(fullBy.has(number), number);
+    const kinds = short.map((row) => `${row.ema_product_number}|${row.document_type}|${row.refusal_report}`);
+    assert.equal(new Set(kinds).size, kinds.length);
+    assert.deepEqual(Object.keys(short[0]), ["ema_product_number", "document_type", "refusal_report", "url", "last_updated_date"]);
+  },
+);
