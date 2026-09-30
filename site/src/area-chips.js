@@ -11,13 +11,18 @@
 // branchSelected() and branchIncludedIn(); the click is the caller's (chipTogglable()). The visible
 // chip is its fill (.area-chip-fill) inside the button, so on phones the button's transparent rim can
 // give way to every fill (style.css).
+// On the lookup's cards (the medicine card, the substance card's table; Laws of UX, second pass,
+// owner decision 2026-09-30) a chip is a link to its branch's condition page instead (link option):
+// a tag-like chip that filtered the overview swapped the card for it. Neither pressed nor disabled
+// there; the toolbar stays (its first link the one tab stop, the arrow keys to the others and "+n",
+// whose tooltip needs that keyboard path), as the dashboard's chips.
 import { branchChips, branchIncludedIn, branchSelected } from "./areas.js";
 import { UI } from "./labels.js";
 
 const CHIP = "button.area-chip";
 
-// Each toolbar's term branches ({ codes, branches: termBranches() }), so markAreaChips() can show
-// other chips when the area filter changes.
+// Each toolbar's term branches ({ codes, branches: termBranches(), link }), so markAreaChips() can
+// show other chips when the area filter changes.
 const sources = new WeakMap();
 
 const node = (tag, className, text = null) => {
@@ -28,18 +33,46 @@ const node = (tag, className, text = null) => {
 };
 
 // The chips of term (branches: termBranches(); selected: the area filter, null while unknown), or
-// null for a term without a branch.
-export function areaChips(term, branches, selected) {
+// null for a term without a branch. link(code, name, fill): a chip as a link (the lookup's cards):
+// the element holding fill, or null for a branch without a page (then a plain label).
+export function areaChips(term, branches, selected, { link = null } = {}) {
   const codes = branches.of(term);
   if (!codes.length) return null;
   const toolbar = node("span", "area-chips");
   toolbar.setAttribute("role", "toolbar");
   toolbar.setAttribute("aria-label", UI.areas.chips(term));
-  sources.set(toolbar, { codes, branches });
+  sources.set(toolbar, { codes, branches, link });
   const wrap = node("span", "term-branches");
   wrap.append(toolbar);
-  markAreaChips(wrap, selected);
+  if (link) {
+    const { shown, rest } = branchChips(codes);
+    fillChips(toolbar, shown, rest);
+  } else {
+    markAreaChips(wrap, selected);
+  }
   return wrap;
+}
+
+// A card's chip: a link to its branch's condition page (named "Open condition page: C10 Nervous
+// System Diseases", the branch's name its tooltip), else, without a page, a plain label the arrow
+// keys and a tap still reach for its tooltip.
+function linkChip(code, name, link) {
+  const fill = node("span", "area-chip-fill", code);
+  const chip = link(code, name, fill);
+  if (chip) {
+    chip.classList.add("area-chip");
+    chip.setAttribute("aria-label", UI.areas.chipLink(code, name));
+  } else {
+    const label = node("span", "area-chip toolbar-item");
+    label.append(fill);
+    label.tabIndex = -1;
+    label.setAttribute("role", "img");
+    label.setAttribute("aria-label", UI.areas.chipName(code, name));
+    label.dataset.tip = name;
+    return label;
+  }
+  chip.dataset.tip = name;
+  return chip;
 }
 
 // The toolbar's chips (branchChips(): those within the selection first), then "+n" naming the rest,
@@ -48,8 +81,9 @@ export function areaChips(term, branches, selected) {
 // it; never the tab stop), an image named by the branches it stands for (conditions card review
 // 2026-09-29: focused, it was an unnamed generic), at least 24px (44px on phones, style.css).
 function fillChips(toolbar, shown, rest) {
-  const { branches } = sources.get(toolbar);
+  const { branches, link } = sources.get(toolbar);
   const chips = shown.map((code) => {
+    if (link) return linkChip(code, branches.name(code), link);
     const chip = node("button", "area-chip");
     chip.type = "button";
     chip.dataset.area = code;
@@ -59,6 +93,11 @@ function fillChips(toolbar, shown, rest) {
     return chip;
   });
   toolbar.replaceChildren(...chips);
+  // A card's toolbar: its first link the one tab stop.
+  if (link) {
+    const links = [...toolbar.querySelectorAll("a.area-chip")];
+    for (const chip of links) chip.tabIndex = chip === links[0] ? 0 : -1;
+  }
   if (!rest.length) return;
   const text = UI.areas.chipsRest(rest.map((code) => ({ code, name: branches.name(code) })));
   // As a chip, its visible part (.area-more-fill) inside, so on phones its rim can give way.
@@ -101,6 +140,7 @@ function includedDescription(category) {
 export function markAreaChips(root, selected) {
   const known = selected ?? [];
   for (const toolbar of root.querySelectorAll(".area-chips")) {
+    if (sources.get(toolbar).link) continue; // a card's links: no filter state
     const { shown, rest } = branchChips(sources.get(toolbar).codes, known);
     if (String(shown) !== String([...toolbar.querySelectorAll(CHIP)].map((chip) => chip.dataset.area))) fillChips(toolbar, shown, rest);
     const chips = [...toolbar.querySelectorAll(CHIP)];

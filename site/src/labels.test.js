@@ -1320,6 +1320,7 @@ test("substance and condition answers name EMA or the central procedure", () => 
     UI.about.scope,
     UI.page.scope(labels.SOURCES),
     UI.page.scope(labels.SOURCES, { widened: true }),
+    UI.page.title(labels.SOURCES, { widened: true }),
   ];
   for (const text of texts) assert.match(text, /\bEMA\b|\bcentral/, text);
   assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11 Feb 2003 (Avandamet)");
@@ -1330,7 +1331,13 @@ test("substance and condition answers name EMA or the central procedure", () => 
 // under it, a scope line built from the sources the data has (SOURCES), so another one joins the line.
 test("the page heading is source-neutral; its scope line names the sources", () => {
   const { UI, SOURCES } = labels;
-  assert.equal(UI.page.title, "Approved medicines");
+  assert.equal(UI.page.title(SOURCES), "Approved medicines");
+  // Laws of UX, second pass (owner decision 2026-09-30): widened, the heading follows the scope and
+  // names the sources' lists, never "approved" or "authorized".
+  assert.equal(UI.page.title(SOURCES, { widened: true }), "Medicines in EMA's list");
+  assert.doesNotMatch(UI.page.title(SOURCES, { widened: true }), /approv|authori/i);
+  assert.equal(UI.page.title([...SOURCES, { key: "other", list: "another agency's list" }], { widened: true }),
+    "Medicines in EMA's list and another agency's list");
   assert.deepEqual(SOURCES.map((source) => source.key), ["ema"]);
   assert.equal(UI.page.scope(SOURCES), "Human medicines authorized EU-wide through EMA");
   // With the status filter widened (every status, or a choice of statuses) it is neutral.
@@ -1345,7 +1352,7 @@ test("the page heading is source-neutral; its scope line names the sources", () 
     UI.page.scope([...SOURCES, other], { widened: true }),
     "Human medicines, EU-wide through EMA's central procedure and from another agency",
   );
-  for (const source of SOURCES) assert.ok(source.scope && source.neutral, source.key);
+  for (const source of SOURCES) assert.ok(source.scope && source.neutral && source.list, source.key);
 });
 
 // Owner decision 2026-09-30: the per-year chart's hint where Stack by Status is not offered.
@@ -1418,8 +1425,10 @@ test("substance card: another spelling of the same substance, with its medicines
 test("protection copy: strip cell, basis note and the other-company reason", () => {
   const { protection, card } = labels.UI;
   assert.equal(card.estimate, "(est.)");
-  assert.equal(protection.glance.until(2031, 2032), "Until 2031–2032");
-  assert.equal(protection.glance.until(2031, 2031), "Until 2031");
+  assert.equal(protection.glance.until(2031, 2032), "Market protection until 2031–2032");
+  assert.equal(protection.glance.until(2031, 2031), "Market protection until 2031");
+  // The lead's first words (its body-type part) start every own-estimate value.
+  for (const value of [protection.glance.until(2031, 2032), protection.glance.ended, protection.glance.unclear]) assert.ok(value.startsWith(`${protection.glance.label} `), value);
   // Owner decision 2026-09-30: "(est.)" unless the Union Register publishes the end.
   assert.equal(protection.glance.orphan(2033, "computed"), "Orphan exclusivity until 2033 (est.)");
   assert.equal(protection.glance.orphan(2033, "register"), "Orphan exclusivity until 2033");

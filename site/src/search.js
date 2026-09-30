@@ -330,6 +330,27 @@ export function submitChoice(groups, query) {
   return choice ? { group: choice.group, value: choice.option.value } : null;
 }
 
+// Laws of UX, second pass (owner decision 2026-09-30; Hick's Law, Choice Overload): on a phone, with
+// the keyboard up, the list had up to 8 options in each of 5 groups. There each group of suggestions
+// shows at most PHONE_GROUP_LIMIT, the ones the query names first (as submitChoice() reads them), and
+// how many it leaves out (hidden), for a "Show all" option that expands the group in place (the
+// search box's). A group one longer than the limit is shown whole ("Show all 4" would take the same
+// row); "did you mean", the indication-text search and the recently viewed list are never collapsed.
+// An expanded group keeps that order, so the options it adds follow those shown. groups: the search
+// box's; query: the one the labels are compared with.
+export const PHONE_GROUP_LIMIT = 3;
+const COLLAPSIBLE = new Set(["medicines", "substances", "conditions", "classes", "companies"]);
+export function collapseGroups(groups, query, { limit = PHONE_GROUP_LIMIT, expanded = new Set() } = {}) {
+  const folded = foldSearchText(query);
+  return groups.map((group) => {
+    if (!COLLAPSIBLE.has(group.key)) return { ...group, hidden: 0 };
+    const named = (option) => option.named || foldSearchText(option.label) === folded || (group.key === "classes" && foldSearchText(option.value) === folded);
+    const options = [...group.options.filter(named), ...group.options.filter((option) => !named(option))];
+    if (expanded.has(group.key) || options.length <= limit + 1) return { ...group, options, hidden: 0 };
+    return { ...group, options: options.slice(0, limit), hidden: options.length - limit };
+  });
+}
+
 // Step 2 (#5): Damerau-Levenshtein distance (optimal string alignment: an adjacent swap is one
 // edit), or max + 1 as soon as it must exceed max. Every row holds a cell no larger than any swap
 // in the next, so a row's minimum bounds the result.

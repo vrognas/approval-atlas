@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
+  PHONE_GROUP_LIMIT,
   SPELLING_VARIANTS,
   buildConditions,
+  collapseGroups,
   buildLookupIndex,
   conditionPhrases,
   didYouMean,
@@ -559,3 +561,40 @@ test(
     assert.deepEqual(missing, []);
   },
 );
+
+// Laws of UX, second pass (owner decision 2026-09-30): on phones each group shows at most 3
+// suggestions, those the query names first, then "Show all" (the search box's) for the rest.
+test("collapseGroups: at most 3 per group on phones, the named match first, expandable in place", () => {
+  const option = (label, fields = {}) => ({ label, value: label.toLowerCase(), ...fields });
+  const groups = [
+    { key: "medicines", options: ["Humira", "Hulio", "Humalog", "Humulin", "Hukyndra"].map((label) => option(label)) },
+    { key: "substances", options: [option("human albumin"), option("human fibrinogen"), option("human thrombin"), option("humira", { named: true }), option("x")] },
+    { key: "conditions", options: ["A", "B", "C", "D"].map((label) => option(label)) },
+    { key: "classes", options: ["L04AB Tumor Necrosis Factor Alpha (TNF-α) Inhibitors", "L04", "L04A", "L04AB04", "L01"].map((label) => option(label)) },
+    { key: "fuzzy", options: ["a", "b", "c", "d", "e"].map((label) => option(label)) },
+    { key: "text", options: [option("Search indication texts for “humira”")] },
+  ];
+  assert.equal(PHONE_GROUP_LIMIT, 3);
+  const collapsed = collapseGroups(groups, "Humira");
+  const labels = (key, list = collapsed) => list.find((group) => group.key === key).options.map((entry) => entry.label);
+  const hidden = (key, list = collapsed) => list.find((group) => group.key === key).hidden;
+  assert.deepEqual(labels("medicines"), ["Humira", "Hulio", "Humalog"]);
+  assert.equal(hidden("medicines"), 2);
+  // The option the query names comes first (marked named, or its label, or a class's code, is the query).
+  assert.deepEqual(labels("substances"), ["humira", "human albumin", "human fibrinogen"]);
+  // One more than the limit: shown whole, as "Show all 4" would take the same row.
+  assert.deepEqual(labels("conditions"), ["A", "B", "C", "D"]);
+  assert.equal(hidden("conditions"), 0);
+  assert.deepEqual(labels("classes", collapseGroups(groups, "l04ab04")).slice(0, 1), ["L04AB04"]);
+  // Did you mean and the indication-text search are never collapsed.
+  assert.equal(labels("fuzzy").length, 5);
+  assert.equal(hidden("fuzzy"), 0);
+  assert.deepEqual(labels("text"), ["Search indication texts for “humira”"]);
+  // Expanded: every option, the shown ones first in the same order, nothing hidden.
+  const expanded = collapseGroups(groups, "Humira", { expanded: new Set(["substances"]) });
+  assert.deepEqual(labels("substances", expanded), ["humira", "human albumin", "human fibrinogen", "human thrombin", "x"]);
+  assert.equal(hidden("substances", expanded), 0);
+  assert.equal(hidden("medicines", expanded), 2);
+  // Nothing is lost: shown plus hidden is every option.
+  for (const group of collapsed) assert.equal(group.options.length + group.hidden, groups.find((other) => other.key === group.key).options.length);
+});
