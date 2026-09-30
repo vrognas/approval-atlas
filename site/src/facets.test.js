@@ -27,6 +27,7 @@ import {
   sentenceParts,
   sortActivityRows,
   statusBreakdown,
+  statusStackAvailable,
   tokenLabel,
   topKeys,
   topWithOther,
@@ -34,6 +35,7 @@ import {
   UNPLACED_KEY,
   withUnplaced,
   yearHistogram,
+  yearStackMode,
   yearStacks,
 } from "./facets.js";
 
@@ -772,6 +774,24 @@ const dated = [
   product("D5", { year: null, authorized_from: null, mah: "Zentiva k.s." }),
 ];
 const stacked = (rows) => rows.map((row) => [row.year, row.total, Object.fromEntries(row.counts)]);
+
+// Owner decision 2026-09-30: under the default status filter (authorized only) a Status stack would
+// be one series, so it is offered only once the status filter is widened, and a Status stack falls
+// back to medicine type when the viewer returns to the default.
+test("stack by status is offered only with the status filter widened", () => {
+  assert.equal(statusStackAvailable(DEFAULT_STATE.status), false);
+  assert.equal(statusStackAvailable(["Authorised"]), false);
+  assert.equal(statusStackAvailable([]), true); // every status (?status=all)
+  assert.equal(statusStackAvailable(["Withdrawn"]), true);
+  assert.equal(statusStackAvailable(["Authorised", "Withdrawn"]), true);
+  assert.equal(yearStackMode("status", DEFAULT_STATE.status), "type");
+  assert.equal(yearStackMode("status", []), "status");
+  assert.equal(yearStackMode("status", ["Withdrawn"]), "status");
+  for (const mode of ["type", "atc", "mah", "mod"]) {
+    assert.equal(yearStackMode(mode, DEFAULT_STATE.status), mode);
+    assert.equal(yearStackMode(mode, []), mode);
+  }
+});
 
 test("year stacks by medicine type: one row per year of the range (zeros included), each medicine once", () => {
   assert.deepEqual(stacked(yearStacks(dated, (row) => [row.medicine_type], [2014, 2017])), [

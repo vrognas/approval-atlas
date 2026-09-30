@@ -85,11 +85,13 @@
         <!-- The page header (F · Spacious, phase 1): the heading, the answer headline as its lead
              paragraph (and the dek), Download CSV at the right; then the filter chips. While a
              lookup result is open the dashboard below it is the overview: the heading says so and
-             a note replaces the lead. -->
+             a note replaces the lead. Under the heading (source-neutral, owner decision
+             2026-09-30) the scope line names the sources the data has (labels.js SOURCES). -->
         <div class="page-head">
           <div class="page-head-row">
             <div class="page-head-text">
               <h1 id="page-title"></h1>
+              <p id="page-scope" class="page-scope"></p>
               <div class="answer">
                 <!-- The lead: the headline, then by default (owner decision 2026-09-29, "Authorized by
                      default") a quiet sentence on the medicines of other statuses and "Include them",
@@ -337,6 +339,9 @@
                 <button type="button" data-stack="mod" hidden></button>
               </div>
             </div>
+            <!-- Status is offered only with the status filter widened (owner decision 2026-09-30):
+                 under the default, this says how, its button widening the filter. -->
+            <p id="chart-stack-hint" class="view-options-hint" hidden><button id="chart-stack-widen" class="lead-button" type="button"></button><span id="chart-stack-hint-after"></span></p>
           </div>
           <div id="chart-info" class="card-info" hidden>
             <p id="chart-note" class="muted"></p>

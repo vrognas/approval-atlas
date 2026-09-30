@@ -392,7 +392,7 @@ input[type="checkbox"] {
   margin: 0 0 8px;
 }
 
-/* The page's heading: the overview's ("EU medicines", #page-title: an h2 under a lookup result,
+/* The page's heading: the overview's ("Approved medicines", #page-title: an h2 under a lookup result,
    whose headline is then the h1, .card h1). */
 h1,
 #page-title {
@@ -666,10 +666,10 @@ button {
   cursor: pointer;
 }
 
-/* The page header (F · Spacious, phase 1): the heading ("EU medicines", or "Explore all EMA
-   medicines" under a lookup result), the answer headline as its lead paragraph (15-16px, the
-   number in the accent), the dek quieter under it; Download CSV at the right; then the filter
-   chips. */
+/* The page header (F · Spacious, phase 1): the heading ("Approved medicines", or "Explore EMA
+   medicines" under a lookup result) with its scope line tight under it (the sources, 13px, muted;
+   2026-09-30), the answer headline as its lead paragraph (15-16px, the number in the accent), the
+   dek quieter under it; Download CSV at the right; then the filter chips. */
 .page-head {
   margin: 0 0 24px;
 }
@@ -689,6 +689,24 @@ button {
   gap: 6px;
   min-width: 0;
   max-width: 820px;
+}
+
+.page-scope {
+  margin: -4px 0 2px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.page-scope[hidden] {
+  display: none;
+}
+
+/* 320px phones: 12px keeps it on one line (283px of 288 in Geist, 2026-09-30). */
+@media (max-width: 359px) {
+  .page-scope {
+    font-size: 0.75rem;
+  }
 }
 
 /* The lead paragraph: the headline (#headline, a span focused for a drug class), then by default the
@@ -2454,6 +2472,20 @@ input::placeholder {
 }
 
 .view-options[hidden] {
+  display: none;
+}
+
+/* Under the controls, on a line of its own: how to get a control not offered now ("Include withdrawn,
+   refused and pending to stack by status."; 2026-09-30). */
+.view-options-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.view-options-hint[hidden] {
   display: none;
 }
 
