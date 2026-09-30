@@ -31,12 +31,18 @@ efficacy_review_value <- function(row) {
   interval <- if (is.na(row$ci_low) || is.na(row$ci_high)) {
     ""
   } else {
-    sprintf(
-      " (%s%% CI %s, %s)",
-      dplyr::coalesce(format(row$ci_level), "?"), row$ci_low, row$ci_high
-    )
+    level <- if (is.na(row$ci_level)) "" else paste0(row$ci_level, "% ")
+    sprintf(" (%sCI %s, %s)", level, row$ci_low, row$ci_high)
   }
   paste0(dplyr::coalesce(row$value, "(no value)"), interval)
+}
+
+# Every line of every quote in the block quote; quotes apart by a ">" line.
+efficacy_review_quotes <- function(quotes) {
+  blocks <- purrr::map(quotes, function(quote) {
+    c(paste0("> ", strsplit(quote, "\r?\n")[[1]]), ">")
+  })
+  utils::head(unlist(blocks), -1)
 }
 
 efficacy_review_entry <- function(row) {
@@ -58,7 +64,7 @@ efficacy_review_entry <- function(row) {
     ),
     paste0("- Row key: `", row$row_key, "`"),
     "",
-    paste0("> ", unlist(row$quotes)),
+    efficacy_review_quotes(unlist(row$quotes)),
     ""
   )
 }

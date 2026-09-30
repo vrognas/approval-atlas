@@ -149,15 +149,27 @@ read_efficacy_extractions <- function(path = efficacy_extractions_path) {
   read_json_records(path, efficacy_extraction_types)
 }
 
+# Failures that another try of the same request can fix. Others (truncated,
+# refused, invalid, no row verified, no text read) would fail again and be
+# billed again, so they wait for new product information, another model or
+# APPROVAL_ATLAS_EFFICACY_ONLY (ruling R9).
+is_transient_efficacy_failure <- function(reason) {
+  grepl(
+    "^(errored(: |$)|expired$|canceled$|no result in the batch$)",
+    reason
+  )
+}
+
 # Authorised medicines with product information that were never extracted,
-# whose product information changed since, or whose extraction failed; with
-# `only`, exactly the listed products (extracted or not, so they can be
-# extracted again, e.g. with another model). Newest documents first.
+# whose product information changed since, or whose extraction failed in a
+# way worth retrying; with `only`, exactly the listed products (extracted or
+# not, so they can be extracted again). Newest documents first.
 plan_efficacy_extractions <- function(medicines,
                                       documents,
                                       extractions,
                                       budget,
-                                      only = efficacy_only_from_env()) {
+                                      only = efficacy_only_from_env(),
+                                      model = efficacy_default_model) {
   product_information <- documents |>
     dplyr::filter(.data$document_type == "product-information") |>
     dplyr::arrange(
@@ -170,13 +182,18 @@ plan_efficacy_extractions <- function(medicines,
       document_url = "url",
       document_last_updated_date = "last_updated_date"
     )
-  last_extractions <- extractions |>
+  last_extractions <- dplyr::bind_rows(
+    empty_efficacy_extractions(),
+    extractions
+  ) |>
     dplyr::distinct(.data$ema_product_number, .keep_all = TRUE) |>
     dplyr::select(
       "ema_product_number",
       extracted_url = "document_url",
       extracted_document_date = "document_last_updated_date",
-      extracted_status = "status"
+      extracted_status = "status",
+      extracted_reason = "reason",
+      extracted_model = "extractor_model"
     )
   candidates <- medicines |>
     dplyr::filter(.data$medicine_status == "Authorised") |>
@@ -202,7 +219,10 @@ plan_efficacy_extractions <- function(medicines,
           .data$document_last_updated_date > .data$extracted_document_date,
           !is.na(.data$document_last_updated_date)
         ) |
-        dplyr::coalesce(.data$extracted_status == "failed", FALSE)
+        (dplyr::coalesce(.data$extracted_status == "failed", FALSE) & (
+          is_transient_efficacy_failure(.data$extracted_reason) |
+            dplyr::coalesce(.data$extracted_model != model, FALSE)
+        ))
     )
   } else {
     warn_unplanned_products(setdiff(only, candidates$ema_product_number))
@@ -229,81 +249,6 @@ warn_unplanned_products <- function(unplanned) {
   }
 }
 
-efficacy_key_fields <- c(
-  "ema_product_number", "trial", "endpoint", "population", "analysis",
-  "value", "ci_low", "ci_high"
-)
-
-# The same product, trial, endpoint, population, analysis and numbers give
-# the same key, so a human review survives a rerun that finds them again.
-efficacy_row_key <- function(row) {
-  parts <- purrr::map_chr(efficacy_key_fields, function(field) {
-    value <- row[[field]]
-    if (is_absent(value)) "" else as.character(value)
-  })
-  digest::digest(
-    paste(parts, collapse = "\u001f"),
-    algo = "sha1",
-    serialize = FALSE
-  )
-}
-
-mentions_not_reached <- function(text) {
-  !is_absent(text) && grepl("\\b(NR|NE)\\b", text, perl = TRUE)
-}
-
-# Every reason a verified row needs a human before it is shown.
-efficacy_flags <- function(row, verification) {
-  ci_level <- row[["ci_level"]]
-  effect_type <- row[["effect_type"]]
-  single_arm_hr <- is_absent(row[["comparator"]]) &&
-    !is_absent(effect_type) && startsWith(effect_type, "hr")
-  checks <- c(
-    reassembled = length(verification$warnings) > 0,
-    ci_level = !is_absent(ci_level) && ci_level != 95,
-    is_primary_unknown = is_absent(row[["is_primary"]]),
-    population_differs = !is_absent(row[["population_match"]]) &&
-      row[["population_match"]] %in% c("whole_trial_broader", "other"),
-    ci_is_range = isTRUE(row[["ci_is_range"]]),
-    not_reached = any(purrr::map_lgl(
-      c("value", "arm_treatment", "arm_control"),
-      \(field) mentions_not_reached(row[[field]])
-    )),
-    single_arm_hr = single_arm_hr,
-    comparator_label_missing = !is_absent(row[["comparator"]]) &&
-      is_absent(row[["comparator_column_label"]])
-  )
-  names(checks)[checks]
-}
-
-efficacy_human_reviews <- c("reviewed_ok", "reviewed_rejected")
-
-# New rows keep a human review of the same row (same key); else they are
-# flagged or auto_ok. The old rows of `replaced_products` give way to the new
-# ones; the other products' rows are kept.
-merge_efficacy_reviews <- function(new_rows,
-                                   old_rows,
-                                   replaced_products =
-                                     unique(new_rows$ema_product_number)) {
-  reviews <- old_rows |>
-    dplyr::filter(.data$review %in% efficacy_human_reviews) |>
-    dplyr::distinct(.data$row_key, .keep_all = TRUE) |>
-    dplyr::select("row_key", human_review = "review")
-  reviewed <- new_rows |>
-    dplyr::select(-dplyr::any_of("review")) |>
-    dplyr::left_join(reviews, by = "row_key") |>
-    dplyr::mutate(
-      review = dplyr::coalesce(
-        .data$human_review,
-        dplyr::if_else(lengths(.data$flags) > 0, "flagged", "auto_ok")
-      )
-    ) |>
-    dplyr::select(-"human_review")
-  old_rows |>
-    dplyr::filter(!.data$ema_product_number %in% replaced_products) |>
-    dplyr::bind_rows(reviewed)
-}
-
 # New answers (rows, or none) replace a product's rows; after a failure, a
 # missing PDF or no section 5.1, its earlier rows stay, marked stale by the
 # pipeline once the product information changed.
@@ -325,28 +270,40 @@ run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
                                     rows_path = efficacy_rows_path,
                                     extractions_path =
                                       efficacy_extractions_path,
+                                    pending_path = efficacy_pending_path,
                                     today = Sys.Date()) {
   inputs <- c(medicines_path, documents_path)
   missing <- inputs[!file.exists(inputs)]
   if (length(missing) > 0) {
     cli::cli_abort(c("Missing {.path {missing}}.", efficacy_pipeline_hint))
   }
-  medicines <- dplyr::as_tibble(jsonlite::fromJSON(medicines_path))
-  documents <- select_epar_documents(read_epar_documents(documents_path)$data)
   old_rows <- read_efficacy_rows(rows_path)
   old_extractions <- read_efficacy_extractions(extractions_path)
-  plan <- plan_efficacy_extractions(medicines, documents, old_extractions,
-                                    budget)
-  if (nrow(plan) == 0) {
-    cli::cli_inform("No product to extract.")
-    return(invisible(list(
-      extracted = empty_efficacy_extractions(),
-      failed = empty_failed_efficacy_rows(),
-      rows = old_rows
-    )))
+  if (file.exists(pending_path)) {
+    run <- resume_efficacy_batch(
+      read_pending_batch(pending_path), poll_seconds, today
+    )
+  } else {
+    medicines <- dplyr::as_tibble(jsonlite::fromJSON(medicines_path))
+    documents <- select_epar_documents(
+      read_epar_documents(documents_path)$data
+    )
+    plan <- plan_efficacy_extractions(medicines, documents, old_extractions,
+                                      budget, model = model)
+    if (nrow(plan) == 0) {
+      cli::cli_inform("No product to extract.")
+      return(invisible(list(
+        extracted = empty_efficacy_extractions(),
+        failed = empty_failed_efficacy_rows(),
+        rows = old_rows
+      )))
+    }
+    cli::cli_inform(
+      "{nrow(plan)} product{?s} to extract with {.val {model}}."
+    )
+    run <- extract_efficacy_batch(plan, model, poll_seconds, today,
+                                  pending_path)
   }
-  cli::cli_inform("{nrow(plan)} product{?s} to extract with {.val {model}}.")
-  run <- extract_efficacy_batch(plan, model, poll_seconds, today)
   replaced <- run$extractions$ema_product_number[
     run$extractions$status %in% efficacy_replacing_statuses
   ]
@@ -364,6 +321,10 @@ run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
   }
   write_json_table(rows, rows_path)
   write_json_table(extractions, extractions_path)
+  # Only once its results are in both files.
+  if (!run$pending) {
+    unlink(pending_path)
+  }
   report_efficacy_run(run, rows)
   invisible(list(
     extracted = run$extractions,

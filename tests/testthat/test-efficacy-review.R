@@ -42,3 +42,19 @@ test_that("the review page lists rows with flags, source and quotes", {
   expect_match(text, "> HR 0.47 (0.34, 0.65)", fixed = TRUE)
   expect_match(text, "key-01", fixed = TRUE)
 })
+
+test_that("the review page leaves out an unknown CI level; quotes every line", {
+  row <- review_rows()[2, ]
+  row$ci_level <- NA_real_
+  row$quotes <- list(c("first line\nsecond line", "another quote"))
+  text <- paste(
+    efficacy_review_markdown(row[0, ], row, as.Date("2026-09-30")),
+    collapse = "\n"
+  )
+  expect_match(text, "0.47 (CI 0.34, 0.65)", fixed = TRUE)
+  expect_no_match(text, "NA%", fixed = TRUE)
+  expect_match(
+    text, "> first line\n> second line\n>\n> another quote",
+    fixed = TRUE
+  )
+})

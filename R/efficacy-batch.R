@@ -1,22 +1,26 @@
-# One extractor run's work: the product information PDFs (fetched slowly and
-# cached as page texts), one Claude Message Batch with a request per section
-# 5.1, and each answer's rows verified against the text they came from.
+# The product information PDFs of an extractor run (fetched slowly and cached
+# as page texts), a request per section 5.1, and each answer's rows verified
+# against the text they came from. Submitting and collecting the batch is in
+# efficacy-batch-run.R.
 
 # Ruling R8: long sections with many rows would be truncated at 16000; a
 # batch has no HTTP timeout to fear.
 efficacy_batch_max_tokens <- 32000L
 
-# Consecutive failed reads of the batch state before the run gives up.
-efficacy_poll_error_limit <- 5L
-
 efficacy_custom_id <- function(product_number) {
   gsub("/", "-", product_number, fixed = TRUE)
 }
 
+# Product, document date and a short hash of the URL: a document replaced on
+# the same day under another URL is read again.
 efficacy_cache_file <- function(plan_row, cache_directory) {
+  url_hash <- substr(
+    digest::digest(plan_row$document_url, algo = "sha1", serialize = FALSE),
+    1, 8
+  )
   file.path(cache_directory, paste0(
     efficacy_custom_id(plan_row$ema_product_number), "-",
-    format(plan_row$document_last_updated_date), ".rds"
+    format(plan_row$document_last_updated_date), "-", url_hash, ".rds"
   ))
 }
 
@@ -156,89 +160,6 @@ prepare_efficacy_requests <- function(plan, model, today) {
   list(records = records, submissions = submissions)
 }
 
-# The results URL once the batch has ended; NULL (with a warning) when its
-# state cannot be read: its products are then planned again.
-wait_for_efficacy_batch <- function(batch_id, poll_seconds) {
-  started <- Sys.time()
-  errors <- 0L
-  repeat {
-    state <- tryCatch(
-      claude_batch_status(batch_id),
-      claude_api_error = function(error) error,
-      httr2_failure = function(error) error
-    )
-    if (inherits(state, "error")) {
-      errors <- errors + 1L
-      if (errors >= efficacy_poll_error_limit) {
-        cli::cli_warn(c(
-          "Gave up reading batch {batch_id}: {conditionMessage(state)}",
-          i = "It may still finish (and be billed); its products are
-          planned again on the next run."
-        ))
-        return(NULL)
-      }
-      cli::cli_inform("Batch {batch_id}: {conditionMessage(state)}")
-    } else {
-      errors <- 0L
-      if (identical(state$status, "ended")) {
-        return(ended_batch_results_url(batch_id, state$results_url))
-      }
-      waited <- difftime(Sys.time(), started, units = "mins")
-      cli::cli_inform(escape_cli_braces(sprintf(
-        "Batch %s: %s after %d minute(s).",
-        batch_id, state$status, as.integer(round(waited))
-      )))
-    }
-    wait_seconds(poll_seconds)
-  }
-}
-
-ended_batch_results_url <- function(batch_id, results_url) {
-  if (is.na(results_url)) {
-    cli::cli_warn(c(
-      "Batch {batch_id} ended without results.",
-      i = "Its products are planned again on the next run."
-    ))
-    return(NULL)
-  }
-  results_url
-}
-
-# The batch's results by custom_id; NULL (with a warning) when the Claude API
-# did not take the batch or its results could not be read.
-run_efficacy_batch <- function(requests, poll_seconds) {
-  failed <- function(error) {
-    cli::cli_warn(c(
-      "Claude API: {conditionMessage(error)}",
-      i = "{length(requests)} product{?s} left for a later run."
-    ))
-    NULL
-  }
-  batch_id <- tryCatch(
-    create_claude_batch(requests),
-    claude_api_error = failed,
-    httr2_failure = failed
-  )
-  if (is.null(batch_id)) {
-    return(NULL)
-  }
-  cli::cli_inform(
-    "Submitted batch {batch_id} with {length(requests)} request{?s}."
-  )
-  results_url <- wait_for_efficacy_batch(batch_id, poll_seconds)
-  if (is.null(results_url)) {
-    return(NULL)
-  }
-  results <- tryCatch(
-    claude_batch_results(results_url),
-    claude_api_error = failed,
-    httr2_failure = failed
-  )
-  if (is.null(results)) {
-    return(NULL)
-  }
-  stats::setNames(results, purrr::map_chr(results, "custom_id"))
-}
 
 efficacy_row_page <- function(row, section) {
   quotes <- as.character(unlist(row[["quotes"]]))
@@ -262,10 +183,10 @@ check_answer_row <- function(row, order, submission, model, today) {
     source_url = plan_row$document_url,
     source_date = plan_row$document_last_updated_date,
     verification = verification$status,
-    flags = efficacy_flags(row, verification),
     extractor_model = model,
     extracted_at = today
   ))
+  record$flags <- efficacy_flags(record, verification)
   record$row_key <- efficacy_row_key(record)
   list(record = record)
 }
@@ -282,7 +203,7 @@ efficacy_outcome <- function(submission, result, model, today) {
     return(failed("no result in the batch"))
   }
   if (result$type == "errored") {
-    return(failed(result$error))
+    return(failed(paste0("errored: ", result$error)))
   }
   if (result$type != "succeeded") {
     return(failed(result$type))
@@ -322,10 +243,7 @@ efficacy_outcome <- function(submission, result, model, today) {
   )
 }
 
-efficacy_repeat_error <- paste(
-  "repeats an earlier row (same trial, endpoint, population, analysis",
-  "and numbers)"
-)
+efficacy_repeat_error <- "repeats an earlier row (the same row key)"
 
 failed_efficacy_rows_repeated <- function(rows) {
   dplyr::tibble(
@@ -342,46 +260,5 @@ failed_efficacy_rows_dropped <- function(product_number, dropped) {
     trial = NA_character_,
     endpoint = NA_character_,
     errors = purrr::map(dropped, \(row) paste("unreadable:", row$reason))
-  )
-}
-
-extract_efficacy_batch <- function(plan,
-                                   model,
-                                   poll_seconds = 60,
-                                   today = Sys.Date()) {
-  empty <- list(
-    rows = empty_efficacy_rows(),
-    extractions = empty_efficacy_extractions(),
-    failed_rows = empty_failed_efficacy_rows()
-  )
-  if (nrow(plan) == 0) {
-    return(empty)
-  }
-  # Before the slow fetching, not after it.
-  claude_api_key()
-  prepared <- prepare_efficacy_requests(plan, model, today)
-  submissions <- prepared$submissions
-  results <- if (length(submissions) > 0) {
-    run_efficacy_batch(purrr::map(submissions, "request"), poll_seconds)
-  }
-  outcomes <- if (is.null(results)) {
-    list()
-  } else {
-    purrr::map(submissions, function(submission) {
-      efficacy_outcome(submission, results[[submission$custom_id]], model,
-                       today)
-    })
-  }
-  list(
-    rows = dplyr::bind_rows(empty$rows, purrr::map(outcomes, "rows")),
-    extractions = dplyr::bind_rows(
-      empty$extractions,
-      prepared$records,
-      purrr::map(outcomes, "extraction")
-    ),
-    failed_rows = dplyr::bind_rows(
-      empty$failed_rows,
-      purrr::map(outcomes, "failed_rows")
-    )
   )
 }

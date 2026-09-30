@@ -32,12 +32,16 @@ plan_sample <- function(extractions = empty_efficacy_extractions(),
   )
 }
 
-alecensa_extraction <- function(status) {
+alecensa_extraction <- function(status,
+                                reason = NA_character_,
+                                model = "claude-sonnet-5-5") {
   dplyr::tibble(
     ema_product_number = "EMEA/H/C/004164",
     document_url = "https://www.ema.europa.eu/pi-1.pdf",
     document_last_updated_date = as.Date("2026-03-31"),
-    status = status
+    status = status,
+    reason = reason,
+    extractor_model = model
   )
 }
 
@@ -68,9 +72,46 @@ test_that("a changed PI URL is planned again; newest documents first", {
   )
 })
 
-test_that("a failed product is planned again; the budget caps the plan", {
-  plan <- plan_sample(alecensa_extraction("failed"), budget = 1)
-  expect_equal(plan$ema_product_number, "EMEA/H/C/004164")
+test_that("a transient failure is planned again; the budget caps the plan", {
+  for (reason in c(
+    "errored: overloaded_error", "expired", "canceled",
+    "no result in the batch"
+  )) {
+    plan <- plan_sample(alecensa_extraction("failed", reason), budget = 1)
+    expect_equal(plan$ema_product_number, "EMEA/H/C/004164", info = reason)
+  }
+})
+
+test_that("a lasting failure waits for a new PI, another model or ONLY", {
+  for (reason in c(
+    "max_tokens", "refusal", "not the row schema",
+    "no row passed verification", "no text read from the PDF"
+  )) {
+    failed <- alecensa_extraction("failed", reason)
+    expect_equal(
+      plan_sample(failed)$ema_product_number,
+      "EMEA/H/C/005522",
+      info = reason
+    )
+    expect_equal(
+      plan_efficacy_extractions(
+        medicines_sample(), documents_sample(), failed, 10,
+        only = NULL, model = "claude-opus-5-5"
+      )$ema_product_number,
+      c("EMEA/H/C/004164", "EMEA/H/C/005522")
+    )
+    expect_equal(
+      plan_sample(failed, only = "EMEA/H/C/004164")$ema_product_number,
+      "EMEA/H/C/004164"
+    )
+    expect_equal(
+      plan_sample(
+        failed,
+        documents = documents_sample(as.Date("2026-09-01"))
+      )$ema_product_number,
+      c("EMEA/H/C/004164", "EMEA/H/C/005522")
+    )
+  }
 })
 
 test_that("the newest product information of a product is planned", {
@@ -144,6 +185,10 @@ test_that("a clean row has no flags; single-arm HRs and ranges are flagged", {
   row$comparator <- NULL
   row$ci_is_range <- TRUE
   expect_equal(efficacy_flags(row, exact), c("ci_is_range", "single_arm_hr"))
+  row$page <- NA_integer_
+  expect_true("page_unknown" %in% efficacy_flags(row, exact))
+  row$page <- 12L
+  expect_false("page_unknown" %in% efficacy_flags(row, exact))
 })
 
 test_that("a row key follows the numbers and the product", {
@@ -158,6 +203,14 @@ test_that("a row key follows the numbers and the product", {
   expect_equal(efficacy_row_key(row), key)
   row$value <- "0.48"
   expect_false(efficacy_row_key(row) == key)
+  for (field in c("assessment", "effect_type", "indication", "comparator")) {
+    changed <- row
+    changed[[field]] <- "other"
+    expect_false(
+      efficacy_row_key(changed) == efficacy_row_key(row),
+      info = field
+    )
+  }
 })
 
 test_that("a human review survives the same numbers, not changed ones", {
@@ -172,7 +225,54 @@ test_that("a human review survives the same numbers, not changed ones", {
     flags = list(character(), "ci_level")
   )
   merged <- merge_efficacy_reviews(new, old)
-  expect_equal(merged$review, c("reviewed_ok", "flagged"))
+  reviews <- stats::setNames(merged$review, merged$row_key)
+  expect_equal(reviews[c("a", "c")], c(a = "reviewed_ok", c = "flagged"))
+})
+
+test_that("reviewed_ok needs every model field unchanged, a rejection not", {
+  old <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/004164",
+    row_key = c("a", "b"),
+    quotes = list("HR 0.47 (0.34, 0.65)", "HR 0.5"),
+    review = c("reviewed_ok", "reviewed_rejected")
+  )
+  new <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/004164",
+    row_key = c("a", "b"),
+    quotes = list("HR 0.47 (0.34, 0.65) in another sentence", "HR 0.5 again"),
+    flags = list(character(), character())
+  )
+  expect_equal(
+    merge_efficacy_reviews(new, old)$review,
+    c("auto_ok", "reviewed_rejected")
+  )
+  same <- merge_efficacy_reviews(
+    dplyr::mutate(old, flags = list("x", "y")),
+    old
+  )
+  expect_equal(same$review, c("reviewed_ok", "reviewed_rejected"))
+})
+
+test_that("rejected rows of a re-extracted product stay as tombstones", {
+  old <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/004164",
+    row_key = c("a", "b"),
+    review = c("auto_ok", "reviewed_rejected")
+  )
+  new <- dplyr::tibble(
+    ema_product_number = "EMEA/H/C/004164",
+    row_key = "c",
+    flags = list(character())
+  )
+  merged <- merge_efficacy_reviews(new, old)
+  expect_equal(merged$row_key, c("b", "c"))
+  expect_equal(merged$review, c("reviewed_rejected", "auto_ok"))
+  back <- merge_efficacy_reviews(
+    dplyr::mutate(new, row_key = "b"),
+    merged
+  )
+  expect_equal(back$row_key, "b")
+  expect_equal(back$review, "reviewed_rejected")
 })
 
 test_that("other products' rows are kept; an unflagged row is auto_ok", {
@@ -236,10 +336,11 @@ local_batch <- function(pages, results, env = parent.frame()) {
   withr::local_envvar(ANTHROPIC_API_KEY = "test-key", .local_envir = env)
 }
 
-extract_first <- function() {
+extract_first <- function(pending_path = tempfile(fileext = ".json")) {
   suppressMessages(extract_efficacy_batch(
     plan_sample(budget = 1), "claude-sonnet-5-5",
-    poll_seconds = 0, today = as.Date("2026-09-30")
+    poll_seconds = 0, today = as.Date("2026-09-30"),
+    pending_path = pending_path
   ))
 }
 
@@ -269,7 +370,7 @@ test_that("an errored or refused request is recorded failed with its reason", {
   )))
   run <- extract_first()
   expect_equal(run$extractions$status, "failed")
-  expect_equal(run$extractions$reason, "overloaded_error")
+  expect_equal(run$extractions$reason, "errored: overloaded_error")
   local_batch(pages, list(list(
     custom_id = "EMEA-H-C-004164", type = "succeeded",
     message = list(stop_reason = "max_tokens", content = list()),
@@ -424,11 +525,51 @@ test_that("a Claude API error on submission records nothing sent", {
     }
   )
   withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  pending_path <- withr::local_tempfile(fileext = ".json")
   expect_warning(
-    run <- extract_efficacy_batch(plan_sample(), "claude-sonnet-5-5", 0),
+    run <- extract_efficacy_batch(
+      plan_sample(), "claude-sonnet-5-5", 0,
+      pending_path = pending_path
+    ),
     "left for a later run"
   )
   expect_equal(nrow(run$extractions), 0)
+  expect_false(file.exists(pending_path))
+})
+
+test_that("a submission timeout warns that the batch may exist", {
+  local_mocked_bindings(
+    fetch_efficacy_pages = function(plan_row) list(pages = alex_pages()),
+    create_claude_batch = function(requests) {
+      rlang::abort("Timeout was reached", class = "httr2_failure")
+    }
+  )
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  expect_warning(
+    extract_efficacy_batch(
+      plan_sample(), "claude-sonnet-5-5", 0,
+      pending_path = withr::local_tempfile(fileext = ".json")
+    ),
+    "Anthropic Console"
+  )
+})
+
+test_that("the batch id and plan are saved before the batch is polled", {
+  pending_path <- withr::local_tempfile(fileext = ".json")
+  saved <- NULL
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
+  local_mocked_bindings(
+    claude_batch_status = function(batch_id) {
+      saved <<- read_pending_batch(pending_path)
+      list(status = "ended", results_url = "https://x/results")
+    }
+  )
+  run <- extract_first(pending_path)
+  expect_equal(saved$batch_id, "msgbatch_1")
+  expect_equal(saved$model, "claude-sonnet-5-5")
+  expect_equal(saved$plan$ema_product_number, "EMEA/H/C/004164")
+  expect_equal(saved$plan$document_last_updated_date, as.Date("2026-03-31"))
+  expect_false(run$pending)
 })
 
 test_that("the batch is polled until it ends; the request holds the section", {
@@ -468,24 +609,53 @@ test_that("the batch is polled until it ends; the request holds the section", {
   expect_equal(run$extractions$status, "ok")
 })
 
-test_that("polling gives up with a warning after repeated API errors", {
+test_that("polling stops after 30 minutes without a state; the batch stays", {
+  clock <- as.POSIXct("2026-09-30 22:00:00", tz = "UTC")
   local_mocked_bindings(
     fetch_efficacy_pages = function(plan_row) list(pages = alex_pages()),
     create_claude_batch = function(requests) "msgbatch_1",
-    claude_batch_status = function(batch_id) {
-      rlang::abort(
-        "HTTP 500",
-        class = c("claude_api_http_500", "claude_api_error")
-      )
+    claude_batch_status = function(batch_id) stop("connection reset"),
+    wait_seconds = function(seconds) {
+      clock <<- clock + 11 * 60
+      invisible(NULL)
     },
-    wait_seconds = function(seconds) invisible(NULL)
+    current_time = function() clock
   )
   withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  pending_path <- withr::local_tempfile(fileext = ".json")
   expect_warning(
-    run <- suppressMessages(extract_first()),
+    run <- extract_first(pending_path),
     "msgbatch_1"
   )
   expect_equal(nrow(run$extractions), 0)
+  expect_true(run$pending)
+  expect_true(file.exists(pending_path))
+})
+
+test_that("a 429 while polling waits as long as retry-after asks", {
+  waits <- c()
+  polls <- 0L
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
+  local_mocked_bindings(
+    claude_batch_status = function(batch_id) {
+      polls <<- polls + 1L
+      if (polls == 1L) {
+        rlang::abort(
+          "HTTP 429",
+          class = c("claude_api_http_429", "claude_api_error"),
+          retry_after = "120"
+        )
+      }
+      list(status = "ended", results_url = "https://x/results")
+    },
+    wait_seconds = function(seconds) {
+      waits <<- c(waits, seconds)
+      invisible(NULL)
+    }
+  )
+  run <- extract_first()
+  expect_equal(waits, 120)
+  expect_equal(run$extractions$status, "ok")
 })
 
 test_that("the extractor needs the API key before fetching anything", {
@@ -519,7 +689,10 @@ test_that("PDF pages are read once and cached", {
     fetch_quietly(cache)$pages,
     c("page one", "page two")
   )
-  expect_true(file.exists(file.path(cache, "EMEA-H-C-004164-2026-03-31.rds")))
+  expect_match(
+    list.files(cache),
+    "^EMEA-H-C-004164-2026-03-31-[0-9a-f]{8}[.]rds$"
+  )
   local_mocked_bindings(
     download_efficacy_pdf = function(url, path) stop("no download expected")
   )
@@ -602,6 +775,7 @@ run_in <- function(directory, ...) {
     documents_path = fixture_epar_documents_path(),
     rows_path = file.path(directory, "rows.json"),
     extractions_path = file.path(directory, "extractions.json"),
+    pending_path = file.path(directory, "pending-batch.json"),
     today = as.Date("2026-09-30"),
     ...
   )
@@ -653,11 +827,58 @@ test_that("a second run finds nothing to extract; failures are reported", {
   expect_equal(run$extracted$status, "failed")
   expect_match(messages, "no row passed verification", all = FALSE)
   expect_match(messages, "ALEX, PFS: value = '0.99'", all = FALSE)
+  # A lasting failure is not retried by itself, only when asked for.
+  expect_message(run <- run_in(directory), "No product to extract")
+  expect_equal(nrow(run$extracted), 0)
   local_batch(alex_pages(), batch_answer("EMEA-H-C-003933", list()))
+  withr::local_envvar(APPROVAL_ATLAS_EFFICACY_ONLY = "EMEA/H/C/003933")
   expect_equal(
     suppressMessages(run_in(directory))$extracted$status,
     "no_rows"
   )
-  expect_message(run <- run_in(directory), "No product to extract")
+})
+
+test_that("a pending batch is collected before anything is planned", {
+  directory <- withr::local_tempdir()
+  write_run_inputs(directory)
+  pending_path <- file.path(directory, "pending-batch.json")
+  plan <- plan_efficacy_extractions(
+    jsonlite::fromJSON(file.path(directory, "ema_medicines.json")),
+    select_epar_documents(
+      read_epar_documents(fixture_epar_documents_path())$data
+    ),
+    empty_efficacy_extractions(), 1,
+    only = "EMEA/H/C/003933"
+  )
+  write_pending_batch(pending_path, "msgbatch_9", "claude-opus-5-5", plan)
+  local_batch(
+    alex_pages(),
+    batch_answer("EMEA-H-C-003933", list(alex_row()))
+  )
+  local_mocked_bindings(
+    create_claude_batch = function(requests) stop("no new batch expected")
+  )
+  run <- suppressMessages(run_in(directory))
+  expect_equal(run$extracted$ema_product_number, "EMEA/H/C/003933")
+  expect_equal(run$extracted$status, "ok")
+  expect_equal(run$extracted$extractor_model, "claude-opus-5-5")
+  rows <- read_efficacy_rows(file.path(directory, "rows.json"))
+  expect_equal(nrow(rows), 2L)
+  expect_false(file.exists(pending_path))
+})
+
+test_that("a batch still pending after a run keeps its file", {
+  directory <- withr::local_tempdir()
+  write_run_inputs(directory)
+  local_batch(alex_pages(), list())
+  local_mocked_bindings(
+    claude_batch_results = function(results_url) stop("results unavailable")
+  )
+  withr::local_envvar(APPROVAL_ATLAS_EFFICACY_ONLY = "")
+  expect_warning(
+    run <- suppressMessages(run_in(directory)),
+    "results unavailable"
+  )
   expect_equal(nrow(run$extracted), 0)
+  expect_true(file.exists(file.path(directory, "pending-batch.json")))
 })
