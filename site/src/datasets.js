@@ -7,6 +7,20 @@
 
 export const FAILED = Symbol("failed");
 
+// Resolves once promise settles or ms have passed, whichever comes first; never rejects. How long
+// the other data files wait for the one a shared medicine link loads first (main.js loadFile()),
+// so a stalled small file cannot hold the rest (review of the primary documents, 2026-09-30).
+export function settledOrAfter(promise, ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    promise.then(done, done);
+  });
+}
+
 // definitions: { name: [files, build(...rows)] }; loadFile(name): a Promise of the file's rows;
 // onLoad(name): a dataset arrived, or changed after a retry.
 export function createDatasets(definitions, loadFile, onLoad) {

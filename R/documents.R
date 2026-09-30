@@ -161,8 +161,8 @@ build_documents_table <- function(documents, medicines) {
 # newest current (not "(archive)") product information, standard EPAR and
 # overview, and the newest refusal report (an assessment report whose own
 # title names a refusal: a refused medicine's EPAR). The frontend still picks
-# by the medicine's status. Ties on the date go by title, then URL, as the
-# frontend sorts the documents index.
+# by the medicine's status. Ties on the date go by title, then by the
+# documents index's order (by URL, C locale), as the frontend sorts it.
 build_primary_documents_table <- function(documents) {
   documents |>
     dplyr::filter(
@@ -181,13 +181,15 @@ build_primary_documents_table <- function(documents) {
         grepl("refusal", .data$title, ignore.case = TRUE)
     ) |>
     dplyr::filter(!.data$own_title | .data$refusal_report) |>
+    # arrange() is stable: the URL order (C locale, as build_documents_table())
+    # decides only what the keys below leave tied.
+    dplyr::arrange(.data$url, .locale = "C") |>
     dplyr::arrange(
       .data$ema_product_number,
       .data$document_type,
       .data$refusal_report,
       dplyr::desc(.data$last_updated_date),
       .data$title,
-      .data$url,
       .locale = "en"
     ) |>
     dplyr::slice_head(
