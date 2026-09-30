@@ -184,7 +184,7 @@ test("the About disclosure states scope, intended use and privacy", () => {
   const { about } = labels.UI;
   assert.equal(
     about.what,
-    "Approval Atlas is a free, non-commercial lookup of human medicines that went through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
+    "Approval Atlas is a free, non-commercial lookup of human medicines that went through the European Medicines Agency's central procedure, run by Viktor Rognås (Sweden) as a personal project and rebuilt daily from public data.",
   );
   // Step 2 (#1, #16): central only; where an authorization is valid; availability is national.
   assert.equal(
@@ -205,9 +205,10 @@ test("the About disclosure states scope, intended use and privacy", () => {
     about.privacy,
     "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and, like any web server, the page addresses they request (including any search in a link), for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
   );
-  // No personal name or email until the owner decides: the repository's issues.
-  assert.equal(partsText(about.contact), "Questions and corrections: GitHub issues. Security reports: see the security policy.");
+  // The operator's email (owner decision 2026-09-30), then the repository's issues.
+  assert.equal(partsText(about.contact), "Questions and corrections: viktor@vrognas.com or GitHub issues. Security reports: see the security policy.");
   assert.deepEqual(partsUrls(about.contact), [
+    "mailto:viktor@vrognas.com",
     "https://github.com/vrognas/approval-atlas/issues",
     "https://github.com/vrognas/approval-atlas/blob/main/SECURITY.md",
   ]);
@@ -241,11 +242,14 @@ test("the footer's three lines: sources with their licences, use and non-affilia
     footer.use,
     "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI or GLEIF.",
   );
-  assert.equal(partsText(footer.licence), "Data CC BY-SA 4.0 (third-party values keep their own terms) · Code MIT · No cookies or tracking · Contact");
+  assert.equal(
+    partsText(footer.licence),
+    "Data CC BY-SA 4.0 (third-party values keep their own terms) · Code MIT · No cookies or tracking · Run by Viktor Rognås · Contact: viktor@vrognas.com",
+  );
   assert.deepEqual(partsUrls(footer.licence), [
     "https://creativecommons.org/licenses/by-sa/4.0/",
     "https://github.com/vrognas/approval-atlas/blob/main/LICENSE",
-    "https://github.com/vrognas/approval-atlas/issues",
+    "mailto:viktor@vrognas.com",
   ]);
 });
 

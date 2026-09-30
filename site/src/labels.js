@@ -315,6 +315,9 @@ const LINKS = {
   mit: "https://github.com/vrognas/approval-atlas/blob/main/LICENSE",
   issues: "https://github.com/vrognas/approval-atlas/issues",
   security: "https://github.com/vrognas/approval-atlas/blob/main/SECURITY.md",
+  // The operator's email (owner decision 2026-09-30): a mailto link, not another website (links.js
+  // isWebLink(): no new tab, no external marking).
+  email: "mailto:viktor@vrognas.com",
 };
 
 export const UI = {
@@ -1962,10 +1965,10 @@ export const UI = {
 
   // The footer and "About this site" (legal review of 2026-09-30, .remember/legal/footer-review.md;
   // not legal advice). Rendered by main.js renderFooter() in the DOM (text nodes, no HTML): a part is text, or
-  // { text, url } for a link to another website (markExternal()). Every third-party credit stands in
-  // the visible first line, equally prominent (CC BY-SA 3.0 4(c): ChEMBL's too), with the licence
-  // links CC BY 4.0 and CC BY-SA 3.0 require; About has the detail. Contact: the repository's issues
-  // until the owner decides on an operator name and email (none on the site until then).
+  // { text, url } for a link to another website (markExternal()) or, a mailto: url, an email link
+  // (no new tab or marking). Every third-party credit stands in the visible first line, equally prominent (CC BY-SA 3.0 4(c): ChEMBL's too), with the licence
+  // links CC BY 4.0 and CC BY-SA 3.0 require; About has the detail. The operator and contact (owner
+  // decision 2026-09-30): Viktor Rognås, viktor@vrognas.com (GDPR Art. 13; footer review §2b).
   footer: {
     // mesh, chembl: meta.json's versions ("MeSH 2026", "ChEMBL_37"); date: the data's date (null
     // until meta.json has loaded).
@@ -1990,8 +1993,8 @@ export const UI = {
       { text: "CC BY-SA 4.0", url: LINKS.ccBySa4 },
       " (third-party values keep their own terms) · Code ",
       { text: "MIT", url: LINKS.mit },
-      " · No cookies or tracking · ",
-      { text: "Contact", url: LINKS.issues },
+      " · No cookies or tracking · Run by Viktor Rognås · Contact: ",
+      { text: "viktor@vrognas.com", url: LINKS.email },
     ],
   },
 
@@ -2006,8 +2009,9 @@ export const UI = {
       privacy: "Privacy.",
       contact: "Contact.",
     },
-    // A personal, non-commercial project; the operator is not named until the owner decides.
-    what: "Approval Atlas is a free, non-commercial lookup of human medicines that went through the European Medicines Agency's central procedure, run as a personal project and rebuilt daily from public data.",
+    // A personal, non-commercial project, and who runs it (owner decision 2026-09-30; GDPR Art. 13:
+    // the controller's identity, should the operator count as one of GitHub's logs).
+    what: "Approval Atlas is a free, non-commercial lookup of human medicines that went through the European Medicines Agency's central procedure, run by Viktor Rognås (Sweden) as a personal project and rebuilt daily from public data.",
     // Step 2 (#1, #16): what is in the data, where a central authorization is valid, and that
     // availability and reimbursement are national.
     scope: "It covers the medicines EMA lists from its central procedure, whatever their status. Many older or common medicines are authorized country by country and are not here: check your national medicines agency. A central authorization is valid in the EU, Iceland, Liechtenstein and Norway, not the UK or Switzerland. Availability and reimbursement vary by country.",
@@ -2056,6 +2060,8 @@ export const UI = {
     privacy: "No cookies, analytics or tracking; searches run in your browser. The site is hosted on GitHub Pages (GitHub, Inc., USA), which logs visitors' IP addresses and, like any web server, the page addresses they request (including any search in a link), for security. This browser keeps, on this device only and never sent: your theme, whether you have seen or closed the intro, your recently viewed items (Clear removes them) and, for offline use, the site's files and data. Clearing this site's data in your browser removes them.",
     contact: [
       "Questions and corrections: ",
+      { text: "viktor@vrognas.com", url: LINKS.email },
+      " or ",
       { text: "GitHub issues", url: LINKS.issues },
       ". Security reports: see the ",
       { text: "security policy", url: LINKS.security },

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { UI } from "./labels.js";
-import { destinationOf } from "./links.js";
+import { destinationOf, isWebLink } from "./links.js";
 
 test("an external link's destination is named by its host, an unknown host by itself", () => {
   assert.deepEqual(destinationOf("https://www.ema.europa.eu/en/medicines/human/EPAR/keytruda"), { name: "EMA website", host: "www.ema.europa.eu" });
@@ -56,15 +56,26 @@ test("index.html links to other websites only over https, in a new tab, without 
   }
 });
 
+// A mailto: link (the operator's email, owner decision 2026-09-30) is no other website: main.js
+// appendParts() opens it in place, without the new-tab note or icon.
+test("only https links count as other websites; an email link does not", () => {
+  assert.equal(isWebLink("https://www.ema.europa.eu/en"), true);
+  assert.equal(isWebLink("mailto:viktor@vrognas.com"), false);
+  assert.equal(isWebLink("http://example.org/"), false);
+});
+
 // The footer's and About's links (main.js renderFooter(): new tab, noopener noreferrer,
-// markExternal()): https only, each destination named (doi.org by the article it opens).
-test("the footer's and About's links are https and name their destination", () => {
+// markExternal()): https only, each destination named (doi.org by the article it opens); besides
+// them only the operator's email, as a mailto: link, in the footer and About's contact.
+test("the footer's and About's links are https and name their destination, or the operator's email", () => {
   const credits = { date: "2026-09-29", mesh: "MeSH 2026", chembl: "ChEMBL_37", explained: true, innStems: true };
   const { footer, about } = UI;
   const parts = [...footer.sources(credits), ...footer.licence, ...about.sources(credits).flat(), ...about.contact];
   const urls = parts.filter((part) => typeof part !== "string").map((part) => part.url);
   assert.ok(urls.length >= 15);
-  for (const url of urls) {
+  const emails = urls.filter((url) => !isWebLink(url));
+  assert.deepEqual(emails, ["mailto:viktor@vrognas.com", "mailto:viktor@vrognas.com"]);
+  for (const url of urls.filter(isWebLink)) {
     assert.match(url, /^https:\/\//, url);
     assert.notEqual(destinationOf(url).name, destinationOf(url).host, url);
   }
