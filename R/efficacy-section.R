@@ -3,9 +3,9 @@
 # SmPC per strength or form: later copies repeat it.
 
 smpc_section_start <-
-  "(?m)(?:^|\\f)\\s*5\\.1[\\s ]+Pharmacodynamic properties"
+  "(?m)(?:^|\\f)\\s*\\K5\\.1[\\s ]+Pharmacodynamic properties"
 smpc_section_end <-
-  "(?m)(?:^|\\f)\\s*5\\.2[\\s ]+Pharmacokinetic properties"
+  "(?m)(?:^|\\f)\\s*\\K5\\.2[\\s ]+Pharmacokinetic properties"
 
 slice_smpc_efficacy <- function(page_texts) {
   joined <- paste(page_texts, collapse = "\f")
