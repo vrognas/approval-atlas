@@ -74,8 +74,8 @@ test_that("a changed PI URL is planned again; newest documents first", {
 
 test_that("a transient failure is planned again; the budget caps the plan", {
   for (reason in c(
-    "errored: overloaded_error", "errored: api_error", "errored", "expired",
-    "canceled", "no result in the batch"
+    "errored: overloaded_error", "errored: api_error", "errored: errored",
+    "errored", "expired", "canceled", "no result in the batch"
   )) {
     plan <- plan_sample(alecensa_extraction("failed", reason), budget = 1)
     expect_equal(plan$ema_product_number, "EMEA/H/C/004164", info = reason)

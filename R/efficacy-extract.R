@@ -158,7 +158,7 @@ read_efficacy_extractions <- function(path = efficacy_extractions_path) {
 is_transient_efficacy_failure <- function(reason) {
   grepl(
     paste0(
-      "^(errored(: (api_error|overloaded_error))?$|expired$|canceled$",
+      "^(errored(: (api_error|overloaded_error|errored))?$|expired$|canceled$",
       "|no result in the batch$)"
     ),
     reason
