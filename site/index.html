@@ -126,22 +126,25 @@
           <p id="url-note" class="note" role="status" hidden></p>
         </div>
 
-        <!-- The tabs (F · Spacious, phase 2): links to the dashboard's views (?tab=…, pushState), the
-             one shown aria-current="page"; under the chip bar, which filters every tab. Phones: the
-             strip scrolls sideways. Only the tab shown renders its cards (main.js). -->
-        <nav id="tabs" class="tabs" aria-labelledby="tabs-label">
-          <span id="tabs-label" class="visually-hidden"></span>
-          <a class="tab" data-tab="overview" href="?"></a>
-          <a class="tab" data-tab="protection" href="?tab=protection"></a>
-          <a class="tab" data-tab="classes" href="?tab=classes"></a>
-          <a class="tab" data-tab="companies" href="?tab=companies"></a>
-          <a class="tab" data-tab="years" href="?tab=years"></a>
-          <a class="tab" data-tab="medicines" href="?tab=medicines"></a>
-        </nav>
+        <!-- The tabs (F · Spacious, phase 2; the WAI-ARIA tabs pattern since 2026-09-30, owner
+             decision): a tablist under the chip bar, which filters every tab; one tab stop (the tab
+             shown), Left/Right/Home/End between tabs, Enter or Space shows one (manual activation:
+             ?tab=…, pushState; tabs.js, main.js). Its name is set by main.js (UI.tabs.label).
+             Phones: the strip scrolls sideways. Only the tab shown renders its cards. -->
+        <div id="tabs" class="tabs" role="tablist">
+          <button id="tab-button-overview" class="tab" type="button" role="tab" data-tab="overview" aria-controls="tab-overview" aria-selected="true"></button>
+          <button id="tab-button-protection" class="tab" type="button" role="tab" data-tab="protection" aria-controls="tab-protection" aria-selected="false" tabindex="-1"></button>
+          <button id="tab-button-classes" class="tab" type="button" role="tab" data-tab="classes" aria-controls="tab-classes" aria-selected="false" tabindex="-1"></button>
+          <button id="tab-button-companies" class="tab" type="button" role="tab" data-tab="companies" aria-controls="tab-companies" aria-selected="false" tabindex="-1"></button>
+          <button id="tab-button-years" class="tab" type="button" role="tab" data-tab="years" aria-controls="tab-years" aria-selected="false" tabindex="-1"></button>
+          <button id="tab-button-medicines" class="tab" type="button" role="tab" data-tab="medicines" aria-controls="tab-medicines" aria-selected="false" tabindex="-1"></button>
+        </div>
 
+        <!-- The panels (role="tabpanel", named by their tab): each starts with a card title, not a
+             control, so each is itself a tab stop (tabindex="0", as the APG pattern asks). -->
         <!-- Overview: "Authorized over time" with the type tiles, then small previews of the other
              tabs (the top companies, conditions and protection years), each with a link to its tab. -->
-        <div id="tab-overview" class="tab-panel" data-tab-panel="overview">
+        <div id="tab-overview" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-overview" tabindex="0" data-tab-panel="overview">
         <!-- One dashboard: every medicine matching the filters (by default the authorized ones:
              owner decision 2026-09-29). The top row
              (owner decision 2026-09-29, revised): "Authorized over time" across the main column,
@@ -200,7 +203,7 @@
         </div>
 
         <!-- Protection: the estimated protection ending card. -->
-        <div id="tab-protection" class="tab-panel" data-tab-panel="protection" hidden>
+        <div id="tab-protection" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-protection" tabindex="0" data-tab-panel="protection" hidden>
         <!-- Draft (loss-of-exclusivity calendar; protection-calendar-card.js): currently authorized
              medicines by the year their estimated market protection ends at the earliest. -->
         <section id="protection-calendar" class="chart-card neutral-badges" aria-labelledby="pc-title">
@@ -220,7 +223,7 @@
 
         <!-- Classes and areas: the breakdown (ATC, therapeutic area, company or modality) and the
              conditions card. -->
-        <div id="tab-classes" class="tab-panel" data-tab-panel="classes" hidden>
+        <div id="tab-classes" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-classes" tabindex="0" data-tab-panel="classes" hidden>
         <section class="chart-card neutral-badges" aria-labelledby="breakdown-title">
           <div class="card-head">
             <div class="card-title">
@@ -276,7 +279,7 @@
         </div>
 
         <!-- Companies: who is active where, the top company groups by ATC group or therapeutic area group. -->
-        <div id="tab-companies" class="tab-panel" data-tab-panel="companies" hidden>
+        <div id="tab-companies" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-companies" tabindex="0" data-tab-panel="companies" hidden>
         <section class="chart-card neutral-badges" aria-labelledby="activity-title">
           <div class="card-head">
             <div class="card-title">
@@ -313,7 +316,7 @@
         </div>
 
         <!-- By year: approvals per year, stacked by medicine type, ATC class, company group, status or modality (UI state). -->
-        <div id="tab-years" class="tab-panel" data-tab-panel="years" hidden>
+        <div id="tab-years" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-years" tabindex="0" data-tab-panel="years" hidden>
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
             <div class="card-title">
@@ -348,7 +351,7 @@
         </div>
 
         <!-- Medicines: the table with Download CSV. -->
-        <div id="tab-medicines" class="tab-panel" data-tab-panel="medicines" hidden>
+        <div id="tab-medicines" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-medicines" tabindex="0" data-tab-panel="medicines" hidden>
         <section class="chart-card table-card neutral-badges" aria-labelledby="table-title">
           <!-- "Download CSV" (main.js, csv.js): every medicine the table lists; the caption says which. -->
           <div class="card-head">

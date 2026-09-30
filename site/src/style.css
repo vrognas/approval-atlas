@@ -2204,9 +2204,9 @@ input::placeholder {
   font-size: 0.8125rem;
 }
 
-/* The tabs (F · Spacious, phase 2; main.js renderTabs()): links under the chip bar, the one shown
-   in the ink, semibold, with a 2px accent underline (3:1 on the page, palette.test.js), the others
-   in the secondary ink; a hairline under the strip. Drawn with inset shadows, not borders with a
+/* The tabs (F · Spacious, phase 2; main.js renderTabs(); the WAI-ARIA tabs pattern since
+   2026-09-30): buttons under the chip bar, the one shown (aria-selected) in the ink, semibold,
+   with a 2px accent underline (3:1 on the page, palette.test.js), the others in the secondary ink; a hairline under the strip. Drawn with inset shadows, not borders with a
    negative margin, as the strip scrolls sideways on phones (an overflowing border would make it
    scroll down too). Focus rings sit inside the tab, which the scroll box would clip. */
 .tabs {
@@ -2227,18 +2227,22 @@ input::placeholder {
   flex: none;
   align-items: center;
   min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-secondary);
   font-size: 0.90625rem;
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .tab:hover {
   color: var(--ink);
 }
 
-.tab[aria-current="page"] {
+.tab[aria-selected="true"] {
   box-shadow: inset 0 -2px var(--accent);
   color: var(--ink);
   font-weight: 600;
@@ -2246,6 +2250,12 @@ input::placeholder {
 
 .tab:focus-visible {
   outline-offset: -2px;
+}
+
+/* A tab's panel: a tab stop (tabindex 0, as the APG pattern asks: it starts with a card title, not
+   a control), its focus ring just outside its cards. */
+.tab-panel:focus-visible {
+  outline-offset: 4px;
 }
 
 /* A tab's panel: its cards (the first one's top margin is the strip's gap). */
@@ -6492,7 +6502,7 @@ code {
     border-bottom: 1px solid GrayText;
   }
 
-  .tab[aria-current="page"] {
+  .tab[aria-selected="true"] {
     text-decoration-line: underline;
     text-decoration-thickness: 2px;
     text-underline-offset: 6px;
