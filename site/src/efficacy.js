@@ -37,6 +37,44 @@ export function formatArms(row) {
   return measure ? `${pair} (${measure})` : pair;
 }
 
+// The More details section's lines (lookup.js efficacySection()); null where the row states nothing.
+const POPULATION_NOTES = { subgroup_matches: "subgroup", whole_trial_broader: "broader", other: "otherPopulation" };
+export function populationNote(row) {
+  const key = POPULATION_NOTES[row.population_match];
+  return key ? UI.efficacy[key] : null;
+}
+
+// "{regimen} (n = 279) vs {comparator} (n = 277)"; a single-arm trial (no comparator) says so.
+export function regimenLine(row) {
+  const { efficacy } = UI;
+  const regimen = present(row.regimen) ? efficacy.armSize(row.regimen, row.n_treatment ?? null) : null;
+  const comparator = present(row.comparator) ? efficacy.armSize(row.comparator, row.n_control ?? null) : null;
+  if (!regimen && !comparator) return null;
+  return efficacy.regimen(regimen, comparator);
+}
+
+// The endpoint's name (a known abbreviation spelled out, the abbreviation after it), who assessed
+// it, and "primary endpoint" only when the source names it one (is_primary true).
+export function endpointLine(row) {
+  const { endpointNames } = UI.efficacy;
+  const endpoint = present(row.endpoint) ? String(row.endpoint) : null;
+  const name = endpoint && Object.hasOwn(endpointNames, endpoint) ? `${endpointNames[endpoint]} (${endpoint})` : endpoint;
+  const assessment = present(row.assessment) ? String(row.assessment) : null;
+  if (!name && !assessment && row.is_primary !== true) return null;
+  return UI.efficacy.endpoint(name, assessment, row.is_primary === true);
+}
+
+export function analysisLine(row) {
+  const role = UI.efficacy.roles[row.analysis_role] ?? null;
+  return UI.efficacy.analysisLine(role, UI.efficacy.analysis(present(row.analysis) ? row.analysis : null));
+}
+
+// The product information at the result's page (#page= opens it there in browsers' PDF viewers).
+export function efficacySourceUrl(row) {
+  if (!String(row.source_url ?? "").startsWith("https://")) return null;
+  return Number.isInteger(row.page) && row.page > 0 ? `${row.source_url}#page=${row.page}` : row.source_url;
+}
+
 // One group per distinct indication (null is one), ordered by the lowest row_order in it; in a
 // group the lead row first, else the lowest row_order, then the rest by row_order.
 export function groupEfficacy(rows) {

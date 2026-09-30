@@ -1722,9 +1722,22 @@ export const UI = {
     moreIndications: (count) => `and results for ${formatCount(count)} more ${count === 1 ? "indication" : "indications"}`,
     subgroup: "subgroup (matches EU indication)",
     broader: "whole trial (EU indication is narrower)",
+    otherPopulation: "population differs from the EU indication",
+    // A group whose rows name no indication (the extractor found none to tie them to).
+    noIndication: "Indication not stated",
+    regimen: (regimen, comparator) => [regimen, comparator ? `vs ${comparator}` : "single-arm"].filter(Boolean).join(regimen && !comparator ? ", " : " "),
+    // "n = 279" kept on one line (no-break spaces).
+    armSize: (text, n) => (n === null || n === undefined ? text : `${text} (n = ${formatCount(n)})`),
+    endpoint: (name, assessment, primary) => [name, assessment ? `assessed by ${assessment}` : null, primary ? "primary endpoint" : null].filter(Boolean).join(", "),
+    // The analysis's role as the extractor read it, before the source's own words (its data cut).
+    roles: { primary: "Primary analysis", later: "Later analysis", exploratory: "Exploratory analysis" },
+    analysisLine: (role, text) => (role && text ? `${role}: ${text}` : role || text || null),
     analysis: (text) => (text ? String(text) : null),
     source: (page) => (page ? `Source: product information, p. ${page}` : "Source: product information"),
     more: "More results",
+    moreResults: (count) => `More results (${formatCount(count)})`,
+    // After the teaser's text, for screen readers: where the link goes.
+    teaserLink: ", see the results in More details",
     stale: (date) => `From the product information of ${formatDate(date)}; EMA has updated it since.`,
     endpointNames: {
       OS: "overall survival",
@@ -2088,8 +2101,9 @@ export const UI = {
       `Company groups show the current owner as curated here${date ? ` (as of ${formatDate(date)})` : ""}, not an official record.`,
     ],
     // One list item per source (parts). explained: the data credits the ATC class explanations (owner
-    // decisions 2026-09-29); innStems: the data credits WHO's INN stems (modality, M2 phase 2).
-    sources: ({ mesh = null, chembl = null, explained = false, innStems = false } = {}) => [
+    // decisions 2026-09-29); innStems: the data credits WHO's INN stems (modality, M2 phase 2);
+    // efficacy: the data credits the pivotal results (extracted from EMA product information).
+    sources: ({ mesh = null, chembl = null, explained = false, innStems = false, efficacy = false } = {}) => [
       ["Source: ", { text: "European Medicines Agency (EMA)", url: LINKS.emaData }, ": medicines data, EPAR documents and orphan designations. © EMA. Filtered and reshaped."],
       [{ text: "Union Register of medicinal products", url: LINKS.unionRegister }, " © European Union, ", { text: "CC BY 4.0", url: LINKS.ccBy }, ", modified: matched to EMA records."],
       [`MeSH® courtesy of the U.S. National Library of Medicine${mesh ? ` (${mesh})` : ""}; definitions verbatim.`],
@@ -2108,6 +2122,7 @@ export const UI = {
         ".",
       ],
       ...(innStems ? [["Modalities from WHO INN stems (World Health Organization, 2024), read as facts in our own words, ChEMBL molecule types and EMA data, some checked by hand."]] : []),
+      ...(efficacy ? [["Pivotal results: extracted automatically from EMA product information (section 5.1) with an AI model (Claude, Anthropic) and checked against the text automatically; not checked by EMA or Anthropic. Check the source."]] : []),
       ["LEI data: Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site."],
       ["Fonts: Geist and Geist Mono © The Geist Project Authors, ", { text: "SIL Open Font License 1.1", url: LINKS.ofl }, "."],
       [

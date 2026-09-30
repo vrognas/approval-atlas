@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatArms, formatEffect, groupEfficacy, teaserText } from "./efficacy.js";
+import { existsSync, readFileSync } from "node:fs";
+import { analysisLine, efficacySourceUrl, endpointLine, formatArms, formatEffect, groupEfficacy, populationNote, regimenLine, teaserText } from "./efficacy.js";
 
 const row = (fields) => ({ indication: "NSCLC first line", trial: "FLAURA", endpoint: "PFS", effect_type: "hr", value: "0.46", ci_low: "0.37", ci_high: "0.57", ci_level: 95, ci_is_range: false, comparator: "gefitinib or erlotinib", arm_treatment: "18.9", arm_control: "10.2", arm_measure: "median months (95% CI)", lead: true, row_order: 1, ...fields });
 
@@ -102,4 +103,57 @@ test("a rate difference already printed with % or pp gets no unit text", () => {
 test("median arm measures keep the unit, whatever the punctuation", () => {
   assert.equal(formatArms(row({ arm_measure: "Median, months" })), "median 18.9 vs 10.2 months");
   assert.equal(formatArms(row({ arm_measure: "median (95% CI) months" })), "median 18.9 vs 10.2 months");
+});
+// Task 9: the More details section's lines (pure parts of lookup.js efficacySection()).
+test("the population note names a matching subgroup, a broader trial or another population; none when the trial matches", () => {
+  assert.equal(populationNote(row({ population_match: "subgroup_matches" })), "subgroup (matches EU indication)");
+  assert.equal(populationNote(row({ population_match: "whole_trial_broader" })), "whole trial (EU indication is narrower)");
+  assert.equal(populationNote(row({ population_match: "other" })), "population differs from the EU indication");
+  assert.equal(populationNote(row({ population_match: "whole_trial_matches" })), null);
+  assert.equal(populationNote(row({ population_match: null })), null);
+});
+
+test("the regimen line compares, or says single-arm; it never invents a regimen", () => {
+  assert.equal(regimenLine(row({ regimen: "osimertinib", n_treatment: 279, n_control: 277 })), "osimertinib (n\u00a0=\u00a0279) vs gefitinib or erlotinib (n\u00a0=\u00a0277)");
+  assert.equal(regimenLine(row({ regimen: "sotorasib", comparator: null, n_treatment: 126, n_control: null, effect_type: "single_arm_rate" })), "sotorasib (n\u00a0=\u00a0126), single-arm");
+  assert.equal(regimenLine(row({ regimen: null, n_treatment: null, n_control: null })), "vs gefitinib or erlotinib");
+  assert.equal(regimenLine(row({ regimen: null, comparator: null, n_treatment: null, n_control: null })), null);
+});
+
+test("the endpoint line says a primary endpoint only when the source does", () => {
+  assert.equal(endpointLine(row({ assessment: "investigator", is_primary: true })), "progression-free survival (PFS), assessed by investigator, primary endpoint");
+  assert.equal(endpointLine(row({ endpoint: "Time to deterioration", assessment: null, is_primary: null })), "Time to deterioration");
+  assert.equal(endpointLine(row({ endpoint: null, assessment: null, is_primary: false })), null);
+});
+
+test("the analysis line names its role, then the source's words", () => {
+  assert.equal(analysisLine(row({ analysis_role: "primary", analysis: "data cut-off 12 June 2017" })), "Primary analysis: data cut-off 12 June 2017");
+  assert.equal(analysisLine(row({ analysis_role: "later", analysis: "updated OS, 2019" })), "Later analysis: updated OS, 2019");
+  assert.equal(analysisLine(row({ analysis_role: "exploratory", analysis: null })), "Exploratory analysis");
+  assert.equal(analysisLine(row({ analysis_role: null, analysis: "OS immature" })), "OS immature");
+  assert.equal(analysisLine(row({ analysis_role: null, analysis: null })), null);
+});
+
+test("the source link opens the PDF at its page; https only", () => {
+  const url = "https://www.ema.europa.eu/en/documents/product-information/x-epar-product-information_en.pdf";
+  assert.equal(efficacySourceUrl(row({ source_url: url, page: 41 })), `${url}#page=41`);
+  assert.equal(efficacySourceUrl(row({ source_url: url, page: null })), url);
+  assert.equal(efficacySourceUrl(row({ source_url: "http://example.org/x.pdf", page: 2 })), null);
+});
+
+const dataPath = new URL("../public/data/ema_medicine_efficacy.json", import.meta.url);
+test("every product in the data file has exactly one lead per indication and https sources", { skip: !existsSync(dataPath) }, () => {
+  const rows = JSON.parse(readFileSync(dataPath, "utf8"));
+  const leads = new Map();
+  for (const row of rows) {
+    assert.match(row.source_url, /^https:\/\//);
+    if (row.lead) {
+      const key = `${row.ema_product_number}|${row.indication}`;
+      assert.equal(leads.has(key), false, key);
+      leads.set(key, true);
+    }
+  }
+  // Every indication has its lead (the card's teaser and each block start with it).
+  const indications = new Set(rows.map((row) => `${row.ema_product_number}|${row.indication}`));
+  assert.equal(leads.size, indications.size);
 });

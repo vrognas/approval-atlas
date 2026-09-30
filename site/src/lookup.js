@@ -14,6 +14,7 @@ import {
 } from "./copies.js";
 import { FAILED, createDatasets } from "./datasets.js";
 import { groupDocuments, primaryDocuments, quickDocuments, splitNamesakeDocuments } from "./documents.js";
+import { analysisLine, efficacySourceUrl, endpointLine, formatArms, formatEffect, groupEfficacy, populationNote, regimenLine, teaserText } from "./efficacy.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import {
   NOT_STATED,
@@ -67,7 +68,8 @@ function groupBy(rows, key) {
   return groups;
 }
 
-const PDF_URL = /\.pdf(-\d+)?$/i;
+// A PDF, also one opened at a page (#page=: the pivotal results' sources).
+const PDF_URL = /\.pdf(-\d+)?(#page=\d+)?$/i;
 // EMA's list of the EU/EEA countries' registers of nationally authorized medicines (checked 2026-09-28).
 const NATIONAL_REGISTERS_URL = "https://www.ema.europa.eu/en/medicines/national-registers-authorised-medicines";
 
@@ -253,6 +255,10 @@ export function createLookup(panel, {
     modalities: [[{ optional: "modalities.json" }, { optional: "ema_medicine_modalities.json" }], (taxonomy, rows) => (taxonomy?.length && rows
       ? { tree: buildModalityTree(taxonomy), byProduct: groupBy(rows, "ema_product_number") }
       : null)],
+    // Pivotal results (efficacy.js; extracted on demand from the product information, R/efficacy.R):
+    // the card's teaser and its More details section; null when the file is missing (older data, or
+    // before the first extraction: the card shows neither).
+    efficacy: [[{ optional: "ema_medicine_efficacy.json" }], (rows) => (rows ? groupBy(rows, "ema_product_number") : null)],
   };
   const listeners = [];
   let lastState = null;
@@ -608,16 +614,81 @@ export function createLookup(panel, {
   // only here, not again in More details), then the first therapeutic areas with their branch chips
   // (areaNames(); here, not in the Status block, since 2026-09-30: with their chips they pushed the
   // product information below a 320x640 screen, and the areas say what it is for as the text does).
-  // Loading… until EMA's rows arrive; none without a text or areas.
-  function indicationBlock(medicines, text, areas) {
+  // Loading… until EMA's rows arrive; none without a text, areas or a teaser. teaser: the pivotal
+  // results' one line (efficacyTeaser()), after the indication and before the areas.
+  function indicationBlock(medicines, text, areas, teaser = null) {
     const facts = areas ? el("dl", { class: "block-facts" }, blockFact(UI.card.areas, areas)) : null;
-    if (!ready(medicines)) return cardBlock("indication", pending(medicines), facts);
-    if (!text && !facts) return null;
+    if (!ready(medicines)) return cardBlock("indication", pending(medicines), teaser, facts);
+    if (!text && !facts && !teaser) return null;
     const { lead, more } = text ? indicationLead(text) : {};
     return cardBlock("indication",
       text ? el("p", { class: "indication-lead" }, lead) : null,
       more ? el("details", { class: "indication", "data-key": "indication" }, el("summary", null, UI.card.fullIndication), el("p", null, text)) : null,
+      teaser,
       facts);
+  }
+
+  // Pivotal results (owner decisions 2026-09-30, .remember/efficacy/efficacy-spec.md): a medicine's
+  // rows grouped by indication (groupEfficacy()); [] without any, or while the file loads, or
+  // when it is missing (older data).
+  function efficacyGroups(number) {
+    const efficacy = need("efficacy");
+    return ready(efficacy) && efficacy ? groupEfficacy(efficacy.get(number) ?? []) : [];
+  }
+
+  // The Indication block's one line: the first indication's lead result (teaserText()), a link
+  // opening More details at the section, then how many more indications it has results for. None
+  // until the file has loaded, so the block does not grow a "Loading…" line.
+  function efficacyTeaser(groups) {
+    if (!groups.length) return null;
+    return el("p", { class: "efficacy-teaser" },
+      el("a", { class: "lead-link", href: "#efficacy", onclick: (event) => openMore("efficacy") && event.preventDefault() },
+        teaserText(groups), el("span", { class: "visually-hidden" }, UI.efficacy.teaserLink)),
+      groups.length > 1 ? [" ", el("span", { class: "muted" }, UI.efficacy.moreIndications(groups.length - 1))] : null);
+  }
+
+  // One result: the trial, its population (a subgroup or broader trial flagged), regimen against
+  // comparator, the endpoint, the effect as printed (strong type, no colour: results are never
+  // ranked or coloured), the arms, the analysis and its data cut, and the source page.
+  function efficacyResult(row) {
+    const note = populationNote(row);
+    const [regimen, endpoint, arms, analysis] = [regimenLine(row), endpointLine(row), formatArms(row), analysisLine(row)];
+    const url = efficacySourceUrl(row);
+    return el("div", { class: "efficacy-result" },
+      row.trial ? el("p", { class: "efficacy-trial" }, row.trial) : null,
+      row.population || note ? el("p", null, row.population ?? "", row.population && note ? " " : null, note ? el("span", { class: "chip" }, note) : null) : null,
+      regimen ? el("p", null, regimen) : null,
+      endpoint ? el("p", null, endpoint) : null,
+      el("p", { class: "efficacy-effect" }, formatEffect(row)),
+      arms ? el("p", { class: "muted" }, arms) : null,
+      analysis ? el("p", { class: "muted" }, analysis) : null,
+      el("p", { class: "efficacy-source" }, url ? externalLink(UI.efficacy.source(row.page), url) : UI.efficacy.source(row.page)),
+      row.stale ? el("p", { class: "muted" }, UI.efficacy.stale(row.source_date)) : null);
+  }
+
+  // More details › Pivotal results: the labels (extracted automatically; not a head-to-head
+  // comparison), then per indication its lead result and, behind "More results", the rest (later
+  // analyses, the whole trial, other endpoints). The heading is the teaser's target (focusable, kept
+  // focused across re-renders). None without rows, or without the file.
+  function efficacySection(number) {
+    const efficacy = need("efficacy");
+    if (efficacy === null) return null;
+    const heading = el("h2", { id: "efficacy", tabindex: "-1", "data-focus-key": "efficacy" }, UI.efficacy.title);
+    if (!ready(efficacy)) return el("section", { class: "card-section" }, heading, pending(efficacy));
+    const groups = efficacyGroups(number);
+    if (!groups.length) return null;
+    return el("section", { class: "card-section efficacy" },
+      heading,
+      el("p", { class: "muted" }, UI.efficacy.auto),
+      el("p", { class: "muted" }, UI.efficacy.caveat),
+      groups.map((group, position) => el("div", { class: "efficacy-indication" },
+        el("h3", null, group.indication ?? UI.efficacy.noIndication),
+        efficacyResult(group.lead),
+        group.more.length
+          ? el("details", { class: "efficacy-more", "data-key": `efficacy-more-${position}` },
+            el("summary", null, UI.efficacy.moreResults(group.more.length)),
+            group.more.map(efficacyResult))
+          : null)));
   }
 
   // The section's heading is the target of the protection lead (focusable, kept
@@ -657,13 +728,15 @@ export function createLookup(panel, {
   }
 
   // Jumps into More details (F · Spacious, phase 4), by the focus key of their target: the protection
-  // lead to the estimate's heading, "and n more" to the first area the Status block does not show.
+  // lead to the estimate's heading, the pivotal results' teaser to theirs, "and n more" to the first
+  // area the Indication block does not show.
   // Each shows its section or fact from its top (the "Therapeutic areas" label, not the target).
   // Data arriving later (the 5 MB documents index) renders above them and would push them off
   // screen: render() gives the target focus back and shows it again while the jump is pending,
   // until the next view or the user scrolls or types (review of phase 4: "and n more" lost focus).
   const JUMPS = {
     protection: () => panel.querySelector("#protection")?.closest("section"),
+    efficacy: () => panel.querySelector("#efficacy")?.closest("section"),
     "areas-rest": () => panel.querySelector("#card-areas-all")?.closest("dd")?.previousElementSibling,
   };
   let pendingJump = null;
@@ -880,6 +953,7 @@ export function createLookup(panel, {
           ]),
           fact(UI.modality.label, modalityFact(number, atc)),
           ladderFact(atcLadders(number, atc, atcCounts), ready(atc) ? ladderHead(atcCounts) : null))),
+      efficacySection(number),
       protectionSection(row),
       primary.length
         ? el("section", { class: "card-section" }, el("h2", null, UI.card.more.allDocuments), documentsList(documents, groups, rest, medicine, namesakeDocuments))
@@ -889,7 +963,7 @@ export function createLookup(panel, {
       title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status), opinion))),
       namesakeNotes(namesakes),
       el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, statusBlock, documentsBlock, protectionBlock,
-        indicationBlock(medicines, medicine?.therapeutic_indication, areaNames(number, areas, conditions)))),
+        indicationBlock(medicines, medicine?.therapeutic_indication, areaNames(number, areas, conditions), efficacyTeaser(efficacyGroups(number))))),
       more);
   }
 

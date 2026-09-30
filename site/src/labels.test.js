@@ -1784,4 +1784,17 @@ test("UI.efficacy copy: no significance words, no em-dash, null analysis stays n
   assert.equal(efficacy.moreIndications(2), "and results for 2 more indications");
   assert.equal(efficacy.source(12), "Source: product information, p. 12");
   assert.equal(efficacy.stale("2026-05-04"), "From the product information of 4 May 2026; EMA has updated it since.");
+  // Task 9: the card's section.
+  assert.equal(efficacy.moreResults(3), "More results (3)");
+  assert.equal(efficacy.regimen("sotorasib (n\u00a0=\u00a0126)", null), "sotorasib (n\u00a0=\u00a0126), single-arm");
+  assert.equal(efficacy.armSize("alectinib", 1234), "alectinib (n\u00a0=\u00a01,234)");
+  assert.equal(efficacy.analysisLine(null, null), null);
+  // About credits the extraction once the data does (meta.json "Pivotal results …"), naming the model's maker
+  // and that neither EMA nor Anthropic checked the results.
+  const { sources } = labels.UI.about;
+  assert.equal(sources().some((parts) => /Pivotal results/.test(parts[0])), false);
+  const line = sources({ efficacy: true }).find((parts) => /Pivotal results/.test(parts[0]))[0];
+  assert.match(line, /extracted automatically from EMA product information/);
+  assert.match(line, /Claude, Anthropic/);
+  assert.match(line, /not checked by EMA or Anthropic/);
 });
