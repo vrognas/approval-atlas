@@ -94,8 +94,6 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
           meta.className = "option-meta";
           meta.textContent = option.meta;
         }
-        item.addEventListener("pointerdown", (event) => event.preventDefault()); // keep focus on the input
-        item.addEventListener("click", () => pick(index));
       }
       return list;
     }));
@@ -178,7 +176,42 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     }
     event.preventDefault();
   });
-  input.addEventListener("blur", close);
+  // A tap or click on an option (owner report 2026-10-01: tapping "Iqirvo" on a phone did not open
+  // it). On a touch screen the input loses focus before the click even with pointerdown prevented,
+  // and closing on that blur hid the list, so the click landed on the page below; and data arriving
+  // between press and release rebuilt the list, so the click went to the listbox, not the option.
+  // So: the list stays while an option is pressed (no close on blur, no rebuild), and the click is
+  // handled on the listbox, finding the option under the pointer when its own target is gone.
+  let pressing = false;
+  const optionAt = (event) => {
+    const target = event.target instanceof Element ? event.target.closest('[role="option"]') : null;
+    if (target && listbox.contains(target)) return target;
+    const under = document.elementFromPoint(event.clientX, event.clientY)?.closest('[role="option"]');
+    return under && listbox.contains(under) ? under : null;
+  };
+  listbox.addEventListener("pointerdown", (event) => {
+    if (!optionAt(event)) return;
+    event.preventDefault(); // keep focus on the input (mouse)
+    pressing = true;
+  });
+  listbox.addEventListener("click", (event) => {
+    pressing = false;
+    const item = optionAt(event);
+    if (item) pick(Number(item.id.replace("lookup-opt-", "")));
+  });
+  // A press that ends without a click (a scroll of the list, a drag away): the list closes if the
+  // field lost focus meanwhile, as a blur would have closed it.
+  document.addEventListener("pointercancel", () => {
+    if (!pressing) return;
+    pressing = false;
+    if (document.activeElement !== input) close();
+  }, true);
+  document.addEventListener("pointerdown", (event) => {
+    if (!listbox.contains(event.target)) pressing = false;
+  }, true);
+  input.addEventListener("blur", () => {
+    if (!pressing) close();
+  });
   // Focused and empty: the viewer's recently viewed (none: nothing opens).
   input.addEventListener("focus", () => {
     if (input.value.trim() === "") renderList();
@@ -191,6 +224,7 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
       // An empty field shows the recently viewed list, which background data does not change: not
       // rebuilt (review 2026-09-29: it reset the active option and repeated the announcement).
       if (input.value.trim() === "") return;
+      if (pressing) return; // rebuilt under a press, the click would miss its option
       if (!listbox.hidden || (requested && input.value.trim().length >= 2)) renderList();
     },
     setText(text) {

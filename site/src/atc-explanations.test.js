@@ -51,7 +51,7 @@ test("every class the data uses at levels 1-4 has a tip led by its explanation",
     }
     const [lead, second] = atcClassTip(code, classes, explanations).split("\n");
     assert.equal(lead, explanation, code);
-    assert.match(second, new RegExp(`^${code}\\b.*: ATC level ${atcLevel(code)}, `), code);
+    assert.match(second, new RegExp(`^ATC level ${atcLevel(code)}, `), code);
   }
   // Only a class WHO does not name may go without (the pipeline warns; none on 2026-09-29).
   assert.deepEqual(unexplained.filter((code) => classes.has(code)), []);

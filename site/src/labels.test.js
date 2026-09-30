@@ -1198,10 +1198,10 @@ test("the ATC tree's explainers: WHO's level meanings, at most 25 words of copy,
     5: "chemical substance",
   });
   const tips = [
-    atc.classTip("L04AC", 4, "L04A"),
-    `${atc.classTip("L01XC", 4, "L01X")} ${atc.retired(2022, "L01F")}`,
-    `${atc.classTip("J07BX99", 5, "J07BX")} ${atc.retired(2023, null)}`,
-    `${atc.classTip("C10AX21", 5, "C10AX")} ${atc.temporary}`,
+    atc.classTip(4, "L04A"),
+    `${atc.classTip(4, "L01X")} ${atc.retired(2022, "L01F")}`,
+    `${atc.classTip(5, "J07BX")} ${atc.retired(2023, null)}`,
+    `${atc.classTip(5, "C10AX")} ${atc.temporary}`,
     atc.incompleteTip,
     atc.codedHereTip,
   ];

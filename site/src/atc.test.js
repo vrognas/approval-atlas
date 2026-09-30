@@ -345,20 +345,20 @@ test("atcBadgeTip: the level names one per line, then why the code is incomplete
 
 // Owner feedback 2026-09-29: every ATC tree row explains its class, as the therapeutic area rows do;
 // its parent by its code only (owner decision 2026-09-29: shorter tips).
-test("atcClassTip: the class, its ATC level and what WHO calls that level, its parent's code, and a retired or temporary status", () => {
-  assert.equal(atcClassTip("L", atcClasses), "L Antineoplastic and Immunomodulating Agents: ATC level 1, anatomical main group.");
-  assert.equal(atcClassTip("L04", atcClasses), "L04 Immunosuppressants: ATC level 2, pharmacological or therapeutic subgroup, in L.");
-  assert.equal(atcClassTip("L01F", atcClasses), "L01F Monoclonal Antibodies and Antibody Drug Conjugates: ATC level 3, chemical, pharmacological or therapeutic subgroup, in L01.");
-  assert.equal(atcClassTip("L04AC", atcClasses), "L04AC Interleukin Inhibitors: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A.");
-  assert.equal(atcClassTip("L01FA01", atcClasses), "L01FA01 Rituximab: ATC level 5, chemical substance, in L01FA.");
+test("atcClassTip: its ATC level (not the class's code and name) and what WHO calls that level, its parent's code, and a retired or temporary status", () => {
+  assert.equal(atcClassTip("L", atcClasses), "ATC level 1, anatomical main group.");
+  assert.equal(atcClassTip("L04", atcClasses), "ATC level 2, pharmacological or therapeutic subgroup, in L.");
+  assert.equal(atcClassTip("L01F", atcClasses), "ATC level 3, chemical, pharmacological or therapeutic subgroup, in L01.");
+  assert.equal(atcClassTip("L04AC", atcClasses), "ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A.");
+  assert.equal(atcClassTip("L01FA01", atcClasses), "ATC level 5, chemical substance, in L01FA.");
   // Retired (atc_classes.json status, replaced_by, changed_year) and temporary codes say so.
-  assert.equal(atcClassTip("L01XC02", atcClasses), "L01XC02 Rituximab: ATC level 5, chemical substance, in L01XC. Retired 2022, now L01FA01.");
-  assert.equal(atcClassTip("L01XC", atcClasses), "L01XC Monoclonal Antibodies: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X. Retired 2022, now L01F.");
-  assert.equal(atcClassTip("C10AX21", atcClasses), "C10AX21 Olezarsen: ATC level 5, chemical substance, in C10AX. On WHO's temporary list: it can still change.");
+  assert.equal(atcClassTip("L01XC02", atcClasses), "ATC level 5, chemical substance, in L01XC. Retired 2022, now L01FA01.");
+  assert.equal(atcClassTip("L01XC", atcClasses), "ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X. Retired 2022, now L01F.");
+  assert.equal(atcClassTip("C10AX21", atcClasses), "ATC level 5, chemical substance, in C10AX. On WHO's temporary list: it can still change.");
   const deleted = new Map([["J07BX99", atcClass("J07BX99", "example vaccines", "retired", null, 2023)]]);
-  assert.equal(atcClassTip("J07BX99", deleted), "J07BX99 Example Vaccines: ATC level 5, chemical substance, in J07BX. Retired 2023, with no successor.");
+  assert.equal(atcClassTip("J07BX99", deleted), "ATC level 5, chemical substance, in J07BX. Retired 2023, with no successor.");
   // No WHO name (EMA's B06C): the code alone; a malformed code has no explainer.
-  assert.equal(atcClassTip("B06C", new Map()), "B06C: ATC level 3, chemical, pharmacological or therapeutic subgroup, in B06.");
+  assert.equal(atcClassTip("B06C", new Map()), "ATC level 3, chemical, pharmacological or therapeutic subgroup, in B06.");
   assert.equal(atcClassTip("LX1XX02", atcClasses), null);
 });
 
@@ -388,22 +388,22 @@ test("buildAtcExplanations and atcExplanation: code -> text, levels 1-4 only, no
 test("atcClassTip: the class's explanation first, then on a line of its own the level line", () => {
   assert.equal(atcClassTip("L04AC", atcClasses, explanations), [
     "Block interleukins, immune messenger proteins that drive inflammation, or their receptors, calming overactive immune responses.",
-    "L04AC Interleukin Inhibitors: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A.",
+    "ATC level 4, chemical, pharmacological or therapeutic subgroup, in L04A.",
   ].join("\n"));
   assert.equal(atcClassTip("L", atcClasses, explanations), [
     "Cancer medicines (chemotherapy, targeted and hormone therapy) and medicines that calm or boost immunity, e.g. for arthritis or transplants.",
-    "L Antineoplastic and Immunomodulating Agents: ATC level 1, anatomical main group.",
+    "ATC level 1, anatomical main group.",
   ].join("\n"));
   // A class without an explanation (L01F here; a retired class, which the data no longer uses; a
   // level-5 code) and older data (no explanations) as before.
   assert.equal(atcClassTip("L01F", atcClasses, explanations), atcClassTip("L01F", atcClasses));
-  assert.equal(atcClassTip("L01XC", atcClasses, explanations), "L01XC Monoclonal Antibodies: ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X. Retired 2022, now L01F.");
-  assert.equal(atcClassTip("L01FA01", atcClasses, explanations), "L01FA01 Rituximab: ATC level 5, chemical substance, in L01FA.");
+  assert.equal(atcClassTip("L01XC", atcClasses, explanations), "ATC level 4, chemical, pharmacological or therapeutic subgroup, in L01X. Retired 2022, now L01F.");
+  assert.equal(atcClassTip("L01FA01", atcClasses, explanations), "ATC level 5, chemical substance, in L01FA.");
   // A temporary class with an explanation: its status stays on the level line.
   const temporary = new Map([["C10AX", atcClass("C10AX", "Other lipid modifying agents", "temporary")]]);
   assert.equal(atcClassTip("C10AX", temporary, explanations), [
     "Blood-fat medicines that fit none of the named groups, lowering cholesterol or other blood fats in other ways.",
-    "C10AX Other Lipid Modifying Agents: ATC level 4, chemical, pharmacological or therapeutic subgroup, in C10A. On WHO's temporary list: it can still change.",
+    "ATC level 4, chemical, pharmacological or therapeutic subgroup, in C10A. On WHO's temporary list: it can still change.",
   ].join("\n"));
 });
 
