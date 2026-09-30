@@ -187,8 +187,32 @@ test_that("no rows, an empty table with the columns and no source entry", {
   expect_identical(lapply(table, class), lapply(full, class))
 })
 
+test_that("the source entry counts only the rows the site shows", {
+  rows <- efficacy_fixture()
+  hidden <- !rows$review %in% efficacy_shown_reviews
+  rows$extractor_model[hidden] <- "claude-opus-5-5"
+  rows$extracted_at[hidden] <- as.Date("2026-10-15")
+  table <- build_efficacy_table(rows, fixture_medicines())
+  entry <- efficacy_source_entry(table)
+  expect_identical(
+    entry$version, "Extracted 2026-09-30; models claude-sonnet-5-5"
+  )
+  rows$review <- "flagged"
+  expect_null(
+    efficacy_source_entry(build_efficacy_table(rows, fixture_medicines()))
+  )
+})
+
+test_that("a row without an extraction date stops the build", {
+  rows <- efficacy_fixture()
+  rows$extracted_at[2] <- NA
+  expect_error(check_efficacy_rows(rows), "no extraction date")
+})
+
 test_that("the source entry names the extraction", {
-  entry <- efficacy_source_entry(efficacy_fixture())
+  entry <- efficacy_source_entry(
+    build_efficacy_table(efficacy_fixture(), fixture_medicines())
+  )
   expect_identical(
     entry$name,
     paste(

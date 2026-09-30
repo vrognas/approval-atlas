@@ -37,15 +37,23 @@ read_pdf_pages <- function(path) {
   pdftools::pdf_text(path)
 }
 
+# The PDF's page texts from the cache, NULL when they are not there.
+cached_efficacy_pages <- function(plan_row,
+                                  cache_directory = efficacy_text_cache) {
+  cache_file <- efficacy_cache_file(plan_row, cache_directory)
+  if (file.exists(cache_file)) readRDS(cache_file)
+}
+
 # The PDF's page texts: `pages`, else `status` (not_found, or failed with a
 # `reason`), else `stop` when EMA's answer should end the fetching (a 429, a
 # firewall page) for this run.
 fetch_efficacy_pages <- function(plan_row,
                                  cache_directory = efficacy_text_cache) {
-  cache_file <- efficacy_cache_file(plan_row, cache_directory)
-  if (file.exists(cache_file)) {
-    return(list(pages = readRDS(cache_file)))
+  cached <- cached_efficacy_pages(plan_row, cache_directory)
+  if (!is.null(cached)) {
+    return(list(pages = cached))
   }
+  cache_file <- efficacy_cache_file(plan_row, cache_directory)
   wait_seconds(smpc_request_spacing_seconds)
   cli::cli_inform("Reading {.url {plan_row$document_url}}.")
   pdf_path <- tempfile(fileext = ".pdf")
@@ -170,7 +178,9 @@ efficacy_row_page <- function(row, section) {
 # One answered row: verified against the section, or listed as failed.
 check_answer_row <- function(row, order, submission, model, today) {
   plan_row <- submission$plan_row
-  verification <- verify_efficacy_row(row, submission$section$text)
+  verification <- verify_efficacy_row(
+    row, submission$section$text, plan_row$therapeutic_indication
+  )
   if (verification$status == "failed") {
     return(list(failed = failed_efficacy_row(
       plan_row$ema_product_number, row, verification$errors

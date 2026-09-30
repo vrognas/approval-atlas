@@ -14,8 +14,12 @@ current_time <- function() {
   Sys.time()
 }
 
+# Written beside the file and renamed over it, so a failed write never leaves
+# a half file that later runs cannot read.
 write_pending_batch <- function(path, batch_id, model, plan) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  partial <- paste0(path, ".tmp")
+  on.exit(unlink(partial), add = TRUE)
   jsonlite::write_json(
     list(
       batch_id = batch_id,
@@ -23,12 +27,16 @@ write_pending_batch <- function(path, batch_id, model, plan) {
       created = format(current_time(), "%Y-%m-%dT%H:%M:%S%z"),
       plan = plan
     ),
-    path,
+    partial,
     auto_unbox = TRUE,
     pretty = TRUE,
     na = "null",
     dataframe = "rows"
   )
+  if (!file.rename(partial, path)) {
+    cli::cli_abort("Could not replace {.path {path}}.")
+  }
+  invisible(path)
 }
 
 read_pending_batch <- function(path) {
@@ -73,10 +81,24 @@ submit_efficacy_batch <- function(submissions, model, pending_path) {
   if (is.null(batch_id)) {
     return(NULL)
   }
-  plan <- dplyr::bind_rows(purrr::map(submissions, "plan_row"))
-  write_pending_batch(pending_path, batch_id, model, plan)
+  # Shown before anything else can fail: the batch is billed from now on.
   cli::cli_inform(
     "Submitted batch {batch_id} with {length(requests)} request{?s}."
+  )
+  plan <- dplyr::bind_rows(purrr::map(submissions, "plan_row"))
+  tryCatch(
+    write_pending_batch(pending_path, batch_id, model, plan),
+    error = function(error) {
+      cli::cli_warn(c(
+        "Could not save batch {batch_id} in {.path {pending_path}}:
+        {conditionMessage(error)}",
+        i = "It is collected in this run if it ends in time. If this run
+        stops first, the batch is still billed: its id is {batch_id}; check
+        the Anthropic Console (https://console.anthropic.com) and collect it
+        by that id before running again, or its products are paid for
+        twice."
+      ))
+    }
   )
   batch_id
 }
@@ -227,20 +249,17 @@ extract_efficacy_batch <- function(plan,
   combine_efficacy_run(prepared$records, collected)
 }
 
-# The sections of a pending batch's products, from the text cache (a product
-# whose text cannot be read again is left for a later run).
-pending_submissions <- function(plan) {
-  purrr::map(seq_len(nrow(plan)), function(index) {
+# The sections of a pending batch's products, from the text cache only (never
+# EMA: a fetch could fail or bring a changed text). The batch is paid for, so
+# a product whose section cannot be read again stops the run before its
+# results are collected, the pending file kept.
+pending_submissions <- function(pending) {
+  plan <- pending$plan
+  submissions <- purrr::map(seq_len(nrow(plan)), function(index) {
     plan_row <- plan[index, ]
-    fetched <- fetch_efficacy_pages(plan_row)
-    section <- if (!is.null(fetched$pages)) {
-      slice_smpc_efficacy(fetched$pages)
-    }
+    pages <- cached_efficacy_pages(plan_row)
+    section <- if (!is.null(pages)) slice_smpc_efficacy(pages)
     if (is.null(section) || is.na(section$text)) {
-      cli::cli_warn(
-        "No section 5.1 for {plan_row$ema_product_number}: left for a later
-        run."
-      )
       return(NULL)
     }
     list(
@@ -248,8 +267,18 @@ pending_submissions <- function(plan) {
       section = section,
       custom_id = efficacy_custom_id(plan_row$ema_product_number)
     )
-  }) |>
-    purrr::compact()
+  })
+  missing <- plan$ema_product_number[purrr::map_lgl(submissions, is.null)]
+  if (length(missing) > 0) {
+    cli::cli_abort(c(
+      "Batch {pending$batch_id}: no cached section 5.1 for {.val {missing}}
+      in {.path {efficacy_text_cache}}; its results are not collected.",
+      i = "The pending file stays. Restore the cached texts and run again;
+      its results stay in the Anthropic Console (https://console.anthropic.com)
+      for 29 days."
+    ))
+  }
+  submissions
 }
 
 resume_efficacy_batch <- function(pending, poll_seconds, today = Sys.Date()) {
@@ -258,7 +287,7 @@ resume_efficacy_batch <- function(pending, poll_seconds, today = Sys.Date()) {
     "Collecting batch {pending$batch_id} ({pending$model}, created
     {pending$created}) before planning anything new."
   )
-  submissions <- pending_submissions(pending$plan)
+  submissions <- pending_submissions(pending)
   collected <- collect_efficacy_batch(
     pending$batch_id, submissions, pending$model, poll_seconds, today
   )

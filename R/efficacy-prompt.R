@@ -117,10 +117,13 @@ efficacy_system_prompt <- function() {
     "In tables, check which column is the medicine and which the comparator",
     "from the column headers; copy the comparator's header into",
     "comparator_column_label. comparator_column_label and the arm values",
-    "(arm_treatment, arm_control) must appear inside a quote.",
+    "(arm_treatment, arm_control) must appear inside a quote, the label in",
+    "the same quote as arm_control.",
     "Each row needs 1 to 3 verbatim quotes of at most 50 words that together",
-    "contain every number you give, the value with its confidence interval in",
-    "one quote.",
+    "contain every number you give, the arm sizes (n_treatment, n_control)",
+    "included, the value with its confidence interval in one quote.",
+    "Copy population, regimen and comparator verbatim from the text, as",
+    "printed; never summarise or reword them.",
     "indication: the EU indication the row supports, copied exactly from the",
     'indications given, never paraphrased; "" when no given indication',
     "applies. Give no rows when section 5.1 reports no efficacy trial."
@@ -204,8 +207,9 @@ normalise_efficacy_row <- function(row) {
   if (length(not_string) > 0) {
     return(dropped(paste("not a string:", paste(not_string, collapse = ", "))))
   }
+  # Only spaces is as good as "": nothing stated.
   empty <- efficacy_text_fields[
-    purrr::map_lgl(efficacy_text_fields, function(field) row[[field]] == "")
+    purrr::map_lgl(efficacy_text_fields, \(field) trimws(row[[field]]) == "")
   ]
   numbers <- list(
     n_treatment = parse_efficacy_count(row$n_treatment),

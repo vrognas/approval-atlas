@@ -30,11 +30,100 @@ sample_efficacy_review <- function(rows, share = efficacy_review_share) {
 efficacy_review_value <- function(row) {
   interval <- if (is.na(row$ci_low) || is.na(row$ci_high)) {
     ""
+  } else if (isTRUE(row$ci_is_range)) {
+    sprintf(" (range %s, %s)", row$ci_low, row$ci_high)
   } else {
     level <- if (is.na(row$ci_level)) "" else paste0(row$ci_level, "% ")
     sprintf(" (%sCI %s, %s)", level, row$ci_low, row$ci_high)
   }
   paste0(dplyr::coalesce(row$value, "(no value)"), interval)
+}
+
+efficacy_review_effect_words <- c(
+  hr = "HR", hr_noninferiority = "HR", rate_difference = "difference",
+  single_arm_rate = "response rate", single_arm_median = "median"
+)
+
+# The effect as the card words it (efficacy.js formatEffect()), in plain text.
+efficacy_review_effect <- function(row) {
+  words <- efficacy_review_effect_words[row$effect_type]
+  effect <- paste(
+    c(if (!is.na(words)) words, efficacy_review_value(row)),
+    collapse = " "
+  )
+  if (row$effect_type %in% "hr_noninferiority") {
+    effect <- paste0(effect, ", non-inferiority")
+  }
+  effect
+}
+
+review_text <- function(value) {
+  if (length(value) == 0 || is.na(value)) "not stated" else as.character(value)
+}
+
+efficacy_review_arm <- function(text, n) {
+  if (is.na(text)) {
+    return(NULL)
+  }
+  if (is.na(n)) text else sprintf("%s (n = %s)", text, n)
+}
+
+efficacy_review_regimen <- function(row) {
+  regimen <- efficacy_review_arm(row$regimen, row$n_treatment)
+  comparator <- efficacy_review_arm(row$comparator, row$n_control)
+  paste(
+    review_text(regimen),
+    if (is.null(comparator)) "(single-arm)" else paste("vs", comparator)
+  )
+}
+
+efficacy_review_arms <- function(row) {
+  if (is.na(row$arm_treatment) && is.na(row$arm_control)) {
+    return("not stated")
+  }
+  arms <- paste(
+    review_text(row$arm_treatment), "vs", review_text(row$arm_control)
+  )
+  if (is.na(row$arm_measure)) {
+    return(arms)
+  }
+  sprintf("%s (%s)", arms, row$arm_measure)
+}
+
+efficacy_review_primary <- function(is_primary) {
+  if (is.na(is_primary)) "not stated" else if (is_primary) "yes" else "no"
+}
+
+# Every field the medicine card shows, so the reviewer judges what readers
+# will see.
+efficacy_review_fields <- function(row) {
+  population <- review_text(row$population)
+  if (!is.na(row$population_match)) {
+    population <- sprintf("%s (%s)", population, row$population_match)
+  }
+  analysis <- paste(
+    c(
+      if (!is.na(row$analysis_role)) paste0(row$analysis_role, ":"),
+      review_text(row$analysis)
+    ),
+    collapse = " "
+  )
+  c(
+    paste0("- Indication: ", review_text(row$indication)),
+    paste0("- Trial: ", review_text(row$trial)),
+    paste0("- Population: ", population),
+    paste0("- Regimen: ", efficacy_review_regimen(row)),
+    paste0(
+      "- Comparator column label: ", review_text(row$comparator_column_label)
+    ),
+    paste0("- Arms: ", efficacy_review_arms(row)),
+    paste0("- Endpoint: ", review_text(row$endpoint)),
+    paste0("- Assessment: ", review_text(row$assessment)),
+    paste0("- Primary endpoint: ", efficacy_review_primary(row$is_primary)),
+    paste0("- Analysis: ", analysis),
+    paste0("- CI level: ", review_text(row$ci_level)),
+    paste0("- Effect: ", efficacy_review_effect(row))
+  )
 }
 
 # Every line of every quote in the block quote; quotes apart by a ">" line.
@@ -53,7 +142,7 @@ efficacy_review_entry <- function(row) {
       dplyr::coalesce(row$trial, "?"), dplyr::coalesce(row$endpoint, "?")
     ),
     "",
-    paste0("- Value: ", efficacy_review_value(row)),
+    efficacy_review_fields(row),
     paste0(
       "- Flags: ",
       if (length(flags) == 0) "none" else paste(flags, collapse = ", ")

@@ -56,7 +56,8 @@ efficacy_row_problems <- function(rows) {
       "no extractor model",
       NA_character_
     ),
-    ifelse(is.na(rows$row_key), "no row key", NA_character_)
+    ifelse(is.na(rows$row_key), "no row key", NA_character_),
+    ifelse(is.na(rows$extracted_at), "no extraction date", NA_character_)
   )
   purrr::pmap_chr(problems, function(...) {
     found <- c(...)
@@ -210,12 +211,14 @@ build_efficacy_table <- function(rows, medicines, documents = NULL) {
     dplyr::select(dplyr::all_of(efficacy_site_columns))
 }
 
-efficacy_source_entry <- function(rows) {
-  if (nrow(rows) == 0) {
+# From the site table (build_efficacy_table()): the shown rows' models and
+# latest extraction; none when the site shows no row.
+efficacy_source_entry <- function(table) {
+  if (nrow(table) == 0) {
     return(NULL)
   }
-  extracted <- max(rows$extracted_at, na.rm = TRUE)
-  models <- sort(unique(stats::na.omit(rows$extractor_model)))
+  extracted <- max(table$extracted_at)
+  models <- sort(unique(table$extractor_model))
   list(
     name = paste(
       "Pivotal results (extracted from EMA product information SmPC",

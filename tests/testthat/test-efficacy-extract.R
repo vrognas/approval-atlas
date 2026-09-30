@@ -74,8 +74,8 @@ test_that("a changed PI URL is planned again; newest documents first", {
 
 test_that("a transient failure is planned again; the budget caps the plan", {
   for (reason in c(
-    "errored: overloaded_error", "expired", "canceled",
-    "no result in the batch"
+    "errored: overloaded_error", "errored: api_error", "errored", "expired",
+    "canceled", "no result in the batch"
   )) {
     plan <- plan_sample(alecensa_extraction("failed", reason), budget = 1)
     expect_equal(plan$ema_product_number, "EMEA/H/C/004164", info = reason)
@@ -85,7 +85,9 @@ test_that("a transient failure is planned again; the budget caps the plan", {
 test_that("a lasting failure waits for a new PI, another model or ONLY", {
   for (reason in c(
     "max_tokens", "refusal", "not the row schema",
-    "no row passed verification", "no text read from the PDF"
+    "no row passed verification", "no text read from the PDF",
+    "errored: invalid_request_error", "errored: authentication_error",
+    "errored: api_errors_elsewhere"
   )) {
     failed <- alecensa_extraction("failed", reason)
     expect_equal(
@@ -413,7 +415,10 @@ alex_row <- function(...) {
     comparator = "crizotinib", comparator_column_label = "Crizotinib",
     n_treatment = "152", n_control = "151", value = "0.47", ci_low = "0.34",
     ci_high = "0.65", ci_level = "95", analysis = "primary analysis",
-    quotes = list("Hazard ratio 0.47 (95% CI: 0.34, 0.65), p < 0.0001.")
+    quotes = list(
+      "Hazard ratio 0.47 (95% CI: 0.34, 0.65), p < 0.0001.",
+      "(n = 152) or crizotinib (n = 151)."
+    )
   )
   overrides <- list(...)
   row[names(overrides)] <- overrides
@@ -425,11 +430,12 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
     alex_row(),
     alex_row(endpoint = "OS", value = "0.67"),
     alex_row(
-      endpoint = "PFS (updated)", value = "0.47", analysis = "later",
+      value = "0.47", analysis = "later",
       arm_treatment = "NR (17.7, NR)",
       quotes = list(
         "Hazard ratio 0.47 (95% CI: 0.34, 0.65), p < 0.0001.",
-        "Median PFS NR (17.7, NR) versus 11.1 months."
+        "Median PFS NR (17.7, NR) versus 11.1 months.",
+        "(n = 152) or crizotinib (n = 151)."
       )
     )
   )))
@@ -454,6 +460,15 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_match(run$rows$row_key, "^[0-9a-f]{40}$")
   expect_equal(run$failed_rows$endpoint, "OS")
   expect_match(run$failed_rows$errors[[1]][1], "0.67")
+})
+
+test_that("an indication not in the medicine's section 4.1 is flagged", {
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(
+    alex_row(indication = "ALK-positive NSCLC"),
+    alex_row(indication = "ALK-positive lung cancer", analysis = "later")
+  )))
+  run <- extract_first()
+  expect_equal(run$rows$flags, list(character(), "indication_not_in_source"))
 })
 
 test_that("a repeated row and parser-dropped rows count as failed", {
@@ -827,6 +842,10 @@ test_that("a second run finds nothing to extract; failures are reported", {
   expect_equal(run$extracted$status, "failed")
   expect_match(messages, "no row passed verification", all = FALSE)
   expect_match(messages, "ALEX, PFS: value = '0.99'", all = FALSE)
+  expect_match(
+    messages, "Failed, not retried until the product information",
+    all = FALSE
+  )
   # A lasting failure is not retried by itself, only when asked for.
   expect_message(run <- run_in(directory), "No product to extract")
   expect_equal(nrow(run$extracted), 0)
@@ -835,6 +854,35 @@ test_that("a second run finds nothing to extract; failures are reported", {
   expect_equal(
     suppressMessages(run_in(directory))$extracted$status,
     "no_rows"
+  )
+})
+
+test_that("the run summary says which failures are retried", {
+  extractions <- dplyr::bind_rows(
+    efficacy_extraction_record(
+      plan_sample(budget = 1), "failed", as.Date("2026-09-30"),
+      reason = "errored: overloaded_error"
+    ),
+    efficacy_extraction_record(
+      plan_sample(budget = 2)[2, ], "failed", as.Date("2026-09-30"),
+      reason = "errored: invalid_request_error"
+    )
+  )
+  run <- list(
+    rows = empty_efficacy_rows(), extractions = extractions,
+    failed_rows = empty_failed_efficacy_rows()
+  )
+  messages <- paste(
+    testthat::capture_messages(report_efficacy_run(run, run$rows)),
+    collapse = ""
+  )
+  expect_match(
+    messages,
+    "Failed, retried on the next run[^\n]*\n[^\n]*overloaded_error"
+  )
+  expect_match(
+    messages,
+    "Failed, not retried until[^\n]*\n[^\n]*invalid_request_error"
   )
 })
 
@@ -856,7 +904,9 @@ test_that("a pending batch is collected before anything is planned", {
     batch_answer("EMEA-H-C-003933", list(alex_row()))
   )
   local_mocked_bindings(
-    create_claude_batch = function(requests) stop("no new batch expected")
+    create_claude_batch = function(requests) stop("no new batch expected"),
+    fetch_efficacy_pages = function(plan_row) stop("no fetch expected"),
+    cached_efficacy_pages = function(plan_row) alex_pages()
   )
   run <- suppressMessages(run_in(directory))
   expect_equal(run$extracted$ema_product_number, "EMEA/H/C/003933")
@@ -865,6 +915,104 @@ test_that("a pending batch is collected before anything is planned", {
   rows <- read_efficacy_rows(file.path(directory, "rows.json"))
   expect_equal(nrow(rows), 2L)
   expect_false(file.exists(pending_path))
+})
+
+pending_run_directory <- function(env = parent.frame()) {
+  directory <- withr::local_tempdir(.local_envir = env)
+  write_run_inputs(directory)
+  plan <- plan_efficacy_extractions(
+    jsonlite::fromJSON(file.path(directory, "ema_medicines.json")),
+    select_epar_documents(
+      read_epar_documents(fixture_epar_documents_path())$data
+    ),
+    empty_efficacy_extractions(), 2,
+    only = c("EMEA/H/C/003933", "EMEA/H/C/000697")
+  )
+  write_pending_batch(
+    file.path(directory, "pending-batch.json"), "msgbatch_9",
+    "claude-opus-5-5", plan
+  )
+  directory
+}
+
+test_that("a resumed batch without its texts stops before collecting", {
+  directory <- pending_run_directory()
+  pending_path <- file.path(directory, "pending-batch.json")
+  local_batch(alex_pages(), list())
+  local_mocked_bindings(
+    fetch_efficacy_pages = function(plan_row) stop("no fetch expected"),
+    claude_batch_status = function(batch_id) stop("no collecting expected"),
+    cached_efficacy_pages = function(plan_row) {
+      if (plan_row$ema_product_number == "EMEA/H/C/003933") alex_pages()
+    }
+  )
+  expect_error(
+    suppressMessages(run_in(directory)),
+    "EMEA/H/C/000697"
+  )
+  expect_true(file.exists(pending_path))
+  expect_equal(read_pending_batch(pending_path)$batch_id, "msgbatch_9")
+})
+
+test_that("cached page texts are read without fetching", {
+  cache <- withr::local_tempdir()
+  plan_row <- plan_sample(budget = 1)
+  expect_null(cached_efficacy_pages(plan_row, cache))
+  saveRDS(c("page one"), efficacy_cache_file(plan_row, cache))
+  expect_equal(cached_efficacy_pages(plan_row, cache), "page one")
+})
+
+test_that("the batch id is shown before it is saved; a failed save warns", {
+  pending_path <- withr::local_tempfile(fileext = ".json")
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
+  local_mocked_bindings(
+    write_pending_batch = function(path, batch_id, model, plan) {
+      stop("disk full")
+    }
+  )
+  messages <- character()
+  warnings <- character()
+  run <- withCallingHandlers(
+    extract_efficacy_batch(
+      plan_sample(budget = 1), "claude-sonnet-5-5",
+      poll_seconds = 0, today = as.Date("2026-09-30"),
+      pending_path = pending_path
+    ),
+    message = function(condition) {
+      messages <<- c(messages, conditionMessage(condition))
+      invokeRestart("muffleMessage")
+    },
+    warning = function(condition) {
+      warnings <<- c(warnings, conditionMessage(condition))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_match(messages[1], "msgbatch_1")
+  expect_match(paste(warnings, collapse = " "), "msgbatch_1")
+  expect_match(paste(warnings, collapse = " "), "Anthropic Console")
+  expect_match(paste(warnings, collapse = " "), "disk full")
+  # The batch is still collected in this run.
+  expect_equal(run$extractions$status, "ok")
+})
+
+test_that("the pending file is replaced whole or not at all", {
+  path <- withr::local_tempfile(fileext = ".json")
+  plan <- plan_sample(budget = 1)
+  write_pending_batch(path, "msgbatch_1", "claude-sonnet-5-5", plan)
+  expect_false(file.exists(paste0(path, ".tmp")))
+  local_mocked_bindings(
+    write_json = function(x, path, ...) {
+      writeLines("{\"batch_id\": \"msgbatch_2\", \"mod", path)
+      stop("disk full")
+    },
+    .package = "jsonlite"
+  )
+  expect_error(
+    write_pending_batch(path, "msgbatch_2", "claude-sonnet-5-5", plan),
+    "disk full"
+  )
+  expect_equal(read_pending_batch(path)$batch_id, "msgbatch_1")
+  expect_false(file.exists(paste0(path, ".tmp")))
 })
 
 test_that("a batch still pending after a run keeps its file", {

@@ -109,7 +109,7 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
       union_register_source_entry(register_source)
     ), atc_sources$source_entries, purrr::compact(list(
       atc_explanations_source_entry(tables$atc_class_explanations),
-      efficacy_source_entry(efficacy_rows)
+      efficacy_source_entry(tables$ema_medicine_efficacy)
     )), company_source_entries(
       register_source,
       gleif_matches

@@ -149,13 +149,18 @@ read_efficacy_extractions <- function(path = efficacy_extractions_path) {
   read_json_records(path, efficacy_extraction_types)
 }
 
-# Failures that another try of the same request can fix. Others (truncated,
-# refused, invalid, no row verified, no text read) would fail again and be
+# Failures that another try of the same request can fix: the API's own
+# errors (api_error, overloaded_error; an error without a type), and requests
+# the batch never answered. Others (a request the API refused as invalid,
+# truncated, refused, no row verified, no text read) would fail again and be
 # billed again, so they wait for new product information, another model or
 # APPROVAL_ATLAS_EFFICACY_ONLY (ruling R9).
 is_transient_efficacy_failure <- function(reason) {
   grepl(
-    "^(errored(: |$)|expired$|canceled$|no result in the batch$)",
+    paste0(
+      "^(errored(: (api_error|overloaded_error))?$|expired$|canceled$",
+      "|no result in the batch$)"
+    ),
     reason
   )
 }
@@ -333,6 +338,19 @@ run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
   ))
 }
 
+report_failed_extractions <- function(failed, heading) {
+  if (nrow(failed) == 0) {
+    return(invisible())
+  }
+  cli::cli_inform(c(
+    escape_cli_braces(heading),
+    stats::setNames(
+      escape_cli_braces(paste0(failed$ema_product_number, ": ", failed$reason)),
+      rep("x", nrow(failed))
+    )
+  ))
+}
+
 report_efficacy_run <- function(run, rows) {
   statuses <- run$extractions$status
   count <- function(status) sum(statuses == status)
@@ -353,17 +371,18 @@ report_efficacy_run <- function(run, rows) {
     )
   ))
   failed <- run$extractions[statuses == "failed", ]
-  if (nrow(failed) > 0) {
-    cli::cli_inform(c(
-      "Failed (planned again on the next run):",
-      stats::setNames(
-        escape_cli_braces(paste0(
-          failed$ema_product_number, ": ", failed$reason
-        )),
-        "x"
-      )
-    ))
-  }
+  transient <- is_transient_efficacy_failure(failed$reason)
+  report_failed_extractions(
+    failed[transient, ],
+    "Failed, retried on the next run (an API error or no answer):"
+  )
+  report_failed_extractions(
+    failed[!transient, ],
+    paste(
+      "Failed, not retried until the product information or the model",
+      "changes, or APPROVAL_ATLAS_EFFICACY_ONLY lists it (ruling R9):"
+    )
+  )
   if (nrow(run$failed_rows) > 0) {
     first_errors <- purrr::map_chr(run$failed_rows$errors, 1)
     cli::cli_inform(c(

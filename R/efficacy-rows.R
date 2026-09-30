@@ -68,7 +68,9 @@ efficacy_flags <- function(row, verification) {
     # A row given its page (extracted rows) whose quote was not placed.
     page_unknown = "page" %in% names(row) && is_absent(row[["page"]])
   )
-  names(checks)[checks]
+  # The verifier's own: text, indication, CI level or arm sizes not found
+  # where the row says they come from.
+  c(names(checks)[checks], verification$flags)
 }
 
 efficacy_human_reviews <- c("reviewed_ok", "reviewed_rejected")

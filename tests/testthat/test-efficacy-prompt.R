@@ -157,6 +157,22 @@ test_that("the system prompt states the rules the verifier relies on", {
   expect_match(prompt, "most 50 words", fixed = TRUE)
   expect_match(prompt, "ci_is_range", fixed = TRUE)
   expect_match(prompt, "not a statement of significance", fixed = TRUE)
+  expect_match(
+    prompt,
+    "Copy population, regimen and comparator verbatim from the text",
+    fixed = TRUE
+  )
+  expect_match(prompt, "the arm sizes (n_treatment, n_control)", fixed = TRUE)
+  expect_match(prompt, "the same quote as arm_control", fixed = TRUE)
+})
+
+test_that("text that is only spaces is not stated", {
+  row <- parse_efficacy_response(answer_with(
+    population = "   ", comparator = "\n", value = " 0.24 "
+  ))$rows[[1]]
+  expect_null(row$population)
+  expect_null(row$comparator)
+  expect_equal(row$value, " 0.24 ")
 })
 
 test_that("the system prompt defines every enum value and the empty cases", {
