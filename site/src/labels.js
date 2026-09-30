@@ -1651,6 +1651,13 @@ export const UI = {
     updated: (date) => (date ? `updated ${date}` : null),
     medicinePage: "EMA medicine page",
     noDocuments: "No EPAR documents listed.",
+    // The Status lead's qualifier chips on 320px phones (2026-09-30: two full names took two lines
+    // there): shown only, the full name (flags) stays the one read and the tip explains it.
+    flagsShort: {
+      conditional_approval: "Conditional",
+      exceptional_circumstances: "Exceptional",
+      additional_monitoring: "Monitoring",
+    },
     flags: {
       orphan_medicine: "Orphan",
       conditional_approval: "Conditional approval",

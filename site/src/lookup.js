@@ -153,12 +153,16 @@ const blockFact = (label, value, className = null) => (value === null || value =
 // Step 4 (#9): an approval flag's chip (UI.card.flags) explaining itself on hover and on a tap
 // (UI.flagTips; tabindex -1: focusable, no tab stop, as the type badges) and, visually hidden, to
 // screen readers (the card has room, as for its type explanations); additional monitoring leads
-// with EMA's black triangle (aria-hidden).
+// with EMA's black triangle (aria-hidden). The Status lead's chips show a short name on 320px phones
+// (UI.card.flagsShort, aria-hidden; style.css), so two share a line there; the full name stays the
+// one read.
 function flagChip(flag) {
   const tip = UI.flagTips[flag] ?? null;
+  const short = UI.card.flagsShort[flag];
   return el("span", { class: "chip flag-chip", "data-tip": tip, tabindex: tip ? "-1" : null },
     flag === "additional_monitoring" ? [el("span", { class: "black-triangle", "aria-hidden": "true" }, UI.card.blackTriangle), " "] : null,
-    UI.card.flags[flag],
+    el("span", { class: "flag-name" }, UI.card.flags[flag]),
+    short ? el("span", { class: "flag-short", "aria-hidden": "true" }, short) : null,
     tip ? el("span", { class: "visually-hidden" }, `: ${tip}`) : null);
 }
 
@@ -599,7 +603,7 @@ export function createLookup(panel, {
       .sort((a, b) => a.marketing_authorisation_date.localeCompare(b.marketing_authorisation_date))[0] ?? null;
   }
 
-  // The Indication block, right after the Documents block (what it is for is part of the answer):
+  // The Indication block, the last of the blocks (what it is for is part of the answer):
   // the indication's lead (indicationLead()), the full text behind "Show full indication" (shown
   // only here, not again in More details), then the first therapeutic areas with their branch chips
   // (areaNames(); here, not in the Status block, since 2026-09-30: with their chips they pushed the
@@ -827,11 +831,12 @@ export function createLookup(panel, {
     // then the blocks in reading order (2026-09-30: the product information was below a 320x640
     // screen): Status (the status, since, qualifiers, company), Documents (the product information,
     // EPAR and overview buttons: opening them is the primary use case), which end the first phone
-    // screen, Indication (what it is for: the indication's lead and the first therapeutic areas with
-    // their branch chips), and Protection and copies (the estimate's short form as its lead, the
-    // copies lines); then one More details disclosure holding the rest (a disclosure per block would
-    // add a 44px row before the buttons for each). The answer's parts (authorized or not, since,
-    // protected until) are the card's strong type; its chips and badges are neutral.
+    // screen, Protection and copies (the estimate's short form as its lead, the copies lines: "is it
+    // still protected?" right under them), and Indication (what it is for: the indication's lead and
+    // the first therapeutic areas with their branch chips); then one More details disclosure holding
+    // the rest (a disclosure per block would add a 44px row before the buttons for each). The
+    // answer's parts (authorized or not, since, protected until) are the card's strong type; its
+    // chips and badges are neutral.
     // The Status block's lead: the status pill, then since when (approved when, once it ended) in
     // the answer's type, then its qualifiers; never-approved medicines have no date, and an
     // authorized one without a date says so (6 on 2026-09-29, e.g. Lyvdelzi; review of phase 4).
@@ -883,8 +888,8 @@ export function createLookup(panel, {
       kicker("medicine"),
       title(headlineNodes(UI.headline.medicine(row.name_of_medicine, statusKind(row.medicine_status), opinion))),
       namesakeNotes(namesakes),
-      el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, statusBlock, documentsBlock,
-        indicationBlock(medicines, medicine?.therapeutic_indication, areaNames(number, areas, conditions)), protectionBlock)),
+      el("div", { class: "card-blocks-frame" }, el("div", { class: "card-blocks" }, statusBlock, documentsBlock, protectionBlock,
+        indicationBlock(medicines, medicine?.therapeutic_indication, areaNames(number, areas, conditions)))),
       more);
   }
 
