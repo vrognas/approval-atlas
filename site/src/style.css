@@ -2489,6 +2489,15 @@ input::placeholder {
   display: none;
 }
 
+/* Phones: the hint's button is 44px tall (.lead-button), so the line makes room for it and keeps
+   it clear of the controls above. */
+@media (max-width: 720px) {
+  .view-options-hint {
+    margin-top: 4px;
+    line-height: 1.375rem;
+  }
+}
+
 /* Card polish (F · Spacious, phase 3). Law of Common Region: every dashboard card's head is one row,
    the title with its (i) button at the left, its tools (a mode switch, View options, Download CSV)
    at the right, wrapping under it when short of room; then its takeaway, one sentence in the ink
