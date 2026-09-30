@@ -71,6 +71,7 @@ import { createRecent, keptOpenedClass, openedClass, recentEntry, recentLookupSt
 import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
 import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
+import { tabsKeydown } from "./tabs.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
@@ -1093,12 +1094,14 @@ function startDashboard(meta, [
   // In the headline's lead (owner decision 2026-09-29, "Authorized by default"; inline after the
   // headline, F · Spacious): include the medicines of every status; the control goes, so focus goes
   // to the headline, which then counts them.
-  // The tabs (F · Spacious, phase 2): links to the dashboard's views (?tab=…). A plain click shows
-  // the tab without a reload (one history entry, as a lookup link); only the tab shown renders its
-  // cards (renderDashboard()). Focus stays on the link; from an Overview preview's "… tab" link it
-  // moves to the tab, scrolled into view (the preview link is gone with the Overview).
-  d3.select("#tabs-label").text(UI.tabs.label);
-  const tabLinks = [...document.querySelectorAll("#tabs .tab")];
+  // The tabs (F · Spacious, phase 2; the WAI-ARIA tabs pattern since 2026-09-30, owner decision):
+  // a tablist of buttons, one tab stop; the arrows, Home and End move focus (tabs.js), Enter, Space
+  // or a click shows the tab (manual activation: one history entry, as a lookup link, ?tab=…); only
+  // the tab shown renders its cards (renderDashboard()). Focus stays on the tab; from an Overview
+  // preview's "… tab" link it moves to the tab, scrolled into view (the preview link is gone with
+  // the Overview).
+  $("#tabs").setAttribute("aria-label", UI.tabs.label);
+  const tabButtons = [...document.querySelectorAll("#tabs [role=tab]")];
   const tabPanels = [...document.querySelectorAll("#app .tab-panel")];
   const previewTabLinks = [...document.querySelectorAll("#app .preview-tab-link")];
   const plainClick = (event) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -1109,14 +1112,11 @@ function startDashboard(meta, [
     if (tab === state.tab) scheduleRender();
     else setState({ tab }, true);
   }
-  for (const link of tabLinks) {
-    link.textContent = UI.tabs.names[link.dataset.tab];
-    link.addEventListener("click", (event) => {
-      if (!plainClick(event)) return;
-      event.preventDefault();
-      showTab(link.dataset.tab);
-    });
+  for (const button of tabButtons) {
+    button.textContent = UI.tabs.names[button.dataset.tab];
+    button.addEventListener("click", () => showTab(button.dataset.tab));
   }
+  $("#tabs").addEventListener("keydown", tabsKeydown);
   for (const link of previewTabLinks) {
     link.textContent = UI.previews.tabLink(UI.tabs.names[link.dataset.tabLink]);
     link.addEventListener("click", (event) => {
@@ -1125,20 +1125,20 @@ function startDashboard(meta, [
       showTab(link.dataset.tabLink, true);
     });
   }
-  // The tab links and their panels follow the state; hrefs keep the rest of the view (filters,
-  // lookup), so a new browser tab opens the same view on that tab. Phones: the strip scrolls
+  // The tabs and their panels follow the state: the tab shown aria-selected and the tab stop (the
+  // others tabindex -1). The previews' links keep the rest of the view (filters, lookup) in their
+  // hrefs, so a new browser tab opens the same view on that tab. Phones: the strip scrolls
   // sideways, the tab shown kept in it.
   function renderTabs() {
     const hrefOf = (tab) => `?${encodeUrl({ ...state, tab })}`;
-    for (const link of tabLinks) {
-      const current = link.dataset.tab === state.tab;
-      link.href = hrefOf(link.dataset.tab);
-      if (current) link.setAttribute("aria-current", "page");
-      else link.removeAttribute("aria-current");
+    for (const button of tabButtons) {
+      const current = button.dataset.tab === state.tab;
+      button.setAttribute("aria-selected", String(current));
+      button.tabIndex = current ? 0 : -1;
     }
     for (const link of previewTabLinks) link.href = hrefOf(link.dataset.tabLink);
     for (const panel of tabPanels) panel.hidden = panel.dataset.tabPanel !== state.tab;
-    const current = tabLinks.find((link) => link.dataset.tab === state.tab);
+    const current = tabButtons.find((button) => button.dataset.tab === state.tab);
     if (tabShown !== state.tab) {
       tabShown = state.tab;
       const nav = $("#tabs");

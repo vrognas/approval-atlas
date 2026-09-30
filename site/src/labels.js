@@ -311,7 +311,8 @@ export const UI = {
   page: {
     title: "EU medicines",
   },
-  // The dashboard's tabs (F · Spacious, phase 2; url.js TABS): links under the chip bar.
+  // The dashboard's tabs (F · Spacious, phase 2; url.js TABS): a tablist under the chip bar (the
+  // WAI-ARIA tabs pattern since 2026-09-30); label names it.
   tabs: {
     label: "Dashboard views",
     names: {
