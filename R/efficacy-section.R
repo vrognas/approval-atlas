@@ -11,9 +11,15 @@ slice_smpc_efficacy <- function(page_texts) {
   joined <- paste(page_texts, collapse = "\f")
   start_match <- regexpr(smpc_section_start, joined, perl = TRUE)
   if (start_match < 0) {
-    return(list(text = NA_character_, pages = character()))
+    return(list(
+      text = NA_character_, pages = character(), first_page = NA_integer_
+    ))
   }
   start <- start_match[[1]]
+  # Pages are joined by form feeds: those before the heading count the pages
+  # before the one it starts on.
+  before <- substr(joined, 1, start - 1)
+  first_page <- sum(gregexpr("\f", before, fixed = TRUE)[[1]] > 0) + 1L
   start_len <- attr(start_match, "match.length")[[1]]
   rest <- substring(joined, start)
   # Find next 5.1 after the first match
@@ -39,5 +45,9 @@ slice_smpc_efficacy <- function(page_texts) {
   }
   section <- substring(rest, 1, end_pos - 1)
   pages <- strsplit(section, "\f", fixed = TRUE)[[1]]
-  list(text = paste(pages, collapse = "\n"), pages = pages)
+  list(
+    text = paste(pages, collapse = "\n"),
+    pages = pages,
+    first_page = first_page
+  )
 }

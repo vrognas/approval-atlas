@@ -116,3 +116,21 @@ test_that("non-breaking spaces between 5.1 and heading", {
   expect_match(section$text, "Efficacy data", fixed = TRUE)
   expect_no_match(section$text, "5.2", fixed = TRUE)
 })
+
+test_that("first_page is the PDF page on which section 5.1 starts", {
+  pages <- c(
+    "ANNEX I",
+    "4.9 Overdose",
+    "",
+    "text\n5.1 Pharmacodynamic properties\nTrial X",
+    "more\n5.2 Pharmacokinetic properties"
+  )
+  expect_equal(slice_smpc_efficacy(pages)$first_page, 4L)
+  lumykras <- lumykras_pages()
+  section <- slice_smpc_efficacy(lumykras)
+  expect_match(
+    lumykras[[section$first_page]], "5\\.1\\s+Pharmacodynamic properties",
+    perl = TRUE
+  )
+  expect_true(is.na(slice_smpc_efficacy(c("ANNEX I", "none"))$first_page))
+})
