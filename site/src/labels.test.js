@@ -319,14 +319,21 @@ test("the date line of the merged status cell: approval date, or end date and ap
 });
 
 // Owner decision 2026-09-30: the medicines table's status dot names its status and dates.
-test("the status dot's name: since the approval, or the status, its end and its approval", () => {
+test("the status dot's name: since the approval, or the status and its end", () => {
   assert.equal(labels.statusDotLine("Authorised", "2022-01-06", null), "Authorized since 6 Jan 2022");
   assert.equal(labels.statusDotLine("Authorised", null, null), "Authorized, no approval date");
-  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)");
-  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", null), "Withdrawn (approved 19 Jun 2006)");
+  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16 Jan 2009");
+  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", null), "Withdrawn");
   assert.equal(labels.statusDotLine("Withdrawn from rolling review", null, "2021-10-29"), "Withdrawn from rolling review 29 Oct 2021");
   assert.equal(labels.statusDotLine("Refused", null, null), "Refused");
   assert.equal(labels.statusDotLine("Opinion", null, null, "Negative"), "Opinion (negative)");
+});
+
+test("the status dot's tip adds the approval date of a status other than Authorized", () => {
+  assert.equal(labels.statusDotTipLine("Authorised", "2022-01-06", null), "Authorized since 6 Jan 2022");
+  assert.equal(labels.statusDotTipLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)");
+  assert.equal(labels.statusDotTipLine("Withdrawn", "2006-06-19", null), "Withdrawn (approved 19 Jun 2006)");
+  assert.equal(labels.statusDotTipLine("Refused", null, null), "Refused");
 });
 
 test("a medicine that is not authorized gets a status sentence built from EMA's dates only", () => {

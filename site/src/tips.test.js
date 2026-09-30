@@ -20,6 +20,14 @@ test("atPointer: flips left of the pointer near the right edge and above it near
   assert.deepEqual(atPointer({ x: 1300, y: 850 }, { width: 200, height: 50 }, bounds), { left: 1088, top: 788 });
 });
 
+// 2026-09-30: the medicines table's status dots put their tip above the pointer (below, it covered
+// the row's PI and EPAR links), below it only without room above.
+test("atPointer: above the pointer when asked, below it without room above", () => {
+  const bounds = { left: 8, top: 8, right: 1432, bottom: 892 };
+  assert.deepEqual(atPointer({ x: 100, y: 400 }, { width: 200, height: 50 }, bounds, true), { left: 112, top: 338 });
+  assert.deepEqual(atPointer({ x: 100, y: 40 }, { width: 200, height: 50 }, bounds, true), { left: 112, top: 52 });
+});
+
 test("atPointer: kept inside its bounds where neither side has room", () => {
   // A 352px explainer on a 390px screen: as far right as fits.
   const phone = { left: 8, top: 8, right: 382, bottom: 836 };

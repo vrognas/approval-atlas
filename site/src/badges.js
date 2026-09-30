@@ -217,6 +217,9 @@ export function typeTip(label) {
   return UI.typeTips[label] ? { text: UI.typeTips[label], id: typeTipId(label) } : null;
 }
 
-export function statusTip(status) {
+// opinion: EMA's opinion; a negative one has its own explanation (UI.negativeOpinionTip, its hidden
+// copy statusTipId(NEGATIVE_OPINION)).
+export function statusTip(status, opinion = null) {
+  if (status === "Opinion" && opinion === "Negative") return { text: UI.negativeOpinionTip, id: statusTipId(NEGATIVE_OPINION) };
   return UI.statusTips[status] ? { text: UI.statusTips[status], id: statusTipId(status) } : null;
 }

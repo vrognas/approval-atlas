@@ -138,6 +138,9 @@ test("each status explanation has one element id; tips give the text and that id
   assert.equal(statusTipId("Authorised"), "status-tip-authorised");
   assert.deepEqual(statusTip("Lapsed"), { text: "Authorization ended: not marketed for 3 years.", id: "status-tip-lapsed" });
   assert.equal(statusTip("Something new"), null);
+  // A negative opinion's own (2026-09-30: the medicines table's status dots).
+  assert.deepEqual(statusTip("Opinion", "Negative"), { text: "EMA recommended refusal; no EU decision published yet.", id: "status-tip-negative-opinion" });
+  assert.deepEqual(statusTip("Opinion", "Positive"), { text: "EMA has given its opinion; EU decision pending.", id: "status-tip-opinion" });
   assert.deepEqual(typeTip("Orphan"), { text: "For rare diseases (at most 5 in 10,000 people in the EU).", id: "type-tip-orphan" });
   assert.equal(typeTip(null), null);
 });
