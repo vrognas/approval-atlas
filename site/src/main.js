@@ -44,19 +44,21 @@ import {
   orderActivityColumns,
   sortActivityRows,
   statusBreakdown,
+  statusStackAvailable,
   topKeys,
   topWithOther,
   typeSplit,
   UNPLACED_KEY,
   withUnplaced,
   yearHistogram,
+  yearStackMode,
   yearStacks,
 } from "./facets.js";
 import { renderFilterChips, renderFilterSummary } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
-import { UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
+import { SOURCES, UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
 import { isWebLink, markExternal, openIcon } from "./links.js";
 import { createLookup, headlineNodes } from "./lookup.js";
 import { areaNote, describedTip, meshTip } from "./mesh-notes.js";
@@ -305,6 +307,8 @@ function render() {
     pageTitle = heading;
   }
   pageTitle.textContent = lookupOpen ? UI.explore.title : UI.page.title;
+  // The overview heading's scope line; "Explore EMA medicines" names the source itself.
+  $("#page-scope").hidden = lookupOpen;
   $("#explore-note").hidden = !lookupOpen;
   // The intro card, and the Try line with it. Before the dashboard's data has loaded, the URL's
   // filters are still verbatim (pendingFilters). While a filter popover is open it stays as it is.
@@ -736,6 +740,7 @@ function setupTips() {
 function renderAbout() {
   d3.select("#data-date").text(UI.dataDate(null));
   d3.select("#page-title").text(UI.page.title);
+  d3.select("#page-scope").text(UI.page.scope(SOURCES));
   d3.select("#filter-bar-label").text(UI.filters.label);
   d3.select("#lookup-label").text(UI.lookup.label);
   d3.select("#lookup-input").attr("placeholder", UI.lookup.placeholder);
@@ -1343,6 +1348,24 @@ function startDashboard(meta, [
       stackMode = event.currentTarget.dataset.stack;
       scheduleRender();
     });
+  // Stack by Status only with the status filter widened (owner decision 2026-09-30); under the
+  // default the panel says how, and its button widens the filter, stacks by status and moves focus to
+  // the Status button (its own button is then hidden).
+  const statusStackButton = $('#chart-stack [data-stack="status"]');
+  const offerStatusStack = (offered) => {
+    statusStackButton.hidden = !offered;
+    $("#chart-stack-hint").hidden = offered;
+  };
+  d3.select("#chart-stack-widen")
+    .text(UI.years.stack.statusHint.button)
+    .attr("aria-describedby", "chart-stack-hint-after")
+    .on("click", () => {
+      stackMode = "status";
+      setState({ status: [] });
+      offerStatusStack(true);
+      statusStackButton.focus();
+    });
+  d3.select("#chart-stack-hint-after").text(UI.years.stack.statusHint.after);
 
   const substanceIndex = buildSubstanceIndex(substanceRows);
   const areaBranches = termBranches(branchRows);
@@ -1955,6 +1978,8 @@ function startDashboard(meta, [
   }
 
   function renderYears(withoutDateFilter) {
+    stackMode = yearStackMode(stackMode, state.status);
+    offerStatusStack(statusStackAvailable(state.status));
     d3.selectAll("#chart-stack button").attr("aria-pressed", function pressed() {
       return String(this.dataset.stack === stackMode);
     });

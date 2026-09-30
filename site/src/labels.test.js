@@ -287,11 +287,10 @@ test("dates display as day, abbreviated month and year; missing dates stay missi
 });
 
 test("the top bar shows the source and the data date in display form", () => {
-  // F · Spacious, phase 1: the wordmark's second line names EMA's data (the page heading reads "EU
-  // medicines"; the intro card and the About disclosure say it covers EMA's central procedure).
+  // F · Spacious, phase 1: the wordmark's second line names EMA's data (the page header's scope line,
+  // the intro card and the About disclosure say it covers EMA's central procedure).
   assert.equal(labels.UI.dataDate("2026-09-26"), "EMA data as of 26 Sep 2026");
   assert.equal(labels.UI.dataDate(null), "EMA data");
-  assert.equal(labels.UI.page.title, "EU medicines");
   assert.equal(labels.UI.offline("2026-09-26"), "Offline: data as of 26 Sep 2026");
 });
 
@@ -1319,10 +1318,32 @@ test("substance and condition answers name EMA or the central procedure", () => 
     UI.dataDate("2026-09-26"),
     UI.intro.scope,
     UI.about.scope,
+    UI.page.scope(labels.SOURCES),
   ];
   for (const text of texts) assert.match(text, /\bEMA\b|\bcentral/, text);
   assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11 Feb 2003 (Avandamet)");
   assert.equal(UI.substance.firstApproval(null, null), "No central EU approval date");
+});
+
+// Owner decision 2026-09-30 (other regulators' data may follow): a source-neutral page heading and,
+// under it, a scope line built from the sources the data has (SOURCES), so another one joins the line.
+test("the page heading is source-neutral; its scope line names the sources", () => {
+  const { UI, SOURCES } = labels;
+  assert.equal(UI.page.title, "Approved medicines");
+  assert.deepEqual(SOURCES.map((source) => source.key), ["ema"]);
+  assert.equal(UI.page.scope(SOURCES), "Human medicines authorized EU-wide through EMA");
+  assert.equal(
+    UI.page.scope([...SOURCES, { key: "other", scope: "in another place" }]),
+    "Human medicines authorized EU-wide through EMA and in another place",
+  );
+});
+
+// Owner decision 2026-09-30: the per-year chart's hint where Stack by Status is not offered.
+test("the per-year chart says how to stack by status under the default status filter", () => {
+  const hint = labels.UI.years.stack.statusHint;
+  assert.equal(`${hint.button}${hint.after}`, "Include withdrawn, refused and pending to stack by status.");
+  // The same words as the Status filter's own widening button.
+  assert.equal(hint.button, labels.UI.facets.statusWiden);
 });
 
 // Parts ({ text, link } for links) as the text they read.

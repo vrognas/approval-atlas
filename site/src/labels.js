@@ -301,6 +301,11 @@ const TEXT_RULE_WORDS = {
   mrna: "mRNA",
 };
 
+// The regulators whose data the overview covers, as the page header's scope line names them (owner
+// decision 2026-09-30): one phrase each, so another source (a national agency, the FDA) joins the
+// line without a redesign. Only sources the data has: never one that is planned.
+export const SOURCES = [{ key: "ema", scope: "EU-wide through EMA" }];
+
 // The footer's and About's links (https): sources, licenses, the repository.
 const LINKS = {
   emaData: "https://www.ema.europa.eu/en/medicines/download-medicine-data",
@@ -327,8 +332,11 @@ export const UI = {
   // covers (EMA's central procedure).
   dataDate: (date) => (date ? `EMA data as of ${formatDate(date)}` : "EMA data"),
   // The dashboard's page heading (F · Spacious, phase 1): the answer headline is its lead paragraph.
+  // Source-neutral since 2026-09-30 (owner decision: other regulators' data may follow); the scope
+  // line under it names the sources (SOURCES): "Human medicines authorized EU-wide through EMA".
   page: {
-    title: "EU medicines",
+    title: "Approved medicines",
+    scope: (sources) => `Human medicines authorized ${listing(sources.map((source) => source.scope))}`,
   },
   // The dashboard's tabs (F · Spacious, phase 2; url.js TABS): a tablist under the chip bar (the
   // WAI-ARIA tabs pattern since 2026-09-30); label names it.
@@ -977,7 +985,17 @@ export const UI = {
       `Stacked column chart of EU approvals per year by ${by}, ${first} to ${last}: ` +
       `${formatCount(total)} medicines in total, most in ${peakYear} (${formatCount(peakCount)}).`,
     tooltipTitle: (year, total) => `${year}: ${plural(total, "approval", "approvals")}`,
-    stack: { label: "Stack by", modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status", mod: "Modality" } },
+    stack: {
+      label: "Stack by",
+      modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status", mod: "Modality" },
+      // Under the default status filter (authorized only) Status would be one series, so it is not
+      // offered (owner decision 2026-09-30); the panel says how to get it, its button widening the
+      // status filter (described by the words after it).
+      statusHint: {
+        button: "Include withdrawn, refused and pending",
+        after: " to stack by status.",
+      },
+    },
     // label: atcClassLabel() of the one ATC class selected, whose child classes the columns stack;
     // name: the one modality group selected, whose modalities the columns stack.
     by: {

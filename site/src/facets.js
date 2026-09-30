@@ -87,6 +87,12 @@ export function withUnplaced(products, keysOf) {
   };
 }
 
+// "Stack by Status" (owner decision 2026-09-30): under the default status filter (authorized only)
+// it would be one series, so it is offered only once the status filter is widened (every status, or
+// a choice of statuses). A Status stack left under the default falls back to medicine type.
+export const statusStackAvailable = (status) => !isDefaultStatus(status);
+export const yearStackMode = (mode, status) => (mode === "status" && !statusStackAvailable(status) ? "type" : mode);
+
 // "Approvals per year": the products with an approval date per year of [first, last] (zeros
 // included), each counted once in every stack key it has (keysOf(product): its keys, e.g. its
 // medicine type, ATC classes or holder) and not at all without one (withUnplaced() gives them one).
