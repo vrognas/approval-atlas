@@ -178,3 +178,179 @@ test_that("a failed results download stops with its status", {
     "404"
   )
 })
+
+test_that("an HTTP error is classed by status and carries retry-after", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response_json(
+      status_code = 429,
+      headers = list(`retry-after` = "30"),
+      body = list(error = list(type = "rate_limit_error", message = "Slow"))
+    )
+  })
+  error <- expect_error(
+    send_claude_message(list()),
+    class = "claude_api_http_429"
+  )
+  expect_s3_class(error, "claude_api_error")
+  expect_equal(error$status, 429L)
+  expect_equal(error$retry_after, "30")
+})
+
+test_that("an error without retry-after has none", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(status_code = 500, body = charToRaw("{}"))
+  })
+  error <- expect_error(
+    send_claude_message(list()),
+    class = "claude_api_http_500"
+  )
+  expect_null(error$retry_after)
+})
+
+test_that("a string error from a gateway keeps the status and the body", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(status_code = 503, body = charToRaw('{"error":"oops"}'))
+  })
+  error <- expect_error(
+    send_claude_message(list()),
+    class = "claude_api_http_503"
+  )
+  expect_match(conditionMessage(error), "503")
+  expect_match(conditionMessage(error), "oops")
+})
+
+test_that("an empty error body still gives the status", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(status_code = 502)
+  })
+  error <- expect_error(
+    send_claude_message(list()),
+    class = "claude_api_http_502"
+  )
+  expect_match(conditionMessage(error), "no message")
+})
+
+test_that("a long plain-text error body is cut", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response(
+      status_code = 502,
+      body = charToRaw(strrep("x", 1000))
+    )
+  })
+  error <- expect_error(send_claude_message(list()), "502")
+  expect_lt(nchar(conditionMessage(error)), 400)
+})
+
+test_that("a failed results download carries the API message and class", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response_json(
+      status_code = 404,
+      body = list(error = list(type = "not_found_error", message = "Gone"))
+    )
+  })
+  error <- expect_error(
+    claude_batch_results("https://api.anthropic.com/v1/x/results"),
+    class = "claude_api_http_404"
+  )
+  expect_match(conditionMessage(error), "Gone")
+})
+
+test_that("a batch response without an id stops", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response_json(body = list(processing_status = "in_progress"))
+  })
+  expect_error(create_claude_batch(list()), "id")
+})
+
+test_that("a missing or unknown processing status stops", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response_json(body = list(id = "msgbatch_1"))
+  })
+  expect_error(claude_batch_status("msgbatch_1"), "processing_status")
+  httr2::local_mocked_responses(function(req) {
+    httr2::response_json(
+      body = list(id = "msgbatch_1", processing_status = "done")
+    )
+  })
+  expect_error(claude_batch_status("msgbatch_1"), "processing_status")
+})
+
+test_that("CRLF line endings and a trailing newline are read", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  lines <- paste0(
+    '{"custom_id":"a","result":{"type":"expired"}}\r\n',
+    '{"custom_id":"b","result":{"type":"canceled"}}\r\n'
+  )
+  httr2::local_mocked_responses(function(req) results_response(lines))
+  results <- claude_batch_results("https://api.anthropic.com/v1/x/results")
+  expect_equal(purrr::map_chr(results, "custom_id"), c("a", "b"))
+})
+
+test_that("a malformed line stops naming its line number", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  lines <- paste(
+    '{"custom_id":"a","result":{"type":"expired"}}',
+    "",
+    "{not json",
+    sep = "\n"
+  )
+  httr2::local_mocked_responses(function(req) results_response(lines))
+  expect_error(
+    claude_batch_results("https://api.anthropic.com/v1/x/results"),
+    "line 3"
+  )
+})
+
+test_that("a line without custom_id or result type stops", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  for (line in c(
+    '{"result":{"type":"expired"}}',
+    '{"custom_id":"a","result":{}}',
+    '{"custom_id":"a"}'
+  )) {
+    httr2::local_mocked_responses(function(req) results_response(line))
+    expect_error(
+      claude_batch_results("https://api.anthropic.com/v1/x/results"),
+      "line 1"
+    )
+  }
+})
+
+test_that("repeated custom_ids stop", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  lines <- paste(
+    '{"custom_id":"a","result":{"type":"expired"}}',
+    '{"custom_id":"a","result":{"type":"canceled"}}',
+    sep = "\n"
+  )
+  httr2::local_mocked_responses(function(req) results_response(lines))
+  expect_error(
+    claude_batch_results("https://api.anthropic.com/v1/x/results"),
+    "custom_id"
+  )
+})
+
+test_that("the key is never sent to another host or plain http", {
+  withr::local_envvar(ANTHROPIC_API_KEY = "test-key")
+  called <- FALSE
+  httr2::local_mocked_responses(function(req) {
+    called <<- TRUE
+    results_response("")
+  })
+  for (url in c(
+    "https://evil.example.com/v1/x/results",
+    "http://api.anthropic.com/v1/x/results",
+    "https://api.anthropic.com.evil.example/v1/x/results"
+  )) {
+    expect_error(claude_batch_results(url), "api.anthropic.com")
+  }
+  expect_false(called)
+})
