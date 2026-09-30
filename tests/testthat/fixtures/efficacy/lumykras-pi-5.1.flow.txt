@@ -1,0 +1,94 @@
+
+
+5.1
+
+Pharmacodynamic properties
+
+Pharmacotherapeutic group: Antineoplastic agents, ATC code: L01XX73
+Mechanism of action
+Sotorasib is a selective KRAS G12C (Kirsten rat sarcoma viral oncogene homologue) inhibitor, which
+covalently and irreversibly binds to the unique cysteine of KRAS G12C. Inactivation of KRAS G12C
+by sotorasib blocks tumour cell signalling and survival, inhibits cell growth, and promotes apoptosis
+selectively in tumours harbouring KRAS G12C, an oncogenic driver of tumourigenesis.
+Clinical efficacy and safety
+LUMYKRAS for the treatment of patients with previously treated KRAS G12C-mutated NSCLC
+
+10
+
+CodeBreaK 100 phase 2 part A
+The efficacy of LUMYKRAS was studied in a single-arm, open-label, multicentre trial
+(CodeBreaK 100 phase 2 part A) that enrolled patients with locally advanced or metastatic
+KRAS G12C-mutated NSCLC who had disease progression after receiving prior therapy. Key
+eligibility criteria included progression on an immune checkpoint inhibitor and/or platinum-based
+chemotherapy and after targeted therapy if actionable oncogenic driver mutations were identified, an
+Eastern Cooperative Oncology Group Performance Status (ECOG PS) of 0 or 1, and at least one
+measurable lesion as defined by Response Evaluation Criteria in Solid Tumours (RECIST v1.1). All
+patients were required to have KRAS G12C-mutated NSCLC prospectively identified in tumour
+samples using a validated test (Qiagen therascreen® KRAS RGQ PCR Kit) performed in a central
+laboratory. Patients with renal impairment, hepatic impairment and active brain metastases were
+excluded.
+A total of 126 patients were enrolled and treated with LUMYKRAS 960 mg once daily as
+monotherapy until disease progression or unacceptable toxicity; 124 patients had at least one
+measurable lesion at baseline as assessed by Blinded Independent Central Review (BICR) according
+to RECIST v1.1 and were included in the analysis for response-related efficacy outcomes. The median
+duration of treatment was 5.5 months (range: 0 to 15) with 48% of patients treated for ≥ 6 months and
+33% of patients treated for ≥ 9 months.
+The major efficacy outcome measure was objective response rate (ORR) defined as the proportion of
+patients who achieved CR or PR as evaluated by a BICR according to RECIST v1.1. Additional
+efficacy outcome measures included duration of response (DOR), disease control rate (DCR) defined
+as the proportion of patients who achieved CR, PR and stable disease, time to response (TTR),
+progression-free survival (PFS), and overall survival (OS).
+The baseline demographic and disease characteristics of the study population were: median age
+64 years (range: 37 to 80); 50% Female; 82% White, 15% Asian, 2% Black; 70% ECOG PS 1; 96%
+had stage IV disease; 99% with non-squamous histology; 81% former smokers, 12% current smokers,
+5% never smokers.
+All patients received at least 1 prior line of systemic therapy for metastatic NSCLC; 43% received
+only 1 prior line of therapy, 35% received 2 prior lines of therapy, 22% received 3 prior lines of
+therapy, 91% received prior anti-PD-1/PD-L1 immunotherapy, 90% received prior platinum-based
+chemotherapy, 81% received both platinum-based chemotherapy and anti-PD-1/PD-L1. The sites of
+known extra-thoracic metastasis included 48% bone, 21% brain, and 21% liver.
+Efficacy results are summarised in table 4.
+Table 4. Efficacy results in CodeBreaK 100 for patients with KRAS G12C-mutated NSCLC
+(CodeBreaK 100 phase 2 part A)
+Efficacy parameters
+
+LUMYKRAS
+N = 124
+37.1 (28.6, 46.2)
+2.4
+34.7
+
+ORR, % (95% CI)a,c
+Complete response (CR), %
+Partial response (PR), %
+DORa,d
+Number of responders
+Medianb, months (range)
+Censored, %
+Patients with duration ≥ 6 months, %
+
+46
+11.1 (6.9, 15.0)
+39.0
+63.0
+
+CI = confidence interval; DOR = duration of response; ORR = objective response rate
+a
+Response-related efficacy outcome
+b
+Estimated using Kaplan-Meier method
+c
+Based on 01 December 2020 data cut
+d
+Based on 20 June 2021 data cut
+11
+
+Paediatric population
+The European Medicines Agency has waived the obligation to submit the results of studies with
+LUMYKRAS in all subsets of the paediatric population in NSCLC (see section 4.2 for information on
+paediatric use).
+Conditional marketing authorisation
+This medicinal product has been authorised under a so-called ‘conditional approval’ scheme. This
+means that further evidence on this medicinal product is awaited. The European Medicines Agency
+will review new information on this medicinal product at least every year and this SmPC will be
+updated as necessary.

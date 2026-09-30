@@ -1,0 +1,389 @@
+
+
+5.1   Pharmacodynamic properties
+
+Pharmacotherapeutic group: anti-neoplastic agents, protein kinase inhibitor; ATC code: L01ED03.
+
+Mechanism of action
+
+Alectinib is a highly selective and potent ALK and rearranged during transfection (RET) tyrosine
+kinase inhibitor. In pre-clinical studies, inhibition of ALK tyrosine kinase activity led to blockage of
+downstream signalling pathways including signal transducer and activator of transcription 3 (STAT 3)
+and phosphoinositide 3-kinase (PI3K)/protein kinase B (AKT) and induction of tumour cell death
+(apoptosis).
+
+Alectinib demonstrated in vitro and in vivo activity against mutant forms of the ALK enzyme,
+including mutations responsible for resistance to crizotinib. The major metabolite of alectinib (M4)
+has shown similar in vitro potency and activity.
+Based on preclinical data, alectinib is not a substrate of P-gp or BCRP, which are both efflux
+transporters in the blood brain barrier, and is therefore able to distribute into and be retained within the
+central nervous system.
+
+Clinical efficacy and safety
+
+Adjuvant treatment of resected ALK-positive NSCLC
+
+The efficacy of Alecensa for the adjuvant treatment of patients with ALK-positive NSCLC following
+complete tumour resection was established in a global randomised Phase III open-label clinical trial
+(BO40336; ALINA). Eligible patients were required to have Stage IB (tumours ≥ 4 cm) - Stage IIIA
+NSCLC per the Union for International Cancer Control/American Joint Committee on Cancer
+(UICC/AJCC) Staging System, 7th Edition, with ALK-positive disease identified by a locally
+performed CE-marked ALK test, or centrally performed by the Ventana ALK (D5F3)
+immunohistochemistry (IHC) assay.
+
+The following selection criteria define patients with high risk of recurrence who are included in the
+therapeutic indication and are reflective of the patient population with Stage IB
+(tumours ≥ 4 cm) – IIIA NSCLC according to the 7th Edition UICC/AJCC staging criteria:
+
+Tumour size ≥ 4 cm; or tumours of any size that are either accompanied by N1 or N2 status; or
+tumours that are invasive of thoracic structures (directly invade the parietal pleura, chest wall,
+diaphragm, phrenic nerve, mediastinal pleura, parietal pericardium, mediastinum, heart, great vessels,
+trachea, recurrent laryngeal nerve, oesophagus, vertebral body, carina); or tumours that involve the
+
+                                                    12
+main bronchus < 2 cm distal to the carina but without involvement of the carina; or tumours that are
+associated with atelectasis or obstructive pneumonitis of the entire lung; or tumours with separate
+nodule(s) in the same lobe or different ipsilateral lobe as the primary.
+
+The study did not include patients who had N2 status with tumours also invading the mediastinum,
+heart, great vessels, trachea, recurrent laryngeal nerve, oesophagus, vertebral body, carina, or with
+separate tumour nodule(s) in a different ipsilateral lobe.
+
+Patients were randomised (1:1) to receive Alecensa or platinum-based chemotherapy following tumour
+resection. Randomisation was stratified by race (Asian and non-Asian) and stage of disease (IB, II and
+IIIA). Alecensa was administered at the recommended oral dose of 600 mg twice daily for a total of
+2 years, or until disease recurrence or unacceptable toxicity. Platinum-based chemotherapy was
+administered intravenously for 4 cycles, with each cycle lasting 21 days, according to one of the
+following regimens:
+
+Cisplatin 75 mg/m2 on Day 1 plus vinorelbine 25 mg/m2 on Days 1 and 8
+Cisplatin 75 mg/m2 on Day 1 plus gemcitabine 1250 mg/m2 on Days 1 and 8
+Cisplatin 75 mg/m2 on Day 1 plus pemetrexed 500 mg/m2 on Day 1
+
+In the event of intolerance to a cisplatin-based regimen, carboplatin was administered instead of
+cisplatin in the above combinations at a dose of area under the free carboplatin plasma versus time
+curve (AUC) 5 mg/mL/min or AUC 6 mg/mL/min.
+
+The primary efficacy endpoint was disease-free survival (DFS) as assessed by the Investigator. DFS
+was defined as the time from date of randomisation to the date of occurrence of any of the following:
+first documented recurrence of disease, new primary NSCLC, or death due to any cause, whichever
+occurred first. The secondary and exploratory efficacy endpoints were overall survival (OS) and time
+to CNS recurrence or death (CNS-DFS).
+
+A total of 257 patients were studied: 130 patients were randomised to the Alecensa arm, and
+127 patients were randomised to the chemotherapy arm. Overall, the median age was 56 years (range:
+26 to 87), and 24 % were ≥ 65 years old, 52 % were female, 56 % were Asian, 60 % were never
+smokers, 53 % had an ECOG PS of 0, 10 % of patients had Stage IB, 36 % had Stage II and 54 % had
+Stage IIIA disease.
+
+ALINA demonstrated a statistically significant improvement in DFS for patients treated with Alecensa
+compared to patients treated with chemotherapy in the Stage II-IIIA and the Stage IB (≥ 4 cm) - IIIA
+(ITT) patient populations. OS data were not mature at the time of DFS analysis with 2.3 % of deaths
+reported overall. The median duration of survival follow-up was 27.8 months in the Alecensa arm and
+28.4 months in the chemotherapy arm.
+
+
+The DFS efficacy results are summarised in Table 4 and Figure 1.
+
+
+
+
+                                                   13
+Table 4 Investigator assessed DFS results in ALINA
+
+
+                                                Stage II-IIIA                             ITT Population
+ Efficacy Parameter
+                                        Alecensa            Chemotherapy           Alecensa          Chemotherapy
+                                        n = 116                n = 115             n = 130              n = 127
+ Number of DFS events (%)               14 (12.1)              45 (39.1)           15 (11.5)              50 (39.4)
+ Median DFS, months                       NE                     44.4                NE                    41.3
+ (95 % CI)                              (NE, NE)              (27.8, NE)           (NE, NE)             (28.5, NE)
+ Stratified HR                                        0.24                                      0.24
+ (95 % CI)*                                       (0.13, 0.45)                              (0.13, 0.43)
+ p-value (log-rank)*                                < 0.0001                                   < 0.0001
+DFS = Disease-Free Survival; ITT = Intent-to-Treat; CI = Confidence Interval; NE = Not Estimable; HR = Hazard Ratio
+*Stratified by race in Stage II-IIIA, stratified by race and stage in Stage IB-IIIA.
+
+
+
+Figure 1: Kaplan-Meier curve of investigator assessed DFS in the ITT population
+
+
+
+
+Treatment of advanced ALK-positive NSCLC
+
+Treatment-naïve patients
+
+The safety and efficacy of Alecensa were studied in a global randomised Phase III open label clinical
+trial (BO28984, ALEX) in ALK-positive NSCLC patients who were treatment naïve. Central testing
+for ALK protein expression positivity of tissue samples from all patients by Ventana anti-ALK (D5F3)
+immunohistochemistry was required before randomisation into the study.
+
+A total of 303 patients were included in the Phase III trial, 151 patients randomised to the crizotinib
+arm and 152 patients randomised to the Alecensa arm receiving Alecensa orally, at the recommended
+dose of 600 mg twice daily.
+
+Eastern Cooperative Oncology Group performance status ((ECOG PS) (0/1 vs. 2)), race
+(Asian vs. non-Asian), and central nervous system (CNS) metastases at baseline (yes vs. no) were
+stratification factors for randomisation. The primary endpoint of the trial was to demonstrate
+superiority of Alecensa versus crizotinib based on Progression Free survival (PFS) as per investigator
+assessment using Response Evaluation Criteria in Solid Tumors (RECIST) version 1.1. Baseline
+demographic and disease characteristics for Alecensa were median age 58 years (54 years for
+
+                                                       14
+crizotinib), 55 % female (58 % for crizotinib), 55 % non-Asian (54 % for crizotinib), 61 % with no
+smoking history (65 % for crizotinib), 93 % ECOG PS of 0 or 1 (93 % for crizotinib), 97 % Stage IV
+disease (96 % for crizotinib), 90 % adenocarcinoma histology (94 % for crizotinib), 40 % CNS
+metastases at baseline (38 % for crizotinib) and 17 % having received prior CNS radiation (14 % for
+crizotinib).
+
+The trial met its primary endpoint at the primary analysis, demonstrating a statistically significant
+improvement in PFS by investigator. Efficacy data are summarised in Table 5 and the Kaplan-Meier
+curve for investigator assessed PFS is shown in Figure 2. Additionally, the Kaplan-Meier plot of
+overall survival from the final OS analysis is presented in Figure 3.
+
+Table 5 Summary of efficacy results from study BO28984 (ALEX)
+
+                                                        Crizotinib                     Alecensa
+                                                         n = 151                       n = 152
+
+                                                        23.3
+ Median duration of follow-up (months) ‡                                         53.5(range 0.5 – 126.8)
+                                                 (range 0.3 – 123.5)
+ Primary efficacy parameter
+
+ PFS (INV) †
+    Number of patients with event n (%)                102 (68 %)                      62 (41 %)
+    Median (months)                                       11.1                            NE
+    [95 % CI]                                          [9.1; 13.1]                     [17.7; NE]
+
+     HR                                                                    0.47
+     [95 % CI]                                                         [0.34, 0.65]
+     Stratified log-rank p-value                                        p < 0.0001
+
+ Secondary efficacy parameters
+
+ PFS (IRC)*, †
+     Number of patients with event n (%)                92 (61 %)                      63 (41 %)
+     Median (months)                                       10.4                           25.7
+     [95 % CI]                                          [7.7; 14.6]                    [19.9; NE]
+
+     HR                                                                    0.50
+     [95 % CI]                                                         [0.36; 0.70]
+     Stratified log-rank p-value                                        p < 0.0001
+
+ Time to CNS progression (IRC)*, **, †
+    Number of patients with event n (%)                 68 (45 %)                      18 (12 %)
+
+     Cause-specific HR                                                     0.16
+     [95 % CI]                                                         [0.10; 0.28]
+     Stratified log-rank p-value                                        p < 0.0001
+
+     12-month cumulative incidence of CNS
+     progression (IRC)                                   41.4 %                          9.4 %
+     [95 % CI]                                         [33.2; 49.4]                    [5.4; 14.7]
+
+ ORR (INV)*, ***, †
+   Responders n (%)                                    114 (75.5 %)                   126 (82.9 %)
+   [95 % CI]                                            [67.8; 82.1]                   [76.0; 88.5]
+
+ Overall survival*, ‡
+    Number of patients with event n (%)                73 (48.3 %)                    76 (50.0 %)
+    Median (months)                                        54.2                           81.1
+    [95 % CI]                                          [34.6; 75.6]                   [62.3; NE]
+
+
+                                                  15
+                                                         Crizotinib                     Alecensa
+                                                          n = 151                       n = 152
+     HR                                                                     0.78
+     [95 % CI]                                                          [0.56; 1.08]
+
+ Duration of response (INV) ‡                             n = 115                        n = 126
+     Median (months)                                        11.1                           42.3
+     [95 % CI]                                           [7.9; 13.0]                   [31.3; 51.3]
+
+ CNS-ORR in patients with measurable CNS                   n = 22                        n = 21
+ metastases at baseline†
+     CNS responders n (%)                                11 (50.0 %)                   17 (81.0 %)
+     [95 % CI]                                           [28.2; 71.8]                  [58.1; 94.6]
+
+     CNS-CR n (%)                                          1 (5 %)                      8 (38 %)
+
+     CNS-DOR, median (months)                                5.5                          17.3
+     [95 % CI]                                           [2.1, 17.3]                   [14.8, NE]
+
+ CNS-ORR in patients with measurable and                   n = 58                        n = 64
+ non-measurable CNS metastases at baseline
+ (IRC) †
+     CNS responders n (%)                                15 (25.9 %)                   38 (59.4 %)
+     [95 % CI]                                           [15.3; 39.0]                  [46.4; 71.5]
+
+     CNS-CR n (%)                                          5 (9 %)                     29 (45 %)
+
+     CNS-DOR, median (months)                                3.7                          NE
+     [95 % CI]                                            [3.2, 6.8]                   [17.3, NE]
+
+* Key secondary endpoints part of the hierarchical testing
+** Competing risk analysis of CNS progression, systemic progression and death as competing events
+*** 2 patients in the crizotinib arm and 6 patients in the alectinib arm had CR
+† Data from primary analysis
+
+‡ Data from final OS analysis, which was conducted after 149 deaths had occurred.
+
+CI = confidence interval; CNS = central nervous system; CR = complete response; DOR  duration of response;
+HR = hazard ratio; IRC = Independent Review Committee; INV = investigator; NE = not estimable;
+ORR  objective response rate; PFS = progression free survival
+
+The PFS benefit was consistent for patients with CNS metastases at baseline (hazard ratio
+(HR) = 0.40, 95 % confidence interval (CI): 0.25-0.64, median PFS for Alecensa = not
+estimable (NE), 95 % CI: 9.2-NE, median PFS for crizotinib = 7.4 months, 95 %CI: 6.6-9.6) and
+without CNS metastases at baseline (HR = 0.51, 95 % CI: 0.33-0.80, median PFS for Alecensa = NE,
+95 % CI: NE, NE, median PFS for crizotinib = 14.8 months, 95 % CI:10.8-20.3), indicating benefit of
+Alecensa over crizotinib in both subgroups.
+
+
+
+
+                                                    16
+Figure 2: Kaplan Meier plot of INV assessed PFS in BO28984 (ALEX)
+
+
+
+
+Figure 3: Kaplan Meier plot of overall survival in BO28984 (ALEX)
+
+
+
+
+Crizotinib pre-treated patients
+
+The safety and efficacy of Alecensa in ALK-positive NSCLC patients pre-treated with crizotinib were
+studied in two Phase I/II clinical trials (NP28673 and NP28761).
+
+NP28673
+Study NP28673 was a Phase I/II single arm, multicentre study conducted in patients with
+ALK-positive advanced NSCLC who have previously progressed on crizotinib treatment. In addition
+to crizotinib, patients may have received previous treatment with chemotherapy. A total of
+138 patients were included in the phase II part of the study and received Alecensa orally, at the
+recommended dose of 600 mg twice daily.
+
+The primary endpoint was to evaluate the efficacy of Alecensa by Objective Response Rate (ORR) as
+per central Independent Review Committee (IRC) assessment using RECIST version 1.1 in the overall
+population (with and without prior exposure of cytotoxic chemotherapy treatments). The co-primary
+endpoint was to evaluate the ORR as per central IRC assessment using RECIST 1.1 in patients with
+
+
+                                                17
+prior exposure of cytotoxic chemotherapy treatments. A lower confidence limit for the estimated ORR
+above the pre-specified threshold of 35 % would achieve a statistically significant result.
+
+Patient demographics were consistent with that of a NSCLC ALK positive population. The
+demographic characteristics of the overall study population were 67 % Caucasian, 26 % Asian, 56 %
+females, and the median age was 52 years. The majority of patients had no history of smoking (70 %).
+The ECOG PS at baseline was 0 or 1 in 90.6 % of patients and 2 in 9.4 % of patients. At the time of
+entry in the study, 99 % of patients had stage IV disease, 61 % had brain metastases and in 96 % of
+patients tumours were classified as adenocarcinoma. Among patients included in the study, 20 % of
+the patients had previously progressed on crizotinib treatment only, and 80 % had previously
+progressed on crizotinib and at least one chemotherapy treatment.
+
+Study NP28761
+Study NP28761 was a Phase I/II single arm multicentre study conducted in patients with ALK positive
+advanced NSCLC who have previously progressed on crizotinib treatment. In addition to crizotinib,
+patients may have received previous treatment with chemotherapy. A total of 87 patients were
+included in the phase II part of the study and received Alecensa orally, at the recommended dose of
+600 mg twice daily.
+
+The primary endpoint was to evaluate the efficacy of Alecensa by ORR as per central IRC assessment
+using RECIST version 1.1. A lower confidence limit for the estimated ORR above the pre-specified
+threshold of 35 % would achieve a statistically significant result.
+
+Patient demographics were consistent with that of a NSCLC ALK positive population. The
+demographic characteristics of the overall study population were 84 % Caucasian, 8 % Asian, 55 %
+females. The median age was 54 years. The majority of patients had no history of smoking (62 %).
+The ECOG PS at baseline was 0 or 1 in 89.7 % of patients and 2 in 10.3 % of patients. At the time of
+entry in the study, 99 % of patients had stage IV disease, 60 % had brain metastases and in 94 % of
+patients tumours were classified as adenocarcinoma. Among the patients included in the study, 26 %
+of the patients had previously progressed on crizotinib treatment only, and 74 % had previously
+progressed on crizotinib and at least one chemotherapy treatment.
+
+The main efficacy results from studies NP28673 and NP28761 are summarised in Table 6. A summary
+of pooled analysis of CNS endpoints is presented in Table 7.
+
+
+
+
+                                                 18
+Table 6 Efficacy results from studies NP28673 and NP28761
+
+
+                                                         NP28673                         NP28761
+                                                     Alecensa 600 mg                 Alecensa 600 mg
+                                                        twice daily                     twice daily
+
+                                                            21                              17
+ Median duration of follow-up (months)
+                                                       (range 1 – 30)                  (range 1 – 29)
+ Primary efficacy parameters
+
+ ORR (IRC) in RE population                               n = 122 a                       n  67 b
+    Responders n (%)                                    62 (50.8 %)                    35 (52.2 %)
+    [95 % CI]                                         [41.6 %, 60.0 %]               [39.7 %, 64.6 %]
+
+ ORR (IRC) in patients pre-treated with                      n = 96
+ chemotherapy
+    Responders n (%)                                    43 (44.8 %)
+    [95 % CI]                                         [34.6 %, 55.3 %]
+
+ Secondary efficacy parameters
+
+ DOR (IRC)                                                   n  62                        n  35
+   Number of patients with events n (%)                    36 (58.1 %)                  20 (57.1 %)
+   Median (months)                                             15.2                         14.9
+   [95 % CI]                                               [11.2, 24.9]                  [6.9, NE]
+
+ PFS (IRC)                                                   n = 138                       n  87
+    Number of patients with events n (%)                   98 (71.0 %)                  58 (66.7 %)
+    Median duration (months)                                    8.9                          8.2
+    [95 % CI]                                               [5.6, 12.8]                  [6.3, 12.6]
+
+CI  confidence interval; DOR = duration of response; IRC  independent review committee; NE = not
+estimable; ORR = objective response rate; PFS = progression free survival; RE  response evaluable
+a
+  16 patients did not have measurable disease at baseline according to the IRC and were not included in the IRC
+response evaluable population.
+b
+  20 patients did not have measurable disease at baseline according to the IRC and were not included in the IRC
+response evaluable population
+
+ORR results for studies NP28673 and NP28761 were consistent across subgroups of baseline patient
+characteristics such as age, gender, race, ECOG PS, CNS metastasis and prior chemotherapy use,
+especially when considering the small number of patients in some subgroups.
+
+
+
+
+                                                      19
+Table 7 Summary of the pooled analysis of CNS endpoints from studies NP28673 and NP28761
+
+ CNS Parameters (NP28673 and NP28761)                                Alecensa 600 mg twice daily
+ Patients with measurable CNS lesions at baseline                              n = 50
+ CNS ORR (IRC)
+      Responders (%)                                                        32 (64.0 %)
+      [95 % CI]                                                           [49.2 %, 77.1 %]
+      Complete response                                                     11 (22.0 %)
+      Partial response                                                      21 (42.0 %)
+
+ CNS DOR (IRC)                                                                   n = 32
+     Number of patients with events (%)                                       18 (56.3 %)
+     Median (months)                                                              11.1
+     [95 %CI]                                                                  [7.6, NE]
+CI  confidence interval; DOR  duration of response; IRC  independent review committee; ORR  objective
+response rate; NE = not estimable
+
+Paediatric population
+The European Medicines Agency has waived the obligation to submit the results of studies with
+Alecensa in all subsets of the paediatric population in lung carcinoma (small cell and non-small cell
+carcinoma) (see section 4.2 for information on paediatric use).
