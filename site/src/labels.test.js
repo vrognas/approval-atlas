@@ -240,7 +240,7 @@ test("the footer's three lines: sources with their licences, use and non-affilia
   );
   assert.equal(
     footer.use,
-    "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI or GLEIF.",
+    "For information only: not medical, legal or regulatory advice. Not affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre, NLM, EMBL-EBI, GLEIF or Anthropic.",
   );
   assert.equal(
     partsText(footer.licence),
@@ -1781,6 +1781,31 @@ test("companies: provenance, why a medicine sits under its group, a sponsor, a g
   assert.equal(companies.medicinesUnder(3), "Its medicines are under ");
   assert.equal(external.destinations["en.wikipedia.org"], "Wikipedia");
   assert.equal(external.destinations["www.sec.gov"], "SEC website");
+});
+
+test("UI.efficacy copy: no significance words, no em-dash, null analysis stays null", () => {
+  const { efficacy } = labels.UI;
+  const texts = [...textValues(efficacy)];
+  assert.ok(texts.length > 10);
+  assert.deepEqual(texts.filter((text) => /significan|authoris|—/i.test(text)), []);
+  assert.equal(efficacy.analysis(null), null);
+  assert.equal(efficacy.moreIndications(1), "and results for 1 more indication");
+  assert.equal(efficacy.moreIndications(2), "and results for 2 more indications");
+  assert.equal(efficacy.source(12), "Source: product information, p. 12");
+  assert.equal(efficacy.stale("2026-05-04"), "From the product information of 4 May 2026; EMA has updated it since.");
+  // Task 9: the card's section.
+  assert.equal(efficacy.moreResults(3), "More results (3)");
+  assert.equal(efficacy.regimen("sotorasib (n\u00a0=\u00a0126)", null), "sotorasib (n\u00a0=\u00a0126), single-arm");
+  assert.equal(efficacy.armSize("alectinib", 1234), "alectinib (n\u00a0=\u00a01,234)");
+  assert.equal(efficacy.analysisLine(null, null), null);
+  // About credits the extraction once the data does (meta.json "Pivotal results …"), naming the model's maker
+  // and that neither EMA nor Anthropic checked the results.
+  const { sources } = labels.UI.about;
+  assert.equal(sources().some((parts) => /Pivotal results/.test(parts[0])), false);
+  const line = sources({ efficacy: true }).find((parts) => /Pivotal results/.test(parts[0]))[0];
+  assert.match(line, /extracted automatically from EMA product information/);
+  assert.match(line, /Claude, Anthropic/);
+  assert.match(line, /not checked by EMA or Anthropic/);
 });
 
 // Review of PR #39: the phone search list's expander names what a click adds, never "all" (a group

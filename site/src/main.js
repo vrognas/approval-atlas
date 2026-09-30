@@ -411,6 +411,7 @@ function renderFooter(meta = null) {
     chembl: versionOf(/chembl/i),
     explained: sources.some((source) => /atc class explanations/i.test(source.name)),
     innStems: sources.some((source) => /inn stems/i.test(source.name)),
+    efficacy: sources.some((source) => /pivotal results/i.test(source.name)),
   };
   const groupsDate = versionOf(/company groups/i)?.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
   const line = (id, parts) => {
@@ -2305,6 +2306,8 @@ function startDashboard(meta, [
   // 61 KB gzipped) once the page is idle, so a card opened later, offline or on a slow network,
   // has them (the service worker keeps what was loaded).
   whenIdle(() => lookup.need("protection"));
+  // The pivotal results (optional; the card's teaser and section) likewise, for offline cards.
+  whenIdle(() => lookup.need("efficacy"));
   // The full documents index (~5 MB, 300 KB gzipped): the cards' documents lists, and the table's
   // links where the primary documents are missing (older data); a card asks for it at once where
   // it needs it (lookup.js medicineCard()).

@@ -6124,6 +6124,67 @@ details > summary {
   margin: 8px 0 0;
 }
 
+/* Pivotal results (lookup.js efficacyTeaser(), efficacySection()): the Indication block's line,
+   wrapping in full (never nowrap, never clamped: an ellipsis could cut an interval or a comparator
+   mid-number, ruling R16), then, in More details, a block per indication under a hairline. Results
+   are never coloured or ranked: the effect is in the ink, only its weight sets it apart. Long trial
+   names and populations break rather than widen the card. */
+.card .efficacy-teaser {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.efficacy-indication {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--grid);
+}
+
+.efficacy-indication > h3 {
+  margin: 0 0 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.card .efficacy-result p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.card .efficacy-result .efficacy-trial {
+  margin: 0;
+  font-weight: 600;
+}
+
+.card .efficacy-result .efficacy-effect {
+  margin-top: 6px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.card .efficacy-result .efficacy-source {
+  margin-top: 6px;
+  font-size: 0.875rem;
+}
+
+.efficacy-more {
+  margin-top: 10px;
+}
+
+.efficacy-more > summary {
+  padding: 4px 0;
+  color: var(--link);
+  font-size: 0.875rem;
+}
+
+.efficacy-more > .efficacy-result {
+  margin-top: 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--grid);
+}
+
 /* A namesake (another medicine with the same name) under the dek. */
 .card .namesake {
   margin: 8px 0 0;
@@ -6690,6 +6751,25 @@ mark {
     align-items: center;
     min-height: 44px;
     margin: -10px 0;
+  }
+
+  /* The pivotal results' teaser: inline, so it wraps with the text in full (its lines, 24px each,
+     are its target); 14px, so it takes fewer lines on a phone. */
+  .card .efficacy-teaser {
+    margin-top: 12px;
+    font-size: 0.875rem;
+    line-height: 1.5rem;
+  }
+
+  .efficacy-teaser a.lead-link {
+    display: inline;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .efficacy-more > summary {
+    padding: 12px 0;
+    margin: -8px 0;
   }
 
   .doc-link {

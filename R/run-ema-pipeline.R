@@ -4,7 +4,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
                              smpc_budget = smpc_budget_from_env(),
                              gleif_path = gleif_matches_path,
                              chembl_path = chembl_matches_path,
-                             explanations_path = atc_explanations_path) {
+                             explanations_path = atc_explanations_path,
+                             efficacy_path = efficacy_rows_path) {
   ema <- read_ema_json(download_ema_json(destination = cache_path))
   ema$data |>
     check_expected_columns() |>
@@ -77,6 +78,12 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
     tables$ema_medicine_substances,
     tables$ema_medicine_active_substances
   )
+  efficacy_rows <- check_efficacy_rows(read_efficacy_rows(efficacy_path))
+  tables$ema_medicine_efficacy <- build_efficacy_table(
+    efficacy_rows,
+    tables$ema_medicines,
+    select_epar_documents(documents$data)
+  )
   previous_protection <- read_previous_protection(
     file.path(output_directory, "ema_medicine_protection.json")
   )
@@ -101,7 +108,8 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
       ),
       union_register_source_entry(register_source)
     ), atc_sources$source_entries, purrr::compact(list(
-      atc_explanations_source_entry(tables$atc_class_explanations)
+      atc_explanations_source_entry(tables$atc_class_explanations),
+      efficacy_source_entry(tables$ema_medicine_efficacy)
     )), company_source_entries(
       register_source,
       gleif_matches
@@ -115,6 +123,7 @@ run_ema_pipeline <- function(output_directory = "site/public/data",
   report_atc_summary(tables, atc_sources)
   report_company_summary(company_run, tables$ema_medicines)
   report_modality_summary(modality_run, tables$ema_medicines)
+  report_efficacy_summary(efficacy_rows, tables$ema_medicine_efficacy)
   report_protection_changes(
     previous_protection,
     tables$ema_medicine_protection,

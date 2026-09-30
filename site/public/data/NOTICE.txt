@@ -23,6 +23,10 @@ Other sources, with their own terms:
 - LEI data: Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or
   endorse this data.
 - WHO INN stems (World Health Organization, 2024), read as facts in Approval Atlas's own words.
+- Pivotal results (ema_medicine_efficacy.json): extracted automatically from section 5.1 of EMA
+  product information (© EMA; quotes verbatim, EMA acknowledged as the source) with Claude, an
+  AI model by Anthropic, and checked against the quoted text automatically; not checked by EMA
+  or Anthropic. Results of different trials are not a head-to-head comparison.
 
 License: the compilation is licensed CC BY-SA 4.0
 (https://creativecommons.org/licenses/by-sa/4.0/); ChEMBL-derived values are adapted from
@@ -33,4 +37,4 @@ For information only: not medical, legal or regulatory advice. Data can lag the 
 contain errors; provided as is, without warranty. Protection dates are rough estimates from EU
 central approval dates only, not patent or supplementary protection certificate data. Not
 affiliated with or endorsed by EMA, the European Commission, WHO or its Collaborating Centre,
-NLM, EMBL-EBI or GLEIF.
+NLM, EMBL-EBI, GLEIF or Anthropic.
