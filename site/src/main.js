@@ -27,7 +27,7 @@ import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
 import { createConditionsCard } from "./conditions-card.js";
 import { equivalentSetKey } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
-import { FAILED } from "./datasets.js";
+import { FAILED, settledOrAfter } from "./datasets.js";
 import { createFacetPanel } from "./facet-panel.js";
 import {
   FACET_VALUES,
@@ -186,15 +186,20 @@ const recent = createRecent(undefined, (entry) => {
 // A shared medicine link (?med=, the phone lookup during a talk): once the search works, the
 // card's document buttons (the small primary-documents file) load before any other file, which
 // waits for it (or its failure), so the buttons do not share the network with the dashboard's
-// megabyte (audit 2026-09-30, S5). null: no file waits.
+// megabyte (audit 2026-09-30, S5); but no longer than FIRST_FILE_WAIT_MS, as a stalled small
+// file must not hold the card's other parts (it takes about 0.4 s on the audit's phone profile).
+// null: no file waits.
 const PRIMARY_DOCUMENTS_FILE = "ema_medicine_primary_documents.json";
+const FIRST_FILE_WAIT_MS = 1500;
 let firstFile = null;
 const files = new Map();
 function loadFile(file) {
   if (!files.has(file)) {
     const request = () => d3.json(`/data/${file}`);
     files.set(file, (firstFile && file !== PRIMARY_DOCUMENTS_FILE ? firstFile.then(request) : request()).catch((error) => {
-      files.delete(file); // a failed load (flaky network) is retried by the next caller
+      // A failed load (flaky network) is retried by the next caller; the primary documents' 404
+      // (older data without the file) is kept for this page load, so it is not asked for again.
+      if (file !== PRIMARY_DOCUMENTS_FILE || !String(error?.message).startsWith("404")) files.delete(file);
       throw error;
     }));
   }
@@ -876,10 +881,9 @@ function renderTryLinks() {
 
 function startLookup([meta, searchRows, entryTermRows]) {
   if (new URLSearchParams(window.location.search).has("med")) {
-    const done = () => {
+    firstFile = settledOrAfter(loadFile(PRIMARY_DOCUMENTS_FILE), FIRST_FILE_WAIT_MS).then(() => {
       firstFile = null;
-    };
-    firstFile = loadFile(PRIMARY_DOCUMENTS_FILE).then(done, done);
+    });
   }
   d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
   renderFooter(meta);

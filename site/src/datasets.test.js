@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FAILED, createDatasets } from "./datasets.js";
+import { FAILED, createDatasets, settledOrAfter } from "./datasets.js";
 
 // Settles the loads started so far (fake files resolve at once).
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -162,4 +162,18 @@ test("retry() leaves complete datasets, loads in progress and datasets never nee
   assert.equal(requests.get("protection.json"), 1);
   assert.equal(requests.get("copies.json"), 1);
   assert.equal(requests.has("register.json"), false);
+});
+
+// main.js: the files a shared medicine link holds back wait for the small primary-documents file,
+// but no longer than the time given (review of the primary documents, 2026-09-30).
+test("settledOrAfter waits for the promise, or the time given when it takes longer", async () => {
+  const order = [];
+  await Promise.all([
+    settledOrAfter(Promise.resolve(1), 1000).then(() => order.push("resolved")),
+    settledOrAfter(Promise.reject(new Error("404")), 1000).then(() => order.push("rejected")),
+  ]);
+  assert.deepEqual(order.sort(), ["rejected", "resolved"]);
+  const started = Date.now();
+  await settledOrAfter(new Promise(() => {}), 30);
+  assert.ok(Date.now() - started >= 25);
 });
