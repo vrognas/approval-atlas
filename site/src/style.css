@@ -4886,13 +4886,19 @@ button.area-chip[aria-disabled="true"] {
   outline-offset: 2px;
 }
 
-/* The medicine card's Status block: its first three conditions, then "and n more", a button that
-   reads as a link and opens More details at the full list (lookup.js areaNames(); F · Spacious,
-   phase 4). */
+/* The medicine card's Indication block: its first three conditions, then "and n more", a button
+   that reads as a link and opens More details at the full list (lookup.js areaNames(); F · Spacious,
+   phase 4). 14px, as the block's other reveal control, "Show full indication" (design sweep B6
+   fix-up: it was 16px under that 14px summary), 24px tall as it is (its 21px line padded, the
+   negative margin keeping the line). */
 .toggle.areas-more {
-  padding: 0;
+  padding: 1.5px 0;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: -1.5px;
+  margin-block: min(0px, (1lh - 24px) / 2);
   color: var(--link);
   font: inherit;
+  font-size: 0.875rem;
   text-decoration: underline;
   text-decoration-color: var(--link-underline);
   text-underline-offset: 3px;
@@ -7221,12 +7227,16 @@ mark {
 
   /* The medicine card's "and n more" (F · Spacious, phase 4; in the Indication block since
      2026-09-30): on a line of its own, its 44px box starting under the 5px gap below the chips
-     above, so it never covers their fills or the 24px a chip keeps clear (axe target-size). */
+     above, so it never covers their fills or the 24px a chip keeps clear (axe target-size). 44px
+     whatever its line (14px since the B6 fix-up: a 21px line, 11.5px above and below), as "Show
+     full indication". */
   .toggle.areas-more {
     display: block;
     width: fit-content;
-    margin: 0 0 -10px;
-    padding: 10px 0;
+    margin: 0 0 -11.5px;
+    margin-block: 0 min(0px, (1lh - 44px) / 2);
+    padding: 11.5px 0;
+    padding-block: max(0px, (44px - 1lh) / 2);
   }
 
   /* The medicine card's protection lead (step 3; F · Spacious, phase 4). */
