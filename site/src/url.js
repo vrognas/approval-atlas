@@ -216,14 +216,20 @@ export const areaState = (key) => ({ ...structuredClone(DEFAULT_STATE), area: [k
 
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI, company group or
 // company key (companies part 2). Kept verbatim: an unknown value shows a "not found" result
-// instead of being dropped.
-export const LOOKUP_KEYS = ["q", "med", "sub", "cond", "co"];
+// instead of being dropped. show: "Show all statuses" on a condition, text-search or company page
+// (STATUS_ALL, else null; navigation fixes 2026-10-01: a reload and a shared link keep it).
+export const LOOKUP_KEYS = ["q", "med", "sub", "cond", "co", "show"];
 export const LOOKUP_QUERY_MAX = 100;
-export const DEFAULT_LOOKUP = Object.freeze({ q: "", med: null, sub: null, cond: null, co: null });
+export const DEFAULT_LOOKUP = Object.freeze({ q: "", med: null, sub: null, cond: null, co: null, show: null });
+// The lookup views with a "Show all statuses" choice.
+const SHOW_ALL_VIEWS = ["condition", "text", "company"];
+export const showsEveryStatus = (state) => state.show === STATUS_ALL && SHOW_ALL_VIEWS.includes(lookupView(state).kind);
 
 export function decodeLookup(params) {
   const value = (key) => params.get(key)?.trim() || null;
-  return { q: (value("q") ?? "").slice(0, LOOKUP_QUERY_MAX), med: value("med"), sub: value("sub"), cond: value("cond"), co: value("co") };
+  const lookup = { q: (value("q") ?? "").slice(0, LOOKUP_QUERY_MAX), med: value("med"), sub: value("sub"), cond: value("cond"), co: value("co"), show: STATUS_ALL };
+  if (value("show") !== STATUS_ALL || !showsEveryStatus(lookup)) lookup.show = null;
+  return lookup;
 }
 
 // The one result the page shows for a lookup state.
@@ -259,7 +265,7 @@ export function patchFilterParams(params, patch) {
 // filter domain is still loading (so a shared link's filters survive the first lookups).
 export function encodeUrl(state, filterParams = null) {
   const params = new URLSearchParams();
-  for (const key of LOOKUP_KEYS) if (state[key]) params.set(key, state[key]);
+  for (const key of LOOKUP_KEYS) if (key === "show" ? showsEveryStatus(state) : state[key]) params.set(key, state[key]);
   for (const [key, value] of filterParams ?? encodeState(state)) params.append(key, value);
   return params;
 }

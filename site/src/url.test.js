@@ -24,6 +24,7 @@ import {
   patchIsSet,
   scheduleUrlWrite,
   setHistoryWriter,
+  showsEveryStatus,
   togglePatch,
   withoutLookup,
 } from "./url.js";
@@ -316,17 +317,43 @@ const lookupOf = (search) => decodeLookup(new URLSearchParams(search));
 
 test("lookup keys decode trimmed, with empty values as absent", () => {
   assert.deepEqual(lookupOf(""), DEFAULT_LOOKUP);
-  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943", co: null });
+  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943", co: null, show: null });
   assert.equal(lookupOf("co=+g.roche+").co, "g.roche");
   assert.equal(lookupOf(`q=${"x".repeat(LOOKUP_QUERY_MAX + 20)}`).q.length, LOOKUP_QUERY_MAX);
 });
 
 test("lookup keys come first in the URL, then the filters; values round-trip", () => {
-  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924", co: "g.roche" };
+  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924", co: "g.roche", show: null };
   const query = encodeUrl({ ...structuredClone(DEFAULT_STATE), ...lookup, mah: ["A & B, C"] }).toString();
   assert.equal(query, "q=type+2+diabetes&med=EMEA%2FH%2FC%2F003820&sub=tenofovir+disoproxil&cond=D003924&co=g.roche&mah=A+%26+B%2C+C");
   assert.deepEqual(lookupOf(query), lookup);
   assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP }).toString(), "");
+});
+
+// Navigation fixes (lookup.md #7): "Show all statuses" on a condition, text-search or company page
+// is in the URL (show=all), so a reload and a shared link keep it; no other view has the choice.
+test("show=all: every status on a condition, text-search or company page, nowhere else", () => {
+  for (const search of ["cond=D011565", "q=psoriasis", "co=g.roche"]) {
+    assert.equal(lookupOf(`${search}&show=all`).show, STATUS_ALL, search);
+    assert.equal(lookupOf(search).show, null, search);
+    const state = { ...structuredClone(DEFAULT_STATE), ...lookupOf(`${search}&show=all`) };
+    assert.equal(showsEveryStatus(state), true, search);
+    assert.equal(encodeUrl(state).toString(), `${search}&show=all`);
+  }
+  // A medicine card, a substance card or the overview has no such choice: dropped.
+  for (const search of ["med=M1&show=all", "sub=adalimumab&show=all", "show=all", "cond=D1&med=M1&show=all"]) {
+    assert.equal(lookupOf(search).show, null, search);
+    assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...lookupOf(search) }).toString().includes("show"), false, search);
+  }
+  assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, med: "M1", show: STATUS_ALL }).toString(), "med=M1");
+  // Other values are no choice; the key comes after the lookup keys, before the filters; it is not
+  // a filter (the overview's status filter is status=…).
+  assert.equal(lookupOf("cond=D1&show=yes").show, null);
+  assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, cond: "D1", show: STATUS_ALL, type: ["Generic"] }).toString(), "cond=D1&show=all&type=Generic");
+  assert.equal(withoutLookup(new URLSearchParams("cond=D1&show=all&type=Generic")).toString(), "type=Generic");
+  assert.deepEqual(decode("cond=D1&show=all"), { state: structuredClone(DEFAULT_STATE), dropped: [] });
+  // Opening another view starts at the authorized medicines.
+  assert.equal(DEFAULT_LOOKUP.show, null);
 });
 
 // Navigation fixes (dashboard.md #1): a push is written at once, before the new view's render

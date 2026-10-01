@@ -41,7 +41,7 @@ import { endingByYear, protectionEnding } from "./protection-calendar.js";
 import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
 import { renderTimeline } from "./timeline.js";
 import { toolbarKeydown } from "./toolbar.js";
-import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
+import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState, showsEveryStatus } from "./url.js";
 
 const formatNumber = new Intl.NumberFormat("en-US").format;
 // The medicine card's therapeutic areas shown in its Status block before "and n more" (areaNames()).
@@ -198,8 +198,9 @@ const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substanc
 // meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
 // decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
 // opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
+// onShowAll(checked): the "Show all statuses" choice changed (main.js writes it into the URL).
 export function createLookup(panel, {
-  index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null,
+  index, loadFile, navigate, onShowAll, snapshotDate, meshVersion = null, decision = null,
 }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
@@ -260,8 +261,9 @@ export function createLookup(panel, {
   const listeners = [];
   let lastState = null;
   let renderedKey = null;
+  // "Show all statuses" on a condition, text-search or company page: the URL's show=all (url.js
+  // showsEveryStatus()), as last rendered.
   let showAll = false;
-  let showAllKey = null; // the lookup view the "Show all statuses" choice belongs to
   let focusNext = false;
   let timeline = null;
   const resizeObserver = new ResizeObserver(() => {
@@ -1288,10 +1290,7 @@ export function createLookup(panel, {
     // A text search with nothing to show says why (step 2, #2), once its related conditions are known.
     const empty = !descriptor && mentioned?.length === 0 && related.length === 0 && conditions !== undefined;
     const toggle = el("label", { class: "toggle-all" },
-      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
-        showAll = event.currentTarget.checked;
-        render(lastState, true);
-      } }),
+      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => onShowAll(event.currentTarget.checked) }),
       " ", UI.condition.showAll);
     const mentionedRows = (mentioned ?? []).map((entry) => entry.row);
     // Step 4 (#10): the tagged medicines' distinct active substances (equivalent spellings joined),
@@ -1468,10 +1467,7 @@ export function createLookup(panel, {
       protectionEndingPart);
 
     const toggle = anyAuthorized ? el("label", { class: "toggle-all" },
-      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
-        showAll = event.currentTarget.checked;
-        render(lastState, true);
-      } }),
+      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => onShowAll(event.currentTarget.checked) }),
       " ", UI.condition.showAll) : null;
     const gleifUrl = row.lei ? `https://search.gleif.org/#/record/${encodeURIComponent(row.lei)}` : null;
     // Ownership (provenance; none in older data files): the curated notes on its members
@@ -1517,23 +1513,21 @@ export function createLookup(panel, {
       sources);
   }
 
-  // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
+  // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle
+  // changed (the URL's show=all: a new search, condition or company page starts at Authorized only;
+  // Back from a medicine card opened from it keeps the choice).
   function render(state, force = false) {
     lastState = state;
     const view = lookupView(state);
     const key = JSON.stringify(view);
     const sameView = key === renderedKey;
-    if (!force && sameView) return;
+    const everyStatus = showsEveryStatus(state);
+    if (!force && sameView && everyStatus === showAll) return;
     renderedKey = key;
+    showAll = everyStatus;
     // A new view retries data that failed to load, and, once, an optional file that was missing,
     // each when a card or list next needs it (not forced re-renders: that would loop).
-    if (!force) datasets.retry();
-    // A new search, substance or condition starts at Authorized only; opening a medicine card
-    // and coming back keeps the choice.
-    if (view.kind !== null && view.kind !== "medicine" && key !== showAllKey) {
-      showAll = false;
-      showAllKey = key;
-    }
+    if (!force && !sameView) datasets.retry();
     // Same view re-rendered: keep open disclosures and the focused control.
     const open = new Set(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []);
     const focusKey = sameView && panel.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;

@@ -83,6 +83,7 @@ import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
   FILTER_KEYS,
+  STATUS_ALL,
   activeFilterCount,
   classState,
   decodeLookup,
@@ -969,6 +970,8 @@ function startLookup([meta, searchRows, entryTermRows]) {
     index,
     loadFile,
     navigate,
+    // "Show all statuses" is in the URL (show=all), as filter edits replace the entry.
+    onShowAll: (checked) => setState({ show: checked ? STATUS_ALL : null }),
     snapshotDate: meta.snapshot_date,
     meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null,
     decision: days(medianDays) ? { median: medianDays, p90: days(p90Days) } : null,
