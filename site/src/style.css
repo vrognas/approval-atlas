@@ -5876,7 +5876,11 @@ table.activity {
   background: var(--surface);
 }
 
-.card-section > :is(h2, h3):first-child {
+/* The section's heading at its top, also inside the substance card's ATC label row (a flex row, so
+   the h2's margin stayed: 33px from the section's top against 17px for the Approval timeline above
+   it, review of the design sweep's L2). */
+.card-section > :is(h2, h3):first-child,
+.card-section > .ladder-title:first-child > h2 {
   margin-top: 0;
 }
 
