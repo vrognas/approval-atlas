@@ -2449,8 +2449,10 @@ input::placeholder {
 
 /* A tapped tab's panel shows at once, before its cards are drawn for the current view (design sweep
    2026-10-01, L3; main.js renderTabs()): its old cards dimmed, but only once that takes 150 ms, so a
-   fast render never blinks. An animation, as a panel that was hidden has no style to transition
-   from. */
+   fast render never blinks (review of L3: a stale panel is busy 20-26 ms at 1440 and 1024, where a
+   dim at once would flash for a frame or two, 55-222 ms on a phone at 4x CPU, Medicines 317-382 ms);
+   old counts show undimmed for 150 ms at most. An animation, as a panel that was hidden has no style
+   to transition from. */
 .tab-panel[aria-busy="true"] {
   animation: tab-busy 1ms linear 150ms forwards;
 }

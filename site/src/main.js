@@ -1434,7 +1434,7 @@ function startDashboard(meta, [
   // hrefs, so a new browser tab opens the same view on that tab. Phones: the strip scrolls
   // sideways, the tab shown kept in it. tab: the tab to show (a tap shows it before the state's
   // render, showTab()). A panel whose cards were drawn for another view is busy until they are
-  // drawn again (dimmed after 150 ms, style.css), so a tap never shows old counts as current.
+  // drawn again (dimmed after 150 ms, style.css), so its old counts show undimmed for 150 ms at most.
   const panelView = () => encodeUrl({ ...state, tab: DEFAULT_STATE.tab });
   function renderTabs(tab = state.tab) {
     const hrefOf = (to) => `?${encodeUrl({ ...state, tab: to })}`;
