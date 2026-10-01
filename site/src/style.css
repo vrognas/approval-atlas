@@ -6879,6 +6879,63 @@ mark {
     min-width: 44px;
   }
 
+  /* The sticky company column 7.5rem wide (bug hunt 2026-10-01: 203px, so at 320px about one heat
+     cell showed beside it; now 2 and a half at 320, 4 at 390): the badge and the total on a line,
+     the name wrapped under them; the company page link 28px wide, its 24px outlined box in a 44px
+     tall target. */
+  .activity th[scope="row"] {
+    width: 7.5rem;
+    min-width: 0;
+    max-width: 7.5rem;
+    padding-right: 4px;
+  }
+
+  .activity th[scope="row"] button {
+    display: grid;
+    grid-template-areas: "badge total" "name name";
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: center;
+    align-items: center;
+    gap: 2px 6px;
+  }
+
+  .activity-row-head .company-badge {
+    grid-area: badge;
+  }
+
+  .activity-row-head .activity-total {
+    grid-area: total;
+    justify-self: end;
+  }
+
+  .activity-row-head .activity-holder {
+    grid-area: name;
+    overflow-wrap: anywhere;
+  }
+
+  .activity-row-head .cond-link {
+    width: 28px;
+    height: 44px;
+    border: 0;
+  }
+
+  .activity-row-head .cond-link:hover {
+    background: none;
+  }
+
+  .activity-row-head .cond-link .link-icon {
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    border: 1px solid var(--axis);
+    border-radius: 6px;
+  }
+
+  .activity-row-head .cond-link:hover .link-icon {
+    background: var(--wash);
+  }
+
   :is(.activity, .conditions-table) .sort-button {
     width: 44px;
     height: 44px;
