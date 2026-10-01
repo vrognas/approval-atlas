@@ -2113,6 +2113,8 @@ export const UI = {
   },
 
   timeline: {
+    // Its heading (design sweep 2026-10-01, L2: after the lists on condition, text and substance pages).
+    title: "Approval timeline",
     caption: "One dot per medicine; lines join medicines with the same active substances (reference, generics, biosimilars). Tap or point at a dot for its name.",
     // Step 4 (#17): after the caption on condition and indication-text pages ("this use": an
     // indication-text search is not a condition; review of step 4).

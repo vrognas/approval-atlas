@@ -1113,11 +1113,12 @@ export function createLookup(panel, {
   // Fewer dated medicines than this: no timeline (a month axis with a dot or two says nothing).
   const TIMELINE_MIN = 3;
 
-  // A surface block holding the timeline and its caption; none with fewer than TIMELINE_MIN dated
-  // rows. mentioned: product numbers found only in indication texts (hollow dots; a legend then
-  // names the dots of each kind present: tagged by EMA, filled; mentioned, hollow). caveat: a
-  // sentence after the caption (condition and indication-text pages: the dots are first approvals;
-  // step 4, #17).
+  // A surface block holding the timeline under its heading and caption; none with fewer than
+  // TIMELINE_MIN dated rows. mentioned: product numbers found only in indication texts (hollow dots;
+  // a legend then names the dots of each kind present: tagged by EMA, filled; mentioned, hollow).
+  // caveat: a sentence after the caption (condition and indication-text pages: the dots are first
+  // approvals; step 4, #17). A heading of its own (design sweep 2026-10-01, L2): on condition, text
+  // and substance pages it follows the lists, and would otherwise read as part of the last one.
   function timelineBlock(rows, medicines, mentioned = new Set(), caveat = null) {
     if (rows.filter((row) => row.marketing_authorisation_date).length < TIMELINE_MIN) return null;
     const container = el("div", { class: "timeline chart" });
@@ -1146,6 +1147,7 @@ export function createLookup(panel, {
         el("li", null, el("span", { class: "dot-key hollow", "aria-hidden": "true" }), UI.timeline.legend.mentioned))
       : null;
     return el("div", { class: "card-section" },
+      el("h2", null, UI.timeline.title),
       el("p", { class: "muted timeline-caption" }, UI.timeline.caption, caveat ? [" ", caveat] : null),
       legend,
       container);
@@ -1211,13 +1213,15 @@ export function createLookup(panel, {
         el("dl", { class: "block-facts" },
           blockFact(UI.card.company, holders ?? pending(companies)),
           blockFact(UI.modality.label, substanceModality(rows, key)))))),
-      timelineBlock(rows, medicines),
       el("h2", { id: "results-substance" }, siblings.length ? UI.substance.productsListed(rows.length, substance.name) : UI.substance.products(rows.length)),
       // What each medicine is for (its therapeutic areas); the substance line only where it differs.
       resultTable(rows.map((row) => ({ row })), medicines, "results-substance", {
         areas: true,
         sameSubstance: (row) => row.substance_keys?.length === 1 && row.substance_keys[0] === key,
       }),
+      // The list first, then its timeline (design sweep 2026-10-01, L2: adalimumab's first row was
+      // at 932px on a 390px phone, under the 282px timeline).
+      timelineBlock(rows, medicines),
       substanceAtc(rows, atc, atcCounts));
   }
 
@@ -1355,7 +1359,6 @@ export function createLookup(panel, {
       // What the condition is: NLM's scope note (owner request 2026-09-28).
       descriptor ? meshDefinition(ui) : null,
       toggle,
-      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined, UI.timeline.firstApproval),
       descriptor
         ? [el("h2", { id: "results-tagged" }, UI.condition.taggedOwn(descriptor.name, own.length)), resultTable(own.map((row) => ({ row })), medicines, "results-tagged")]
         : null,
@@ -1365,7 +1368,10 @@ export function createLookup(panel, {
       el("h2", { id: "results-mentioned" }, mentioned
         ? `${descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned} (${mentioned.length})`
         : descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned),
-      mentioned ? (empty ? emptyState(query, matches.length) : resultTable(mentioned, medicines, "results-mentioned")) : pending(medicines));
+      mentioned ? (empty ? emptyState(query, matches.length) : resultTable(mentioned, medicines, "results-mentioned")) : pending(medicines),
+      // The lists first, then their timeline (design sweep 2026-10-01, L2: Psoriasis's first medicine
+      // was at 1,202px on a 390px phone, under the 409px timeline).
+      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined, UI.timeline.firstApproval));
   }
 
   // "a, b and c" of nodes (or node lists).
