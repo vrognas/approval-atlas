@@ -722,6 +722,32 @@ write_gold_result <- function(result, output_directory) {
   path
 }
 
+# The saved result of a model (gold-eval-<model>.json) when it scored exactly
+# these medicines and no batch of it is pending; else NULL (the model runs).
+# Read back in the shape gold_model_result() returns, for the report.
+read_saved_gold_result <- function(model, medicines, output_directory) {
+  path <- file.path(output_directory, paste0("gold-eval-", model, ".json"))
+  if (!file.exists(path) ||
+        file.exists(gold_pending_path(output_directory, model))) {
+    return(NULL)
+  }
+  result <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  calls <- dplyr::bind_rows(purrr::map(result$calls, function(call) {
+    purrr::map(call, \(value) value %||% NA)
+  }))
+  if (!setequal(calls$medicine, purrr::map_chr(medicines, "medicine"))) {
+    return(NULL)
+  }
+  cli::cli_inform(
+    "Using the saved result of {model} ({.path {path}}); delete it to ask
+    that model again."
+  )
+  result$calls <- calls
+  result$score$pitfalls <- unlist(result$score$pitfalls)
+  result$dropped_rows <- as.character(unlist(result$dropped_rows))
+  result
+}
+
 gold_yes_no <- function(value) {
   ifelse(value, "pass", "FAIL")
 }
@@ -887,17 +913,32 @@ run_gold_evaluation <- function(models,
   )
   gold <- jsonlite::fromJSON(gold_path, simplifyVector = FALSE)
   dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+  # A model already scored on these medicines (and not pending) is read back,
+  # never asked again: a rerun after an interruption must not pay twice.
+  saved <- purrr::map(models, function(model) {
+    read_saved_gold_result(model, medicines, output_directory)
+  })
+  names(saved) <- models
   batch_ids <- purrr::map(models, function(model) {
+    if (!is.null(saved[[model]])) {
+      return(NULL)
+    }
     gold_submit_batch(model, medicines, output_directory, batch_api$create)
   })
-  results <- purrr::map2(models, batch_ids, function(model, batch_id) {
-    gold_collect_model(
-      model, batch_id, medicines, gold, output_directory, batch_api,
+  names(batch_ids) <- models
+  results <- list()
+  for (model in models) {
+    result <- saved[[model]] %||% gold_collect_model(
+      model, batch_ids[[model]], medicines, gold, output_directory, batch_api,
       poll_seconds
     )
-  })
-  names(results) <- models
-  results <- purrr::compact(results)
+    if (is.null(result)) next
+    results[[model]] <- result
+    # The report so far, so a model still waiting (a batch can take hours)
+    # does not hold back the others' results.
+    report <- write_gold_report(results, output_directory, today)
+    cli::cli_inform(paste0("Report: ", report))
+  }
   unfinished <- setdiff(models, names(results))
   if (length(unfinished) > 0) {
     cli::cli_inform(c(
@@ -905,10 +946,6 @@ run_gold_evaluation <- function(models,
       i = "Run the evaluation again: it collects the saved batch, without
       submitting a new one."
     ))
-  }
-  if (length(results) > 0) {
-    report <- write_gold_report(results, output_directory, today)
-    cli::cli_inform(paste0("Report: ", report))
   }
   invisible(results)
 }

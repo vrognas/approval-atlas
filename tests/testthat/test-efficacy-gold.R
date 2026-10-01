@@ -649,6 +649,71 @@ test_that("a rerun collects the pending batch instead of paying again", {
   expect_false(file.exists(pending_path))
 })
 
+test_that("a rerun reads a model's saved result instead of paying again", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(fake_message("Alecensa")))
+  first <- run_gold(inputs, fake_batch_api(answer))
+  report_path <- file.path(inputs$output_directory, "gold-eval-report.md")
+  report <- readLines(report_path)
+  unlink(report_path)
+  second_api <- fake_batch_api(answer)
+  expect_message(
+    second <- run_gold(inputs, second_api),
+    "saved result of claude-sonnet-5-5"
+  )
+  expect_equal(second_api$calls$created, 0L)
+  expect_length(second_api$calls$collected, 0)
+  saved <- second[["claude-sonnet-5-5"]]
+  original <- first[["claude-sonnet-5-5"]]
+  expect_equal(saved$rows_kept, original$rows_kept)
+  expect_equal(saved$score$numeric_errors, original$score$numeric_errors)
+  expect_equal(saved$score$pitfalls, original$score$pitfalls)
+  expect_equal(saved$calls$status, original$calls$status)
+  # The same report from the saved result as from the run that made it.
+  expect_equal(readLines(report_path), report)
+})
+
+test_that("a saved result of other medicines is not reused", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(fake_message("Alecensa")))
+  run_gold(inputs, fake_batch_api(answer))
+  path <- file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  saved <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  saved$calls[[1]]$medicine <- "Other"
+  jsonlite::write_json(saved, path, auto_unbox = TRUE, null = "null")
+  api <- fake_batch_api(answer)
+  run_gold(inputs, api)
+  expect_equal(api$calls$created, 1L)
+})
+
+test_that("the report is written for the models collected so far", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(fake_message("Alecensa")))
+  api <- fake_batch_api(answer)
+  # The second model's batch cannot be read: its pending file stays, and the
+  # first model's report is written anyway.
+  results_of <- api$results
+  api$results <- function(results_url) {
+    if (length(api$calls$collected) >= 1) stop("connection reset")
+    results_of(results_url)
+  }
+  expect_warning(
+    results <- run_gold(
+      inputs, api, models = c("claude-sonnet-5-5", "claude-opus-5-5")
+    ),
+    "connection reset"
+  )
+  expect_named(results, "claude-sonnet-5-5")
+  report <- readLines(file.path(inputs$output_directory, "gold-eval-report.md"))
+  expect_true(any(grepl("claude-sonnet-5-5", report, fixed = TRUE)))
+  expect_true(file.exists(file.path(
+    inputs$output_directory, "gold-pending-claude-opus-5-5.json"
+  )))
+})
+
 test_that("a pending batch for other medicines is not reused silently", {
   directory <- withr::local_tempdir()
   inputs <- gold_run_inputs(directory)
