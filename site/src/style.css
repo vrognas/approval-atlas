@@ -7133,6 +7133,14 @@ mark {
     margin-block: min(0px, (1lh - 24px) / 2);
   }
 
+  /* "List them" (design sweep 2026-10-01, L1: 24px, beside 44px controls): 44px tall, the negative
+     margin keeping its line, so it reaches only into the line's own text above and the 12px before
+     the list it shows. */
+  .pc-orphan-toggle {
+    min-height: 44px;
+    margin-block: -10px;
+  }
+
   /* The company page's protection list (bug hunt 2026-10-01: its medicine links were 21px tall, a
      year's links side by side 8px apart): each link 44px tall, so each line of the list is 44px,
      its years and commas centred on it. And the links of a never-authorized medicine's Documents
@@ -7162,6 +7170,33 @@ mark {
   .block-indication .indication > p,
   .block-indication .indication + .block-facts {
     margin-top: 12px;
+  }
+
+  /* "Limits of the estimate" (design sweep 2026-10-01, L1: 24px beside 44px siblings): 44px tall.
+     Its padding takes no room from the "Patents" line above, whose link it would cover, so the
+     section grows 10px; below it the section's padding (closed) or the open list's top. */
+  .protection > details > summary {
+    padding-block: 10px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+    margin-bottom: -10px;
+    margin-bottom: min(0px, (1lh - 44px) / 2);
+  }
+
+  .protection > details[open] > summary {
+    margin-bottom: 0;
+  }
+
+  .protection > details > ul {
+    margin-top: 0;
+  }
+
+  /* The documents list's "Assessment reports on changes after authorization (n)" (L1): 44px tall on
+     one line (24px before; 48px on two). Its negative margins only take the list items' 4px
+     margins, so it reaches neither the link above nor the one below. */
+  .doc-list > li > details > summary {
+    padding-block: 10px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+    margin-block: -4px;
   }
 
   /* Branch chips: the button's transparent rim around its fill makes the hit area 44px tall (the

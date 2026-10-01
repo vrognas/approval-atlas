@@ -77,6 +77,17 @@ test("phones: Show full indication, a Documents block's links and the company pr
   assert.match(declarations(phones, ":is(.pc-company-list, .block-documents .doc-list) a"), /display: inline-block;.*padding-block: max\(0px, \(44px - 1lh\) \/ 2\)/);
 });
 
+test("phones: Limits of the estimate, the documents sublist and List them are 44px (design sweep L1)", () => {
+  // Each sat at 24px beside 44px siblings.
+  assert.match(declarations(phones, ".protection > details > summary"), /padding-block: max\(0px, \(44px - 1lh\) \/ 2\);.*margin-bottom: min\(0px, \(1lh - 44px\) \/ 2\)/);
+  // Its padding never reaches over the line above (the Patents line's link): no negative top margin.
+  assert.doesNotMatch(declarations(phones, ".protection > details > summary"), /margin-(top|block):/);
+  assert.match(declarations(phones, ".doc-list > li > details > summary"), /padding-block: max\(0px, \(44px - 1lh\) \/ 2\);.*margin-block: -4px/);
+  // -4px only takes the list items' own margins.
+  assert.match(declarations(flat(css), ".doc-list > li"), /margin: 4px 0/);
+  assert.match(declarations(phones, ".pc-orphan-toggle"), /min-height: 44px;.*margin-block: -10px/);
+});
+
 test("phones: the activity table's company column is narrow, its name under the badge", () => {
   assert.match(declarations(phones, '.activity th[scope="row"]'), /width: 7\.5rem;.*max-width: 7\.5rem/);
   assert.match(declarations(phones, '.activity th[scope="row"] button'), /grid-template-areas: "badge total" "name name"/);
