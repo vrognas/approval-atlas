@@ -746,6 +746,7 @@ button {
 }
 
 .page-dek {
+  max-width: 72ch;
   margin: 0;
   color: var(--muted);
   font-size: 0.875rem;
@@ -2631,6 +2632,7 @@ input::placeholder {
 }
 
 .card-takeaway {
+  max-width: 70ch;
   margin: 4px 0 8px;
   color: var(--ink);
   font-size: 0.9375rem;
@@ -2654,6 +2656,14 @@ input::placeholder {
 
 .card-info .muted {
   margin: 4px 0;
+}
+
+/* Prose at most about 70 characters wide (design sweep 2026-10-01, A3: the (i) panels' notes ran
+   175-185 characters a line at 1440; the takeaways, captions, notes, About and the footer too). */
+.card-info p,
+#register-note,
+#undated-authorized {
+  max-width: 70ch;
 }
 
 /* The per-year legend's heading, stacked by status (owner call 2026-09-30: "Status today"). */
@@ -3746,6 +3756,7 @@ table.conditions-table {
 /* The table's caption, above the scroll area so a wide table cannot cut it off. Head, caption,
    "Show next" and the rows on the other cards' text edge (--card-pad; A1). */
 .table-caption {
+  max-width: 70ch;
   margin: 0 var(--card-pad) 12px;
   color: var(--ink-secondary);
   font-size: 0.875rem;
@@ -5361,10 +5372,13 @@ table.activity {
   stroke-linejoin: round;
 }
 
-/* One quiet line under the cards: scope and intended use. */
+/* One quiet line under the cards: scope and intended use; its text at most 70ch wide (design sweep
+   2026-10-01, A3: 178 characters a line at 1440) while its hairline spans the card, so the cap is a
+   right padding (a percentage of the card's width) rather than a max-width. */
 .intro-scope {
   margin: 10px 0 0;
   padding-top: 7px;
+  padding-right: max(0px, 100% - 70ch);
   border-top: 1px solid var(--grid);
   color: var(--muted);
   font-size: 0.75rem;
@@ -6490,6 +6504,7 @@ details > summary {
 }
 
 .snippet {
+  max-width: 70ch;
   color: var(--ink-secondary);
   font-size: 0.875rem;
 }
@@ -6693,6 +6708,7 @@ mark {
 }
 
 .timeline-caption {
+  max-width: 70ch;
   margin: 0 0 8px;
   font-size: 0.8125rem;
 }
@@ -7072,11 +7088,18 @@ footer {
 }
 
 footer p {
+  max-width: 70ch;
   margin: 4px 0;
 }
 
 .about {
   margin-bottom: 12px;
+}
+
+/* Prose at most about 70 characters wide (design sweep 2026-10-01, A3: 150-200 at 1440). */
+.about-part,
+.about-sources {
+  max-width: 70ch;
 }
 
 .about > summary {
