@@ -2742,7 +2742,8 @@ input::placeholder {
 
 /* Von Restorff (phase 3): strong colour for status and protection only. In the cards where they are
    decoration (the code already names the class), ATC badges are the neutral slate (their level
-   shades kept: they tell the levels apart); type badges keep their hues, which are the charts' type
+   shades kept: they tell the levels apart; the lookups' result tables and the company page's ATC
+   groups too, design sweep 2026-10-01, B1); type badges keep their hues, which are the charts' type
    colours. Company monograms keep their group's brand or hashed colour everywhere (owner decision
    2026-09-30: "brand colors"). slate-text on slate-1..5 is a checked pair (palette.test.js). */
 .neutral-badges :is(.letter-badge, .code-badge, .atc-badge) {

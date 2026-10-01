@@ -1092,7 +1092,9 @@ export function createLookup(panel, {
             el("p", { class: "snippet" }, snippet.before, el("mark", null, snippet.match), snippet.after)))
           : null);
     });
-    return el("div", { class: areas ? "result-table with-areas" : "result-table" }, el("table", { role: "table", "aria-labelledby": labelledBy },
+    // ATC badges in the neutral slate, as in the medicines table: the code names the class (design
+    // sweep 2026-10-01, B1; style.css .neutral-badges).
+    return el("div", { class: areas ? "result-table with-areas neutral-badges" : "result-table neutral-badges" }, el("table", { role: "table", "aria-labelledby": labelledBy },
       el("thead", { role: "rowgroup" }, el("tr", { role: "row" }, headers.map((header) => el("th", { scope: "col", role: "columnheader" }, header)))),
       bodies));
   }
@@ -1437,7 +1439,8 @@ export function createLookup(panel, {
       atcMix = rows.length ? el("section", { class: "card-section" },
         el("h2", null, UI.companies.atc),
         el("p", { class: "muted" }, UI.companies.atcHint),
-        el("ol", { class: "condition-list company-mix" }, rows.map(([code, count]) => mixRow(
+        // Slate letters, as the breakdown's and the Companies tab's (B1).
+        el("ol", { class: "condition-list company-mix neutral-badges" }, rows.map(([code, count]) => mixRow(
           internalLink([el("span", { class: `letter-badge hue-${atcHue(code)}` }, code), " ", el("span", null, atcName(atc.names.get(code)))],
             filtered(companies.canonical(key), { atc: [code], tab: "classes" }), "mix-link", UI.companies.mixLink(atcClassLabel(code, atc.names.get(code)), count)),
           count, rows[0][1])))) : null;
