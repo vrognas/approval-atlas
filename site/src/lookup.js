@@ -277,7 +277,18 @@ export function createLookup(panel, {
     for (const listener of listeners) listener(name);
     if (lastState) render(lastState, true);
   });
-  const { need } = datasets;
+  // The datasets the view shown asked for (render(), and its own controls since), so main.js can
+  // wait for them before restoring a place in it (loading()); asking: those of the render running.
+  let asked = new Set();
+  let asking = null;
+  const need = (name) => {
+    (asking ?? asked).add(name);
+    return datasets.need(name);
+  };
+  // The disclosure keys the render running opens (details[data-key]), and those Back, Forward or a
+  // reload reopen in the view shown that are not in it yet (render()).
+  let opening = new Set();
+  let reopening = new Set();
   const ready = (value) => value !== undefined && value !== FAILED;
 
   // Document rows by product for the buttons and the PI / EPAR links: the primary-documents file,
@@ -879,10 +890,11 @@ export function createLookup(panel, {
     // The buttons come from the primary-documents file (quickDocumentRows()); the documents list
     // needs the full index (need("documents")): at once where that file cannot give the buttons (a
     // later namesake's documents to leave out) or gives none (the list is the Documents block),
-    // else when More details opens or the page is idle (main.js). Once loaded, all comes from it.
+    // else when More details opens (this render reopening it too) or the page is idle (main.js).
+    // Once loaded, all comes from it.
     const quick = later ? null : quickDocumentRows();
     const quickPrimary = quick && ready(quick) ? primaryDocuments(groupDocuments(quick.get(number) ?? []), row.medicine_status).primary : null;
-    const documents = quick !== undefined && !quickPrimary?.length ? need("documents") : datasets.peek("documents");
+    const documents = (quick !== undefined && !quickPrimary?.length) || opening.has("more-details") ? need("documents") : datasets.peek("documents");
     const split = ready(documents) ? splitNamesakeDocuments(documents.get(number) ?? [], later?.marketing_authorisation_date ?? null) : null;
     const groups = split ? groupDocuments(split.own) : [];
     const full = primaryDocuments(groups, row.medicine_status);
@@ -1515,8 +1527,10 @@ export function createLookup(panel, {
 
   // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle
   // changed (the URL's show=all: a new search, condition or company page starts at Authorized only;
-  // Back from a medicine card opened from it keeps the choice).
-  function render(state, force = false) {
+  // Back from a medicine card opened from it keeps the choice). reopen: the disclosure keys
+  // (details[data-key]) a view made anew opens, as Back, Forward or a reload left them (main.js,
+  // history-scroll.js: the card is as tall as when its place was kept).
+  function render(state, force = false, reopen = null) {
     lastState = state;
     const view = lookupView(state);
     const key = JSON.stringify(view);
@@ -1528,19 +1542,24 @@ export function createLookup(panel, {
     // A new view retries data that failed to load, and, once, an optional file that was missing,
     // each when a card or list next needs it (not forced re-renders: that would loop).
     if (!force && !sameView) datasets.retry();
-    // Same view re-rendered: keep open disclosures and the focused control.
-    const open = new Set(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []);
+    // Same view re-rendered: keep open disclosures and the focused control. Another: those to reopen,
+    // each once it is in the card (a reload's card can get it only once its data has loaded).
+    if (!sameView) reopening = new Set(reopen ?? []);
+    const open = new Set([...(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []), ...reopening]);
     const focusKey = sameView && panel.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
     if (!sameView) pendingJump = null;
     timeline = null;
     resizeObserver.disconnect();
     panel.hidden = view.kind === null;
+    asked = new Set();
     if (view.kind === null) {
       panel.replaceChildren();
       return;
     }
     // Data the card cannot handle is logged and the card says so, instead of staying on "Loading…".
     let content;
+    asking = new Set();
+    opening = open;
     try {
       content = view.kind === "medicine" ? medicineCard(view.value)
         : view.kind === "substance" ? substanceCard(view.value)
@@ -1551,8 +1570,15 @@ export function createLookup(panel, {
       timeline = null;
       content = el("article", { class: "card" }, kicker(view.kind), el("p", { class: "muted" }, UI.lookup.notAvailable));
     }
+    asked = asking;
+    asking = null;
+    opening = new Set();
     panel.replaceChildren(content);
-    for (const details of panel.querySelectorAll("details[data-key]")) if (open.has(details.dataset.key)) details.open = true;
+    for (const details of panel.querySelectorAll("details[data-key]")) {
+      if (!open.has(details.dataset.key)) continue;
+      details.open = true;
+      reopening.delete(details.dataset.key);
+    }
     if (timeline) {
       drawTimeline();
       resizeObserver.observe(timeline.container);
@@ -1580,7 +1606,11 @@ export function createLookup(panel, {
 
   return {
     render,
-    need,
+    // The page's own loads (main.js: the dashboard's, when idle) are not the view's (loading()).
+    need: datasets.need,
+    // Whether a dataset the view shown asked for is still loading (main.js waits before restoring a
+    // place in it).
+    loading: () => [...asked].some((name) => datasets.peek(name) === undefined),
     title: viewTitle,
     conditions: () => (ready(datasets.peek("conditions")) ? datasets.peek("conditions") : null),
     // Company groups (the "Companies" suggestions): null until need("companies") has loaded them.

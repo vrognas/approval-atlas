@@ -56,7 +56,7 @@ import {
 } from "./facets.js";
 import { renderFilterChips, renderFilterSummary } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
-import { createHistoryScroll, restoreStep } from "./history-scroll.js";
+import { createHistoryScroll, placeAt, restoreStep } from "./history-scroll.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
 import { SOURCES, UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
@@ -253,7 +253,8 @@ let lookup = null;
 let filtersOpen = () => false;
 // Closes an open filter popover or sheet without handing focus back to its chip (set once the
 // dashboard exists): Back or Forward shows another view, which the open filters would edit unseen.
-let closeFiltersNow = () => {};
+// True when one was open.
+let closeFiltersNow = () => false;
 let frame = 0;
 const urlNote = $("#url-note");
 // Filter edits (not the first render, the breakdown's mode, the tab or lookups) announce the new
@@ -274,35 +275,87 @@ const keepInPlace = (element) => {
 // the view was left, once it has rendered (a reload too, once the dashboard has). Until then scroll
 // anchoring is off (html.restoring-scroll), as it would move the page by the height of a card put
 // back above (lookup.md #1); a wheel, touch, key or pointer press ends a restore still waiting, so
-// the page never jumps under the user.
-const historyScroll = createHistoryScroll(window);
-setHistoryWriter(historyScroll);
+// the page never jumps under the user. A place is kept by the part at the middle of the screen (the
+// result or the overview), with the result's open disclosures, which the card made anew reopens
+// (lookup.js render(): More details, the full indication).
+const TOP = placeAt(0, 0, { result: null, overview: null });
+// The place a Back, Forward or reload goes to once rendered (restoreScroll()), else null.
 let pendingScroll = null;
+// The parts a place is kept by: the lookup result and the overview (#app), by their document tops.
+function pageMarks() {
+  const documentTop = (element) => element.getBoundingClientRect().top + window.scrollY;
+  const result = $("#result");
+  const app = $("#app");
+  return {
+    result: result.hidden ? null : { top: documentTop(result), height: result.offsetHeight },
+    overview: app.hidden ? null : documentTop(app),
+  };
+}
+// While a restore waits, the place it goes to (a second Back, a reload before it).
+function pagePlace() {
+  if (pendingScroll !== null) return pendingScroll;
+  const result = $("#result");
+  const open = result.hidden ? [] : [...result.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key);
+  return placeAt(window.scrollY, window.innerHeight, pageMarks(), open);
+}
+const historyScroll = createHistoryScroll(window, pagePlace);
+setHistoryWriter(historyScroll);
+// The disclosures the next render's lookup card reopens (Back, Forward, a reload), then null.
+let reopenKeys = historyScroll.initial?.open ?? null;
+// Back or Forward closed a filter popover or sheet, whose chip took focus back: settled after the
+// restore (settleFocus()).
+let refocus = false;
 function stopRestoring() {
   pendingScroll = null;
+  refocus = false;
   document.documentElement.classList.remove("restoring-scroll");
 }
-function startRestoring(y) {
-  pendingScroll = y;
+function startRestoring(place) {
+  pendingScroll = place;
   document.documentElement.classList.add("restoring-scroll");
 }
-// After a render: final once the dashboard is there (the page's height then holds, short of later
-// data: the page's end will do).
+// The chip a closed sheet gave focus back to can be out of view in the view shown (the restored card
+// at the top, the chip below it), and a closed popover leaves focus on the page: focus goes to the
+// view's heading when in view, else to the page (dashboard.md #2 review).
+function settleFocus() {
+  const inView = (element) => {
+    const box = element.getBoundingClientRect();
+    return box.bottom > 0 && box.top < window.innerHeight;
+  };
+  const active = document.activeElement;
+  if (active && active !== document.body && inView(active)) return;
+  const heading = lookupView(state).kind !== null ? $("#result").querySelector("h1") : $("#headline");
+  if (heading && inView(heading)) heading.focus({ preventScroll: true });
+  else active?.blur();
+}
+// After a render (the lookup's own too, as its data arrives): final once the dashboard is there and
+// the lookup view's data has loaded (the page's height then holds, short of later data: the page's
+// end will do).
 function restoreScroll() {
   if (pendingScroll === null) return;
-  const step = restoreStep(pendingScroll, document.documentElement.scrollHeight - window.innerHeight, dashboard !== null);
+  const step = restoreStep(pendingScroll, pageMarks(), {
+    maxScroll: document.documentElement.scrollHeight - window.innerHeight,
+    viewportHeight: window.innerHeight,
+    final: dashboard !== null && !lookup?.loading(),
+  });
   if (!step) return;
+  const settle = refocus;
   window.scrollTo(0, step.y);
   stopRestoring();
+  if (settle) settleFocus();
 }
 if (historyScroll.initial !== null) startRestoring(historyScroll.initial);
-// A second after the page stops scrolling, the entry notes where it is (for a reload; at most one
-// history write a second).
+// A second after the page stops scrolling, the entry notes where it is; and the tab, when the page
+// is left or hidden (a reload within that second; at most one history write a second).
 let scrollSaveTimer = 0;
 window.addEventListener("scroll", () => {
   clearTimeout(scrollSaveTimer);
   scrollSaveTimer = setTimeout(historyScroll.save, 1000);
 }, { passive: true });
+window.addEventListener("pagehide", historyScroll.leave);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") historyScroll.leave();
+});
 for (const type of ["wheel", "touchstart", "keydown", "pointerdown"]) {
   window.addEventListener(type, () => {
     if (pendingScroll !== null) stopRestoring();
@@ -338,7 +391,8 @@ function updateTitle() {
 
 function render() {
   placeTopbar();
-  lookup.render(state);
+  lookup.render(state, false, reopenKeys);
+  reopenKeys = null;
   const lookupOpen = lookupView(state).kind !== null;
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
   // Below a lookup result, the dashboard is the overview of every medicine: its heading says so and
@@ -1009,6 +1063,8 @@ function startLookup([meta, searchRows, entryTermRows]) {
   lookup.onData((name) => {
     if (["conditions", "atc", "atcCounts", "companies", "medicines"].includes(name)) searchBox.refresh();
     if (name === "conditions" || name === "companies") updateTitle();
+    // A restore waiting for the card's data: once the lookup has rendered it (after the listeners).
+    queueMicrotask(restoreScroll);
   });
   // The wordmark opens the overview: every lookup and filter cleared, one history entry.
   $("#home-link").addEventListener("click", (event) => {
@@ -1025,10 +1081,22 @@ function startLookup([meta, searchRows, entryTermRows]) {
   searchBox.setText(state.q);
   scheduleUrlWrite(state, false, pendingFilters);
   // Back or Forward: open filters close (dashboard.md #2), and the view returns to where it was left
-  // (the top when unknown) once rendered.
+  // (the top when unknown) once rendered, its card's disclosures open as they were. A fragment
+  // navigation (Chrome fires popstate for location.hash and #links), or Back and Forward over one,
+  // shows the same view: nothing to close or render, the entry's place when known (the browser
+  // scrolls to a new fragment itself).
   window.addEventListener("popstate", (event) => {
-    closeFiltersNow();
-    startRestoring(historyScroll.popped(event.state) ?? 0);
+    const { place, hashOnly } = historyScroll.popped(event.state);
+    if (hashOnly) {
+      if (place) {
+        startRestoring(place);
+        restoreScroll();
+      }
+      return;
+    }
+    refocus = closeFiltersNow();
+    reopenKeys = place?.open ?? [];
+    startRestoring(place ?? TOP);
     applyUrl();
     searchBox.setText(state.q);
     scheduleRender();
@@ -1243,7 +1311,11 @@ function startDashboard(meta, [
     popover.close({ restoreFocus: false });
     sheet.close({ restoreFocus: false });
   };
-  closeFiltersNow = closeFilters;
+  closeFiltersNow = () => {
+    const open = popover.isOpen() || sheet.isOpen();
+    closeFilters();
+    return open;
+  };
   DESKTOP.addEventListener("change", () => {
     // A chip opens a popover from 1024px, a sheet below: the other one closes.
     if (DESKTOP.matches) sheet.close();
