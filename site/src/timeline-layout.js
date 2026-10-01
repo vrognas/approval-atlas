@@ -31,6 +31,17 @@ export function layoutLanes(items, step) {
   }).filter((lane) => lane.dots.length > 0);
 }
 
+// What a click on the chart, or a tap on the pinned tip where it lies over the chart (bug hunt
+// 2026-10-01: it covered the dots under it), does: dot is the one near the point (null: none),
+// pinned the dot whose tip is pinned, hovered the one a mouse's hover shows. "pin": the hovered
+// dot's tip stays where it is, so the pointer can reach its link; "show": that dot's tip, pinned at
+// it; "hide": the tip closes (the pinned dot again, or no dot near).
+export function dotClick(dot, pinned, hovered) {
+  if (dot && dot === hovered) return "pin";
+  if (dot && dot !== pinned) return "show";
+  return "hide";
+}
+
 // Dots sharing a family key (substance_set_key), two or more, each family in x order.
 export function families(dots) {
   const groups = new Map();

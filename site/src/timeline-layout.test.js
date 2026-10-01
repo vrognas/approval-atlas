@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dodge, families, layoutLanes } from "./timeline-layout.js";
+import { dodge, dotClick, families, layoutLanes } from "./timeline-layout.js";
 
 test("dodge stacks dots that would overlap, alternating around the lane center", () => {
   assert.deepEqual(dodge([100, 100, 100, 100], 10), [0, 1, -1, 2]);
@@ -49,4 +49,27 @@ test("families join two or more dots with the same key, in x order", () => {
     { id: "none", x: 20, family: null },
   ];
   assert.deepEqual(families(dots).map((family) => family.map((dot) => dot.id)), [["ref", "bio1", "bio2"]]);
+});
+
+test("dotClick: a click on the hovered dot pins its tip, another dot shows its own, else it closes", () => {
+  const trudexa = { id: "trudexa" };
+  const amgevita = { id: "amgevita" };
+  // A mouse's hover shows Trudexa: its click pins that tip where it is.
+  assert.equal(dotClick(trudexa, null, trudexa), "pin");
+  // A tap on a dot (no hover on touch), or a dot other than the pinned one: its tip, pinned.
+  assert.equal(dotClick(trudexa, null, null), "show");
+  assert.equal(dotClick(amgevita, trudexa, null), "show");
+  // The pinned dot again, or no dot near: closed.
+  assert.equal(dotClick(trudexa, trudexa, null), "hide");
+  assert.equal(dotClick(null, trudexa, null), "hide");
+  assert.equal(dotClick(null, null, null), "hide");
+});
+
+// Bug hunt 2026-10-01 (lookup #4): a tap on the pinned tip, not its link, where a dot lies under it
+// reaches that dot (the tip covered it); elsewhere on the tip it closes it.
+test("dotClick: a tap on the pinned tip acts on the dot under it", () => {
+  const trudexa = { id: "trudexa" };
+  const amgevita = { id: "amgevita" };
+  assert.equal(dotClick(amgevita, trudexa, null), "show");
+  assert.equal(dotClick(null, trudexa, null), "hide");
 });
