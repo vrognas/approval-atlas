@@ -15,6 +15,7 @@ import {
   toggleCompany,
 } from "./companies.js";
 import { HOLDER_NAME_FIXES, holderName } from "./labels.js";
+import { decodeState } from "./url.js";
 
 // Companies part 2 (user decisions 2026-09-28): group › company › EMA holder name, the medicine's
 // EMA holder name always kept. Rows shaped as companies.json and ema_medicine_companies.json.
@@ -589,5 +590,22 @@ test(
     const holders = new Set(medicines.map((row) => row.holder_ema));
     assert.deepEqual([...HOLDER_NAME_FIXES.keys()].filter((name) => !holders.has(name)), []);
     assert.deepEqual(real.values().filter((value) => HOLDER_NAME_FIXES.has(value)), []);
+    // A link from before the fix, filtering by such a name as EMA spells it, selects exactly the
+    // medicines EMA gives that holder (C8 review: it was ignored), as the page's domain reads it.
+    const domain = {
+      mahs: new Set([...products.map((product) => product.mah), ...real.values()]),
+      mahAncestors: real.ancestors,
+      mahCanonical: real.canonical,
+      areas: new Set(),
+      types: new Set(),
+      statuses: new Set(),
+      years: [1995, 2026],
+    };
+    for (const bad of HOLDER_NAME_FIXES.keys()) {
+      const { state, dropped } = decodeState(new URLSearchParams({ mah: bad }), domain);
+      assert.deepEqual(dropped, []);
+      const selected = [...new Set(state.mah.flatMap(matching).map((product) => product.ema_product_number))].sort();
+      assert.deepEqual(selected, medicines.filter((row) => row.holder_ema === bad).map((row) => row.ema_product_number).sort());
+    }
   },
 );

@@ -225,6 +225,22 @@ test("companies: older holder links still load, keys load as the tree selects th
   assert.equal(encodeState(load("mah=c.roche").state).toString(), "mah=g.roche");
 });
 
+// Design sweep C8 review: a link from before the fix, filtering by Primavax's holder as EMA's file
+// spells it ("Pasteur Mà¨rieux MSD"), was ignored once the site showed the name fixed.
+test("companies: an older link with a holder name EMA spells with a broken encoding selects the fixed row", () => {
+  const companies = {
+    ...domain,
+    mahs: new Set([...domain.mahs, "g.pasteur-merieux-msd", "Pasteur Mérieux MSD"]),
+    mahCanonical: (value) => (value === "Pasteur Mérieux MSD" ? ["g.pasteur-merieux-msd"] : [value]),
+  };
+  const load = (search) => decodeState(new URLSearchParams(search), companies);
+  for (const search of ["mah=Pasteur%20M%C3%A0%C2%A8rieux%20MSD", "mah=Pasteur+M%C3%A9rieux+MSD"]) {
+    assert.deepEqual(load(search), { state: { ...structuredClone(DEFAULT_STATE), mah: ["g.pasteur-merieux-msd"] }, dropped: [] }, search);
+  }
+  // A value not in the data is reported as the link spells it.
+  assert.deepEqual(load("mah=Nobody%20M%C3%A0%C2%A8rieux").dropped, [{ key: "mah", value: "Nobody Mà¨rieux" }]);
+});
+
 // Modality (M2 phase 2): group and modality keys in one list, combined with OR; a modality under a
 // selected group is dropped (as toggleModality()); unknown values are dropped and reported.
 test("modalities: repeated keys, a modality under a selected group dropped, unknown values reported", () => {

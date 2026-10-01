@@ -1,5 +1,6 @@
 // Filter and lookup state <-> URL query string. Encode/decode are pure; the writer touches history.
 import { splitAtcValues } from "./filters.js";
+import { holderName } from "./labels.js";
 
 export const BREAKDOWNS = ["atc", "area", "mah", "mod"];
 // F · Spacious, phase 2: the dashboard's tabs, in their order (Serial Position / Pareto: Protection
@@ -159,13 +160,16 @@ export function decodeState(params, domain) {
 
   // Companies (companies part 2): group and company keys, and EMA holder names from older links; a
   // value a row stands for loads as that row's (a company shown as its group), and a value within
-  // another selected one is dropped, as toggleCompany().
+  // another selected one is dropped, as toggleCompany(). A holder name as EMA's file spells it with a
+  // broken encoding (links from before the site showed it fixed: design sweep C8 review) loads as
+  // the name shown (labels.js holderName()).
   const mahAbove = domain.mahAncestors ?? (() => new Set());
   const mahCanonical = domain.mahCanonical ?? ((value) => [value]);
   const mahs = [];
-  for (const value of sortedDistinct(params.getAll("mah"))) {
+  for (const raw of sortedDistinct(params.getAll("mah"))) {
+    const value = holderName(raw);
     if (domain.mahs.has(value)) mahs.push(...mahCanonical(value));
-    else dropped.push({ key: "mah", value });
+    else dropped.push({ key: "mah", value: raw });
   }
   state.mah = sortedDistinct(mahs).filter((value) => !mahs.some((other) => mahAbove(value).has(other)));
 
