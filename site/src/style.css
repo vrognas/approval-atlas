@@ -5870,11 +5870,17 @@ table.activity {
   margin-top: 12px;
 }
 
-.block-facts dt {
-  margin: 0 0 2px;
+/* A fact's label: one style in the blocks and in More details (design sweep 2026-10-01, B10: the
+   same "Company" and "Therapeutic areas" were 13px/500 in the blocks, 14px/600 in More details). */
+.block-facts dt,
+.facts dt {
   color: var(--ink-secondary);
   font-size: 0.8125rem;
   font-weight: 500;
+}
+
+.block-facts dt {
+  margin: 0 0 2px;
 }
 
 .block-facts dd {
@@ -6228,16 +6234,12 @@ table.activity {
   cursor: help;
 }
 
+/* Label and value on one baseline (the 13px label beside a 16px value). */
 .facts {
   display: grid;
   grid-template-columns: max-content 1fr;
+  align-items: baseline;
   gap: 8px 16px;
-}
-
-.facts dt {
-  color: var(--ink-secondary);
-  font-size: 0.875rem;
-  font-weight: 600;
 }
 
 .facts dd {
