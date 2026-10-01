@@ -6735,8 +6735,15 @@ mark {
   }
 
   :is(.term a:not(.area-chip), .areas-more),
-  :is(#medicines-table, .result-table) :is(a:not(.area-chip), .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more)) {
+  :is(#medicines-table, .result-table) :is(a:not(.area-chip), .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more, .result-table .type-cell .badge)) {
     position: relative;
+    z-index: 1;
+  }
+
+  /* The result tables' type badges stay static, so their Type cell holds the tip (it spans the
+     stacked row: 16rem, not the badge's 76px, bug hunt 2026-10-01); raised as flex items (.badges)
+     instead, to 5 while their tip shows (below). */
+  .result-table td.type-cell .badge[data-tip] {
     z-index: 1;
   }
 
