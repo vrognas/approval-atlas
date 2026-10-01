@@ -1657,11 +1657,33 @@ test("an indication's lead: the whole text when short, else its first sentence, 
   assert.ok(long.startsWith(lead.slice(0, -1)), lead);
   assert.ok(!lead.slice(0, -1).endsWith(" "), lead);
   assert.equal(labels.UI.card.fullIndication, "Show full indication");
+  // Design sweep 2026-10-01 (C6): a text that only refers to the product information (Humira's;
+  // Cyltezo's and Solymbic's) is said in the site's voice; a text that refers to it besides saying
+  // what the medicine is for is EMA's, as written.
+  const referral = { lead: labels.UI.card.referralIndication, more: false, referral: true };
+  assert.deepEqual(indicationLead("Please refer to the product information document."), referral);
+  assert.deepEqual(indicationLead("Please refer to section 4.1 of the Summary of product characteristics in the product information document."), referral);
+  assert.deepEqual(indicationLead(" please refer to the Product Information "), referral);
+  const wounds = "Treatment of partial thickness wounds in adults. See sections 4.4 and 5.1 in Product Information with respect to type of wounds studied.";
+  assert.deepEqual(indicationLead(wounds), { lead: wounds, more: false });
+  assert.match(labels.UI.card.referralIndication, /product information above/);
   // F · Spacious, phase 4: the Status block shows the first three conditions, the rest in More
   // details, opened by a button whose name ends in what it shows.
   assert.deepEqual(labels.UI.card.moreAreas(7), { text: "and 7 more", hidden: " therapeutic areas" });
   assert.deepEqual(labels.UI.card.moreAreas(1), { text: "and 1 more", hidden: " therapeutic area" });
 });
+
+const medicinesFile = new URL("../public/data/ema_medicines.json", import.meta.url);
+test(
+  "on the real data, only short referral texts read as referral-only indications (C6)",
+  { skip: existsSync(medicinesFile) ? false : "site/public/data/ema_medicines.json not found" },
+  () => {
+    const texts = JSON.parse(readFileSync(medicinesFile, "utf8")).map((row) => row.therapeutic_indication).filter(Boolean);
+    const referrals = texts.filter((text) => labels.indicationLead(text).referral);
+    assert.ok(referrals.length >= 1);
+    assert.deepEqual(referrals.filter((text) => text.length > 150 || !/^please refer/i.test(text)), []);
+  },
+);
 
 // Phase 4c review: the tab's title names the view (WCAG 2.4.2); the dashboard under a lookup result
 // has its own heading.

@@ -122,8 +122,13 @@ export function statusSentence(status, date, opinion, { decision = null, asOf = 
 
 // The start of an indication text for the medicine card's first screen: the whole text when short,
 // else its first sentence (a period, then a capital: "e.g. dysglycaemia" goes on), else its first
-// max characters cut at a word with "…". more: text was left out.
+// max characters cut at a word with "…". more: text was left out. A text that only refers to the
+// product information (design sweep 2026-10-01, C6: Humira's "Please refer to the product
+// information document.", Cyltezo's and Solymbic's "Please refer to section 4.1 of …") is said in
+// the site's voice instead (referral: true), the therapeutic areas under it saying what it is for.
+const REFERRAL_ONLY = /^please refer to\b.*\bproduct information( document)?\.?$/i;
 export function indicationLead(text, max = 200) {
+  if (REFERRAL_ONLY.test(text.trim())) return { lead: UI.card.referralIndication, more: false, referral: true };
   if (text.length <= max) return { lead: text, more: false };
   const end = text.search(/\.\s+(?=\p{Lu})/u);
   if (end >= 0 && end < max) return { lead: text.slice(0, end + 1), more: true };
@@ -1687,6 +1692,9 @@ export const UI = {
     atc: "Drug class (ATC)",
     areas: "Therapeutic areas",
     fullIndication: "Show full indication",
+    // EMA's indication field only refers to the product information (indicationLead(); design sweep
+    // 2026-10-01, C6: Humira, the intro card's example). The Documents block is above the Indication one.
+    referralIndication: "EMA's data gives no indication text here: it refers to the product information above.",
     // F · Spacious, phase 4: the Status block's first three conditions (with their branch chips since
     // 2026-09-30), then this button, which opens More details at the full list; hidden: the rest of
     // its name.

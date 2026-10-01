@@ -631,9 +631,10 @@ export function createLookup(panel, {
     const facts = areas ? el("dl", { class: "block-facts" }, blockFact(UI.card.areas, areas)) : null;
     if (!ready(medicines)) return cardBlock("indication", pending(medicines), teaser, facts);
     if (!text && !facts && !teaser) return null;
-    const { lead, more } = text ? indicationLead(text) : {};
+    // A text that only refers to the product information is said in the site's voice, muted (C6).
+    const { lead, more, referral } = text ? indicationLead(text) : {};
     return cardBlock("indication",
-      text ? el("p", { class: "indication-lead" }, lead) : null,
+      text ? el("p", { class: referral ? "indication-lead muted" : "indication-lead" }, lead) : null,
       more ? el("details", { class: "indication", "data-key": "indication" }, el("summary", null, UI.card.fullIndication), el("p", null, text)) : null,
       teaser,
       facts);
