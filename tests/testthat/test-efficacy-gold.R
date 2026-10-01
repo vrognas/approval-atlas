@@ -857,6 +857,7 @@ fake_batch_api <- function(results, calls = new.env()) {
   calls$requests <- list()
   calls$created <- 0L
   calls$collected <- character()
+  calls$polled <- character()
   list(
     calls = calls,
     create = function(requests) {
@@ -865,6 +866,7 @@ fake_batch_api <- function(results, calls = new.env()) {
       paste0("msgbatch_", calls$created)
     },
     status = function(batch_id) {
+      calls$polled <- c(calls$polled, batch_id)
       list(status = "ended", results_url = "https://api.anthropic.com/results")
     },
     results = function(results_url) {
@@ -920,15 +922,25 @@ gold_run_inputs <- function(directory) {
   )
 }
 
-run_gold <- function(inputs, api, models = "claude-sonnet-5-5") {
+run_gold <- function(inputs,
+                     api,
+                     models = "claude-sonnet-5-5",
+                     efforts = "high") {
   run_gold_evaluation(
     models = models,
     selection_path = inputs$selection_path,
     text_directory = inputs$text_directory,
     gold_path = inputs$gold_path,
     output_directory = inputs$output_directory,
+    efforts = efforts,
     medicines_path = inputs$medicines_path,
     batch_api = api
+  )
+}
+
+request_efforts <- function(api) {
+  purrr::map_chr(
+    api$calls$requests, \(requests) requests[[1]]$params$output_config$effort
   )
 }
 
@@ -1295,4 +1307,224 @@ test_that("an authentication failure creating the batch stops the run", {
     cli::cli_abort("no", class = "claude_api_http_401")
   }
   expect_error(run_gold(inputs, api), class = "claude_api_http_401")
+})
+
+test_that("each effort of a model is a variant with its own batch", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  api <- fake_batch_api(list(fake_result(fake_message("Alecensa"))))
+  out <- inputs$output_directory
+  seen <- new.env()
+  status <- api$status
+  api$status <- function(batch_id) {
+    pending <- file.path(out, "gold-pending-claude-sonnet-5-5-medium.json")
+    if (file.exists(pending)) {
+      seen$pending <- jsonlite::fromJSON(pending, simplifyVector = FALSE)
+    }
+    status(batch_id)
+  }
+  results <- run_gold(inputs, api, efforts = c("medium", "high"))
+  expect_equal(api$calls$created, 2L)
+  expect_equal(request_efforts(api), c("medium", "high"))
+  expect_equal(seen$pending$effort, "medium")
+  expect_equal(seen$pending$model, "claude-sonnet-5-5")
+  expect_named(results, c("claude-sonnet-5-5-medium", "claude-sonnet-5-5"))
+  expect_equal(results[["claude-sonnet-5-5-medium"]]$effort, "medium")
+  expect_equal(results[["claude-sonnet-5-5"]]$effort, "high")
+  medium <- file.path(out, "gold-eval-claude-sonnet-5-5-medium.json")
+  expect_equal(read_gold_result_file(medium)$effort, "medium")
+  # The high variant keeps the names of the runs before effort levels.
+  high <- file.path(out, "gold-eval-claude-sonnet-5-5.json")
+  expect_equal(read_gold_result_file(high)$effort, "high")
+  expect_length(list.files(out, pattern = "^gold-pending"), 0)
+  report <- readLines(file.path(out, "gold-eval-report.md"))
+  expect_true(any(grepl(
+    "| | claude-sonnet-5-5 (medium) | claude-sonnet-5-5 (high) |",
+    report,
+    fixed = TRUE
+  )))
+  expect_true(any(report == "### claude-sonnet-5-5 (medium)"))
+})
+
+test_that("models and efforts make every pair, model by model", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  api <- fake_batch_api(list(fake_result(fake_message("Alecensa"))))
+  results <- run_gold(
+    inputs, api,
+    models = c("claude-sonnet-5-5", "claude-opus-5-5"),
+    efforts = c("low", "high")
+  )
+  models <- purrr::map_chr(api$calls$requests, \(r) r[[1]]$params$model)
+  expect_equal(models, rep(c("claude-sonnet-5-5", "claude-opus-5-5"), each = 2))
+  expect_equal(request_efforts(api), rep(c("low", "high"), 2))
+  expect_named(results, c(
+    "claude-sonnet-5-5-low", "claude-sonnet-5-5",
+    "claude-opus-5-5-low", "claude-opus-5-5"
+  ))
+})
+
+test_that("a pending batch made before effort levels is collected as high", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  dir.create(inputs$output_directory)
+  # As the batches left pending on 2026-10-01: no effort recorded.
+  pending_path <- file.path(
+    inputs$output_directory, "gold-pending-claude-sonnet-5-5.json"
+  )
+  jsonlite::write_json(
+    list(
+      batch_id = "msgbatch_old", model = "claude-sonnet-5-5",
+      custom_ids = list("EMEA-H-C-004164"),
+      created = "2026-10-01T00:20:16+0200"
+    ),
+    pending_path,
+    auto_unbox = TRUE
+  )
+  api <- fake_batch_api(list(fake_result(fake_message("Alecensa"))))
+  results <- suppressMessages(
+    run_gold(inputs, api, efforts = c("medium", "high"))
+  )
+  # Only the medium variant is new; the high one collects the old batch.
+  expect_equal(api$calls$created, 1L)
+  expect_equal(request_efforts(api), "medium")
+  expect_setequal(api$calls$polled, c("msgbatch_old", "msgbatch_1"))
+  expect_equal(results[["claude-sonnet-5-5"]]$effort, "high")
+  expect_equal(results[["claude-sonnet-5-5"]]$rows_kept, 4L)
+  expect_false(file.exists(pending_path))
+  expect_true(file.exists(
+    file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  ))
+})
+
+test_that("a pending batch of another effort is not collected silently", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  dir.create(inputs$output_directory)
+  jsonlite::write_json(
+    list(
+      batch_id = "msgbatch_old", model = "claude-sonnet-5-5", effort = "low",
+      custom_ids = list("EMEA-H-C-004164")
+    ),
+    file.path(inputs$output_directory, "gold-pending-claude-sonnet-5-5.json"),
+    auto_unbox = TRUE
+  )
+  api <- fake_batch_api(list())
+  expect_error(run_gold(inputs, api), "low")
+  expect_equal(api$calls$created, 0L)
+  expect_length(api$calls$polled, 0)
+})
+
+test_that("a saved result is reused per variant, only at its own effort", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(fake_message("Alecensa")))
+  run_gold(inputs, fake_batch_api(answer))
+  api <- fake_batch_api(answer)
+  expect_message(
+    run_gold(inputs, api, efforts = c("medium", "high")),
+    "saved result of claude-sonnet-5-5 (high)",
+    fixed = TRUE
+  )
+  expect_equal(api$calls$created, 1L)
+  expect_equal(request_efforts(api), "medium")
+  again <- fake_batch_api(answer)
+  suppressMessages(run_gold(inputs, again, efforts = c("medium", "high")))
+  expect_equal(again$calls$created, 0L)
+  # A result whose recorded effort is another is asked again.
+  medium <- file.path(
+    inputs$output_directory, "gold-eval-claude-sonnet-5-5-medium.json"
+  )
+  saved <- jsonlite::fromJSON(medium, simplifyVector = FALSE)
+  saved$effort <- "low"
+  jsonlite::write_json(saved, medium, auto_unbox = TRUE, null = "null")
+  other <- fake_batch_api(answer)
+  suppressMessages(run_gold(inputs, other, efforts = "medium"))
+  expect_equal(other$calls$created, 1L)
+  expect_equal(read_gold_result_file(medium)$effort, "medium")
+})
+
+test_that("a saved result without an effort is the high variant's", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(fake_message("Alecensa")))
+  run_gold(inputs, fake_batch_api(answer))
+  path <- file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  saved <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  saved$effort <- NULL
+  jsonlite::write_json(saved, path, auto_unbox = TRUE, null = "null")
+  expect_equal(read_gold_result_file(path)$effort, "high")
+  api <- fake_batch_api(answer)
+  result <- suppressMessages(run_gold(inputs, api))[["claude-sonnet-5-5"]]
+  expect_equal(api$calls$created, 0L)
+  expect_equal(result$effort, "high")
+  expect_equal(read_gold_result_file(path)$effort, "high")
+})
+
+test_that("an unknown effort stops the run before any request", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  api <- fake_batch_api(list(fake_result(fake_message("Alecensa"))))
+  expect_error(
+    run_gold(inputs, api, efforts = c("high", "turbo")),
+    "turbo"
+  )
+  expect_error(run_gold(inputs, api, efforts = character()), "effort")
+  expect_equal(api$calls$created, 0L)
+  expect_false(dir.exists(inputs$output_directory))
+})
+
+test_that("the efforts come from APPROVAL_ATLAS_GOLD_EFFORTS", {
+  expect_equal(gold_efforts_from_env(""), "high")
+  expect_equal(gold_efforts_from_env(" , "), "high")
+  expect_equal(gold_efforts_from_env("medium, high"), c("medium", "high"))
+  expect_equal(gold_efforts_from_env("max,max"), "max")
+  expect_equal(
+    gold_efforts_from_env("low,medium,high,xhigh,max"),
+    c("low", "medium", "high", "xhigh", "max")
+  )
+  expect_error(gold_efforts_from_env("medium,turbo"), "turbo")
+  expect_error(gold_efforts_from_env("High"), "High")
+  withr::local_envvar(APPROVAL_ATLAS_GOLD_EFFORTS = "low,high")
+  expect_equal(gold_efforts_from_env(), c("low", "high"))
+})
+
+test_that("the report shows output tokens per answered call and cut-offs", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  api <- fake_batch_api(list(fake_result(fake_message(
+    "Alecensa",
+    output_tokens = 12345
+  ))))
+  result <- run_gold(inputs, api)[["claude-sonnet-5-5"]]
+  expect_equal(result$calls$output_tokens, 12345)
+  report_path <- file.path(inputs$output_directory, "gold-eval-report.md")
+  report <- readLines(report_path)
+  expect_true(any(report == "| Output tokens per answered call | 12,345 |"))
+  expect_true(any(report == "| Truncated calls | 0 of 1 |"))
+  message <- fake_message("Alecensa", output_tokens = 128000)
+  message$stop_reason <- "max_tokens"
+  unlink(file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json"))
+  run_gold(inputs, fake_batch_api(list(fake_result(message))))
+  report <- readLines(report_path)
+  expect_true(any(report == "| Output tokens per answered call | n/a |"))
+  expect_true(any(report == "| Truncated calls | 1 of 1 |"))
+})
+
+test_that("a saved result without per-call tokens still reports", {
+  result <- list(
+    model = "claude-sonnet-5-5", effort = "high",
+    calls = dplyr::tibble(
+      medicine = "Alecensa", status = "ok", reason = NA_character_,
+      rows_kept = 1L, rows_failed = 0L, rows_dropped = 0L
+    ),
+    rows_kept = 1L, rows_failed = 0L,
+    usage = list(input_tokens = 10, output_tokens = 20), cost = 0.1,
+    score = list(
+      numeric_errors = 0L, missed_rows = 0L, gold_rows = 1L, extra_rows = 0L,
+      outside_rows = 0L, lead_agreement = 1, pitfalls = c(a = TRUE)
+    )
+  )
+  table <- gold_report_table(list(result))
+  expect_true(any(table == "| Output tokens per answered call | n/a |"))
 })

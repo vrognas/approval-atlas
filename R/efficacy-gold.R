@@ -853,8 +853,46 @@ check_gold_inputs <- function(paths) {
   }
 }
 
-gold_pending_path <- function(output_directory, model) {
-  file.path(output_directory, paste0("gold-pending-", model, ".json"))
+# A model asked at an effort level: what the evaluation scores, with its own
+# batch and files. The legacy effort keeps the names of the runs made before
+# effort levels (gold-eval-<model>.json), so a batch they left pending is
+# collected, never asked again; another effort adds its name
+# (gold-eval-<model>-<effort>.json).
+gold_variant <- function(model, effort) {
+  list(
+    model = model,
+    effort = effort,
+    name = if (effort == efficacy_legacy_effort) {
+      model
+    } else {
+      paste0(model, "-", effort)
+    },
+    label = paste0(model, " (", effort, ")")
+  )
+}
+
+# Every model at every effort, model by model.
+gold_variants <- function(models, efforts) {
+  pairs <- expand.grid(
+    effort = unique(efforts), model = unique(models),
+    stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE
+  )
+  variants <- purrr::map2(pairs$model, pairs$effort, gold_variant)
+  stats::setNames(variants, purrr::map_chr(variants, "name"))
+}
+
+# APPROVAL_ATLAS_GOLD_EFFORTS: a comma list, "high" when unset.
+gold_efforts_from_env <- function(value =
+                                    Sys.getenv("APPROVAL_ATLAS_GOLD_EFFORTS")) {
+  efficacy_efforts_from_text(value, "APPROVAL_ATLAS_GOLD_EFFORTS")
+}
+
+gold_pending_path <- function(output_directory, variant) {
+  file.path(output_directory, paste0("gold-pending-", variant$name, ".json"))
+}
+
+gold_result_path <- function(output_directory, variant) {
+  file.path(output_directory, paste0("gold-eval-", variant$name, ".json"))
 }
 
 gold_custom_ids <- function(medicines) {
@@ -863,26 +901,34 @@ gold_custom_ids <- function(medicines) {
   )
 }
 
-# The id of the model's batch: the one a run left pending (its id was saved
+# The id of the variant's batch: the one a run left pending (its id was saved
 # before anything was polled, so a rerun never pays twice), else a new batch of
-# one request per medicine, saved at once.
-gold_submit_batch <- function(model,
+# one request per medicine at the variant's effort, saved at once.
+gold_submit_batch <- function(variant,
                               medicines,
                               output_directory,
                               create_batch) {
-  pending_path <- gold_pending_path(output_directory, model)
+  pending_path <- gold_pending_path(output_directory, variant)
   custom_ids <- gold_custom_ids(medicines)
   if (file.exists(pending_path)) {
     pending <- jsonlite::fromJSON(pending_path, simplifyVector = FALSE)
+    pending_effort <- pending$effort %||% efficacy_legacy_effort
     if (!setequal(unlist(pending$custom_ids), custom_ids)) {
       cli::cli_abort(c(
         "{.path {pending_path}} is a batch of other medicines.",
         i = "Collect or delete it before running this evaluation again."
       ))
     }
+    if (pending_effort != variant$effort) {
+      cli::cli_abort(c(
+        "{.path {pending_path}} is a batch at effort {.val {pending_effort}},
+        not {.val {variant$effort}}.",
+        i = "Collect or delete it before running this evaluation again."
+      ))
+    }
     cli::cli_inform(
-      "Collecting batch {pending$batch_id} ({model}) instead of submitting
-      again."
+      "Collecting batch {pending$batch_id} ({variant$label}) instead of
+      submitting again."
     )
     return(pending$batch_id)
   }
@@ -890,22 +936,25 @@ gold_submit_batch <- function(model,
     list(
       custom_id = efficacy_custom_id(medicine$ema_product_number),
       params = efficacy_request_params(
-        medicine$medicine, medicine$indication, medicine$section, model,
-        max_tokens = efficacy_batch_max_tokens
+        medicine$medicine, medicine$indication, medicine$section,
+        variant$model,
+        effort = variant$effort, max_tokens = efficacy_batch_max_tokens
       )
     )
   })
   batch_id <- create_batch(requests)
   jsonlite::write_json(
     list(
-      batch_id = batch_id, model = model, custom_ids = as.list(custom_ids),
+      batch_id = batch_id, model = variant$model, effort = variant$effort,
+      custom_ids = as.list(custom_ids),
       created = format(current_time(), "%Y-%m-%dT%H:%M:%S%z")
     ),
     pending_path,
     auto_unbox = TRUE, pretty = TRUE
   )
   cli::cli_inform(
-    "Submitted batch {batch_id} ({model}, {length(requests)} request{?s})."
+    "Submitted batch {batch_id} ({variant$label}, {length(requests)}
+    request{?s})."
   )
   batch_id
 }
@@ -917,7 +966,7 @@ dropped_lines <- function(medicine, dropped) {
   paste0(medicine, ": ", dropped)
 }
 
-gold_model_result <- function(model, medicines, gold, results) {
+gold_model_result <- function(variant, medicines, gold, results) {
   answers <- purrr::map2(
     medicines, gold_custom_ids(medicines),
     function(medicine, custom_id) {
@@ -931,15 +980,19 @@ gold_model_result <- function(model, medicines, gold, results) {
     input_tokens = tokens("input_tokens"),
     output_tokens = tokens("output_tokens")
   )
+  model <- variant$model
   list(
     model = model,
+    effort = variant$effort,
     calls = dplyr::tibble(
       medicine = names,
       status = purrr::map_chr(answers, "status"),
       reason = purrr::map_chr(answers, \(a) a$reason %||% NA_character_),
       rows_kept = purrr::map_int(answers, \(answer) length(answer$rows)),
       rows_failed = purrr::map_int(answers, \(answer) length(answer$failed)),
-      rows_dropped = purrr::map_int(answers, \(answer) length(answer$dropped))
+      rows_dropped = purrr::map_int(answers, \(answer) length(answer$dropped)),
+      input_tokens = purrr::map_dbl(answers, "input_tokens"),
+      output_tokens = purrr::map_dbl(answers, "output_tokens")
     ),
     rows_kept = length(rows),
     rows_failed = sum(purrr::map_int(answers, \(a) length(a$failed))),
@@ -954,12 +1007,15 @@ gold_model_result <- function(model, medicines, gold, results) {
   )
 }
 
+# A result without an effort was asked at the legacy effort.
+gold_result_variant <- function(result) {
+  gold_variant(result$model, result$effort %||% efficacy_legacy_effort)
+}
+
 write_gold_result <- function(result, output_directory) {
   # A named logical vector would be written without its names.
   result$score$pitfalls <- as.list(result$score$pitfalls)
-  path <- file.path(
-    output_directory, paste0("gold-eval-", result$model, ".json")
-  )
+  path <- gold_result_path(output_directory, gold_result_variant(result))
   jsonlite::write_json(
     result, path,
     auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null",
@@ -968,9 +1024,11 @@ write_gold_result <- function(result, output_directory) {
   path
 }
 
-# A gold-eval-<model>.json read back in the shape gold_model_result() returns.
+# A gold-eval-<model>.json read back in the shape gold_model_result() returns;
+# one written before effort levels was asked at the legacy effort.
 read_gold_result_file <- function(path) {
   result <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  result$effort <- result$effort %||% efficacy_legacy_effort
   result$calls <- dplyr::bind_rows(purrr::map(result$calls, function(call) {
     purrr::map(call, \(value) value %||% NA)
   }))
@@ -1002,25 +1060,28 @@ rescore_saved_gold_result <- function(path, gold_path) {
   )
 }
 
-# The saved result of a model (gold-eval-<model>.json) when it scored exactly
-# these medicines and no batch of it is pending, scored again against `gold`
-# and written back, so the file and the report agree; else NULL (the model
-# runs).
-read_saved_gold_result <- function(model, medicines, output_directory, gold) {
-  path <- file.path(output_directory, paste0("gold-eval-", model, ".json"))
+# The saved result of a variant (gold_result_path()) when it scored exactly
+# these medicines at the variant's effort and no batch of it is pending, scored
+# again against `gold` and written back, so the file and the report agree;
+# else NULL (the variant runs).
+read_saved_gold_result <- function(variant,
+                                   medicines,
+                                   output_directory,
+                                   gold) {
+  path <- gold_result_path(output_directory, variant)
   if (!file.exists(path) ||
-        file.exists(gold_pending_path(output_directory, model))) {
+        file.exists(gold_pending_path(output_directory, variant))) {
     return(NULL)
   }
   result <- read_gold_result_file(path)
-  if (!setequal(
+  if (result$effort != variant$effort || !setequal(
     result$calls$medicine, purrr::map_chr(medicines, "medicine")
   )) {
     return(NULL)
   }
   cli::cli_inform(
-    "Using the saved result of {model} ({.path {path}}), scored again and
-    written back; delete it to ask that model again."
+    "Using the saved result of {variant$label} ({.path {path}}), scored again
+    and written back; delete it to ask again."
   )
   result <- rescore_gold_result(result, gold)
   write_gold_result(result, output_directory)
@@ -1035,14 +1096,29 @@ gold_cost_text <- function(cost) {
   if (is.na(cost)) "n/a" else sprintf("%.2f", cost)
 }
 
+# Mean output tokens of the calls that answered, as the effort level spends
+# them (a truncated call would only show the limit); "n/a" without such a
+# call, or for a result saved before calls kept their tokens.
+gold_output_tokens_per_answer <- function(result) {
+  calls <- result$calls
+  answered <- calls$status == "ok"
+  if (!"output_tokens" %in% names(calls) || !any(answered)) {
+    return("n/a")
+  }
+  format(round(mean(calls$output_tokens[answered])), big.mark = ",")
+}
+
 gold_report_table <- function(results) {
-  models <- purrr::map_chr(results, "model")
+  labels <- purrr::map_chr(results, \(r) gold_result_variant(r)$label)
   cell <- function(extract) purrr::map_chr(results, extract)
   pitfalls <- names(results[[1]]$score$pitfalls)
   rows <- c(
     list(
       "Calls that answered" = cell(function(r) {
         sprintf("%d of %d", sum(r$calls$status == "ok"), nrow(r$calls))
+      }),
+      "Truncated calls" = cell(function(r) {
+        sprintf("%d of %d", sum(r$calls$status == "truncated"), nrow(r$calls))
       }),
       "Rows kept (verified)" = cell(\(r) as.character(r$rows_kept)),
       "Rows failed verification" = cell(\(r) as.character(r$rows_failed)),
@@ -1070,6 +1146,7 @@ gold_report_table <- function(results) {
       "Output tokens" = cell(
         \(r) format(r$usage$output_tokens, big.mark = ",")
       ),
+      "Output tokens per answered call" = cell(gold_output_tokens_per_answer),
       "Cost (USD, batch price)" = cell(\(r) gold_cost_text(r$cost)),
       "Meets the acceptance rule" = cell(
         \(r) gold_yes_no(gold_model_passes(r))
@@ -1077,8 +1154,8 @@ gold_report_table <- function(results) {
     )
   )
   c(
-    paste0("| | ", paste(models, collapse = " | "), " |"),
-    paste0("|---|", paste(rep("---|", length(models)), collapse = "")),
+    paste0("| | ", paste(labels, collapse = " | "), " |"),
+    paste0("|---|", paste(rep("---|", length(labels)), collapse = "")),
     paste0(
       "| ", names(rows), " | ",
       purrr::map_chr(rows, paste, collapse = " | "), " |"
@@ -1101,7 +1178,7 @@ gold_report_details <- function(result) {
     )
   })
   c(
-    paste0("### ", result$model),
+    paste0("### ", gold_result_variant(result)$label),
     "",
     listing("Not accepted because", gold_acceptance_problems(result)),
     listing("Calls that did not answer", paste0(
@@ -1132,7 +1209,8 @@ write_gold_report <- function(results, output_directory, today) {
       "Run ", format(today), ". Gold: the pilot's SmPC rows; rows kept are ",
       "those that pass the verifier; rows whose indication names another ",
       "condition than the gold's (NSCLC) are not scored. Message Batches API, ",
-      "so costs are at the batch price (half the list price)."
+      "so costs are at the batch price (half the list price). Each column is ",
+      "a model at an effort level (output_config.effort)."
     ),
     "",
     "Acceptance (spec, rulings R13 and R14): no numeric error among the",
@@ -1151,17 +1229,17 @@ write_gold_report <- function(results, output_directory, today) {
   path
 }
 
-# One model's batch: read once it has ended, scored, written, and its pending
-# file removed. NULL (the pending file stays for a rerun) when the batch could
-# not be collected now.
-gold_collect_model <- function(model,
+# One variant's batch: read once it has ended, scored, written, and its
+# pending file removed. NULL (the pending file stays for a rerun) when the
+# batch could not be collected now.
+gold_collect_model <- function(variant,
                                batch_id,
                                medicines,
                                gold,
                                output_directory,
                                batch_api,
                                poll_seconds) {
-  pending_path <- gold_pending_path(output_directory, model)
+  pending_path <- gold_pending_path(output_directory, variant)
   results <- read_efficacy_batch_results(
     batch_id, poll_seconds, batch_api$status, batch_api$results,
     pending_name = basename(pending_path)
@@ -1169,25 +1247,28 @@ gold_collect_model <- function(model,
   if (is.null(results)) {
     return(NULL)
   }
-  result <- gold_model_result(model, medicines, gold, results)
+  result <- gold_model_result(variant, medicines, gold, results)
   write_gold_result(result, output_directory)
   unlink(pending_path)
   result
 }
 
-# Asks each model for every pilot medicine's rows with one Message Batch per
-# model (production's path, at half the price; `batch_api` holds the functions
-# that create a batch, read its state and read its results), verifies the rows
-# against the section text, scores the kept rows against the gold SmPC rows and
-# writes gold-eval-<model>.json (as each model's batch is collected) and
-# gold-eval-report.md into `output_directory`. A batch's id is saved in
-# gold-pending-<model>.json when it is created, so a run that is interrupted
-# or gives up waiting collects the same batch when run again, at no new cost.
+# Asks each model at each effort level (a variant, gold_variant()) for every
+# pilot medicine's rows with one Message Batch per variant (production's path,
+# at half the price; `batch_api` holds the functions that create a batch, read
+# its state and read its results), verifies the rows against the section text,
+# scores the kept rows against the gold SmPC rows and writes the variant's
+# gold-eval-*.json (as its batch is collected) and gold-eval-report.md into
+# `output_directory`. A batch's id is saved in the variant's gold-pending-*.json
+# when it is created, so a run that is interrupted or gives up waiting
+# collects the same batch when run again, at no new cost. An effort the API
+# does not know stops the run before anything is read or asked.
 run_gold_evaluation <- function(models,
                                 selection_path,
                                 text_directory,
                                 gold_path,
                                 output_directory,
+                                efforts = efficacy_default_effort,
                                 medicines_path =
                                   "site/public/data/ema_medicines.json",
                                 batch_api = list(
@@ -1197,39 +1278,41 @@ run_gold_evaluation <- function(models,
                                 ),
                                 poll_seconds = 60,
                                 today = Sys.Date()) {
+  check_efficacy_efforts(efforts, "`efforts`")
   check_gold_inputs(c(selection_path, gold_path, medicines_path))
   medicines <- read_gold_medicines(
     selection_path, text_directory, medicines_path
   )
   gold <- jsonlite::fromJSON(gold_path, simplifyVector = FALSE)
   dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
-  # A model already scored on these medicines (and not pending) is read back,
-  # never asked again: a rerun after an interruption must not pay twice.
-  saved <- purrr::map(models, function(model) {
-    read_saved_gold_result(model, medicines, output_directory, gold)
+  variants <- gold_variants(models, efforts)
+  # A variant already scored on these medicines (and not pending) is read
+  # back, never asked again: a rerun after an interruption must not pay twice.
+  saved <- purrr::map(variants, function(variant) {
+    read_saved_gold_result(variant, medicines, output_directory, gold)
   })
-  names(saved) <- models
-  batch_ids <- purrr::map(models, function(model) {
-    if (!is.null(saved[[model]])) {
+  batch_ids <- purrr::map(variants, function(variant) {
+    if (!is.null(saved[[variant$name]])) {
       return(NULL)
     }
-    gold_submit_batch(model, medicines, output_directory, batch_api$create)
+    gold_submit_batch(variant, medicines, output_directory, batch_api$create)
   })
-  names(batch_ids) <- models
   results <- list()
-  for (model in models) {
-    result <- saved[[model]] %||% gold_collect_model(
-      model, batch_ids[[model]], medicines, gold, output_directory, batch_api,
-      poll_seconds
+  for (variant in variants) {
+    result <- saved[[variant$name]] %||% gold_collect_model(
+      variant, batch_ids[[variant$name]], medicines, gold, output_directory,
+      batch_api, poll_seconds
     )
     if (is.null(result)) next
-    results[[model]] <- result
-    # The report so far, so a model still waiting (a batch can take hours)
+    results[[variant$name]] <- result
+    # The report so far, so a variant still waiting (a batch can take hours)
     # does not hold back the others' results.
     report <- write_gold_report(results, output_directory, today)
     cli::cli_inform(paste0("Report: ", report))
   }
-  unfinished <- setdiff(models, names(results))
+  unfinished <- purrr::map_chr(variants, "label")[
+    !names(variants) %in% names(results)
+  ]
   if (length(unfinished) > 0) {
     cli::cli_inform(c(
       "Not collected yet: {.val {unfinished}}.",
