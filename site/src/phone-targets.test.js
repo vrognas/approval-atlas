@@ -72,8 +72,8 @@ test("phones: Show full indication, a Documents block's links and the company pr
   // and both at one size, 14px (it was 16px under the 14px summary).
   assert.match(declarations(phones, ".toggle.areas-more"), /display: block;.*padding-block: max\(0px, \(44px - 1lh\) \/ 2\)/);
   const all = flat(css);
-  assert.match(declarations(all, ".toggle.areas-more"), /font-size: 0\.875rem/);
-  assert.match(declarations(all, ".block-indication .indication > summary"), /font-size: 0\.875rem/);
+  assert.match(declarations(all, ".toggle.areas-more"), /font-size: var\(--font-size-14\)/);
+  assert.match(declarations(all, ".block-indication .indication > summary"), /font-size: var\(--font-size-14\)/);
   assert.match(declarations(phones, ":is(.pc-company-list, .block-documents .doc-list) a"), /display: inline-block;.*padding-block: max\(0px, \(44px - 1lh\) \/ 2\)/);
 });
 
