@@ -77,6 +77,31 @@ efficacy_review_regimen <- function(row) {
   )
 }
 
+# Owner decision 2026-10-01: the extractor blanks a two-arm effect's arm sizes
+# no table places under their arms' column headers (unverified_sizes()), and
+# the rows file does not record it, so a two-arm effect without both sizes
+# says when they are kept.
+efficacy_review_sizes <- function(row) {
+  missing <- efficacy_size_fields[
+    purrr::map_lgl(efficacy_size_fields, \(field) is_absent(row[[field]]))
+  ]
+  if (!two_arm_effect(row) || length(missing) == 0) {
+    return(NULL)
+  }
+  shown <- if (length(missing) == 2) {
+    "not shown"
+  } else if (missing == "n_treatment") {
+    "the treatment arm's not shown"
+  } else {
+    "the control arm's not shown"
+  }
+  paste(
+    "- Arm sizes:", shown, "(kept only where a table header prints the",
+    "comparator's column label over the control arm's n and the treatment",
+    "arm's n beside it)"
+  )
+}
+
 efficacy_review_arms <- function(row) {
   if (is.na(row$arm_treatment) && is.na(row$arm_control)) {
     return("not stated")
@@ -113,6 +138,7 @@ efficacy_review_fields <- function(row) {
     paste0("- Trial: ", review_text(row$trial)),
     paste0("- Population: ", population),
     paste0("- Regimen: ", efficacy_review_regimen(row)),
+    efficacy_review_sizes(row),
     paste0(
       "- Comparator column label: ", review_text(row$comparator_column_label)
     ),

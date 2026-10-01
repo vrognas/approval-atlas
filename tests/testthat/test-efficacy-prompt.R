@@ -164,13 +164,67 @@ test_that("the system prompt states the rules the verifier relies on", {
   expect_match(prompt, "at most three", fixed = TRUE)
   expect_match(prompt, "ci_is_range", fixed = TRUE)
   expect_match(prompt, "not a statement of significance", fixed = TRUE)
+  expect_match(prompt, "the arm sizes (n_treatment, n_control)", fixed = TRUE)
   expect_match(
     prompt,
-    "Copy population, regimen and comparator verbatim from the text",
+    "in the same quote as each control-arm value (arm_control, n_control)",
     fixed = TRUE
   )
-  expect_match(prompt, "the arm sizes (n_treatment, n_control)", fixed = TRUE)
-  expect_match(prompt, "the same quote as arm_control", fixed = TRUE)
+  # The header a reviewer checks the sizes against (the verifier keeps them
+  # only where the table places them under their arms, unverified_sizes()).
+  expect_match(prompt, "quote the header with the number printed under it",
+               fixed = TRUE)
+})
+
+test_that("the system prompt asks for text copied, not written", {
+  prompt <- efficacy_system_prompt()
+  has <- function(phrase) expect_match(prompt, phrase, fixed = TRUE)
+  has("population, regimen, comparator, endpoint and assessment")
+  has("the shortest span of section 5.1 that states")
+  has("Do not paraphrase, expand or abbreviate")
+  has("do not join words printed apart")
+  has("copy the comparator's header into comparator_column_label")
+  has("arm_treatment, arm_control, n_treatment and n_control")
+  # The instructions these replace are gone.
+  expect_no_match(prompt, "never summarise or reword", fixed = TRUE)
+  expect_no_match(prompt, "must appear inside a quote", fixed = TRUE)
+})
+
+test_that("the schema describes the fields copied from the text", {
+  properties <- efficacy_row_schema()$properties$rows$items$properties
+  described <- c(
+    "population", "regimen", "comparator", "comparator_column_label",
+    "endpoint", "assessment"
+  )
+  for (field in described) {
+    expect_type(properties[[field]]$description, "character")
+  }
+  expect_match(properties$endpoint$description, "as printed", fixed = TRUE)
+  expect_null(properties$trial$description)
+  expect_equal(properties$trial, list(type = "string"))
+})
+
+# Review of the prompt change (2026-10-01): the schema said "" meant
+# single-arm, the prompt "no single span states it"; the label's "" was read
+# across the whole section in one and per result in the other.
+test_that("the schema and the prompt give \"\" one meaning", {
+  properties <- efficacy_row_schema()$properties$rows$items$properties
+  prompt <- efficacy_system_prompt()
+  rules <- list(
+    comparator = efficacy_empty_comparator,
+    comparator_column_label = efficacy_empty_label
+  )
+  for (field in names(rules)) {
+    expect_match(properties[[field]]$description, rules[[field]], fixed = TRUE)
+    expect_match(prompt, rules[[field]], fixed = TRUE)
+  }
+  expect_match(efficacy_empty_comparator, "no single span states it")
+  expect_match(efficacy_empty_label, "gives no arm values")
+  expect_no_match(properties$comparator$description, "when single-arm")
+  expect_no_match(
+    properties$comparator_column_label$description,
+    "no table has a column per arm"
+  )
 })
 
 test_that("text that is only spaces is not stated", {
@@ -195,7 +249,7 @@ test_that("the system prompt defines every enum value and the empty cases", {
   has("is left out")
   has("never paraphrased")
   has("\"\" when no given indication applies")
-  has("and the arm values (arm_treatment, arm_control) must appear inside")
+  has("the other arm values (arm_treatment, arm_control); the p-value")
   has("For every field the text does not state, use \"\"")
   has("Never estimate.")
 })

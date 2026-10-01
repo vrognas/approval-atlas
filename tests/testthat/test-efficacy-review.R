@@ -101,6 +101,39 @@ test_that("the review page says what a row does not state", {
                fixed = TRUE)
 })
 
+# Owner decision 2026-10-01: the extractor blanks arm sizes the section's
+# layout does not place under their arms' column headers, and the rows file
+# does not record it, so the reviewer is told why a two-arm effect has no n.
+test_that("the review page says when a row of two arms has no sizes", {
+  row <- review_rows()[2, ]
+  row$regimen <- "alectinib"
+  row$comparator <- "crizotinib"
+  row$effect_type <- "hr"
+  rule <- paste(
+    "(kept only where a table header prints the comparator's column label",
+    "over the control arm's n and the treatment arm's n beside it)"
+  )
+  page <- function(row) {
+    paste(
+      efficacy_review_markdown(row[0, ], row, as.Date("2026-10-01")),
+      collapse = "\n"
+    )
+  }
+  text <- page(row)
+  expect_match(text, "- Regimen: alectinib vs crizotinib", fixed = TRUE)
+  expect_match(text, paste("- Arm sizes: not shown", rule), fixed = TRUE)
+  row$n_control <- 151L
+  expect_match(
+    page(row), paste("- Arm sizes: the treatment arm's not shown", rule),
+    fixed = TRUE
+  )
+  row$n_treatment <- 152L
+  expect_no_match(page(row), "- Arm sizes", fixed = TRUE)
+  single <- review_rows()[2, ]
+  single$effect_type <- "single_arm_rate"
+  expect_no_match(page(single), "- Arm sizes", fixed = TRUE)
+})
+
 test_that("the review page leaves out an unknown CI level; quotes every line", {
   row <- review_rows()[2, ]
   row$ci_level <- NA_real_

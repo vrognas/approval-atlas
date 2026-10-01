@@ -152,6 +152,16 @@ test("the regimen line compares, or says single-arm; it never invents a regimen"
   assert.equal(regimenLine(row({ regimen: null, comparator: null, n_treatment: null, n_control: null })), null);
 });
 
+// Owner decision 2026-10-01: arm sizes no comparator column label ties to their arms are blanked
+// (null in the site file) and the row is shown without them.
+test("the regimen line leaves out arm sizes the row does not give", () => {
+  const line = regimenLine(row({ regimen: "osimertinib", n_treatment: null, n_control: null }));
+  assert.equal(line, "osimertinib vs gefitinib or erlotinib");
+  assert.equal(/n =|null|undefined|NaN/.test(line), false);
+  assert.equal(regimenLine(row({ regimen: "osimertinib" })), "osimertinib vs gefitinib or erlotinib");
+  assert.equal(regimenLine(row({ regimen: "osimertinib", n_treatment: null, n_control: 277 })), "osimertinib vs gefitinib or erlotinib (n = 277)");
+});
+
 test("the endpoint line says a primary endpoint only when the source does", () => {
   assert.equal(endpointLine(row({ assessment: "investigator", is_primary: true })), "progression-free survival (PFS), assessed by investigator, primary endpoint");
   assert.equal(endpointLine(row({ endpoint: "Time to deterioration", assessment: null, is_primary: null })), "Time to deterioration");
