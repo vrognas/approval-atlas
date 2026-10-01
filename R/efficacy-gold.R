@@ -10,11 +10,12 @@
 # - medicine, trial (folded: "KEYNOTE 024" = "KEYNOTE-024", "ALEX (BO28984)" =
 #   "ALEX", its first word and a following number) and endpoint (an
 #   abbreviation: "Progression-free survival (PFS)" = "PFS") name the group a
-#   row is compared within; rows whose trial labels name different trials
-#   (gold_tokens_related(): RAINBOW is not REVEL, KEYNOTE-189 not KEYNOTE-407)
-#   never pair;
-# - indication: the extractor's, for the gold's condition (NSCLC): a row of
-#   another condition is not scored (gold_condition_pattern);
+#   row is compared within; rows whose trial labels name no trial in common
+#   (gold_trial_names_related(): RAINBOW is not REVEL, KEYNOTE-189 not
+#   KEYNOTE-407, MARIPOSA not MARIPOSA-2) never pair;
+# - indication: the extractor's, for the gold's condition (NSCLC): a row whose
+#   indication names another condition, and not NSCLC, is not scored
+#   (gold_condition);
 # - value, ci_low, ci_high are compared as printed (spaces and a percent sign
 #   aside);
 # - effect_type: gold "HR non-inferiority" = extractor hr_noninferiority,
@@ -52,12 +53,43 @@ gold_endpoint_names <- c(
 )
 gold_known_endpoints <- unique(unname(gold_endpoint_names))
 
-# The pilot's gold rows are NSCLC rows, while the extractor answers for every
-# indication of a medicine: a row whose indication names another condition
-# is outside the gold set (Retsevmo's thyroid-cancer LIBRETTO-001 response
-# rate, Cyramza's gastric-cancer RAINBOW). EMA's text has "?" for some
-# hyphens ("non?small cell").
-gold_condition_pattern <- "non.?small.?cell.?lung|\\bnsclc\\b"
+# The gold's condition (`own`) and the other conditions the pilot's 18
+# medicines are authorised for (`others`), as regular expressions. The gold
+# rows are NSCLC rows, while the extractor answers for every indication of a
+# medicine: a row whose indication names another condition, and not NSCLC, is
+# outside the gold set (Retsevmo's thyroid-cancer LIBRETTO-001 response rate,
+# Cyramza's gastric-cancer RAINBOW). A row whose indication names no
+# condition is scored, so an NSCLC row whose indication lost its condition
+# still counts. "small cell lung" is SCLC only: an indication naming NSCLC is
+# scored whatever else it names. EMA's text has "?" for some hyphens
+# ("non?small cell").
+gold_condition <- list(
+  own = "non.?small.?cell.?lung|\\bnsclc\\b",
+  others = paste(
+    c(
+      "melanoma", "renal.?cell", "urothelial", "bladder", "head.?and.?neck",
+      "hodgkin", "lymphoma", "colorectal", "\\bm?crc\\b", "gastric",
+      "o?esophag", "hepatocellular", "\\bhcc\\b", "biliary", "cholangio",
+      "thyroid", "breast", "cervical", "endometri", "ovarian", "mesothelioma",
+      "nasopharyn", "cutaneous", "cscc", "basal.?cell", "\\b(la|m)?bcc\\b",
+      "merkel", "small.?cell.?lung", "\\bsclc\\b", "solid.?tumou?r", "msi.?h",
+      "mismatch.?repair"
+    ),
+    collapse = "|"
+  )
+)
+
+# Whether each indication is outside the gold's condition (`condition`, as
+# gold_condition; NULL: none is).
+gold_outside_condition <- function(indications, condition) {
+  if (is.null(condition)) {
+    return(rep(FALSE, length(indications)))
+  }
+  naming <- function(pattern) {
+    grepl(pattern, indications, ignore.case = TRUE, perl = TRUE)
+  }
+  !naming(condition$own) & naming(condition$others)
+}
 
 gold_generic_trial_words <- c("study", "phase", "trial")
 
@@ -99,47 +131,99 @@ gold_trial_key <- function(trial) {
   paste(tokens[seq_len(keep)], collapse = "-")
 }
 
-# The words of a trial label that name the trial, lower-case: those with a
-# digit (the number of "KEYNOTE-024", "Study 1624", "BO28984") and those
-# written with two capitals or more ("RAINBOW", "IMpower110", "CodeBreaK"),
-# not a phase ("phase 3", "Phase III") nor a generic word. A description such
-# as "pembrolizumab adjuvant study" names none.
-gold_trial_tokens <- function(trial) {
+# The trial names of a label, each as its words: lower-case, letters and
+# digits apart, leading zeros dropped ("KEYNOTE-024" and "KEYNOTE 24" are
+# "keynote 24", "IMpower110" is "impower 110"). A name is a run of words, kept
+# together by spaces, hyphens or underscores, that name a trial: a word with a
+# digit or with two capitals or more ("RAINBOW", "IMpower110", "CodeBreaK",
+# "B7461006"), and a word hyphenated to one ("DESTINY-Lung02", "GEOMETRY
+# mono-1"); never a phase ("phase 3", "Phase III") nor a generic word. Any
+# other character ends a name, brackets too: "ALEX (BO28984)" names "alex"
+# and "bo 28984". A description such as "pembrolizumab adjuvant study" names
+# none.
+gold_trial_names <- function(trial) {
   text <- gsub(
     "\\bphase[ -]*([0-9]+[a-z]?|[ivx]+)(/([0-9]+|[ivx]+))*\\b", " ",
     gold_text(trial),
     ignore.case = TRUE, perl = TRUE
   )
-  words <- strsplit(text, "[^A-Za-z0-9]+")[[1]]
-  named <- grepl("[0-9]", words) | grepl("[A-Z].*[A-Z]", words)
-  setdiff(unique(tolower(words[named])), gold_generic_trial_words)
+  segments <- strsplit(text, "[^A-Za-z0-9 _-]+")[[1]]
+  unique(unlist(purrr::map(segments, gold_segment_trial_names)))
 }
 
-# Whether two labels can name the same trial: a shared number when both have
-# one ("KEYNOTE-189" is not "KEYNOTE-407"), else a shared name ("BO28984,
-# ALEX" is "ALEX (BO28984)"; RAINBOW is not REVEL). A label naming no trial
-# can be any.
-gold_tokens_related <- function(first, second) {
-  if (length(first) == 0 || length(second) == 0) {
-    return(TRUE)
+# The trial names of a stretch of a label without brackets or punctuation.
+gold_segment_trial_names <- function(segment) {
+  word_pattern <- gregexpr("[A-Za-z0-9]+", segment)
+  words <- regmatches(segment, word_pattern)[[1]]
+  if (length(words) == 0) {
+    return(character())
   }
-  first_numbers <- first[grepl("[0-9]", first)]
-  second_numbers <- second[grepl("[0-9]", second)]
-  if (length(first_numbers) > 0 && length(second_numbers) > 0) {
-    return(length(intersect(first_numbers, second_numbers)) > 0)
-  }
-  length(intersect(first, second)) > 0
+  separators <- regmatches(segment, word_pattern, invert = TRUE)[[1]]
+  # A hyphen or underscore before a word joins it to the word before.
+  joined <- c(FALSE, grepl("[-_]", separators[seq_along(words)][-1]))
+  generic <- tolower(words) %in% gold_generic_trial_words
+  named <- (grepl("[0-9]", words) | grepl("[A-Z].*[A-Z]", words)) & !generic
+  joined_to_named <- (joined & c(FALSE, named[-length(words)])) |
+    (c(joined[-1], FALSE) & c(named[-1], FALSE))
+  kept <- !generic & (named | joined_to_named)
+  pieces <- purrr::map(tolower(words[kept]), function(word) {
+    parts <- regmatches(word, gregexpr("[a-z]+|[0-9]+", word))[[1]]
+    sub("^0+(?=[0-9])", "", parts, perl = TRUE)
+  })
+  runs <- split(pieces, cumsum(!kept)[kept])
+  unname(purrr::map_chr(runs, \(run) paste(unlist(run), collapse = " ")))
 }
 
-# A known name outside the parentheses wins ("Duration of response (months)"
-# is DOR, not "MONTHS"); else an abbreviation in parentheses after a longer
-# name ("Time to CNS progression (TTP)"); other parentheses are dropped ("OS
-# (final analysis)").
+# Whether two trial names can be one trial: the same words, or one the other
+# with words after it that hold no number ("IMpower110 ITT" is IMpower110);
+# never with a number after it ("MARIPOSA" is not "MARIPOSA-2", nor
+# "DESTINY" "DESTINY-Lung02").
+gold_same_trial_name <- function(first, second) {
+  first <- strsplit(first, " ", fixed = TRUE)[[1]]
+  second <- strsplit(second, " ", fixed = TRUE)[[1]]
+  if (length(first) > length(second)) {
+    longer <- first
+    first <- second
+    second <- longer
+  }
+  shared <- seq_along(first)
+  identical(second[shared], first) &&
+    !any(grepl("^[0-9]+$", second[-shared]))
+}
+
+# Whether two labels name a trial in common (gold_same_trial_name()), so a
+# number in brackets only links two labels, never separates them ("ALINA
+# (BO40336)" is "ALINA (NCT03456076)" and "BO40336; ALINA").
+gold_trial_names_shared <- function(first, second) {
+  any(purrr::map_lgl(first, function(name) {
+    any(purrr::map_lgl(second, \(other) gold_same_trial_name(name, other)))
+  }))
+}
+
+# Whether two labels can name the same trial (gold_trial_names() of each): a
+# name in common, or a label naming no trial, which can be any.
+gold_trial_names_related <- function(first, second) {
+  length(first) == 0 || length(second) == 0 ||
+    gold_trial_names_shared(first, second)
+}
+
+# A known endpoint named outside the parentheses wins: the whole name
+# ("Duration of response (months)" is DOR, not "MONTHS"), else the one known
+# endpoint the words outside name (gold_endpoint_mentions(): "Overall
+# survival by tumour PD-L1 Tumour Cell (TC) expression status" is OS, not
+# "TC"); else an abbreviation in parentheses after a longer name ("Time to
+# CNS progression (TTP)"); other parentheses are dropped ("OS (final
+# analysis)").
 gold_endpoint <- function(endpoint) {
   text <- tolower(gold_text(endpoint))
-  name <- gsub("-", " ", trimws(gsub("\\([^)]*\\)", "", text)), fixed = TRUE)
+  outside <- trimws(gsub("\\([^)]*\\)", "", text))
+  name <- gsub("-", " ", outside, fixed = TRUE)
   if (!is.na(gold_endpoint_names[name])) {
     return(unname(gold_endpoint_names[name]))
+  }
+  named <- gold_endpoint_mentions(outside)
+  if (length(named) == 1) {
+    return(named)
   }
   abbreviation <- regmatches(
     text, regexpr("(?<=\\()[a-z]{2,6}(?=\\))", text, perl = TRUE)
@@ -150,8 +234,22 @@ gold_endpoint <- function(endpoint) {
   toupper(name)
 }
 
-# Words that make a named endpoint another one: CNS PFS is not PFS.
-gold_endpoint_qualifiers <- c("cns", "intracranial", "second", "subsequent")
+# Phrases (regular expressions over a label's lower-case words) that make a
+# named endpoint another one: progression or response in the CNS ("CNS
+# progression-free survival", "Time to intracranial progression"), a second
+# progression ("Second PFS", "PFS2") and a subsequent therapy ("PFS after
+# first subsequent therapy"). A qualifier of the analysis or the population
+# does not ("PFS at second interim analysis", "PFS in patients with baseline
+# CNS metastases").
+gold_endpoint_qualifiers <- c(
+  paste0(
+    "(cns|intracranial) (progression|response|objective|overall|duration|",
+    "recurrence|pfs|orr|dor|dfs|efs)"
+  ),
+  "second (progression|pfs)",
+  "pfs ?2",
+  "subsequent (therapy|treatment|anticancer|line)"
+)
 
 # The known endpoints a label names as words, by name or abbreviation
 # ("Confirmed objective response rate" and "Confirmed ORR, laBCC" name ORR).
@@ -164,7 +262,10 @@ gold_endpoint_mentions <- function(endpoint) {
     " ", gsub("[^a-z0-9]+", " ", tolower(gold_text(endpoint))), " "
   )
   has <- function(phrase) grepl(paste0(" ", phrase, " "), words, fixed = TRUE)
-  if (any(purrr::map_lgl(gold_endpoint_qualifiers, has))) {
+  qualified <- purrr::map_lgl(gold_endpoint_qualifiers, function(phrase) {
+    grepl(paste0(" ", phrase, " "), words, perl = TRUE)
+  })
+  if (any(qualified)) {
     return(character())
   }
   by_name <- purrr::map_lgl(names(gold_endpoint_names), has)
@@ -268,7 +369,7 @@ gold_row_table <- function(rows) {
     medicine = tolower(text_column("medicine")),
     trial_text = text_column("trial"),
     trial = purrr::map_chr(rows, \(row) gold_trial_key(row$trial)),
-    trial_tokens = purrr::map(rows, \(row) gold_trial_tokens(row$trial)),
+    trial_names = purrr::map(rows, \(row) gold_trial_names(row$trial)),
     endpoint = purrr::map_chr(rows, \(row) gold_endpoint(row$endpoint)),
     endpoint_mentions = purrr::map(
       rows, \(row) gold_endpoint_mentions(row$endpoint)
@@ -328,18 +429,19 @@ gold_pair_scores <- function(extracted, gold, pairs) {
     same_known(extracted$effect_type[e], gold$effect_type[g])
 }
 
-# Which pairs may pair at all: never two trials the labels tell apart (even
-# where they fold to one key: DESTINY-Lung01 is not DESTINY-Lung02). With
-# `linked` (rows of a medicine left over from their own group, so a label the
-# model spelled differently cannot hide a wrong number) also only the same
-# endpoint, or the same trial where one label names the other's endpoint
-# (gold_endpoint_mentions(): "Confirmed objective response rate" is ORR; OS
-# or "time to worsening of symptoms" is never PFS).
+# Which pairs may pair at all: only rows whose trial labels can name the same
+# trial (gold_trial_names_related()), even where they fold to one key
+# (DESTINY-Lung01 is not DESTINY-Lung02). With `linked` (rows of a medicine
+# left over from their own group, so a label the model spelled differently
+# cannot hide a wrong number) also only the same endpoint, or the same trial
+# key where one label names the other's endpoint (gold_endpoint_mentions():
+# "Confirmed objective response rate" is ORR; OS or "time to worsening of
+# symptoms" is never PFS).
 gold_pairable <- function(extracted, gold, pairs, linked) {
   e <- pairs$extracted
   g <- pairs$gold
   related <- purrr::map2_lgl(
-    extracted$trial_tokens[e], gold$trial_tokens[g], gold_tokens_related
+    extracted$trial_names[e], gold$trial_names[g], gold_trial_names_related
   )
   if (!linked) {
     return(related)
@@ -384,9 +486,10 @@ match_group_rows <- function(extracted,
 }
 
 # For each extracted row the gold row it stands for, or NA. First within
-# (medicine, trial, endpoint); then the rows still unpaired of a medicine pair
-# by trial or endpoint alone (gold_pairable()), so a label the model spelled
+# (medicine, trial key, endpoint); then the rows still unpaired of a medicine
+# pair across those (gold_pairable()), so a label the model spelled
 # differently cannot hide a wrong number as a missed row plus an extra one.
+# Both passes pair only rows whose trial labels can name the same trial.
 match_gold_rows <- function(extracted, gold) {
   matched <- rep(NA_integer_, nrow(extracted))
   for (group in intersect(extracted$group, gold$group)) {
@@ -534,25 +637,23 @@ gold_pitfalls <- function(extracted, gold, matched) {
 # top of the file). Numeric errors: a matched row whose value, ci_low or
 # ci_high differ from the gold's as printed, once per row. A right value with a
 # wrong CI is an error too (the verifier cannot tell which number is wrong); a
-# range the gold gives no CI for is not compared. With `condition` (a regular
-# expression, gold_condition_pattern for the pilot's gold), a row whose
-# indication names another condition is outside the gold set: never paired,
-# counted in outside_rows, not as extra; a row without an indication is scored.
+# range the gold gives no CI for is not compared. With `condition` (as
+# gold_condition, for the pilot's gold), a row whose indication names another
+# condition and not the gold's is outside the gold set: never paired, nor
+# looked at by the pitfalls or the lead agreement, counted in outside_rows,
+# not as extra; a row whose indication names no condition is scored. Those of
+# them that name a trial of the gold rows of their medicine are listed in
+# outside_gold_trial_keys, as their indication alone kept them out (a basket
+# trial such as LIBRETTO-001, or an NSCLC row given another indication).
 score_against_gold <- function(extracted, gold, condition = NULL) {
   extracted <- gold_row_table(extracted)
   gold <- gold_row_table(gold)
-  outside <- if (is.null(condition)) {
-    rep(FALSE, nrow(extracted))
-  } else {
-    nzchar(extracted$stated_indication) & !grepl(
-      condition, extracted$stated_indication,
-      ignore.case = TRUE, perl = TRUE
-    )
-  }
-  matched <- rep(NA_integer_, nrow(extracted))
-  matched[!outside] <- match_gold_rows(extracted[!outside, ], gold)
-  extra <- is.na(matched) & !outside
-  paired <- which(!is.na(matched))
+  outside <- gold_outside_condition(extracted$stated_indication, condition)
+  others <- extracted[outside, ]
+  extracted <- extracted[!outside, ]
+  matched <- match_gold_rows(extracted, gold)
+  extra <- is.na(matched)
+  paired <- which(!extra)
   partner <- matched[paired]
   wrong <- extracted$value[paired] != gold$value[partner] |
     (!gold_ci_skipped(
@@ -564,7 +665,7 @@ score_against_gold <- function(extracted, gold, condition = NULL) {
     numeric_errors = sum(wrong),
     missed_rows = length(setdiff(seq_len(nrow(gold)), matched)),
     extra_rows = sum(extra),
-    outside_rows = sum(outside),
+    outside_rows = nrow(others),
     gold_rows = nrow(gold),
     lead_agreement = gold_lead_agreement(extracted, gold, matched),
     pitfalls = pitfalls$pitfalls,
@@ -572,8 +673,20 @@ score_against_gold <- function(extracted, gold, condition = NULL) {
     numeric_error_keys = extracted$key[paired[wrong]],
     missed_keys = gold$key[setdiff(seq_len(nrow(gold)), matched)],
     extra_keys = extracted$key[extra],
-    outside_keys = extracted$key[outside]
+    outside_keys = others$key,
+    outside_gold_trial_keys = others$key[gold_in_trials(others, gold)]
   )
+}
+
+# Whether each row of `rows` names a trial that a gold row of its medicine
+# names (gold_trial_names_shared()).
+gold_in_trials <- function(rows, gold) {
+  purrr::map_lgl(seq_len(nrow(rows)), function(row) {
+    trials <- gold$trial_names[gold$medicine == rows$medicine[row]]
+    any(purrr::map_lgl(trials, function(trial_names) {
+      gold_trial_names_shared(rows$trial_names[[row]], trial_names)
+    }))
+  })
 }
 
 # What keeps a model from being chosen (spec, and rulings R14): a numeric
@@ -836,7 +949,7 @@ gold_model_result <- function(model, medicines, gold, results) {
     ) %||% character(),
     usage = usage,
     cost = gold_cost(model, usage$input_tokens, usage$output_tokens),
-    score = score_against_gold(rows, gold, condition = gold_condition_pattern),
+    score = score_against_gold(rows, gold, condition = gold_condition),
     rows = rows
   )
 }
@@ -872,13 +985,15 @@ read_gold_result_file <- function(path) {
 rescore_gold_result <- function(result, gold) {
   result$score <- score_against_gold(
     result$rows, gold,
-    condition = gold_condition_pattern
+    condition = gold_condition
   )
   result
 }
 
 # A saved gold-eval-<model>.json scored again against the gold rows at
-# `gold_path` (the pilot's nsclc-rows.json), without asking the model.
+# `gold_path` (the pilot's nsclc-rows.json), without asking the model. The
+# file stays as it is (it can be a kept copy); write_gold_result() writes the
+# result.
 rescore_saved_gold_result <- function(path, gold_path) {
   check_gold_inputs(c(path, gold_path))
   rescore_gold_result(
@@ -888,8 +1003,9 @@ rescore_saved_gold_result <- function(path, gold_path) {
 }
 
 # The saved result of a model (gold-eval-<model>.json) when it scored exactly
-# these medicines and no batch of it is pending, scored again against `gold`;
-# else NULL (the model runs).
+# these medicines and no batch of it is pending, scored again against `gold`
+# and written back, so the file and the report agree; else NULL (the model
+# runs).
 read_saved_gold_result <- function(model, medicines, output_directory, gold) {
   path <- file.path(output_directory, paste0("gold-eval-", model, ".json"))
   if (!file.exists(path) ||
@@ -903,10 +1019,12 @@ read_saved_gold_result <- function(model, medicines, output_directory, gold) {
     return(NULL)
   }
   cli::cli_inform(
-    "Using the saved result of {model} ({.path {path}}), scored again; delete
-    it to ask that model again."
+    "Using the saved result of {model} ({.path {path}}), scored again and
+    written back; delete it to ask that model again."
   )
-  rescore_gold_result(result, gold)
+  result <- rescore_gold_result(result, gold)
+  write_gold_result(result, output_directory)
+  result
 }
 
 gold_yes_no <- function(value) {
@@ -997,6 +1115,10 @@ gold_report_details <- function(result) {
     listing(
       "Rows of other conditions (not scored)", result$score$outside_keys
     ),
+    listing(
+      "Rows of other conditions in a gold trial (check their indication)",
+      result$score$outside_gold_trial_keys
+    ),
     listing("Failed verification", failed),
     ""
   )
@@ -1008,9 +1130,9 @@ write_gold_report <- function(results, output_directory, today) {
     "",
     paste0(
       "Run ", format(today), ". Gold: the pilot's SmPC rows; rows kept are ",
-      "those that pass the verifier; rows of another condition than the ",
-      "gold's (NSCLC) are not scored. Message Batches API, so costs are at ",
-      "the batch price (half the list price)."
+      "those that pass the verifier; rows whose indication names another ",
+      "condition than the gold's (NSCLC) are not scored. Message Batches API, ",
+      "so costs are at the batch price (half the list price)."
     ),
     "",
     "Acceptance (spec, rulings R13 and R14): no numeric error among the",
