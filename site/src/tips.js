@@ -41,12 +41,14 @@ export function tipAbove(carrier, height, clip) {
   return height > below && above > below;
 }
 
-// Whether a tapped tree row's tip goes above the row (bug hunt 2026-10-01: under it, a row's tip in
-// the ATC sheet covered the next two rows, those the finger moves to): when it and its gap fit
-// between the row's top and the top of clip (its scroll box's visible area, { top }), it covers rows
-// already passed instead.
-export function tipFitsAbove(row, height, clip) {
-  return row.top - GAP - height >= clip.top;
+// How far (px) a scroll box scrolls down so that row ({ top, bottom }) ends EDGE inside clip (its
+// visible area, { top, bottom }), never so far that the row starts above it; 0 when it shows (bug
+// hunt 2026-10-01, fix-up: a sheet's tip strip takes its height from the body, which can leave the
+// tapped row under the body's visible bottom).
+export function revealBy(row, clip) {
+  const below = row.bottom - (clip.bottom - EDGE);
+  const above = row.top - (clip.top + EDGE);
+  return Math.max(0, Math.min(below, above));
 }
 
 // The distance (CSS px) a touch may move and still be a tap: beyond it, a swipe that scrolls the page

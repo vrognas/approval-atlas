@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, isSwipe, pointerBridge, tipAbove, tipBounds, tipClick, tipFitsAbove, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -171,16 +171,18 @@ test("isSwipe: a touch that moved more than 10px from where it started", () => {
   assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 395 }, 4), true);
 });
 
-// Bug hunt 2026-10-01 (dashboard #3): a tapped tree row's tip goes above the row when it fits in the
-// visible part of its scroll box, over rows already passed, not the next ones (under it, the A02
-// row's covered A03 and A04 in the ATC sheet).
-test("tipFitsAbove: the tip and its 4px gap fit between the row's top and the box's", () => {
-  const clip = { top: 110, bottom: 780 };
-  // A02 at 243: 129px of room above, an 86px tip fits.
-  assert.equal(tipFitsAbove({ top: 243, bottom: 291 }, 86, clip), true);
-  // Exactly fits.
-  assert.equal(tipFitsAbove({ top: 200, bottom: 248 }, 86, clip), true);
-  // The first row under the box's top: no room above.
-  assert.equal(tipFitsAbove({ top: 150, bottom: 198 }, 86, clip), false);
-  assert.equal(tipFitsAbove({ top: 199, bottom: 247 }, 86, clip), false);
+// Bug hunt 2026-10-01 (dashboard #3), fix-up: on touch screens a tip a tap shows in a sheet or
+// popover goes to a strip above its foot, which takes its height from the body; a tapped row the
+// strip leaves under the body's visible bottom is scrolled back into view.
+test("revealBy: how far a box scrolls down so a row ends 8px inside it, never past the row's top", () => {
+  const clip = { top: 100, bottom: 420 };
+  // Under the strip: by what the box lost there, plus 8px.
+  assert.equal(revealBy({ top: 400, bottom: 448 }, clip), 36);
+  // Shows already.
+  assert.equal(revealBy({ top: 300, bottom: 348 }, clip), 0);
+  assert.equal(revealBy({ top: 360, bottom: 412 }, clip), 0);
+  // Taller than the box: from its top.
+  assert.equal(revealBy({ top: 200, bottom: 800 }, clip), 92);
+  // Above the box: left as it is.
+  assert.equal(revealBy({ top: 40, bottom: 88 }, clip), 0);
 });

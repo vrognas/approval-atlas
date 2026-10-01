@@ -4270,6 +4270,28 @@ a.mesh-tip[data-tip] {
   max-width: none;
 }
 
+/* Touch screens: in a sheet or popover the tip a tap shows (a tree row's, a type or status row's, a
+   static row's) is not drawn at its carrier but in the strip above the foot (setupTips() in main.js),
+   which takes its height from the body, so it covers no row (bug hunt 2026-10-01, fix-up: under a
+   row it hid the next two, above it the search field and the parent row). The pseudo-element keeps
+   its content, so setupTips() reads whether the tip shows. */
+@media (hover: none) {
+  :is(.sheet-body, .popover-body) [data-tip]::after {
+    display: none;
+  }
+}
+
+.tip-strip {
+  flex: none;
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--grid);
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 0.8125rem/1.125rem var(--font);
+  white-space: pre-line;
+}
+
 @media (hover: hover) {
   .mesh-tip[data-tip]:hover::before,
   .mesh-tip[data-tip]:hover::after {

@@ -78,7 +78,7 @@ import { tabsKeydown } from "./tabs.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, isSwipe, pointerBridge, tipAbove, tipBounds, tipClick, tipFitsAbove, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -584,11 +584,11 @@ function renderTypeTips() {
 // rests when its pause ends, flipped above or left without room (atPointer()); it stays put, and
 // leaving the carrier toward it holds it, so the pointer can move onto it. Keyboard focus and touch
 // taps anchor it to its carrier: a carrier whose tip is anchored to its row (static: lookup rows, the
-// ATC, area and modality trees in a popover or sheet) puts the tip under its own line (--tip-top; a
-// tapped tree row's above it where it fits: staticTipTop()); a tip starting at its carrier that
-// would cross the viewport's right edge (a status near the right of a phone) or its
-// scroll box's (the medicines table) moves left (--tip-left), and goes above it where the box has no
-// room below (.tip-above).
+// ATC, area and modality trees in a popover or sheet) puts the tip under its own line (--tip-top); a
+// tip starting at its carrier that would cross the viewport's right edge (a status near the right of
+// a phone) or its scroll box's (the medicines table) moves left (--tip-left), and goes above it where
+// the box has no room below (.tip-above). On touch screens a tip in a sheet or popover shows in its
+// strip instead (updateStrips()).
 function setupTips() {
   const root = document.documentElement;
   let hiddenOn = null; // the carrier under the pointer when the tips were hidden
@@ -597,8 +597,9 @@ function setupTips() {
   // label's checkbox, the first new bar), neither of which shows them again.
   let clickedAt = null;
   const carrierOf = (target) => (target instanceof Element ? target.closest("[data-tip]") : null);
-  const showing = () => [...document.querySelectorAll("[data-tip]:is(:hover, :focus-within, .tip-hold)")]
-    .some((carrier) => getComputedStyle(carrier, "::after").content !== "none");
+  // Whether a tip shows (of a carrier for which also is true).
+  const showing = (also = () => true) => [...document.querySelectorAll("[data-tip]:is(:hover, :focus-within, .tip-hold)")]
+    .some((carrier) => also(carrier) && getComputedStyle(carrier, "::after").content !== "none");
   const pointAt = (event) => ({ x: event.clientX, y: event.clientY });
   // Touch screens (phones) and touch input anchor tips to their carriers, as before.
   const touchScreen = window.matchMedia("(hover: none)");
@@ -622,6 +623,7 @@ function setupTips() {
     hiddenOn = null;
     clickedAt = null;
     root.classList.remove("tips-hidden");
+    scheduleStrips();
   }
   // under: the carrier the tips stay hidden on while the pointer is there (the one under it; none
   // after a swipe, so a tap on the carrier shows its tip again).
@@ -630,6 +632,7 @@ function setupTips() {
     hiddenOn = under;
     clickedAt = at;
     root.classList.add("tips-hidden");
+    scheduleStrips();
   }
   // A tip in a scroll box (clip) is no wider than the box (--tip-max, style.css), else as wide as
   // its style allows.
@@ -637,27 +640,12 @@ function setupTips() {
     if (clip) carrier.style.setProperty("--tip-max", `${tipMaxWidth(clip)}px`);
     else carrier.style.removeProperty("--tip-max");
   }
-  // A static carrier's tip (anchored to its row): under its own line, or, for a tree row whose tip a
-  // tap shows (tapped), above the row where it fits in the visible part of its scroll box, over rows
-  // already passed (bug hunt 2026-10-01: under it, A02's covered A03 and A04 in the ATC sheet;
-  // tipFitsAbove()). In px from the containing block's top; style.css adds 4px (top: calc(--tip-top
-  // + 4px)), so a tip above ends 4px over the row.
-  function staticTipTop(carrier, tapped) {
-    const below = carrier.offsetTop + carrier.offsetHeight;
-    if (!tapped || !carrier.matches(".atc-row")) return below;
-    const box = carrier.closest(".sheet-body, .popover-body");
-    const clip = box ? scrollArea(box) : { top: 0 };
-    const measured = parseFloat(getComputedStyle(carrier, "::after").height);
-    const height = Number.isFinite(measured) ? measured
-      : tipHeightEstimate(carrier.dataset.tip.length, carrier.offsetParent?.clientWidth ?? root.clientWidth);
-    return tipFitsAbove(carrier.getBoundingClientRect(), height, clip) ? carrier.offsetTop - height - 8 : below;
-  }
-  // Keyboard focus and touch taps (tapped): the tip at its carrier.
-  function anchor(carrier, tapped = false) {
+  // Keyboard focus and touch taps: the tip at its carrier.
+  function anchor(carrier) {
     carrier.classList.remove("tip-at-pointer");
     if (pointed?.carrier === carrier) pointed = null;
     if (getComputedStyle(carrier).position === "static") {
-      carrier.style.setProperty("--tip-top", `${staticTipTop(carrier, tapped)}px`);
+      carrier.style.setProperty("--tip-top", `${carrier.offsetTop + carrier.offsetHeight}px`);
       return;
     }
     carrier.style.removeProperty("--tip-left");
@@ -802,7 +790,7 @@ function setupTips() {
     reveal();
     // A tap or the pointer on it: a quiet tip (focusQuietly()) shows again.
     carrier.classList.remove("tip-quiet");
-    if (touch(event)) anchor(carrier, true);
+    if (touch(event)) anchor(carrier);
     else if (!returning && (fresh || pointed?.carrier !== carrier)) placeAtPointer(carrier, pointAt(event));
   });
   document.addEventListener("pointermove", (event) => {
@@ -815,21 +803,64 @@ function setupTips() {
       && event.timeStamp - entered.at < pauseOf(carrier)) moveTip(point);
   }, { passive: true });
   document.addEventListener("focusin", (event) => {
+    scheduleStrips();
     const visible = event.target.matches(":focus-visible");
     if (clickedAt && !visible) return;
     reveal();
     const carrier = carrierOf(event.target);
     // Focus a pointer click gives keeps the tip where the pointer opened it.
-    if (carrier && (visible || !carrier.classList.contains("tip-at-pointer"))) anchor(carrier, !visible && touchScreen.matches);
+    if (carrier && (visible || !carrier.classList.contains("tip-at-pointer"))) anchor(carrier);
   });
   document.addEventListener("focusout", (event) => {
     const carrier = carrierOf(event.target);
     if (carrier && !carrier.contains(event.relatedTarget)) carrier.classList.remove("tip-quiet");
+    scheduleStrips();
   });
+  // Touch screens: in a sheet or popover the tip a tap (or focus) shows is drawn in the strip above
+  // the foot, not at its carrier (style.css), so it covers no row (bug hunt 2026-10-01, fix-up: under
+  // a tree row it hid the next two rows, above it the search field and the parent row). The strip
+  // takes its height from the body: a sheet keeps the height it had when its strip first showed
+  // until it closes (it grows upward from the bottom of the screen, so its rows would move up under
+  // the finger), and a tapped row the strip leaves under the body's visible bottom is scrolled back
+  // into view (revealBy()). Updated in the next frame, never during a tap: a body shrinking between
+  // mousedown (focus) and mouseup would send the click elsewhere, to the sheet's backdrop handler
+  // even, which closes it.
+  const STRIP_BODY = ".sheet-body, .popover-body";
+  const inStrip = (carrier) => touchScreen.matches && carrier.closest(STRIP_BODY) !== null;
+  const shown = (carrier) => getComputedStyle(carrier, "::after").content !== "none";
+  let stripFrame = 0;
+  const stripCarriers = new WeakMap(); // strip: the carrier whose tip it shows
+  function scheduleStrips() {
+    if (!stripFrame) stripFrame = requestAnimationFrame(updateStrips);
+  }
+  function updateStrips() {
+    stripFrame = 0;
+    for (const strip of document.querySelectorAll(".tip-strip")) {
+      const dialog = strip.closest("dialog");
+      const body = dialog.querySelector(STRIP_BODY);
+      // The innermost focused carrier whose tip shows (not a MeSH explainer's a tap leaves hidden).
+      const carrier = dialog.open && touchScreen.matches
+        ? [...body.querySelectorAll("[data-tip]:focus-within")].findLast(shown) : null;
+      if (!dialog.open) dialog.style.removeProperty("height");
+      if (!carrier) {
+        strip.hidden = true;
+        stripCarriers.delete(strip);
+        continue;
+      }
+      if (dialog.classList.contains("sheet") && !dialog.style.height) dialog.style.setProperty("height", `${dialog.offsetHeight}px`);
+      strip.textContent = carrier.dataset.tip;
+      strip.hidden = false;
+      if (stripCarriers.get(strip) === carrier) continue;
+      stripCarriers.set(strip, carrier);
+      body.scrollTop += revealBy(carrier.getBoundingClientRect(), scrollArea(body));
+    }
+  }
+  document.addEventListener("close", scheduleStrips, true);
   // Touch screens: a swipe (the page or a scroll box scrolling under the finger) hides the tips, so
   // a tapped one never hangs over the rows scrolled to (bug hunt 2026-10-01: an ATC segment's 212px
   // tip covered the medicines table's next rows); the next tap on a carrier, or focus moving, shows
-  // them again. A tap's own small movement is no swipe (isSwipe()).
+  // them again. A tap's own small movement is no swipe (isSwipe()). A tip in a strip covers nothing:
+  // a swipe in its sheet leaves it.
   let touchStart = null;
   document.addEventListener("touchstart", (event) => {
     const [first] = event.touches;
@@ -839,7 +870,7 @@ function setupTips() {
     const [first] = event.touches;
     if (!touchStart || !first || !isSwipe(touchStart, { x: first.clientX, y: first.clientY })) return;
     touchStart = null;
-    if (!root.classList.contains("tips-hidden") && showing()) hide(null, null);
+    if (!root.classList.contains("tips-hidden") && showing((carrier) => !inStrip(carrier))) hide(null, null);
   }, { capture: true, passive: true });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || root.classList.contains("tips-hidden") || !showing()) return;
