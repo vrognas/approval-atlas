@@ -192,9 +192,6 @@ export function buildLookupIndex(searchRows, entryTermRows) {
       substances.get(key).products.push(row);
     }
   }
-  // Bug hunt 2026-10-01 (lookup.md #8): the suggestions' meta counts the medicines with status
-  // Authorised, in every group.
-  for (const substance of substances.values()) substance.authorized = substance.products.filter(isAuthorised).length;
   return {
     medicines: searchRows.map((row) => ({ row, folded: foldSearchText(row.name_of_medicine), tokens: searchWords(row.name_of_medicine) })),
     byNumber: new Map(searchRows.map((row) => [row.ema_product_number, row])),
@@ -340,20 +337,37 @@ function namesQuery(groupKey, option, folded) {
   return Boolean(option.named) || foldSearchText(option.label) === folded || (groupKey === "classes" && foldSearchText(option.value) === folded);
 }
 
-// Bug hunt 2026-10-01 (lookup.md #2): background data arriving under an open list rebuilt it with
-// the new groups above those shown ("Roche", the company, above Bondenza, which moved 70px down),
-// so a tap aimed at an option then hit another. The groups shown (shownKeys, in order) keep their
-// order and the new ones follow them, after the indication-text search too, until the next
-// keystroke sorts the list as usual; unless a new group holds the suggestion the query names
-// (Psoriasis, L04AC, Roche): the answer, sorted as usual (the same groups returned).
-export function keepShownOrder(shownKeys, groups, query) {
-  const folded = foldSearchText(query);
-  const shown = new Set(shownKeys);
-  const added = groups.filter((group) => !shown.has(group.key));
-  if (added.some((group) => group.options.some((option) => namesQuery(group.key, option, folded)))) return groups;
-  const position = new Map(shownKeys.map((key, order) => [key, order]));
-  const kept = groups.filter((group) => shown.has(group.key)).sort((a, b) => position.get(a.key) - position.get(b.key));
-  return [...kept, ...added];
+// Bug hunt 2026-10-01 (lookup.md #2) and its review: background data arriving under an open list
+// rebuilt it with new groups above the options shown ("Roche", the company, above Bondenza, 70px
+// down; "msd": a tap aimed at Vorinostat MSD opened Sanofi's company page) and without the
+// "Loading…" note above them (the text search 32px up), so a tap aimed at an option then hit
+// another. The list's layout: next: { groups, note, loading } as the search gives them now;
+// shown: { groups, note } as the open list shows them (groups before collapseGroups()), null for a
+// new list (a keystroke). Returns { groups, note, end }: note above the groups, end under them.
+// A new list: as given, end "Loading…" (loadingNote) while data loads, as what comes then comes
+// there. An open list keeps what it shows in place until the next keystroke sorts it as usual: its
+// groups in their order, each with the options it shows (as they read now: a negative opinion in
+// a medicine's meta; one gone now kept as shown; one new to the group left out), a group gone now
+// kept as shown (did you mean, once something matches); new groups under them, where "Loading…"
+// was, even one the query names (Enter still opens it: submitChoice()); its note kept as it reads
+// now, and a note it did not show under the groups ("Paracetamol (ATC N02BE01): …"), but "No
+// matches" (quietNote), which the status says and a "Did you mean" heading shows.
+export function keepShownList(shown, next, { loadingNote, quietNote }) {
+  const groups = next.groups.filter((group) => group.options.length > 0);
+  const end = next.loading ? loadingNote : null;
+  if (!shown) return { groups, note: next.note ?? null, end };
+  const optionKey = (option) => `${option.pick ?? ""}\u0000${option.value}`;
+  const nextByKey = new Map(groups.map((group) => [group.key, group]));
+  const kept = shown.groups.map((group) => {
+    const now = nextByKey.get(group.key);
+    const current = new Map((now?.options ?? []).map((option) => [optionKey(option), option]));
+    return { ...group, ...now, options: group.options.map((option) => current.get(optionKey(option)) ?? option) };
+  });
+  const shownKeys = new Set(shown.groups.map((group) => group.key));
+  const added = groups.filter((group) => !shownKeys.has(group.key));
+  const note = shown.note ? next.note ?? shown.note : null;
+  const unshown = !shown.note && next.note && next.note !== quietNote ? next.note : null;
+  return { groups: [...kept, ...added], note, end: end ?? unshown };
 }
 
 // Laws of UX, second pass (owner decision 2026-09-30; Hick's Law, Choice Overload): on a phone, with

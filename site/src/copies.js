@@ -176,3 +176,13 @@ export function substanceGroup(products, siblings) {
   const rows = [...new Set([...products, ...siblings.flatMap((sibling) => sibling.substance.products)])];
   return { rows, first: earliest(rows), authorized: rows.filter((row) => row.medicine_status === AUTHORIZED) };
 }
+
+// A search suggestion's count for a substance key (bug hunt 2026-10-01, review of lookup.md #8:
+// "dasatinib" and "dasatinib (anhydrous)" said "1 authorized" each, their cards 2): its medicines
+// with status Authorised under all its spellings, as its card counts them (substanceGroup());
+// substances: the search index's; equivalents: substanceEquivalents(), empty until loaded.
+export function substanceAuthorizedCount(key, substances, equivalents) {
+  const substance = substances.get(key);
+  if (!substance) return 0;
+  return substanceGroup(substance.products, siblingSubstances(key, substances, equivalents)).authorized.length;
+}

@@ -1589,7 +1589,8 @@ export const UI = {
     // opinion: EMA's opinion (statusOpinionLabel()), once ema_medicines.json has loaded.
     medicineMeta: (status, year, opinion = null) => [statusOpinionLabel(status, opinion), year].filter(Boolean).join(" · "),
     // synonym: another name of the substance that matched (#19: "adrenaline" for epinephrine);
-    // count: its medicines with status Authorised, as the other groups count (bug hunt 2026-10-01).
+    // count: its medicines with status Authorised, as the other groups count (bug hunt 2026-10-01),
+    // under all its spellings, as its card counts (copies.js substanceAuthorizedCount()).
     substanceMeta: (count, synonym = null) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     // A WHO level-5 name with no medicine in the data, as a "did you mean" option (a text search).
     whoMeta: (code) => `ATC ${code} · not in EMA's central procedure`,
@@ -1636,8 +1637,9 @@ export const UI = {
       status: (count) => `Recently viewed: ${plural(count, "item", "items")}`,
       cleared: "Recently viewed cleared",
     },
-    // Also the search list's note while the conditions, drug classes or companies load and nothing
-    // matches yet, and what Enter announces while it waits for them (bug hunt 2026-10-01).
+    // Also the line under the search list while the conditions, drug classes or companies load,
+    // announced while nothing matches yet, and what Enter announces while it waits for them (bug
+    // hunt 2026-10-01).
     loading: "Loading…",
     notAvailable: "Not available right now.",
     // Home state only: example lookups (ids checked against the data 2026-09-26), each followed by

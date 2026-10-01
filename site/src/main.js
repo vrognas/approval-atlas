@@ -25,7 +25,7 @@ import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart
 import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, suggestCompanies, toggleCompany } from "./companies.js";
 import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
 import { createConditionsCard } from "./conditions-card.js";
-import { equivalentSetKey } from "./copies.js";
+import { equivalentSetKey, substanceAuthorizedCount } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
 import { FAILED, settledOrAfter } from "./datasets.js";
 import { createFacetPanel } from "./facet-panel.js";
@@ -908,8 +908,10 @@ function showOfflineNote(meta) {
 // until loaded.
 // Step 2: a condition's exact entry term names it ("ADHD", #4); a substance found through another
 // name says so and is named by it ("adrenaline", #19); a company found only through a derived
-// monogram is weak (#4: Enter never opens it as the only suggestion).
-function suggestionGroups(result, classes, companies, medicines) {
+// monogram is weak (#4: Enter never opens it as the only suggestion). substanceCount(substance):
+// its medicines authorized under all its spellings, as its card counts (copies.js
+// substanceAuthorizedCount()).
+function suggestionGroups(result, classes, companies, medicines, substanceCount) {
   const copy = UI.lookup;
   const companyGroup = {
     key: "companies",
@@ -932,7 +934,7 @@ function suggestionGroups(result, classes, companies, medicines) {
       key: "substances",
       label: copy.groups.substances,
       options: result.substances.map((substance) => ({
-        label: substance.name, meta: copy.substanceMeta(substance.authorized, substance.synonym), value: substance.key, named: substance.named,
+        label: substance.name, meta: copy.substanceMeta(substanceCount(substance), substance.synonym), value: substance.key, named: substance.named,
       })),
     },
     {
@@ -953,12 +955,12 @@ function suggestionGroups(result, classes, companies, medicines) {
 
 // A "did you mean" entry (didYouMean()) as an option: a medicine or substance opens its card, a
 // WHO substance with no medicine through EMA runs the text search for its name (which says so).
-function fuzzyOption(entry) {
+function fuzzyOption(entry, substanceCount) {
   const copy = UI.lookup;
   if (entry.kind === "medicine") {
     return { label: entry.label, meta: copy.medicineMeta(entry.row.medicine_status, entry.row.marketing_authorisation_date?.slice(0, 4)), value: entry.value, pick: "medicines" };
   }
-  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(entry.substance.authorized), value: entry.value, pick: "substances" };
+  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(substanceCount(entry.substance)), value: entry.value, pick: "substances" };
   return { label: atcName(entry.label), meta: copy.whoMeta(entry.code), value: entry.value, pick: "text" };
 }
 
@@ -967,26 +969,28 @@ function fuzzyOption(entry) {
 // matches, "No matches" (or that the WHO substance named has no medicine through EMA, #2) and up
 // to 3 close names (#5); always last, the indication-text search for the typed text (#14).
 // run(text): suggestionGroups() for a query. atcClasses: atc_classes.json rows, [] until loaded.
-// loading (bug hunt 2026-10-01, lookup.md #2): the conditions, drug classes or companies are still
-// loading: a list with nothing yet says "Loading…", not "No matches", and guesses no close names.
-function searchSuggestions(index, query, run, atcClasses, loading = false) {
+// substanceCount(substance): a substance option's authorized count. loading (bug hunt 2026-10-01,
+// lookup.md #2): the conditions, drug classes or companies are still loading: more suggestions can
+// come ("Loading…" under the list, search-box.js), so nothing found is no "No matches" yet; the
+// close names guessed from the search index show meanwhile (review: they waited for the data).
+function searchSuggestions(index, query, run, atcClasses, substanceCount, loading = false) {
   const text = query.trim();
-  if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text };
+  if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text, loading: false };
   const copy = UI.lookup;
   const { groups, shownFor } = searchWithFallback(text, run);
   const found = groups.some((group) => group.options.length > 0);
   let note = shownFor ? copy.showingFor(shownFor) : null;
   const extra = [];
-  if (!found && loading) {
-    note = copy.loading;
-  } else if (!found) {
-    const known = knownSubstance(index, text, atcClasses);
-    note = known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+  if (!found) {
+    if (!loading) {
+      const known = knownSubstance(index, text, atcClasses);
+      note = known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+    }
     const fuzzy = didYouMean(index, text, atcClasses);
-    if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map(fuzzyOption) });
+    if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map((entry) => fuzzyOption(entry, substanceCount)) });
   }
   extra.push({ key: "text", label: null, name: copy.groups.text, options: [{ label: copy.searchText(text), value: text }] });
-  return { groups: [...groups, ...extra], note, query: shownFor ?? text };
+  return { groups: [...groups, ...extra], note, query: shownFor ?? text, loading };
 }
 
 // Search icon (decorative) inside the search bar.
@@ -1049,17 +1053,22 @@ function startLookup([meta, searchRows, entryTermRows]) {
     companies: (value) => ({ co: value }), // the company page
     text: (value) => ({ q: value }), // the indication-text search
   };
+  const noEquivalents = new Map();
   const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
     suggestionsFor: (query) => {
       const atc = lookup.atcClasses();
       const companies = lookup.companies();
+      // Under all its spellings once the equivalents have loaded, as its card counts.
+      const equivalents = lookup.equivalents() ?? noEquivalents;
+      const substanceCount = (substance) => substanceAuthorizedCount(substance.key, index.substances, equivalents);
       const run = (text) => suggestionGroups(
         suggest(index, lookup.conditions(), text),
         atc ? suggestAtcClasses(text, atc.classes, atc.counts) : [],
         companies ? suggestCompanies(companies, text) : [],
         lookup.medicines(),
+        substanceCount,
       );
-      return searchSuggestions(index, query, run, atc?.classes ?? [], lookup.searchLoading());
+      return searchSuggestions(index, query, run, atc?.classes ?? [], substanceCount, lookup.searchLoading());
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
@@ -1072,7 +1081,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
   // loaded (and a condition or company page's title its name); so do EMA's opinions (a negative
   // one is named in a medicine's meta line).
   lookup.onData((name) => {
-    if (["conditions", "atc", "atcCounts", "companies", "medicines"].includes(name)) searchBox.refresh();
+    if (["conditions", "atc", "atcCounts", "companies", "medicines", "equivalents"].includes(name)) searchBox.refresh();
     if (name === "conditions" || name === "companies") updateTitle();
     // A restore waiting for the card's data: once the lookup has rendered it (after the listeners).
     queueMicrotask(restoreScroll);
@@ -1085,8 +1094,9 @@ function startLookup([meta, searchRows, entryTermRows]) {
     navigate(structuredClone(DEFAULT_STATE));
   });
   d3.select("#explore-note").text(UI.explore.note);
-  // medicines: the dashboard loads the same file (one request, loadFile()).
-  for (const name of ["conditions", "atc", "atcCounts", "companies", "medicines"]) lookup.need(name);
+  // medicines: the dashboard loads the same file (one request, loadFile()); equivalents (small):
+  // the substance suggestions' counts under every spelling.
+  for (const name of ["conditions", "atc", "atcCounts", "companies", "medicines", "equivalents"]) lookup.need(name);
 
   applyUrl();
   searchBox.setText(state.q);

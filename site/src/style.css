@@ -5414,10 +5414,22 @@ table.activity {
   font-size: 0.8125rem;
 }
 
+/* Review of the bug hunt 2026-10-01: "Loading…" (or a note the open list did not show) goes under
+   the options, where suggestions still to come will show, so none of those shown moves. */
+.listbox-note.listbox-end {
+  padding: 6px 10px 8px;
+}
+
 [role="listbox"] .group-text {
   margin-top: 4px;
   border-top: 1px solid var(--grid);
   padding-top: 4px;
+}
+
+/* First in the list (nothing found while data loads): no hairline under the list's own edge. */
+[role="listbox"] .group-text:first-child {
+  margin-top: 0;
+  border-top: 0;
 }
 
 .lookup .group-text [role="option"] {

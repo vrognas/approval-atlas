@@ -2,66 +2,81 @@
 // selection). DOM focus stays on the input (aria-activedescendant). Text is set via textContent only.
 // Markup is static in index.html: input[role=combobox], [role=listbox], a polite status element.
 import { UI } from "./labels.js";
-import { collapseGroups, keepShownOrder, submitChoice } from "./search.js";
+import { collapseGroups, keepShownList, submitChoice } from "./search.js";
 
 const DEBOUNCE_MS = 120;
-// How long Enter waits at most for the search's background data (bug hunt 2026-10-01): about the
-// gap between the search and that data on slow conference Wi-Fi (1.5-2.5 s at 1.6 Mbps).
-const ENTER_WAIT_MS = 3000;
 const COPY = UI.lookup;
+const NOTES = { loadingNote: COPY.loading, quietNote: COPY.noMatches };
 // Laws of UX, second pass (2026-09-30): on phones (as style.css's 44px options) each group shows a
 // few options and a "Show 5 more" option expanding it in place (collapseGroups()); desktop unchanged.
 const PHONE = window.matchMedia("(max-width: 720px)");
 
 // suggestionsFor(query) -> { groups: [{ key, label, name, options: [{ label, meta, value, pick }] }],
-// note, query }: a group without a label (the indication-text search) is named by name and has no
-// heading; an option's pick names the group it opens as (a "did you mean" medicine: "medicines");
-// note: a line above the options (a retried query, or no matches), announced with the count; query:
-// the query the groups are for (the retried one), which Enter compares labels with. No options and
-// no note: closed. onPick(groupKey, value) for a chosen option (or, on Enter without one, the
-// suggestion the text names or the only one: submitChoice()); onSubmit(text) for Enter otherwise.
-// recent (2026-09-29): { group(), clear() } for the viewer's recently viewed, listed while the field
-// is focused and empty: group() gives the group (recent.js recentGroup(), null when empty), whose
-// options open as picked suggestions but the last, Clear (action "clear": clear(), focus kept).
-// pending(): a Promise settled once the background data suggestions come from has arrived, null
-// when none is loading; navigations(): a count of the history entries pushed or popped (bug hunt
-// 2026-10-01, lookup.md #2: Enter in the first seconds on slow Wi-Fi ran a text search for
-// "psoriasis", as the conditions had not arrived).
+// note, query, loading }: a group without a label (the indication-text search) is named by name and
+// has no heading; an option's pick names the group it opens as (a "did you mean" medicine:
+// "medicines"); note: a line above the options (a retried query, or no matches), announced with the
+// count; query: the query the groups are for (the retried one), which Enter compares labels with;
+// loading: more suggestions can come (background data), said by a "Loading…" line under the list.
+// No options and no note: closed. onPick(groupKey, value) for a chosen option (or, on Enter without
+// one, the suggestion the text names or the only one: submitChoice()); onSubmit(text) for Enter
+// otherwise. recent (2026-09-29): { group(), clear() } for the viewer's recently viewed, listed
+// while the field is focused and empty: group() gives the group (recent.js recentGroup(), null when
+// empty), whose options open as picked suggestions but the last, Clear (action "clear": clear(),
+// focus kept). pending(): a Promise settled once the background data suggestions come from has
+// arrived, null when none is loading; navigations(): a count of the history entries pushed or
+// popped (bug hunt 2026-10-01, lookup.md #2: Enter in the first seconds on slow Wi-Fi ran a text
+// search for "psoriasis", as the conditions had not arrived).
 export function createSearchBox(input, listbox, status, {
   suggestionsFor, onPick, onSubmit, recent = null, pending = () => null, navigations = () => 0,
 }) {
   let options = [];
   let active = -1;
   let timer = 0;
-  // The group keys the list shows, in order, and the query they are for: data arriving under the
-  // open list keeps them in place (keepShownOrder()).
+  // What the open list shows (its groups before collapseGroups(), its note) and the query they are
+  // for: data arriving under it keeps them in place (keepShownList()).
   let listed = null;
   // Each Enter, pick, keystroke, Escape and setText: an Enter waiting for data is dropped by any.
   let submits = 0;
+  // An Enter waiting for data: { serial, text, view } (submit()).
+  let waiting = null;
   // The groups a "Show … more" expanded (phones), until the text changes.
   let expanded = new Set();
   // Suggestions were asked for (typing, arrow keys) and not dismissed since: data arriving later
   // may fill a list that had no matches yet (e.g. an ATC code typed before the classes loaded).
   let requested = false;
 
+  // A dismissed list (a tap outside, Tab, Escape, a pick) also drops an Enter waiting for data
+  // (review of the bug hunt 2026-10-01: it opened the condition page 0.8 s after a tap outside).
   function close() {
     clearTimeout(timer); // a pending keystroke render would reopen the list
     requested = false;
+    waiting = null;
     listbox.hidden = true;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
     active = -1;
   }
 
-  // keepOrder: background data arrived under the open list; the groups shown keep their places.
-  function renderList({ keepOrder = false } = {}) {
+  const noteLine = (text, className) => {
+    if (!text) return null;
+    const line = document.createElement("div");
+    line.className = className;
+    line.setAttribute("aria-hidden", "true");
+    line.textContent = text;
+    return line;
+  };
+
+  // keepOrder: the open list keeps what it shows in place (keepShownList(): background data
+  // arriving, Enter waiting, "Show 5 more"); a keystroke sorts it anew.
+  function renderList({ keepOrder = !listbox.hidden } = {}) {
     requested = true;
     const recentGroup = input.value.trim() === "" ? recent?.group() ?? null : null;
     const result = recentGroup ? { groups: [recentGroup], note: null } : suggestionsFor(input.value);
     const query = result.query ?? input.value;
-    let groups = result.groups.filter((group) => group.options.length > 0);
-    if (keepOrder && !recentGroup && listed?.query === query) groups = keepShownOrder(listed.keys, groups, query);
-    listed = { query, keys: groups.map((group) => group.key) };
+    const shown = keepOrder && !recentGroup && listed?.query === query ? listed : null;
+    const layout = keepShownList(shown, { groups: result.groups, note: result.note ?? null, loading: Boolean(result.loading) }, NOTES);
+    let { groups } = layout;
+    listed = recentGroup ? null : { query, groups, note: layout.note };
     // Phones: a few options per group, then "Show 5 more …" (an action option expanding it in place;
     // it names what it adds, as more can match than a group holds: MAX_SUGGESTIONS).
     let hidden = 0;
@@ -73,14 +88,11 @@ export function createSearchBox(input, listbox, status, {
       });
     }
     options = [];
-    // The note is announced through the status element, so it is hidden from the listbox's tree
-    // (a listbox holds only options and groups).
-    const note = result.note ? document.createElement("div") : null;
-    if (note) {
-      note.className = "listbox-note";
-      note.setAttribute("aria-hidden", "true");
-      note.textContent = result.note;
-    }
+    // The notes are announced through the status element, so they are hidden from the listbox's
+    // tree (a listbox holds only options and groups): one above the options, one under them
+    // ("Loading…", where suggestions still to come will show).
+    const note = noteLine(layout.note, "listbox-note");
+    const end = noteLine(layout.end, "listbox-note listbox-end");
     listbox.replaceChildren(...[note].filter(Boolean), ...groups.map((group) => {
       const list = document.createElement("ul");
       list.setAttribute("role", "group");
@@ -114,16 +126,18 @@ export function createSearchBox(input, listbox, status, {
         }
       }
       return list;
-    }));
+    }), ...[end].filter(Boolean));
     active = -1;
     input.removeAttribute("aria-activedescendant");
-    const open = options.length > 0 || note !== null;
+    const open = options.length > 0 || note !== null || end !== null;
     listbox.hidden = !open;
     input.setAttribute("aria-expanded", String(open));
     // Those a "Show … more" holds count too: the same number as on desktop.
     const count = options.filter((option) => option.counted).length + hidden;
+    // As a new list reads (its note), "Loading…" while nothing is found yet.
+    const spoken = result.note ?? (result.loading && !count ? COPY.loading : null);
     if (recentGroup) status.textContent = COPY.recent.status(count);
-    else status.textContent = input.value.trim().length < 2 ? "" : COPY.status(result.note, count) || COPY.noMatches;
+    else status.textContent = input.value.trim().length < 2 ? "" : COPY.status(spoken, count) || COPY.noMatches;
   }
 
   function setActive(index) {
@@ -167,9 +181,10 @@ export function createSearchBox(input, listbox, status, {
   // labels are compared with. While background data is loading (bug hunt 2026-10-01) only a named
   // suggestion opens ("humira"); else Enter waits (the list shown, "Loading…" announced), trying
   // again as each dataset arrives (refresh(): "psoriasis" opens with the conditions), and chooses
-  // as usual once all have, or ENTER_WAIT_MS passed; dropped when the text changed, another Enter,
-  // pick or Escape came, or a navigation happened (a link, Back) meanwhile.
-  let waiting = null; // { serial, text, view }
+  // as usual once all have arrived or failed; dropped when the text changed, another Enter, pick
+  // or Escape came, the list was dismissed (close()) or a navigation happened (a link, Back)
+  // meanwhile. No time limit (review: after 3 s it ran the text search for "msd", on Wi-Fi a
+  // little slower than 1.6 Mbps): the list stays open meanwhile, its text search a tap away.
   function choose(text, onlyNamed) {
     const result = suggestionsFor(text);
     const choice = submitChoice(result.groups, result.query, { onlyNamed });
@@ -184,13 +199,14 @@ export function createSearchBox(input, listbox, status, {
     const serial = ++submits;
     const loading = pending();
     if (choose(text, loading !== null)) return;
-    waiting = { serial, text, view: navigations() };
     renderList();
+    waiting = { serial, text, view: navigations() };
     status.textContent = COPY.loading;
-    const cap = new Promise((resolve) => setTimeout(resolve, ENTER_WAIT_MS));
-    Promise.race([loading, cap]).then(() => resume(true));
+    loading.then(() => {
+      if (waiting?.serial === serial) resume(true);
+    });
   }
-  // final: every dataset in, or the time is up: the usual choice.
+  // final: every dataset in (or failed): the usual choice.
   function resume(final) {
     if (!waiting) return;
     const { serial, text, view } = waiting;
@@ -202,7 +218,7 @@ export function createSearchBox(input, listbox, status, {
     expanded = new Set();
     submits += 1;
     clearTimeout(timer);
-    timer = setTimeout(renderList, DEBOUNCE_MS);
+    timer = setTimeout(() => renderList({ keepOrder: false }), DEBOUNCE_MS);
   });
   input.addEventListener("keydown", (event) => {
     const isOpen = !listbox.hidden;
@@ -220,6 +236,11 @@ export function createSearchBox(input, listbox, status, {
       submits += 1;
       if (isOpen) close();
       else input.value = "";
+    } else if (event.key === "Tab") {
+      // Closed before focus moves (review of the bug hunt 2026-10-01): Chrome lets a scrolling list
+      // take focus ("hum"), which the field's blur then hid, leaving focus on the page.
+      close();
+      return;
     } else {
       return;
     }
@@ -268,8 +289,8 @@ export function createSearchBox(input, listbox, status, {
 
   return {
     // New background data (conditions, drug classes) arrived: refresh an open list in place, or
-    // show one for a query that had no matches yet. An open list keeps the groups and the active
-    // option it shows where they are, new groups after them (keepShownOrder(); bug hunt 2026-10-01).
+    // show one for a query that had no matches yet. An open list keeps what it shows and its
+    // active option where they are, new groups under them (keepShownList(); bug hunt 2026-10-01).
     refresh() {
       // An empty field shows the recently viewed list, which background data does not change: not
       // rebuilt (review 2026-09-29: it reset the active option and repeated the announcement).

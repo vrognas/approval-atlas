@@ -22,12 +22,13 @@ import {
   searchWords,
   spellingVariant,
   submitChoice,
-  keepShownOrder,
+  keepShownList,
   suggest,
   suggestAtcClasses,
   textMatches,
   textPhrases,
 } from "./search.js";
+import { substanceAuthorizedCount } from "./copies.js";
 
 // The R rule (fold_search_text in R/mesh.R): str_to_lower; str_replace_all("ae|oe", "e");
 // "[\\-\\x{2010}-\\x{2015}]" -> " "; str_squish.
@@ -253,11 +254,13 @@ test("substances match INN items and carry their product count", () => {
 
 // Bug hunt 2026-10-01 (lookup.md #8): the suggestions' meta counts medicines with status
 // Authorised in every group; substances counted every status ("17 medicines" beside "52 authorized").
-test("substances carry their authorized count, as conditions and companies do", () => {
-  assert.deepEqual(suggest(index, null, "ADALIMUMAB").substances.map((s) => [s.name, s.authorized]), [["adalimumab", 2]]);
-  assert.equal(index.substances.get("pembrolizumab").authorized, 1);
+// main.js counts a substance suggestion by substanceAuthorizedCount() (copies.test.js: every spelling).
+test("substances suggested are counted by their authorized medicines, as conditions and companies", () => {
+  const authorized = (substance) => substanceAuthorizedCount(substance.key, index.substances, new Map());
+  assert.deepEqual(suggest(index, null, "ADALIMUMAB").substances.map((s) => [s.name, authorized(s)]), [["adalimumab", 2]]);
+  assert.equal(authorized(index.substances.get("pembrolizumab")), 1);
   // Through another name too (#19: "adrenaline" for epinephrine).
-  assert.deepEqual(suggest(index, null, "adrenaline").substances.map((s) => [s.name, s.synonym, s.authorized]), [["epinephrine", "adrenaline", 1]]);
+  assert.deepEqual(suggest(index, null, "adrenaline").substances.map((s) => [s.name, s.synonym, authorized(s)]), [["epinephrine", "adrenaline", 1]]);
 });
 
 test("conditions: every word must start a word of one entry term; words under 4 characters match whole", () => {
@@ -425,30 +428,58 @@ test("submitChoice with onlyNamed: the suggestion the query names, never the onl
   assert.deepEqual(submitChoice(groups, "msd", { onlyNamed: true }), { group: "companies", value: "g.msd" });
 });
 
-// Bug hunt 2026-10-01 (lookup.md #2): data arriving under an open list rebuilt it with the new
-// groups above the options shown ("Roche" above Bondenza, 70px down), so a tap aimed at an option
-// in that moment hit another. New groups now follow those shown, unless one names the query.
-test("keepShownOrder: the groups shown keep their order, new ones follow; a group naming the query re-sorts", () => {
-  const group = (key, ...labels) => ({ key, options: labels.map((label) => ({ label, value: label })) });
-  const text = group("text", "Search indication texts for “interleukin”");
-  const keys = (groups) => groups.map((entry) => entry.key);
-  // The drug classes arrive: after the text search shown last, not between it and the substances.
-  const next = [group("medicines", "Interleukin Test"), group("substances", "interleukin x"), group("classes", "L04AC Interleukin Inhibitors"), text];
-  assert.deepEqual(keys(keepShownOrder(["medicines", "substances", "text"], next, "interleukin")), ["medicines", "substances", "text", "classes"]);
-  // A group shown before and gone now stays gone (did you mean, once something matches).
-  assert.deepEqual(keys(keepShownOrder(["fuzzy", "text"], [group("conditions", "Interleukin Deficiency"), text], "interleukin")), ["text", "conditions"]);
-  // Nothing shown before: as given.
-  assert.deepEqual(keys(keepShownOrder([], next, "interleukin")), keys(next));
-  // A new group naming the query (named, its label, a class's code) sorts as usual.
-  const roche = [{ key: "companies", options: [{ label: "Roche", value: "g.roche", named: true }] }, group("medicines", "Bondenza"), text];
-  assert.equal(keepShownOrder(["medicines", "text"], roche, "roche"), roche);
-  const psoriasis = [group("conditions", "Psoriasis"), text];
-  assert.equal(keepShownOrder(["text"], psoriasis, "PSORIASIS"), psoriasis);
-  const l04ac = [{ key: "classes", options: [{ label: "L04AC Interleukin Inhibitors", value: "L04AC" }] }, text];
-  assert.equal(keepShownOrder(["text"], l04ac, "l04ac"), l04ac);
-  // A group shown before that names the query does not re-sort (it already showed).
-  const humira = [group("medicines", "Humira"), group("classes", "L04AB04 Adalimumab"), text];
-  assert.deepEqual(keys(keepShownOrder(["medicines", "text"], humira, "humira")), ["medicines", "text", "classes"]);
+// Bug hunt 2026-10-01 (lookup.md #2) and its review: data arriving under an open list rebuilt it
+// with the new groups above the options shown ("Roche" above Bondenza, 70px down; "msd": a tap
+// aimed at Vorinostat MSD opened Sanofi's company page), and the "Loading…" note above the options
+// went (the text search 32px up), so a tap aimed at an option in that moment hit another. Nothing
+// shown moves now: the groups and options shown keep their places, new groups come below them,
+// where the "Loading…" line was, even one naming the query; the next keystroke sorts as usual.
+test("keepShownList: what the list shows stays in place; new groups and notes come below it", () => {
+  const option = (label, extra = {}) => ({ label, value: label, ...extra });
+  const group = (key, ...labels) => ({ key, options: labels.map((label) => option(label)) });
+  const text = group("text", "Search indication texts for “roche”");
+  const keys = (list) => list.groups.map((entry) => entry.key);
+  const labels = (list) => list.groups.map((entry) => `${entry.key}: ${entry.options.map((item) => item.meta ? `${item.label} (${item.meta})` : item.label).join(", ")}`);
+  const notes = { loadingNote: "Loading…", quietNote: "No matches" };
+  // Nothing shown (a keystroke): as given, "Loading…" under the list while data loads.
+  const loading = { groups: [group("medicines", "Bondenza"), text], note: null, loading: true };
+  assert.deepEqual(keepShownList(null, loading, notes), { groups: loading.groups, note: null, end: "Loading…" });
+  assert.deepEqual(keepShownList(null, { ...loading, note: "No matches", loading: false }, notes), { groups: loading.groups, note: "No matches", end: null });
+  // The companies arrive with the group the query names: below the text search, not above Bondenza.
+  const shown = { groups: loading.groups, note: null };
+  const roche = { groups: [{ key: "companies", options: [option("Roche", { value: "g.roche", named: true })] }, group("medicines", "Bondenza"), text], note: null, loading: false };
+  assert.deepEqual(keys(keepShownList(shown, roche, notes)), ["medicines", "text", "companies"]);
+  assert.equal(keepShownList(shown, roche, notes).end, null);
+  // Still loading another dataset: "Loading…" stays last, under the new group.
+  assert.equal(keepShownList(shown, { ...roche, loading: true }, notes).end, "Loading…");
+  // A class named by its code, a condition by its name: the same.
+  const psoriasis = { groups: [group("conditions", "Psoriasis"), text], note: null, loading: false };
+  assert.deepEqual(keys(keepShownList({ groups: [text], note: null }, psoriasis, notes)), ["text", "conditions"]);
+  // A group shown keeps its options and their order: updated in place (an opinion in the meta),
+  // one gone now kept as shown, one new to it left for the next keystroke; a group gone now
+  // (did you mean, once something matches) kept as shown.
+  const medicines = { key: "medicines", options: [option("Kinselby", { meta: "Opinion" }), option("Keytruda", { meta: "Authorized" })] };
+  const fuzzy = group("fuzzy", "Keytruda");
+  const next = {
+    groups: [{ key: "medicines", options: [option("Keytruda", { meta: "Authorized" }), option("Kinselby", { meta: "Opinion (negative)" }), option("Kisplyx")] }, group("conditions", "Keratitis"), text],
+    note: null,
+    loading: false,
+  };
+  assert.deepEqual(labels(keepShownList({ groups: [medicines, fuzzy, text], note: null }, next, notes)), [
+    "medicines: Kinselby (Opinion (negative)), Keytruda (Authorized)",
+    "fuzzy: Keytruda",
+    "text: Search indication texts for “roche”",
+    "conditions: Keratitis",
+  ]);
+  // The note shown above the options stays (as it reads now); one the list did not show comes
+  // below it, but "No matches", which the status says and a "Did you mean" heading shows.
+  const retried = { groups: [group("medicines", "Ozempic"), text], note: "Showing results for “ozempic”", loading: false };
+  assert.equal(keepShownList({ groups: retried.groups, note: "Showing results for “ozempic”" }, retried, notes).note, "Showing results for “ozempic”");
+  assert.deepEqual(keepShownList({ groups: [fuzzy, text], note: null }, { groups: [fuzzy, text], note: "No matches", loading: false }, notes), { groups: [fuzzy, text], note: null, end: null });
+  const known = "Paracetamol (ATC N02BE01): no medicine with it went through EMA's central procedure, but it may be authorized nationally.";
+  assert.deepEqual(keepShownList({ groups: [text], note: null }, { groups: [text], note: known, loading: false }, notes), { groups: [text], note: null, end: known });
+  // Empty groups are no groups.
+  assert.deepEqual(keys(keepShownList({ groups: [text], note: null }, { groups: [text, { key: "classes", options: [] }], note: null, loading: false }, notes)), ["text"]);
 });
 
 test("suggest: 'IL-17' no longer finds Lutetium Billev (previously Illuzyce); 'glp1' reads as GLP-1", () => {
