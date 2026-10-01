@@ -1084,15 +1084,17 @@ function addSearchIcon() {
 }
 
 // "Try Keytruda (brand) · semaglutide (active substance) · …": links that open those lookups, each
-// followed by the kind of thing it is (kept on one line with its link).
+// followed by the kind of thing it is and the separator, kept on one line with its link (bug hunt
+// 2026-10-01: a separator of its own began the second line at 390px).
 function renderTryLinks() {
   const line = d3.select("#lookup-try");
   line.append("span").text(UI.lookup.tryLead);
+  const last = UI.lookup.examples.length - 1;
   for (const [position, example] of UI.lookup.examples.entries()) {
-    if (position > 0) line.append("span").attr("aria-hidden", "true").text("·");
     const item = line.append("span").attr("class", "try-item");
     item.append(() => lookup.link(example.label, example.atc ? classState(example.atc) : example.patch));
     item.append("span").attr("class", "try-kind").text(` ${UI.lookup.exampleKind(example.kind)}`);
+    if (position < last) item.append("span").attr("class", "try-sep").attr("aria-hidden", "true").text("·");
   }
 }
 

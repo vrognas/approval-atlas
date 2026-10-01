@@ -5090,7 +5090,7 @@ table.activity {
 }
 
 /* Right under the search (whose section keeps its bottom margin). Each example keeps its kind
-   ("(brand)") on its line. */
+   ("(brand)") and the "·" after it on its line, so no line starts with a separator. */
 .try {
   display: flex;
   flex-wrap: wrap;
@@ -5103,6 +5103,24 @@ table.activity {
 
 .try-item {
   white-space: nowrap;
+}
+
+/* The separator lies in the 20px gap after its example, 8px clear of either side as when it was an
+   item of its own, without counting toward the line's width: the line breaks where it did, and a
+   line's last separator hangs into the page's gutter. "Try" stays 8px from the first example. */
+.try {
+  column-gap: 20px;
+}
+
+.try > :first-child {
+  margin-right: -12px;
+}
+
+.try-sep {
+  display: inline-block;
+  width: 4px;
+  margin: 0 -12px 0 8px;
+  text-align: center;
 }
 
 /* The landing intro (intro.js; user-approved design 2026-09-28; owner decision 2026-09-29: three
