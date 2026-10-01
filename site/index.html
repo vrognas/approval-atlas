@@ -449,11 +449,10 @@
     <!-- Phones and tablets: a bottom sheet (showModal) with the section of one chip. -->
     <dialog id="sheet" class="sheet" aria-labelledby="sheet-title" aria-describedby="sheet-note">
       <div class="sheet-head">
-        <!-- Under the title, as the popover's (design sweep 2026-10-01, B11): what the counts count. -->
-        <div class="sheet-heading">
-          <h2 id="sheet-title" tabindex="-1"></h2>
-          <p id="sheet-note" class="popover-note"></p>
-        </div>
+        <h2 id="sheet-title" tabindex="-1"></h2>
+        <!-- Under the title, as the popover's (design sweep 2026-10-01, B11): what the counts count.
+             A row of its own across the head, so Clear and × stay on the title's line. -->
+        <p id="sheet-note" class="popover-note"></p>
         <button id="sheet-clear" class="text-button" type="button"></button>
         <button id="sheet-close" class="sheet-close" type="button"></button>
       </div>

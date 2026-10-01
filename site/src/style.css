@@ -1832,20 +1832,32 @@ input::placeholder {
   background: rgba(0, 0, 0, 0.6);
 }
 
-/* Title, Clear, then a visible 44px close button (no grab handle: the sheet does not swipe). */
+/* Title, Clear, then a visible 44px close button (no grab handle: the sheet does not swipe); under
+   them, across the head, what the counts count (as the popover's head; design sweep B11). The note
+   has a row of its own (fix-up: beside the buttons it centred them between the title and the note,
+   and wrapped at 320px). */
 .sheet-head {
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
   padding: 8px 8px 8px 16px;
   border-bottom: 1px solid var(--grid);
 }
 
-/* The title, and under it what the counts count (as the popover's head; design sweep B11). */
-.sheet-heading {
-  flex: 1 1 auto;
-  min-width: 0;
+.sheet-head h2,
+#sheet-clear,
+.sheet-close {
+  grid-row: 1;
+}
+
+.sheet-head .popover-note {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  margin: 0;
+  /* Its text 16px from the right edge, as the title's from the left. */
+  padding-right: 8px;
 }
 
 .sheet-head h2 {
