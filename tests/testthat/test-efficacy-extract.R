@@ -590,8 +590,15 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_equal(run$rows$row_order, c(1L, 3L))
   expect_equal(run$rows$page, c(3L, 3L))
   expect_equal(run$rows$verification, c("exact", "exact"))
-  expect_equal(run$rows$flags, list(character(), "not_reached"))
-  expect_equal(run$rows$n_treatment, c(152L, 152L))
+  # The sizes are printed in a sentence, where no column places them, so they
+  # are blanked with the label, which leaves the third row's arm value
+  # unlabelled (owner decision 2026-10-01).
+  expect_equal(
+    run$rows$flags,
+    list(character(), c("not_reached", "comparator_label_missing"))
+  )
+  expect_equal(run$rows$n_treatment, c(NA_integer_, NA_integer_))
+  expect_equal(run$rows$comparator_column_label, c(NA_character_, NA))
   expect_equal(run$rows$ci_level, c(95, 95))
   expect_equal(
     run$rows$source_url,
@@ -693,7 +700,10 @@ test_that("a row that borrows from another line or column never ships", {
       "Disease progression or death, n 189 (69.0) 216 (79.4) (%)"
     )
   )
-  expect_match(events$failed$errors[[1]], "n_treatment = 189", all = FALSE)
+  # Blanked, never shown (owner decision 2026-10-01: the row is kept).
+  expect_null(events$failed)
+  expect_null(events$record$n_treatment)
+  expect_false(189L %in% events$site$n_treatment)
   # A sign from the line below.
   sign <- row_to_site(
     tevimbra_305,
@@ -743,10 +753,10 @@ laura_row_to_site <- function(...) {
   do.call(row_to_site, c(list(excerpt_pages("tagrisso-laura")), row))
 }
 
-# Owner decision 2026-10-01: sizes no label ties to their arms are blanked and
-# the row shown without them, as its value and CI verify; never hidden for
-# them, never shown with them.
-test_that("arm sizes ship only with the label quoted beside them", {
+# Owner decision 2026-10-01: sizes the section's layout does not place under
+# their arms' column headers are blanked and the row shown without them, as
+# its value and CI verify; never hidden for them, never shown with them.
+test_that("arm sizes ship only under their arms' column headers", {
   # The label printed but left empty, the arm sizes swapped.
   swapped <- laura_row_to_site(
     n_treatment = "73", n_control = "143",
@@ -759,18 +769,39 @@ test_that("arm sizes ship only with the label quoted beside them", {
   expect_true(is.na(swapped$site$n_treatment))
   expect_true(is.na(swapped$site$n_control))
   expect_equal(swapped$site$value, "0.16")
-  # The label given, but in no quote with the control's size: the same, the
-  # label dropped with the sizes it did not tie.
+  # The label given, quoted apart from the sizes: LAURA's table prints
+  # "Placebo" over "(N=73)" and "TAGRISSO" over "(N=143)", so they ship.
   apart <- laura_row_to_site(
     comparator_column_label = "Placebo", n_treatment = "143",
     n_control = "73", quotes = list(laura_hr_quote, "(N=143) (N=73)")
   )
   expect_equal(apart$record$flags, character())
-  expect_null(apart$record$n_control)
-  expect_null(apart$record$comparator_column_label)
-  expect_equal(nrow(apart$site), 1L)
-  expect_true(is.na(apart$site$n_control))
-  expect_true(is.na(apart$site$comparator_column_label))
+  expect_equal(apart$site$n_treatment, 143L)
+  expect_equal(apart$site$n_control, 73L)
+  expect_equal(apart$site$comparator_column_label, "Placebo")
+  # Review of the size fix-up (2026-10-01): the sizes swapped in a quote of
+  # the header, which holds both columns, shipped. Now blanked with the label,
+  # which then ties nothing; the row ships without them.
+  header <- "TAGRISSO Placebo Efficacy Parameter (N=143) (N=73)"
+  in_header <- laura_row_to_site(
+    comparator_column_label = "Placebo", n_treatment = "73",
+    n_control = "143", quotes = list(laura_hr_quote, header)
+  )
+  expect_equal(in_header$record$flags, character())
+  expect_equal(nrow(in_header$site), 1L)
+  expect_true(is.na(in_header$site$n_treatment))
+  expect_true(is.na(in_header$site$n_control))
+  expect_true(is.na(in_header$site$comparator_column_label))
+  # Sizes the section prints in no n notation ("103/212" in a forest plot,
+  # PACIFIC): blanked, the row shipped (owner decision 2026-10-01).
+  unprinted <- laura_row_to_site(
+    n_treatment = "212", n_control = "91",
+    quotes = list(laura_hr_quote, "(N=143) (N=73)")
+  )
+  expect_null(unprinted$failed)
+  expect_equal(nrow(unprinted$site), 1L)
+  expect_true(is.na(unprinted$site$n_treatment))
+  expect_true(is.na(unprinted$site$n_control))
   # Arm values without a label stay hidden, their sizes kept for the human.
   medians <- "Median PFS, months (95% CI) 39.1 (31.5, NC) 5.6 (3.7, 7.4)"
   unlabelled <- laura_row_to_site(
@@ -791,6 +822,49 @@ test_that("arm sizes ship only with the label quoted beside them", {
   expect_equal(headed$record$flags, character())
   expect_equal(headed$site$n_control, 73L)
   expect_equal(headed$site$comparator_column_label, "Placebo")
+})
+
+# Review of the size fix-up (2026-10-01): blanking the sizes of a single-arm
+# effect deleted the only sign of its second arm, so placebo's median shipped
+# as the medicine's ("TAGRISSO vs Placebo", or "TAGRISSO, single-arm").
+test_that("a single-arm effect from a trial of two arms never ships", {
+  medians <- "Median PFS, months (95% CI) 39.1 (31.5, NC) 5.6 (3.7, 7.4)"
+  sizes <- "(N=143) (N=73)"
+  placebo_median <- function(...) {
+    laura_row_to_site(
+      effect_type = "single_arm_median", value = "5.6", ci_low = "3.7",
+      ci_high = "7.4", ...
+    )
+  }
+  cases <- list(
+    named = placebo_median(
+      n_treatment = "143", n_control = "73", quotes = list(medians, sizes)
+    ),
+    unnamed = placebo_median(
+      comparator = "", n_treatment = "143", n_control = "73",
+      quotes = list(medians, sizes)
+    ),
+    # Found without sizes before the fix-up too.
+    bare = placebo_median(quotes = list(medians))
+  )
+  for (name in names(cases)) {
+    case <- cases[[name]]
+    expect_null(case$failed, info = name)
+    expect_true(
+      "single_arm_with_control" %in% case$record$flags, info = name
+    )
+    expect_equal(case$rows$review, "flagged", info = name)
+    expect_equal(nrow(case$site), 0L, info = name)
+  }
+  # The sizes stay for the human.
+  expect_equal(cases$named$record$n_control, 73L)
+  # A single-arm rate given two sizes and no comparator.
+  rate <- laura_row_to_site(
+    effect_type = "single_arm_rate", comparator = "", n_treatment = "143",
+    n_control = "73", quotes = list(laura_hr_quote, sizes)
+  )
+  expect_true("single_arm_with_control" %in% rate$record$flags)
+  expect_equal(nrow(rate$site), 0L)
 })
 
 test_that("a label with nothing to tie never ships", {

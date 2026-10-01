@@ -53,6 +53,14 @@ two_arm_effect <- function(row) {
   !is_absent(effect_type) && effect_type %in% efficacy_two_arm_effects
 }
 
+# Effects of one arm: a response rate or a median.
+efficacy_single_arm_effects <- c("single_arm_rate", "single_arm_median")
+
+single_arm_effect <- function(row) {
+  effect_type <- row[["effect_type"]]
+  !is_absent(effect_type) && effect_type %in% efficacy_single_arm_effects
+}
+
 any_given <- function(row, fields) {
   any(purrr::map_lgl(fields, \(field) !is_absent(row[[field]])))
 }
@@ -68,10 +76,11 @@ two_arm_row <- function(row) {
 # row of two arms without the comparator's column label, which ties the
 # control's values to their column (comparator_label_check()). A row without
 # them has nothing for a label to tie: its effect is one number for both
-# arms. A single-arm row's size names its one arm. The verifier has blanked
-# the sizes no label ties (untied_sizes()), so on a verified row this flags
-# arm values; the sizes stay counted, so a row with unlabelled sizes is never
-# shown.
+# arms. A single-arm row's size names its one arm. The verifier has blanked a
+# two-arm effect's sizes no table places under their arms
+# (unverified_sizes()), but for a row with unlabelled arm values, so on a
+# verified two-arm effect this flags arm values; the sizes stay counted, so a
+# row with unlabelled sizes is never shown.
 arm_values_unlabelled <- function(row) {
   two_arm_row(row) && any_given(row, efficacy_arm_value_fields) &&
     is_absent(row[["comparator_column_label"]])

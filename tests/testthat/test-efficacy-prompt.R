@@ -170,7 +170,8 @@ test_that("the system prompt states the rules the verifier relies on", {
     "in the same quote as each control-arm value (arm_control, n_control)",
     fixed = TRUE
   )
-  # Owner decision 2026-10-01: sizes are kept only when the label ties them.
+  # The header a reviewer checks the sizes against (the verifier keeps them
+  # only where the table places them under their arms, unverified_sizes()).
   expect_match(prompt, "quote the header with the number printed under it",
                fixed = TRUE)
 })

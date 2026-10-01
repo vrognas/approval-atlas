@@ -547,9 +547,9 @@ label_tie <- function(row, pair, label, with_label) {
 # pass (ALEX prints the comparator first). A label in a quote with the
 # treatment arm's value and not the control's is a swap (`swap`, which
 # rejects the row), for the arm values as for the sizes; a label in no quote
-# with the control's value is only unverified (`unverified`), and in no quote
-# with the control's size leaves the sizes untied (untied_sizes()). A quote
-# holding both columns passes either way.
+# with the control's value is only unverified (`unverified`). A quote holding
+# both columns passes either way, so this ties no size to its arm: the sizes
+# need their columns (unverified_sizes()).
 comparator_label_check <- function(row, quotes) {
   label <- row[["comparator_column_label"]]
   if (is_absent(label)) {
@@ -565,34 +565,231 @@ comparator_label_check <- function(row, quotes) {
   )
 }
 
-# The comparator's column label in a quote with the control arm's size: its
-# column is the control's, so both sizes are tied to their arms.
-sizes_tied_by_label <- function(row, quotes) {
-  label <- row[["comparator_column_label"]]
-  size <- row[["n_control"]]
-  !is_absent(label) && !is_absent(size) && any(purrr::map_lgl(
-    quotes,
-    \(quote) contains_folded(label, quote) && quote_holds_size(size, quote)
-  ))
+# A section's lines as printed, their spacing kept so a cell's columns can be
+# read off the line (one space for each no-break space or private-use glyph),
+# without page-number lines and blank lines.
+efficacy_layout_lines <- function(texts) {
+  lines <- unlist(strsplit(strip_page_number_lines(texts), "\n", fixed = TRUE))
+  lines <- gsub("[\u00a0\u2009\u202f\ue000-\uf8ff]", " ", lines, perl = TRUE)
+  lines[grepl("\\S", lines, perl = TRUE)]
 }
 
-# Owner decision 2026-10-01: the arm sizes of a row of two arms that the label
-# does not tie to their arms (sizes_tied_by_label()), as `n_treatment` and
-# `n_control` name them, are blanked, unflagged, so a row whose value and CI
-# verify is shown without them, never with sizes that may be swapped. A row
-# with arm values and no label keeps them: comparator_label_missing hides it
-# for a human, who sees them. A single-arm row's size names its one arm.
-untied_sizes <- function(row, quotes) {
+# The columns where `text` fills a whole cell of a layout line (case aside,
+# its words one space apart): a line's edge or two spaces on each side, as a
+# table's cells stand apart. "chemotherapy" is no cell of "Tislelizumab +
+# chemotherapy".
+cell_places <- function(text, line) {
+  words <- strsplit(normalise_spacing(text), " ", fixed = TRUE)[[1]]
+  pattern <- paste0("(?i)", paste(escape_regex(words), collapse = "\\s"))
+  found <- gregexpr(pattern, line, perl = TRUE)[[1]]
+  if (found[1] == -1) {
+    return(list(first = integer(), last = integer()))
+  }
+  first <- as.integer(found)
+  last <- first + attr(found, "match.length") - 1L
+  before <- substring(line, 1L, first - 1L)
+  after <- substring(line, last + 1L)
+  whole <- grepl("(^\\s*|\\s\\s)$", before, perl = TRUE) &
+    grepl("^(\\s*$|\\s\\s)", after, perl = TRUE)
+  list(first = first[whole], last = last[whole])
+}
+
+# The ways a label's words wrap over one to three lines of a header.
+label_splits <- function(words) {
+  part <- function(from, to) paste(words[from:to], collapse = " ")
+  count <- length(words)
+  splits <- list(part(1L, count))
+  for (end in seq_len(count - 1L)) {
+    splits <- c(splits, list(c(part(1L, end), part(end + 1L, count))))
+    for (second in seq_len(count - 1L)[seq_len(count - 1L) > end]) {
+      splits <- c(splits, list(c(
+        part(1L, end), part(end + 1L, second), part(second + 1L, count)
+      )))
+    }
+  }
+  splits
+}
+
+# Where `parts` stand as cells on consecutive lines from `top`, each part
+# under the one above (overlapping its columns): the lines and the columns
+# they span.
+wrapped_cell_places <- function(parts, lines, top) {
+  bottom <- top + length(parts) - 1L
+  if (bottom > length(lines)) {
+    return(list())
+  }
+  starts <- cell_places(parts[1], lines[top])
+  purrr::compact(purrr::map2(starts$first, starts$last, function(first, last) {
+    span <- c(first, last)
+    for (index in seq_along(parts)[-1]) {
+      below <- cell_places(parts[index], lines[top + index - 1L])
+      under <- below$first <= last & below$last >= first
+      if (!any(under)) {
+        return(NULL)
+      }
+      first <- below$first[under][1]
+      last <- below$last[under][1]
+      span <- range(span, first, last)
+    }
+    list(top = top, bottom = bottom, first = span[1], last = span[2])
+  }))
+}
+
+# Where a column label stands as a table header: a whole cell on one line,
+# or its words wrapped over two or three lines (cell_places()).
+label_places <- function(label, lines) {
+  words <- strsplit(normalise_spacing(label), " ", fixed = TRUE)[[1]]
+  lower <- tolower(lines)
+  places <- purrr::map(label_splits(words), function(parts) {
+    tops <- which(grepl(tolower(parts[1]), lower, fixed = TRUE))
+    purrr::map(tops, \(top) wrapped_cell_places(parts, lines, top))
+  })
+  purrr::list_flatten(purrr::list_flatten(places))
+}
+
+# The arm sizes a layout line prints in n notation ("(N=143)", "n = 1 274"),
+# each with its columns and count.
+size_notations <- function(line) {
+  pattern <- paste0(
+    "(?<![A-Za-z0-9])[nN]\\s*=\\s*",
+    "([0-9]{1,3}(?:[ ,][0-9]{3})+|[0-9]+)(?![0-9]|[.,][0-9])"
+  )
+  found <- gregexpr(pattern, line, perl = TRUE)[[1]]
+  if (found[1] == -1) {
+    return(list(first = integer(), last = integer(), count = integer()))
+  }
+  first <- as.integer(found)
+  last <- first + attr(found, "match.length") - 1L
+  text <- regmatches(line, list(found))[[1]]
+  count <- as.integer(gsub("[^0-9]", "", sub("^[^=]*=", "", text)))
+  list(first = first, last = last, count = count)
+}
+
+efficacy_count <- function(value) {
+  if (is_absent(value)) NA_integer_ else suppressWarnings(as.integer(value))
+}
+
+# The arm sizes in n notation on the lines `indices`: line, columns, count.
+size_notations_on <- function(notations, indices) {
+  purrr::map(indices, function(index) {
+    sizes <- notations[[index]] %||% size_notations("")
+    dplyr::tibble(
+      line = rep(index, length(sizes$first)), first = sizes$first,
+      last = sizes$last, count = sizes$count
+    )
+  }) |>
+    purrr::list_rbind()
+}
+
+# Whether a size stands under a place of the label: on one of the three lines
+# below it, overlapping its columns.
+under_place <- function(place, line, first, last) {
+  line > place$bottom & line <= place$bottom + 3L &
+    first <= place$last & last >= place$first
+}
+
+# The arm sizes a two-arm table places under their arms' column headers
+# (`lines`: efficacy_layout_lines()). n_control: in n notation under the
+# comparator's column label (a header cell, label_places(); the size at most
+# three lines below), with no other size under that place of the label, nor
+# under another place of it next to the control's size, either of which
+# would leave the label's column unclear ("chemotherapy" over "Drugamab +"'s
+# and "Placebo +"'s sizes, a flow text's one column). n_treatment, with it:
+# the header's only other size in n notation (from two lines above the label
+# to three below the control's size), on the control's size line or next to
+# it, so the other column's. The size fields placed: n_control alone where
+# n_treatment is not (a third arm's size nearby leaves the treatment's
+# column unknown). A treatment arm's size beside a third arm's that is not
+# in n notation is not caught.
+sizes_in_label_columns <- function(row, lines) {
+  label <- row[["comparator_column_label"]]
+  control <- efficacy_count(row[["n_control"]])
+  treatment <- efficacy_count(row[["n_treatment"]])
+  if (is_absent(label) || is.na(control)) {
+    return(character())
+  }
+  places <- label_places(label, lines)
+  # The arm sizes of the lines a place's checks read (place_sizes()).
+  reach <- unique(unlist(purrr::map(places, function(place) {
+    max(1L, place$top - 2L):min(length(lines), place$bottom + 6L)
+  })))
+  notations <- vector("list", length(lines))
+  notations[reach] <- purrr::map(lines[reach], size_notations)
+  placed <- unlist(purrr::map(
+    places, place_sizes,
+    places = places, notations = notations, control = control,
+    treatment = treatment
+  ))
+  intersect(c("n_treatment", "n_control"), placed)
+}
+
+# The size fields one place of the label places (sizes_in_label_columns();
+# `notations`: size_notations() of each line it reads).
+place_sizes <- function(place, places, notations, control, treatment) {
+  last_line <- length(notations)
+  below <- place$bottom + seq_len(3L)
+  below <- below[below <= last_line]
+  if (length(below) == 0) {
+    return(character())
+  }
+  sizes <- size_notations_on(notations, below)
+  controls <- which(
+    sizes$count == control &
+      under_place(place, sizes$line, sizes$first, sizes$last)
+  )
+  placed <- character()
+  for (index in controls) {
+    size <- sizes[index, ]
+    nearby <- max(1L, size$line - 1L):min(last_line, size$line + 1L)
+    around <- dplyr::bind_rows(sizes, size_notations_on(notations, nearby))
+    around <- dplyr::distinct(around)
+    others <- around[!(around$line == size$line &
+                         around$first == size$first), ]
+    under_any <- purrr::map(
+      places, under_place, others$line, others$first, others$last
+    )
+    unclear <- under_place(place, others$line, others$first, others$last) |
+      (others$line %in% nearby &
+         purrr::reduce(under_any, `|`, .init = logical(nrow(others))))
+    if (any(unclear)) next
+    placed <- "n_control"
+    window <- max(1L, place$top - 2L):min(last_line, size$line + 3L)
+    beside <- others[others$line %in% nearby, ]
+    if (!is.na(treatment) && treatment %in% beside$count &&
+          nrow(size_notations_on(notations, window)) == 2L) {
+      return(c("n_treatment", "n_control"))
+    }
+  }
+  placed
+}
+
+# Owner decision 2026-10-01 ("blank the sizes and show the row"): the arm
+# sizes the verifier cannot tie to their arms are blanked, unflagged, so a row
+# whose value and CI verify is shown without them, never with a size that may
+# be another arm's or another count: a size the section does not print in an
+# n notation (arm_size_found()), and, on a two-arm effect, a size a table
+# does not place under its arm's column header (sizes_in_label_columns()). A
+# two-arm row with arm values and no label keeps its printed sizes:
+# comparator_label_missing hides it for a human, who sees them. A single-arm
+# effect's size names its one arm (a row of two arms with one is flagged,
+# single_arm_with_control).
+unverified_sizes <- function(row, section) {
   given <- efficacy_size_fields[
     !purrr::map_lgl(efficacy_size_fields, \(field) is_absent(row[[field]]))
   ]
-  unlabelled_arms <- is_absent(row[["comparator_column_label"]]) &&
-    any_given(row, efficacy_arm_number_fields)
-  if (length(given) == 0 || !two_arm_row(row) || unlabelled_arms ||
-        sizes_tied_by_label(row, quotes)) {
+  if (length(given) == 0) {
     return(character())
   }
-  given
+  printed <- given[purrr::map_lgl(given, function(field) {
+    arm_size_found(row[[field]], section)
+  })]
+  unlabelled_arms <- is_absent(row[["comparator_column_label"]]) &&
+    any_given(row, efficacy_arm_number_fields)
+  if (!two_arm_effect(row) || unlabelled_arms) {
+    return(setdiff(given, printed))
+  }
+  placed <- sizes_in_label_columns(row, efficacy_layout_lines(section$texts))
+  setdiff(given, intersect(printed, placed))
 }
 
 # What the row says about each arm (the values, their sizes and measure and
@@ -719,14 +916,19 @@ quote_sources <- function(quotes, sections, section_text) {
 # quote with the control's value), the row is kept without its arms:
 # `blanked` names the arm fields to blank (without_unverified_arms()), and
 # the flag arms_not_verified hides it until reviewed. A label quoted with the
-# treatment arm's value or size is a swap and rejects the row. Arm sizes no
-# label ties to their arms (untied_sizes()) and then a label with no control
-# arm's value to tie (untied_label()) are in `blanked` too, unflagged.
+# treatment arm's value or size is a swap and rejects the row. Arm sizes
+# nothing ties to their arms (unverified_sizes()) and then a label with no
+# control arm's value to tie (untied_label()) are in `blanked` too,
+# unflagged. A single-arm effect on a row of two arms (a comparator or a
+# control arm's value, as the model gave them) is flagged
+# single_arm_with_control: the card would show one arm's result as the
+# medicine's.
 verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   section <- efficacy_section_texts(section_text)
   sections <- section$sections
   all_sections <- section$joined
   row <- normalise_number_fields(row)
+  second_arm <- single_arm_effect(row) && two_arm_row(row)
   quotes <- purrr::map_chr(row[["quotes"]], normalise_efficacy_text)
   quotes <- quotes[nzchar(quotes)]
   sources <- quote_sources(quotes, sections, section$texts)
@@ -754,14 +956,6 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   }
   arms <- check_arms(row, quotes, quotes_text)
   errors <- c(errors, arms$swap)
-  for (field in c("n_treatment", "n_control")) {
-    if (!arm_size_found(row[[field]], section)) {
-      errors <- c(
-        errors,
-        sprintf("%s = %s not found as n=", field, row[[field]])
-      )
-    }
-  }
   missing_parts <- trial_parts_missing(row[["trial"]], all_sections)
   if (length(missing_parts) > 0) {
     errors <- c(errors, sprintf(
@@ -780,7 +974,7 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     warnings <- c(warnings, arms$warnings)
   }
   dropped <- if (length(errors) == 0) {
-    untied_sizes(row, quotes)
+    unverified_sizes(row, section)
   } else {
     character()
   }
@@ -798,7 +992,8 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     verification_flags(row, quotes, sections, indication_text),
     if (any(sources %in% "layout")) "quote_across_lines",
     if (binding == "column") "ci_paired_by_column",
-    if (length(blanked) > 0) "arms_not_verified"
+    if (length(blanked) > 0) "arms_not_verified",
+    if (second_arm) "single_arm_with_control"
   )
   list(
     status = status,
