@@ -22,8 +22,8 @@ function node(tag, className, ...children) {
 }
 
 // view: { status: "loading" | "failed" | "ready", and when ready: buckets, unclear, unclearLatest,
-// orphanOnly (protectionEnding()'s), running, authorized, filtered (any filter active), selected
-// (a bucket key, ORPHAN_ONLY or null), showAll }.
+// orphanOnly (protectionEnding()'s), running, filtered (any filter active), selected (a bucket
+// key, ORPHAN_ONLY or null), showAll }.
 // actions: onSelect(key) (toggles the year or the orphan-only list), onShowAll(),
 // medicineLink(product), companyOf(product) (nodes, or null), substancesOf(product) (text).
 export function renderProtectionCalendar(container, view, actions = {}) {
@@ -34,8 +34,9 @@ export function renderProtectionCalendar(container, view, actions = {}) {
     container.append(node("p", "muted", view.status === "failed" ? UI.lookup.notAvailable : COPY.loading));
     return;
   }
-  const { buckets, unclear, unclearLatest, orphanOnly, running, authorized, filtered, selected, showAll } = view;
-  container.append(node("p", "pc-summary", running ? COPY.summary(running, authorized, filtered) : COPY.none(filtered)));
+  const { buckets, unclear, unclearLatest, orphanOnly, running, filtered, selected, showAll } = view;
+  // How many have it running is in the (i) panel (main.js; design sweep 2026-10-01, C2: a sentence
+  // here repeated the takeaway's count); with none, the card says so here.
   if (running) {
     container.append(
       node("ul", "legend pc-legend",
@@ -43,6 +44,8 @@ export function renderProtectionCalendar(container, view, actions = {}) {
         node("li", null, node("span", "swatch pc-swatch pc-orphan"), COPY.legend.orphan(buckets.flatMap((bucket) => bucket.orphanEnds)))),
       ...bars(buckets, selected, actions).filter(Boolean),
     );
+  } else {
+    container.append(node("p", "pc-summary", COPY.none(filtered)));
   }
   if (unclear) container.append(node("p", "muted pc-unclear", COPY.unclear(unclear, unclearLatest)));
   if (orphanOnly.length) container.append(orphanOnlyLine(orphanOnly, selected === ORPHAN_ONLY, actions));

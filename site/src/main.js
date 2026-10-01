@@ -2280,12 +2280,18 @@ function startDashboard(meta, [
     const protection = lookup.need("protection");
     if (protection === undefined || protection === FAILED) {
       setTakeaway("#pc-takeaway", null);
+      d3.select("#pc-count").text("").attr("hidden", "");
       renderProtectionCalendar($("#pc-body"), { status: protection === FAILED ? "failed" : "loading" });
       return;
     }
     const { rows, orphanOnly, unclear, unclearLatest } = protectionEnding(authorizedNow, protection, dataDate);
-    // Its takeaway: how many may lose market protection (est.) within two years.
+    // Its takeaway: how many may lose market protection (est.) within two years. How many of the
+    // currently authorized have it running goes in the (i) panel (design sweep 2026-10-01, C2: a
+    // 16px sentence under the 15px takeaway repeated its count).
     setTakeaway("#pc-takeaway", protectionTakeaway(rows, calendarFirstYear));
+    d3.select("#pc-count")
+      .text(rows.length ? UI.protectionCalendar.summary(rows.length, authorizedNow.length, anyFilter) : "")
+      .attr("hidden", rows.length ? null : "");
     renderProtectionCalendar($("#pc-body"), {
       status: "ready",
       buckets: calendarBuckets(rows, calendarFirstYear, 5),
@@ -2293,7 +2299,6 @@ function startDashboard(meta, [
       unclearLatest,
       orphanOnly,
       running: rows.length,
-      authorized: authorizedNow.length,
       filtered: anyFilter,
       selected: calendarYear,
       showAll: calendarShowAll,
