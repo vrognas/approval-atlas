@@ -46,14 +46,14 @@ function labelOf({ lead, label }) {
 // container: a preview card's .preview-body. rows: [{ key, lead (a node before the label, inside it
 // when it is a link, or null), label (text or a node), count, unit (what the count counts, read after
 // it) }]. line: a line in
-// place of the rows (loading, none), or null; caption: a muted line under the rows, or null; scale:
+// place of the rows (loading, none, failed: error true, in the ink), or null; caption: a muted line under the rows, or null; scale:
 // the count a full bar stands for (the largest by default). Rebuilt on every render; a focused link
 // keeps its focus (by its row's key).
-export function renderPreview(container, { rows = [], line = null, caption = null, scale = undefined }) {
+export function renderPreview(container, { rows = [], line = null, error = false, caption = null, scale = undefined }) {
   const active = container.contains(document.activeElement) ? document.activeElement.closest("[data-key]")?.dataset.key : undefined;
   container.replaceChildren();
   if (line !== null) {
-    container.append(node("p", "muted", line));
+    container.append(node("p", error ? "muted state-error" : "muted", line));
     return;
   }
   const shares = previewShares(rows.map((row) => row.count), scale);

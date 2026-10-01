@@ -351,6 +351,8 @@ export const UI = {
       widened
         ? `Human medicines, ${listing(sources.map((source) => source.neutral))}`
         : `Human medicines authorized ${listing(sources.map((source) => source.scope))}`,
+    // While the dashboard's data loads (it was hard-coded in index.html; design sweep B11).
+    loading: "Loading charts…",
   },
   // The dashboard's tabs (F · Spacious, phase 2; url.js TABS): a tablist under the chip bar (the
   // WAI-ARIA tabs pattern since 2026-09-30); label names it.

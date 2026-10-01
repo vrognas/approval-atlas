@@ -48,7 +48,9 @@ test("the Overview previews' links fill their rows; their tab links are 24px, 44
   assert.match(declarations(all, ".preview-row .preview-label > a"), /display: block;.*padding: var\(--preview-pad\) 0/);
   assert.match(declarations(all, ".preview-row"), /--preview-pad: 6px;/);
   assert.match(declarations(phones, ".preview-row"), /--preview-pad: 12px;.*min-height: 44px/);
-  assert.match(declarations(all, ".preview-row > .preview-bar"), /margin-top: calc\(var\(--preview-pad\) \+ 6px\)/);
+  // The bar is the tab's 10px bar (design sweep B11), centred on the 20px first line.
+  assert.match(declarations(all, ".preview-row > .preview-bar"), /margin-top: calc\(var\(--preview-pad\) \+ 5px\)/);
+  assert.match(declarations(all, ".preview-bar"), /height: 10px/);
   assert.match(declarations(all, ".preview-row > .preview-count"), /padding-top: var\(--preview-pad\)/);
   assert.match(declarations(all, ".preview-tab-link"), /min-height: 24px/);
   assert.match(flat(blocks("@media (pointer: coarse) {").join(" ")), /\.preview-tab-link \{ min-height: 44px; \}/);

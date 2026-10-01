@@ -87,7 +87,8 @@
 
       <section id="result" class="result" aria-label="Lookup result" hidden></section>
 
-      <p id="app-loading" class="muted">Loading charts…</p>
+      <!-- Its text: main.js renderAbout() (labels.js UI.page.loading). -->
+      <p id="app-loading" class="muted"></p>
 
       <div id="app" hidden>
         <!-- The page header (F · Spacious, phase 1): the heading, the answer headline as its lead
@@ -446,9 +447,13 @@
     </div>
 
     <!-- Phones and tablets: a bottom sheet (showModal) with the section of one chip. -->
-    <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
+    <dialog id="sheet" class="sheet" aria-labelledby="sheet-title" aria-describedby="sheet-note">
       <div class="sheet-head">
-        <h2 id="sheet-title" tabindex="-1"></h2>
+        <!-- Under the title, as the popover's (design sweep 2026-10-01, B11): what the counts count. -->
+        <div class="sheet-heading">
+          <h2 id="sheet-title" tabindex="-1"></h2>
+          <p id="sheet-note" class="popover-note"></p>
+        </div>
         <button id="sheet-clear" class="text-button" type="button"></button>
         <button id="sheet-close" class="sheet-close" type="button">×</button>
       </div>

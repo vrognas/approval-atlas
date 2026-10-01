@@ -637,6 +637,12 @@ h2 {
   display: none;
 }
 
+/* "Not available right now." in the ink, so a failure does not read as "Loading…" (design sweep
+   2026-10-01, B11). */
+.muted.state-error {
+  color: var(--ink);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -1804,8 +1810,13 @@ input::placeholder {
   border-bottom: 1px solid var(--grid);
 }
 
-.sheet-head h2 {
+/* The title, and under it what the counts count (as the popover's head; design sweep B11). */
+.sheet-heading {
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sheet-head h2 {
   margin: 0;
   font-size: 1.25rem;
   line-height: 1.75rem;
@@ -2469,7 +2480,7 @@ input::placeholder {
 }
 
 .preview-row > .preview-bar {
-  margin-top: calc(var(--preview-pad) + 6px);
+  margin-top: calc(var(--preview-pad) + 5px);
 }
 
 .preview-row > .preview-count {
@@ -2525,18 +2536,18 @@ input::placeholder {
   text-underline-offset: 3px;
 }
 
+/* The tab's bars, which the preview previews (design sweep 2026-10-01, B11: 8px on a track, both
+   ends rounded): 10px, no track, the end rounded 3px (.bar-track, .bar-fill). */
 .preview-bar {
   display: block;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--raised);
+  height: 10px;
 }
 
 .preview-fill {
   display: block;
   height: 100%;
   min-width: 2px;
-  border-radius: 4px;
+  border-radius: 0 3px 3px 0;
   background: var(--bar);
 }
 
@@ -6646,15 +6657,6 @@ details[open] > summary::after,
   }
 }
 
-.related a {
-  display: inline-block;
-  margin: 2px 0;
-  padding: 0 10px;
-  border: 1px solid var(--axis);
-  border-radius: 999px;
-  font-size: 0.875rem;
-  text-decoration: none;
-}
 
 /* Result tables (condition, indication-text and substance results): a surface block, one row per
    medicine with hairlines between them, the matched indication text in a full-width row under its
@@ -7410,11 +7412,6 @@ code {
   .preview-fill {
     forced-color-adjust: none;
     background: CanvasText;
-  }
-
-  /* The Overview's preview bars: the track outlined (its fill is dropped). */
-  .preview-bar {
-    outline: 1px solid GrayText;
   }
 
   /* The tabs (F · Spacious, phase 2): the strip's hairline and the shown tab's underline are inset

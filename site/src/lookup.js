@@ -308,7 +308,8 @@ export function createLookup(panel, {
   // Branch chips (area-chips.js): links to their branch's condition page here (termLinks()); the
   // arrow keys move within a condition's chips and "+n".
   panel.addEventListener("keydown", (event) => toolbarKeydown(event, ".area-chip, .area-more"));
-  const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
+  // A failure in the ink, waiting muted (design sweep 2026-10-01, B11: they looked alike).
+  const pending = (value) => el("p", { class: value === FAILED ? "muted state-error" : "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
 
   // The substance equivalents (step 3): none when the file is missing (older data), undefined while
   // it loads. setsOf(): the search index's medicines by substance set, kept for one equivalents value.
@@ -1324,8 +1325,10 @@ export function createLookup(panel, {
       variant ? el("p", { class: "dek" }, UI.condition.alsoSearched(variant)) : null,
       // Both counts of the lists below (phase 4f): tagged by EMA, and only mentioned in the indication.
       descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll, substances)) : null,
+      // Underlined text links joined by "; ", as condition links everywhere else (design sweep
+      // 2026-10-01, B11: outlined pills here).
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
-        related.map((condition) => [conditionLink(condition.name, condition.ui), " "])) : null,
+        related.map((condition, position) => [position ? "; " : "", conditionLink(condition.name, condition.ui)])) : null,
       // What the condition is: NLM's scope note (owner request 2026-09-28).
       descriptor ? meshDefinition(ui) : null,
       toggle,
@@ -1464,7 +1467,7 @@ export function createLookup(panel, {
     // runs on by the year it ends; unclear estimates only counted.
     const protection = need("protection");
     const endingCopy = UI.protectionCalendar;
-    let protectionEndingPart = el("p", { class: "muted" }, protection === FAILED ? UI.lookup.notAvailable : endingCopy.loading);
+    let protectionEndingPart = el("p", { class: protection === FAILED ? "muted state-error" : "muted" }, protection === FAILED ? UI.lookup.notAvailable : endingCopy.loading);
     if (ready(protection)) {
       const { rows: ending, orphanOnly, unclear, unclearLatest } = protectionEnding(anyAuthorized ? authorizedFirst(all, false).shown : [], protection, snapshotDate);
       const orphanNote = (item) => (item.orphanOnly ? endingCopy.company.orphanOnly(item.orphanEnd) : item.orphanEnd ? endingCopy.company.orphan(item.orphanEnd) : null);
@@ -1576,7 +1579,7 @@ export function createLookup(panel, {
     } catch (error) {
       console.error(error);
       timeline = null;
-      content = el("article", { class: "card" }, kicker(view.kind), el("p", { class: "muted" }, UI.lookup.notAvailable));
+      content = el("article", { class: "card" }, kicker(view.kind), el("p", { class: "muted state-error" }, UI.lookup.notAvailable));
     }
     asked = asking;
     asking = null;

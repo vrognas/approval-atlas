@@ -949,6 +949,7 @@ function renderAbout() {
   renderDataDate(null);
   d3.select("#page-title").text(UI.page.title(SOURCES));
   d3.select("#page-scope").text(UI.page.scope(SOURCES));
+  d3.select("#app-loading").text(UI.page.loading);
   d3.select("#filter-bar-label").text(UI.filters.label);
   d3.select("#lookup-label").text(UI.lookup.label);
   d3.select("#lookup-input").attr("placeholder", UI.lookup.placeholder);
@@ -2334,7 +2335,7 @@ function startDashboard(meta, [
     safely($("#preview-conditions"), () => {
       const rows = conditionRanking(filtered, PREVIEW_ROWS);
       if (!Array.isArray(rows)) {
-        renderPreview(body("preview-conditions"), { line: rows === FAILED ? UI.lookup.notAvailable : UI.lookup.loading });
+        renderPreview(body("preview-conditions"), { line: rows === FAILED ? UI.lookup.notAvailable : UI.lookup.loading, error: rows === FAILED });
         return;
       }
       const ranked = rows.filter((row) => row.treatments > 0);
@@ -2352,7 +2353,7 @@ function startDashboard(meta, [
     safely($("#preview-protection"), () => {
       const protection = lookup.protection();
       if (protection === undefined || protection === FAILED) {
-        renderPreview(body("preview-protection"), { line: protection === FAILED ? UI.lookup.notAvailable : UI.protectionCalendar.loading });
+        renderPreview(body("preview-protection"), { line: protection === FAILED ? UI.lookup.notAvailable : UI.protectionCalendar.loading, error: protection === FAILED });
         return;
       }
       const { rows } = protectionEnding(authorizedNow, protection, dataDate);
@@ -2379,7 +2380,7 @@ function startDashboard(meta, [
       note?.remove();
     } catch (error) {
       console.error(error);
-      if (!note) d3.select(container).append("p").attr("class", "muted card-error").text(UI.lookup.notAvailable);
+      if (!note) d3.select(container).append("p").attr("class", "muted state-error card-error").text(UI.lookup.notAvailable);
     }
   }
   const cardOf = (selector) => $(selector).closest(".chart-card");

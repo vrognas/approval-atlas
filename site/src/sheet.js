@@ -13,6 +13,8 @@ export function createSheet(dialog, { onClear }) {
   let current = null;
 
   clear.textContent = UI.sheet.clear;
+  // What the counts count, under the title as in the popover (design sweep 2026-10-01, B11).
+  dialog.querySelector("#sheet-note").textContent = UI.facets.counts;
   clear.addEventListener("click", () => onClear(current.clears));
   done.addEventListener("click", () => dialog.close());
   // A visible way out besides the backdrop, Escape and "Show N medicines".
