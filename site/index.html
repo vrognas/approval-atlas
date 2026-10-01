@@ -87,8 +87,10 @@
 
       <section id="result" class="result" aria-label="Lookup result" hidden></section>
 
-      <!-- Its text: main.js renderAbout() (labels.js UI.page.loading). -->
-      <p id="app-loading" class="muted"></p>
+      <!-- Shown from the first paint, before main.js runs (a first visit on a slow connection waits
+           for the bundle); labels.test.js keeps it equal to labels.js UI.page.loading, which
+           renderAbout() sets again. -->
+      <p id="app-loading" class="muted">Loading charts…</p>
 
       <div id="app" hidden>
         <!-- The page header (F · Spacious, phase 1): the heading, the answer headline as its lead

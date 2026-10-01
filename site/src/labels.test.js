@@ -29,6 +29,13 @@ test("no label value and no index.html text uses an em-dash", () => {
   assert.deepEqual(html.match(/.{0,30}—.{0,30}/g), null);
 });
 
+// index.html shows the loading line from the first paint, before main.js can set it from labels.js
+// (design sweep B11 fix-up: empty until then, a slow first visit showed nothing): one text in both.
+test("index.html's loading line is UI.page.loading", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.equal(html.match(/<p id="app-loading"[^>]*>([^<]*)<\/p>/)?.[1], labels.UI.page.loading);
+});
+
 // "Authorized today" reads as "got its authorization today" (phase 4c): "currently authorized".
 test("no label value says 'authorized today'", () => {
   assert.deepEqual([...textValues(labels)].filter((text) => /authorized today/i.test(text)), []);
