@@ -502,46 +502,87 @@ contains_folded <- function(text, within) {
   grepl(tolower(normalise_spacing(text)), tolower(within), fixed = TRUE)
 }
 
-# The comparator's column label and the control arm's values stand in one
-# quote, so arms read from the wrong column cannot pass (ALEX prints the
-# comparator first). A label in a quote with the treatment arm's values and
-# not the control's is a swap (`swap`, which rejects the row); a label in no
-# quote with the control's values is only unverified (`unverified`).
-comparator_label_check <- function(row, quotes) {
-  label <- row[["comparator_column_label"]]
-  control <- row[["arm_control"]]
-  treatment <- row[["arm_treatment"]]
-  if (is_absent(label) || is_absent(control)) {
+# An arm size as a quote prints it, with or without a thousands separator.
+quote_holds_size <- function(n, quote) {
+  any(purrr::map_lgl(arm_size_spellings(n), contains_bounded, text = quote))
+}
+
+# Each value of the control arm with its treatment arm's counterpart: the
+# sizes say which arm is which, as the arm values do.
+efficacy_arm_pairs <- list(
+  list(control = "arm_control", treatment = "arm_treatment",
+       holds = quote_holds_number),
+  list(control = "n_control", treatment = "n_treatment",
+       holds = quote_holds_size)
+)
+
+# The comparator's column label and a control arm's value (`pair`) in one of
+# the quotes holding the label (`with_label`).
+label_tie <- function(row, pair, label, with_label) {
+  control <- row[[pair$control]]
+  treatment <- row[[pair$treatment]]
+  if (is_absent(control)) {
     return(list())
   }
-  with_label <- quotes[purrr::map_lgl(quotes, contains_folded, text = label)]
   holds <- function(value) {
-    purrr::map_lgl(with_label, \(quote) quote_holds_number(value, quote))
+    purrr::map_lgl(with_label, \(quote) pair$holds(value, quote))
   }
   if (any(holds(control))) {
     return(list())
   }
+  apart <- sprintf(
+    "comparator_column_label '%s' not in a quote with %s '%s'",
+    label, pair$control, control
+  )
   if (!is_absent(treatment) && any(holds(treatment))) {
     return(list(swap = sprintf(
-      paste(
-        "comparator_column_label '%s' not in a quote with arm_control '%s'",
-        "but with arm_treatment '%s' (arms swapped)"
-      ),
-      label, control, treatment
+      "%s but with %s '%s' (arms swapped)", apart, pair$treatment, treatment
     )))
   }
-  list(unverified = sprintf(
-    "comparator_column_label '%s' not in a quote with arm_control '%s'",
-    label, control
-  ))
+  list(unverified = apart)
 }
 
-# What the row says about each arm (the values, their measure and the
-# comparator's column label): blanked together when they do not verify.
+# The comparator's column label and each value of the control arm (its value,
+# its size) stand in one quote, so arms read from the wrong column cannot
+# pass (ALEX prints the comparator first). A label in a quote with the
+# treatment arm's value and not the control's is a swap (`swap`, which
+# rejects the row); a label in no quote with a control's value is only
+# unverified (`unverified`). A quote holding both columns passes either way.
+comparator_label_check <- function(row, quotes) {
+  label <- row[["comparator_column_label"]]
+  if (is_absent(label)) {
+    return(list())
+  }
+  with_label <- quotes[purrr::map_lgl(quotes, contains_folded, text = label)]
+  checks <- purrr::map(efficacy_arm_pairs, function(pair) {
+    label_tie(row, pair, label, with_label)
+  })
+  list(
+    swap = unlist(purrr::map(checks, "swap")),
+    unverified = unlist(purrr::map(checks, "unverified"))
+  )
+}
+
+# What the row says about each arm (the values, their sizes and measure and
+# the comparator's column label): blanked together when they do not verify.
 efficacy_arm_fields <- c(
-  "arm_treatment", "arm_control", "arm_measure", "comparator_column_label"
+  "arm_treatment", "arm_control", "n_treatment", "n_control", "arm_measure",
+  "comparator_column_label"
 )
 efficacy_arm_number_fields <- c("arm_treatment", "arm_control")
+# The values per arm, and those of the control arm, which the comparator's
+# column label ties to their column.
+efficacy_arm_value_fields <- c(
+  "arm_treatment", "arm_control", "n_treatment", "n_control"
+)
+efficacy_control_fields <- c("arm_control", "n_control")
+
+# A label with no control arm's value to tie says nothing checkable (the
+# treatment's header could pass as the comparator's): dropped, unflagged.
+untied_label <- function(row) {
+  !is_absent(row[["comparator_column_label"]]) &&
+    !any_given(row, efficacy_control_fields)
+}
 
 # The arm values in the quotes and the comparator's label with the control's
 # values: `swap` (an error), `unverified` (what did not verify) and
@@ -560,7 +601,7 @@ check_arms <- function(row, quotes, quotes_text) {
 
 # The fields verify_efficacy_row() blanked (`blanked`) as not stated (NULL, as
 # the parser gives a field the model left empty), so an arm that did not
-# verify is never shown.
+# verify, or a label with nothing to tie, is never shown.
 without_unverified_arms <- function(row, blanked) {
   row[blanked] <- list(NULL)
   row
@@ -642,10 +683,11 @@ quote_sources <- function(quotes, sections, section_text) {
 # ci_paired_by_column. `indication_text` is the medicine's section 4.1, for
 # the indication check (none without it). When everything else verifies but
 # the arms do not (arm values not in the quotes, or the comparator's label in
-# no quote with the control's values), the row is kept without them:
+# no quote with a control arm's value or size), the row is kept without them:
 # `blanked` names the arm fields to blank (without_unverified_arms()), and
 # the flag arms_not_verified hides it until reviewed. A label quoted with the
-# treatment arm's values is a swap and rejects the row.
+# treatment arm's value is a swap and rejects the row. A label with no
+# control arm's value to tie (untied_label()) is in `blanked` too, unflagged.
 verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   section <- efficacy_section_texts(section_text)
   sections <- section$sections
@@ -703,6 +745,12 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     errors <- c(errors, arms$unverified)
     warnings <- c(warnings, arms$warnings)
   }
+  dropped <- if (length(errors) == 0 && untied_label(row)) {
+    "comparator_column_label"
+  } else {
+    character()
+  }
+  row <- without_unverified_arms(row, dropped)
   status <- dplyr::case_when(
     length(errors) > 0 ~ "failed",
     length(warnings) > 0 ~ "reassembled",
@@ -719,7 +767,7 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     errors = errors,
     warnings = warnings,
     flags = flags,
-    blanked = blanked
+    blanked = c(blanked, dropped)
   )
 }
 

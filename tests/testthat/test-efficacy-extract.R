@@ -200,7 +200,7 @@ test_that("flags name every reason a row needs a human", {
     population_match = "whole_trial_broader", ci_is_range = FALSE,
     value = "0.63", arm_treatment = "NR (44.4, NR)", arm_control = "20.8",
     comparator = "chemotherapy", comparator_column_label = NULL,
-    effect_type = "hr"
+    effect_type = "hr", endpoint = "OS"
   )
   flags <- efficacy_flags(row, list(status = "reassembled", warnings = "x"))
   expect_setequal(flags, c(
@@ -209,13 +209,13 @@ test_that("flags name every reason a row needs a human", {
   ))
 })
 
-test_that("only arm values need the comparator's column label", {
+test_that("arm values and arm sizes need the comparator's column label", {
   exact <- list(status = "exact", warnings = character())
   # KEYNOTE-024 (Keytruda): the HR alone, from a table or a sentence.
   row <- list(
     ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
     ci_is_range = FALSE, value = "0.50", comparator = "chemotherapy",
-    comparator_column_label = NULL, effect_type = "hr"
+    comparator_column_label = NULL, effect_type = "hr", endpoint = "PFS"
   )
   expect_equal(efficacy_flags(row, exact), character())
   # REGARD (Cyramza): medians from a sentence, which prints no column label.
@@ -223,8 +223,28 @@ test_that("only arm values need the comparator's column label", {
   expect_equal(efficacy_flags(with_arms, exact), "comparator_label_missing")
   only_control <- c(row, list(arm_control = "3.8"))
   expect_equal(efficacy_flags(only_control, exact), "comparator_label_missing")
+  # Any label clears this flag, the arm's name in a sentence too: the
+  # verifier only checks it is quoted with the control's values
+  # (comparator_label_check()).
   with_arms$comparator_column_label <- "placebo"
   expect_equal(efficacy_flags(with_arms, exact), character())
+  # LAURA (Tagrisso): the arm sizes say which arm is which, as arm values do
+  # (here swapped, with the label left empty).
+  sizes <- c(row, list(n_treatment = 73L, n_control = 143L))
+  expect_equal(efficacy_flags(sizes, exact), "comparator_label_missing")
+  expect_equal(
+    efficacy_flags(c(row, list(n_treatment = 143L)), exact),
+    "comparator_label_missing"
+  )
+  sizes$comparator_column_label <- "Placebo"
+  expect_equal(efficacy_flags(sizes, exact), character())
+  # A single-arm trial's size names its one arm.
+  single <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "45.0", effect_type = "single_arm_rate",
+    endpoint = "ORR", n_treatment = 89L
+  )
+  expect_equal(efficacy_flags(single, exact), character())
   # Arms blanked as not verified: arms_not_verified alone hides the row.
   blanked <- without_unverified_arms(
     c(row, list(arm_treatment = "5.2", arm_control = "3.8")),
@@ -236,18 +256,79 @@ test_that("only arm values need the comparator's column label", {
   )
 })
 
-test_that("a clean row has no flags; single-arm HRs and ranges are flagged", {
+# Review of the prompt change (2026-10-01): a two-arm rate difference whose
+# comparator was left "" and its arms swapped was shown as single-arm.
+test_that("a control arm's values need the label, a comparator or none", {
+  exact <- list(status = "exact", warnings = character())
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "15", effect_type = "rate_difference",
+    endpoint = "ORR", arm_treatment = "30", arm_control = "45"
+  )
+  expect_setequal(
+    efficacy_flags(row, exact),
+    c("comparator_missing", "comparator_label_missing")
+  )
+  # The effect called single-arm, the control's value given all the same.
+  single <- c(
+    row[setdiff(names(row), c("effect_type", "arm_treatment"))],
+    list(effect_type = "single_arm_median", n_control = 98L)
+  )
+  expect_equal(efficacy_flags(single, exact), "comparator_label_missing")
+})
+
+test_that("a two-arm effect without a comparator is flagged", {
+  exact <- list(status = "exact", warnings = character())
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "0.60", endpoint = "PFS"
+  )
+  for (effect in c("hr", "hr_noninferiority", "rate_difference")) {
+    expect_equal(
+      efficacy_flags(c(row, list(effect_type = effect)), exact),
+      "comparator_missing",
+      info = effect
+    )
+    named <- c(row, list(effect_type = effect, comparator = "placebo"))
+    expect_equal(efficacy_flags(named, exact), character(), info = effect)
+  }
+  for (effect in c("single_arm_rate", "single_arm_median")) {
+    expect_equal(
+      efficacy_flags(c(row, list(effect_type = effect)), exact),
+      character(),
+      info = effect
+    )
+  }
+})
+
+test_that("a row without an endpoint is flagged", {
+  exact <- list(status = "exact", warnings = character())
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "0.16", comparator = "Placebo",
+    effect_type = "hr", endpoint = "Progression-Free Survival"
+  )
+  expect_equal(efficacy_flags(row, exact), character())
+  row$endpoint <- NULL
+  expect_equal(efficacy_flags(row, exact), "endpoint_missing")
+})
+
+test_that("a clean row has no flags; a missing comparator and ranges are", {
   row <- list(
     ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
     ci_is_range = FALSE, value = "0.47", arm_treatment = "34.8",
     arm_control = "10.9", comparator = "crizotinib",
-    comparator_column_label = "Crizotinib", effect_type = "hr"
+    comparator_column_label = "Crizotinib", effect_type = "hr",
+    endpoint = "PFS"
   )
   exact <- list(status = "exact", warnings = character())
   expect_equal(efficacy_flags(row, exact), character())
   row$comparator <- NULL
   row$ci_is_range <- TRUE
-  expect_equal(efficacy_flags(row, exact), c("ci_is_range", "single_arm_hr"))
+  expect_equal(
+    efficacy_flags(row, exact),
+    c("ci_is_range", "comparator_missing")
+  )
   row$page <- NA_integer_
   expect_true("page_unknown" %in% efficacy_flags(row, exact))
   row$page <- 12L
@@ -644,6 +725,104 @@ test_that("a row that borrows from another line or column never ships", {
   expect_true("quote_across_lines" %in% median_os$record$flags)
   expect_equal(median_os$rows$review, "flagged")
   expect_equal(nrow(median_os$site), 0L)
+})
+
+# Review of the prompt change (2026-10-01): whole rows that reached the site
+# with arm sizes, a label, a comparator or an endpoint nothing verified.
+laura_hr_quote <- "HR (95% CI); P-value 0.16 (0.10, 0.24); P<0.001"
+
+laura_row_to_site <- function(...) {
+  row <- list(
+    trial = "LAURA", endpoint = "Progression-Free Survival",
+    regimen = "TAGRISSO", comparator = "Placebo", value = "0.16",
+    ci_low = "0.10", ci_high = "0.24", ci_level = "95",
+    quotes = list(laura_hr_quote)
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  do.call(row_to_site, c(list(excerpt_pages("tagrisso-laura")), row))
+}
+
+test_that("arm sizes ship only with the label quoted beside them", {
+  # The label printed but left empty, the arm sizes swapped.
+  swapped <- laura_row_to_site(
+    n_treatment = "73", n_control = "143",
+    quotes = list(laura_hr_quote, "(N=143) (N=73)")
+  )
+  expect_true("comparator_label_missing" %in% swapped$record$flags)
+  expect_equal(nrow(swapped$site), 0L)
+  # The label given, but in no quote with the control's size: the arms are
+  # blanked, sizes included, and the row hidden.
+  apart <- laura_row_to_site(
+    comparator_column_label = "Placebo", n_treatment = "143",
+    n_control = "73", quotes = list(laura_hr_quote, "(N=143) (N=73)")
+  )
+  expect_true("arms_not_verified" %in% apart$record$flags)
+  expect_null(apart$record$n_control)
+  expect_null(apart$record$comparator_column_label)
+  expect_equal(nrow(apart$site), 0L)
+  # The column headers quoted with the sizes below them.
+  headed <- laura_row_to_site(
+    comparator_column_label = "Placebo", n_treatment = "143",
+    n_control = "73", quotes = list(
+      laura_hr_quote, "TAGRISSO Placebo Efficacy Parameter (N=143) (N=73)"
+    )
+  )
+  expect_equal(headed$record$flags, character())
+  expect_equal(headed$site$n_control, 73L)
+  expect_equal(headed$site$comparator_column_label, "Placebo")
+})
+
+test_that("a label with nothing to tie never ships", {
+  # The treatment's header given as the comparator's, no arm values.
+  wrong <- laura_row_to_site(comparator_column_label = "TAGRISSO")
+  expect_equal(wrong$record$flags, character())
+  expect_null(wrong$record$comparator_column_label)
+  expect_equal(nrow(wrong$site), 1L)
+  expect_true(is.na(wrong$site$comparator_column_label))
+})
+
+test_that("a row without its endpoint or its comparator never ships", {
+  no_endpoint <- laura_row_to_site(endpoint = "")
+  expect_true("endpoint_missing" %in% no_endpoint$record$flags)
+  expect_equal(nrow(no_endpoint$site), 0L)
+  pages <- c(paste(
+    "5.1 Pharmacodynamic properties",
+    "Table 2 Efficacy results from TRIAL-9",
+    "                     Drugamab          Placebo",
+    "                     (N=100)           (N=98)",
+    "ORR, %               45                30",
+    "Difference in ORR 15 (95% CI: 2, 28)",
+    sep = "\n"
+  ), "5.2 Pharmacokinetic properties")
+  rate_row <- function(...) {
+    row_to_site(
+      pages,
+      trial = "TRIAL-9", endpoint = "ORR", regimen = "Drugamab",
+      effect_type = "rate_difference", value = "15", ci_low = "2",
+      ci_high = "28", ci_level = "95", n_treatment = "100", n_control = "98",
+      ...
+    )
+  }
+  # A rate difference with comparator "", its arms swapped: it would read
+  # "single-arm" beside "30 vs 45".
+  swapped <- rate_row(
+    arm_treatment = "30", arm_control = "45", arm_measure = "ORR, %",
+    quotes = list(
+      "Difference in ORR 15 (95% CI: 2, 28)", "ORR, % 45 30", "(N=100) (N=98)"
+    )
+  )
+  expect_true(all(
+    c("comparator_missing", "comparator_label_missing") %in%
+      swapped$record$flags
+  ))
+  expect_equal(nrow(swapped$site), 0L)
+  # The same without arm values.
+  bare <- rate_row(
+    quotes = list("Difference in ORR 15 (95% CI: 2, 28)", "(N=100) (N=98)")
+  )
+  expect_true("comparator_missing" %in% bare$record$flags)
+  expect_equal(nrow(bare$site), 0L)
 })
 
 test_that("a row quoted in reading order gets its page, flagged for review", {

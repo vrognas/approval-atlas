@@ -318,20 +318,63 @@ test_that("the comparator's column label shares a quote with its arm", {
   expect_true("arms_not_verified" %in% result$flags)
 })
 
-test_that("a label without control values is only looked up in the text", {
+# A label ties the control arm's values to their column; with none it says
+# nothing checkable (the treatment's header passed as the comparator's), so
+# it is dropped, never shown, and hides nothing.
+test_that("a label without control values is dropped, not flagged", {
   section <- "Crizotinib Alecensa HR 0.47 (0.34, 0.65)"
   row <- list(
     quotes = "HR 0.47 (0.34, 0.65)", value = "0.47", ci_low = "0.34",
     ci_high = "0.65", comparator = "crizotinib",
-    comparator_column_label = "Crizotinib"
+    comparator_column_label = "Alecensa"
   )
   result <- verify_efficacy_row(row, section)
   expect_equal(result$status, "exact")
+  expect_equal(result$blanked, "comparator_column_label")
   expect_equal(result$flags, character())
+  kept <- without_unverified_arms(row, result$blanked)
+  expect_null(kept$comparator_column_label)
   row$comparator_column_label <- "Docetaxel"
   result <- verify_efficacy_row(row, section)
+  expect_equal(result$blanked, "comparator_column_label")
+  expect_equal(result$flags, character())
+})
+
+# Arm sizes say which arm is which, as arm values do (review of the prompt
+# change, 2026-10-01: LAURA's swapped "n=73" vs "n=143" was shown).
+test_that("the label shares a quote with the control arm's size", {
+  section <- paste(
+    "Patients received Drugamab (N=100) or placebo (N=98).",
+    "HR 0.60 (0.45, 0.80)."
+  )
+  hr <- "HR 0.60 (0.45, 0.80)."
+  row <- list(
+    quotes = c(hr, "Drugamab (N=100) or placebo (N=98)."),
+    value = "0.60", ci_low = "0.45", ci_high = "0.80", comparator = "placebo",
+    comparator_column_label = "placebo", n_treatment = 100L, n_control = 98L
+  )
+  result <- verify_efficacy_row(row, section)
   expect_equal(result$status, "exact")
-  expect_equal(result$flags, "text_not_in_source")
+  expect_equal(result$blanked, character())
+  expect_equal(result$flags, character())
+  # The label quoted with the treatment arm's size, not the control's: a swap.
+  swapped <- row
+  swapped$quotes <- c(hr, "Drugamab (N=100)", "placebo (N=98)")
+  swapped$n_treatment <- 98L
+  swapped$n_control <- 100L
+  result <- verify_efficacy_row(swapped, section)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "not in a quote with n_control", all = FALSE)
+  expect_match(result$errors, "arms swapped", all = FALSE)
+  # The label in no quote with the control's size: the sizes are blanked.
+  apart <- row
+  apart$quotes <- c(hr, "Drugamab (N=100)", "(N=98)")
+  result <- verify_efficacy_row(apart, section)
+  expect_equal(result$status, "exact")
+  expect_setequal(
+    result$blanked, c("n_treatment", "n_control", "comparator_column_label")
+  )
+  expect_true("arms_not_verified" %in% result$flags)
 })
 
 test_that("text not in the section is flagged, not failed", {

@@ -45,23 +45,34 @@ mentions_not_reached <- function(text) {
   !is_absent(text) && grepl("\\b(NR|NE)\\b", text, perl = TRUE)
 }
 
-# Arm values given without the comparator's column label, which ties the
+# Effects comparing two arms: their row has a control arm.
+efficacy_two_arm_effects <- c("hr", "hr_noninferiority", "rate_difference")
+
+two_arm_effect <- function(row) {
+  effect_type <- row[["effect_type"]]
+  !is_absent(effect_type) && effect_type %in% efficacy_two_arm_effects
+}
+
+any_given <- function(row, fields) {
+  any(purrr::map_lgl(fields, \(field) !is_absent(row[[field]])))
+}
+
+# Values per arm (efficacy_arm_value_fields: the arm values and sizes) on a
+# row of two arms (a comparator named, a control arm's value given or a
+# two-arm effect) without the comparator's column label, which ties the
 # control's values to their column (comparator_label_check()). A row without
-# arm values has nothing for a label to tie: its effect is one number for
-# both arms, and prose results print no column label at all.
+# them has nothing for a label to tie: its effect is one number for both
+# arms. A single-arm row's size names its one arm.
 arm_values_unlabelled <- function(row) {
-  has_arms <- !is_absent(row[["arm_treatment"]]) ||
-    !is_absent(row[["arm_control"]])
-  has_arms && !is_absent(row[["comparator"]]) &&
+  two_arms <- !is_absent(row[["comparator"]]) ||
+    any_given(row, efficacy_control_fields) || two_arm_effect(row)
+  two_arms && any_given(row, efficacy_arm_value_fields) &&
     is_absent(row[["comparator_column_label"]])
 }
 
 # Every reason a verified row needs a human before it is shown.
 efficacy_flags <- function(row, verification) {
   ci_level <- row[["ci_level"]]
-  effect_type <- row[["effect_type"]]
-  single_arm_hr <- is_absent(row[["comparator"]]) &&
-    !is_absent(effect_type) && startsWith(effect_type, "hr")
   checks <- c(
     reassembled = length(verification$warnings) > 0,
     ci_level = !is_absent(ci_level) && ci_level != 95,
@@ -73,8 +84,11 @@ efficacy_flags <- function(row, verification) {
       c("value", "arm_treatment", "arm_control"),
       \(field) mentions_not_reached(row[[field]])
     )),
-    single_arm_hr = single_arm_hr,
+    # A two-arm effect the card would call single-arm.
+    comparator_missing = two_arm_effect(row) && is_absent(row[["comparator"]]),
     comparator_label_missing = arm_values_unlabelled(row),
+    # The card would print the effect without saying of what.
+    endpoint_missing = is_absent(row[["endpoint"]]),
     # A row given its page (extracted rows) whose quote was not placed.
     page_unknown = "page" %in% names(row) && is_absent(row[["page"]])
   )

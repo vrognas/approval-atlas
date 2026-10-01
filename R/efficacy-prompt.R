@@ -28,6 +28,16 @@ efficacy_text_fields <- c(
   "arm_measure"
 )
 
+# What "" means for the comparator and its column label, worded the same in
+# the schema and the system prompt: a single-arm result is one with no
+# comparator to copy, so the effect type, not "", says it is single-arm.
+efficacy_empty_comparator <-
+  '"" when no single span states it, as for a single-arm result'
+efficacy_empty_label <- paste(
+  '"" when the row gives no arm values or no table with a column per arm',
+  "holds them"
+)
+
 efficacy_row_properties <- function() {
   list(
     indication = text_field(),
@@ -40,12 +50,14 @@ efficacy_row_properties <- function() {
       "other", "not_stated"
     ),
     regimen = text_field("The treatment arm, as section 5.1 prints it."),
-    comparator = text_field(
-      'The control arm, as section 5.1 prints it; "" when single-arm.'
-    ),
-    comparator_column_label = text_field(paste(
-      "The header of the comparator's column in the table holding this",
-      'result, as printed; "" when no table has a column per arm.'
+    comparator = text_field(paste0(
+      "The control arm, as section 5.1 prints it; ",
+      efficacy_empty_comparator, "."
+    )),
+    comparator_column_label = text_field(paste0(
+      "The header of the comparator's column in the table holding this ",
+      "row's arm values (arm_treatment, arm_control, n_treatment, ",
+      "n_control), as printed; ", efficacy_empty_label, "."
     )),
     n_treatment = text_field(),
     n_control = text_field(),
@@ -135,17 +147,19 @@ efficacy_system_prompt <- function() {
     "it, exactly as printed. Do not paraphrase, expand or abbreviate, and",
     "do not join words printed apart (a name with its abbreviation, an",
     'endpoint with its population or assessment); "" when no single span',
-    "states it.",
-    "In a table, tell the arms apart by the column headers and copy the",
-    "comparator's header into comparator_column_label exactly as printed",
-    '(its first line when it wraps); "" when no table with a column per',
-    "arm holds the result.",
+    paste0("states it. comparator: ", efficacy_empty_comparator, "."),
+    "The arm values are arm_treatment, arm_control, n_treatment and",
+    "n_control. In a table, tell the arms apart by the column headers and",
+    "copy the comparator's header into comparator_column_label exactly as",
+    "printed (its first line when it wraps);",
+    paste0(efficacy_empty_label, " (a sentence prints no column header)."),
     "Give each row one verbatim quote of at most 50 words that holds the",
     "value with its confidence interval. Add a quote (at most three in all)",
     "only for what that one does not hold: the arm sizes (n_treatment,",
-    "n_control); the arm values (arm_treatment, arm_control), with",
-    "comparator_column_label in the same quote as arm_control when there is",
-    "one; the p-value. Together the quotes contain every number you give.",
+    "n_control); the arm values (arm_treatment, arm_control); the p-value.",
+    "Give comparator_column_label in the same quote as each control-arm",
+    "value (arm_control, n_control). Together the quotes contain every",
+    "number you give.",
     "indication: the EU indication the row supports, copied exactly from the",
     'indications given, never paraphrased; "" when no given indication',
     "applies. Give no rows when section 5.1 reports no efficacy trial."
