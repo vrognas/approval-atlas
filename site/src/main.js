@@ -1682,6 +1682,9 @@ function startDashboard(meta, [
     .attr("aria-label", UI.years.scope.includeLabel)
     .on("click", () => {
       setState({ status: [] });
+      // The title as the render will set it, before focus moves there (review of L4: the render
+      // follows a frame later, so a screen reader read the old title).
+      showYearsScope(false);
       $("#chart-title").focus();
     });
 
@@ -2298,12 +2301,15 @@ function startDashboard(meta, [
     };
   }
 
-  function renderYears(withoutDateFilter) {
-    // By default (authorized only) the chart counts the medicines still authorized: its title and
-    // scope line say so (owner decision 2026-10-01, L4).
-    const authorizedOnly = isDefaultStatus(state.status);
+  // By default (authorized only) the chart counts the medicines still authorized: its title and
+  // scope line say so (owner decision 2026-10-01, L4).
+  function showYearsScope(authorizedOnly) {
     $("#chart-title").textContent = authorizedOnly ? UI.years.titleAuthorized : UI.years.title;
     $("#chart-scope").hidden = !authorizedOnly;
+  }
+
+  function renderYears(withoutDateFilter) {
+    showYearsScope(isDefaultStatus(state.status));
     stackMode = yearStackMode(stackMode, state.status);
     offerStatusStack(statusStackAvailable(state.status));
     d3.selectAll("#chart-stack button").attr("aria-pressed", function pressed() {
