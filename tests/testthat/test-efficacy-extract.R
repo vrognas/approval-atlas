@@ -743,24 +743,44 @@ laura_row_to_site <- function(...) {
   do.call(row_to_site, c(list(excerpt_pages("tagrisso-laura")), row))
 }
 
+# Owner decision 2026-10-01: sizes no label ties to their arms are blanked and
+# the row shown without them, as its value and CI verify; never hidden for
+# them, never shown with them.
 test_that("arm sizes ship only with the label quoted beside them", {
   # The label printed but left empty, the arm sizes swapped.
   swapped <- laura_row_to_site(
     n_treatment = "73", n_control = "143",
     quotes = list(laura_hr_quote, "(N=143) (N=73)")
   )
-  expect_true("comparator_label_missing" %in% swapped$record$flags)
-  expect_equal(nrow(swapped$site), 0L)
-  # The label given, but in no quote with the control's size: the arms are
-  # blanked, sizes included, and the row hidden.
+  expect_equal(swapped$record$flags, character())
+  expect_null(swapped$record$n_treatment)
+  expect_null(swapped$record$n_control)
+  expect_equal(nrow(swapped$site), 1L)
+  expect_true(is.na(swapped$site$n_treatment))
+  expect_true(is.na(swapped$site$n_control))
+  expect_equal(swapped$site$value, "0.16")
+  # The label given, but in no quote with the control's size: the same, the
+  # label dropped with the sizes it did not tie.
   apart <- laura_row_to_site(
     comparator_column_label = "Placebo", n_treatment = "143",
     n_control = "73", quotes = list(laura_hr_quote, "(N=143) (N=73)")
   )
-  expect_true("arms_not_verified" %in% apart$record$flags)
+  expect_equal(apart$record$flags, character())
   expect_null(apart$record$n_control)
   expect_null(apart$record$comparator_column_label)
-  expect_equal(nrow(apart$site), 0L)
+  expect_equal(nrow(apart$site), 1L)
+  expect_true(is.na(apart$site$n_control))
+  expect_true(is.na(apart$site$comparator_column_label))
+  # Arm values without a label stay hidden, their sizes kept for the human.
+  medians <- "Median PFS, months (95% CI) 39.1 (31.5, NC) 5.6 (3.7, 7.4)"
+  unlabelled <- laura_row_to_site(
+    n_treatment = "143", n_control = "73", arm_treatment = "39.1",
+    arm_control = "5.6",
+    quotes = list(laura_hr_quote, medians, "(N=143) (N=73)")
+  )
+  expect_equal(unlabelled$record$flags, "comparator_label_missing")
+  expect_equal(unlabelled$record$n_control, 73L)
+  expect_equal(nrow(unlabelled$site), 0L)
   # The column headers quoted with the sizes below them.
   headed <- laura_row_to_site(
     comparator_column_label = "Placebo", n_treatment = "143",

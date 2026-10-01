@@ -57,16 +57,23 @@ any_given <- function(row, fields) {
   any(purrr::map_lgl(fields, \(field) !is_absent(row[[field]])))
 }
 
+# A row of two arms: a comparator named, a control arm's value given or a
+# two-arm effect.
+two_arm_row <- function(row) {
+  !is_absent(row[["comparator"]]) ||
+    any_given(row, efficacy_control_fields) || two_arm_effect(row)
+}
+
 # Values per arm (efficacy_arm_value_fields: the arm values and sizes) on a
-# row of two arms (a comparator named, a control arm's value given or a
-# two-arm effect) without the comparator's column label, which ties the
+# row of two arms without the comparator's column label, which ties the
 # control's values to their column (comparator_label_check()). A row without
 # them has nothing for a label to tie: its effect is one number for both
-# arms. A single-arm row's size names its one arm.
+# arms. A single-arm row's size names its one arm. The verifier has blanked
+# the sizes no label ties (untied_sizes()), so on a verified row this flags
+# arm values; the sizes stay counted, so a row with unlabelled sizes is never
+# shown.
 arm_values_unlabelled <- function(row) {
-  two_arms <- !is_absent(row[["comparator"]]) ||
-    any_given(row, efficacy_control_fields) || two_arm_effect(row)
-  two_arms && any_given(row, efficacy_arm_value_fields) &&
+  two_arm_row(row) && any_given(row, efficacy_arm_value_fields) &&
     is_absent(row[["comparator_column_label"]])
 }
 

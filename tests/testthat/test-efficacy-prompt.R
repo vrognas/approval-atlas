@@ -170,6 +170,9 @@ test_that("the system prompt states the rules the verifier relies on", {
     "in the same quote as each control-arm value (arm_control, n_control)",
     fixed = TRUE
   )
+  # Owner decision 2026-10-01: sizes are kept only when the label ties them.
+  expect_match(prompt, "quote the header with the number printed under it",
+               fixed = TRUE)
 })
 
 test_that("the system prompt asks for text copied, not written", {
@@ -245,7 +248,7 @@ test_that("the system prompt defines every enum value and the empty cases", {
   has("is left out")
   has("never paraphrased")
   has("\"\" when no given indication applies")
-  has("the arm values (arm_treatment, arm_control); the p-value")
+  has("the other arm values (arm_treatment, arm_control); the p-value")
   has("For every field the text does not state, use \"\"")
   has("Never estimate.")
 })

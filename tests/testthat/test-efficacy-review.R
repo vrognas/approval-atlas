@@ -101,6 +101,34 @@ test_that("the review page says what a row does not state", {
                fixed = TRUE)
 })
 
+# Owner decision 2026-10-01: the extractor blanks arm sizes no comparator
+# column label ties to their arms, and the rows file does not record it, so
+# the reviewer is told why a row of two arms has no n.
+test_that("the review page says when a row of two arms has no sizes", {
+  row <- review_rows()[2, ]
+  row$regimen <- "alectinib"
+  row$comparator <- "crizotinib"
+  note <- paste(
+    "- Arm sizes: not shown (kept only with the comparator's column label",
+    "in a quote with the control arm's size)"
+  )
+  page <- function(row) {
+    paste(
+      efficacy_review_markdown(row[0, ], row, as.Date("2026-10-01")),
+      collapse = "\n"
+    )
+  }
+  text <- page(row)
+  expect_match(text, "- Regimen: alectinib vs crizotinib", fixed = TRUE)
+  expect_match(text, note, fixed = TRUE)
+  row$n_treatment <- 152L
+  row$n_control <- 151L
+  expect_no_match(page(row), "- Arm sizes", fixed = TRUE)
+  single <- review_rows()[2, ]
+  single$effect_type <- "single_arm_rate"
+  expect_no_match(page(single), "- Arm sizes", fixed = TRUE)
+})
+
 test_that("the review page leaves out an unknown CI level; quotes every line", {
   row <- review_rows()[2, ]
   row$ci_level <- NA_real_

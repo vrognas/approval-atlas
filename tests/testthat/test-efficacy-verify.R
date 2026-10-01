@@ -366,7 +366,9 @@ test_that("the label shares a quote with the control arm's size", {
   expect_equal(result$status, "failed")
   expect_match(result$errors, "not in a quote with n_control", all = FALSE)
   expect_match(result$errors, "arms swapped", all = FALSE)
-  # The label in no quote with the control's size: the sizes are blanked.
+  # The label in no quote with the control's size: the sizes cannot be tied
+  # to their arms, so they are blanked with the label, which then ties
+  # nothing, and nothing hides the row (owner decision 2026-10-01).
   apart <- row
   apart$quotes <- c(hr, "Drugamab (N=100)", "(N=98)")
   result <- verify_efficacy_row(apart, section)
@@ -374,7 +376,56 @@ test_that("the label shares a quote with the control arm's size", {
   expect_setequal(
     result$blanked, c("n_treatment", "n_control", "comparator_column_label")
   )
-  expect_true("arms_not_verified" %in% result$flags)
+  expect_equal(result$flags, character())
+})
+
+# Owner decision 2026-10-01: a row whose value and CI verify but whose arm
+# sizes no label ties to their arms is shown without the sizes, not hidden.
+test_that("arm sizes no label ties to their arms are blanked, not flagged", {
+  hr <- "HR 0.60 (0.45, 0.80)."
+  sizes <- "Drugamab (N=100) or the control arm (N=98)."
+  medians <- "Median PFS was 5.2 months with Drugamab and 3.8 with placebo."
+  section <- paste("Patients were randomised to", sizes, hr, medians)
+  row <- list(
+    quotes = c(hr, sizes), value = "0.60", ci_low = "0.45", ci_high = "0.80",
+    comparator = "placebo", n_treatment = 100L, n_control = 98L
+  )
+  result <- verify_efficacy_row(row, section)
+  expect_equal(result$status, "exact")
+  expect_setequal(result$blanked, c("n_treatment", "n_control"))
+  expect_equal(result$flags, character())
+  kept <- without_unverified_arms(row, result$blanked)
+  expect_null(kept$n_treatment)
+  expect_null(kept$n_control)
+  expect_equal(kept$value, "0.60")
+  # The treatment arm's size alone, on a row of two arms.
+  one <- row
+  one$n_control <- NULL
+  expect_equal(verify_efficacy_row(one, section)$blanked, "n_treatment")
+  # The label quoted with the control's size ties both: kept.
+  labelled <- c(row, list(comparator_column_label = "control arm"))
+  result <- verify_efficacy_row(labelled, section)
+  expect_equal(result$blanked, character())
+  expect_equal(result$flags, character())
+  # The label ties the arm values, not the sizes: only the sizes go.
+  arms <- c(row, list(
+    comparator_column_label = "placebo", arm_treatment = "5.2",
+    arm_control = "3.8"
+  ))
+  arms$quotes <- c(hr, sizes, medians)
+  result <- verify_efficacy_row(arms, section)
+  expect_setequal(result$blanked, c("n_treatment", "n_control"))
+  expect_equal(result$flags, character())
+  # Arm values without a label keep the sizes: efficacy_flags() hides the
+  # row (comparator_label_missing) and a human sees them.
+  arms$comparator_column_label <- NULL
+  expect_equal(verify_efficacy_row(arms, section)$blanked, character())
+  # A single-arm row's size names its one arm.
+  single <- list(
+    quotes = c(hr, sizes), value = "0.60", ci_low = "0.45", ci_high = "0.80",
+    effect_type = "single_arm_rate", n_treatment = 100L
+  )
+  expect_equal(verify_efficacy_row(single, section)$blanked, character())
 })
 
 test_that("text not in the section is flagged, not failed", {
@@ -446,18 +497,18 @@ test_that("a CI level the text never prints is flagged", {
   )
 })
 
+# A single-arm row's: a row of two arms keeps its sizes only with the label
+# in a quote with the control's size, so never outside the quotes.
 test_that("an arm size found only outside the quotes is flagged", {
-  section <- "Alecensa (n = 152) or crizotinib (n = 151). HR 0.47 (0.34, 0.65)"
+  section <- "Alecensa (n = 152) in one arm. ORR 47 (34, 65)"
   row <- list(
-    quotes = "HR 0.47 (0.34, 0.65)", value = "0.47", ci_low = "0.34",
-    ci_high = "0.65", n_treatment = 152L, n_control = 151L
+    quotes = "ORR 47 (34, 65)", value = "47", ci_low = "34", ci_high = "65",
+    effect_type = "single_arm_rate", n_treatment = 152L
   )
   result <- verify_efficacy_row(row, section)
   expect_equal(result$status, "exact")
   expect_equal(result$flags, "n_not_in_quotes")
-  row$quotes <- c(
-    "HR 0.47 (0.34, 0.65)", "Alecensa (n = 152) or crizotinib (n = 151)."
-  )
+  row$quotes <- c("ORR 47 (34, 65)", "Alecensa (n = 152) in one arm.")
   expect_equal(verify_efficacy_row(row, section)$flags, character())
 })
 

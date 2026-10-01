@@ -77,6 +77,19 @@ efficacy_review_regimen <- function(row) {
   )
 }
 
+# Owner decision 2026-10-01: the extractor blanks arm sizes no comparator
+# column label ties to their arms (untied_sizes()), and the rows file does not
+# record it, so a row of two arms without sizes says when they are kept.
+efficacy_review_sizes <- function(row) {
+  if (!two_arm_row(row) || any_given(row, efficacy_size_fields)) {
+    return(NULL)
+  }
+  paste(
+    "- Arm sizes: not shown (kept only with the comparator's column label",
+    "in a quote with the control arm's size)"
+  )
+}
+
 efficacy_review_arms <- function(row) {
   if (is.na(row$arm_treatment) && is.na(row$arm_control)) {
     return("not stated")
@@ -113,6 +126,7 @@ efficacy_review_fields <- function(row) {
     paste0("- Trial: ", review_text(row$trial)),
     paste0("- Population: ", population),
     paste0("- Regimen: ", efficacy_review_regimen(row)),
+    efficacy_review_sizes(row),
     paste0(
       "- Comparator column label: ", review_text(row$comparator_column_label)
     ),

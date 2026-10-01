@@ -510,10 +510,10 @@ quote_holds_size <- function(n, quote) {
 # Each value of the control arm with its treatment arm's counterpart: the
 # sizes say which arm is which, as the arm values do.
 efficacy_arm_pairs <- list(
-  list(control = "arm_control", treatment = "arm_treatment",
-       holds = quote_holds_number),
-  list(control = "n_control", treatment = "n_treatment",
-       holds = quote_holds_size)
+  values = list(control = "arm_control", treatment = "arm_treatment",
+                holds = quote_holds_number),
+  sizes = list(control = "n_control", treatment = "n_treatment",
+               holds = quote_holds_size)
 )
 
 # The comparator's column label and a control arm's value (`pair`) in one of
@@ -546,8 +546,10 @@ label_tie <- function(row, pair, label, with_label) {
 # its size) stand in one quote, so arms read from the wrong column cannot
 # pass (ALEX prints the comparator first). A label in a quote with the
 # treatment arm's value and not the control's is a swap (`swap`, which
-# rejects the row); a label in no quote with a control's value is only
-# unverified (`unverified`). A quote holding both columns passes either way.
+# rejects the row), for the arm values as for the sizes; a label in no quote
+# with the control's value is only unverified (`unverified`), and in no quote
+# with the control's size leaves the sizes untied (untied_sizes()). A quote
+# holding both columns passes either way.
 comparator_label_check <- function(row, quotes) {
   label <- row[["comparator_column_label"]]
   if (is_absent(label)) {
@@ -559,8 +561,38 @@ comparator_label_check <- function(row, quotes) {
   })
   list(
     swap = unlist(purrr::map(checks, "swap")),
-    unverified = unlist(purrr::map(checks, "unverified"))
+    unverified = checks$values$unverified
   )
+}
+
+# The comparator's column label in a quote with the control arm's size: its
+# column is the control's, so both sizes are tied to their arms.
+sizes_tied_by_label <- function(row, quotes) {
+  label <- row[["comparator_column_label"]]
+  size <- row[["n_control"]]
+  !is_absent(label) && !is_absent(size) && any(purrr::map_lgl(
+    quotes,
+    \(quote) contains_folded(label, quote) && quote_holds_size(size, quote)
+  ))
+}
+
+# Owner decision 2026-10-01: the arm sizes of a row of two arms that the label
+# does not tie to their arms (sizes_tied_by_label()), as `n_treatment` and
+# `n_control` name them, are blanked, unflagged, so a row whose value and CI
+# verify is shown without them, never with sizes that may be swapped. A row
+# with arm values and no label keeps them: comparator_label_missing hides it
+# for a human, who sees them. A single-arm row's size names its one arm.
+untied_sizes <- function(row, quotes) {
+  given <- efficacy_size_fields[
+    !purrr::map_lgl(efficacy_size_fields, \(field) is_absent(row[[field]]))
+  ]
+  unlabelled_arms <- is_absent(row[["comparator_column_label"]]) &&
+    any_given(row, efficacy_arm_number_fields)
+  if (length(given) == 0 || !two_arm_row(row) || unlabelled_arms ||
+        sizes_tied_by_label(row, quotes)) {
+    return(character())
+  }
+  given
 }
 
 # What the row says about each arm (the values, their sizes and measure and
@@ -570,6 +602,7 @@ efficacy_arm_fields <- c(
   "comparator_column_label"
 )
 efficacy_arm_number_fields <- c("arm_treatment", "arm_control")
+efficacy_size_fields <- c("n_treatment", "n_control")
 # The values per arm, and those of the control arm, which the comparator's
 # column label ties to their column.
 efficacy_arm_value_fields <- c(
@@ -682,12 +715,13 @@ quote_sources <- function(quotes, sections, section_text) {
 # paired with its value by column order (value_ci_binding()) flags it
 # ci_paired_by_column. `indication_text` is the medicine's section 4.1, for
 # the indication check (none without it). When everything else verifies but
-# the arms do not (arm values not in the quotes, or the comparator's label in
-# no quote with a control arm's value or size), the row is kept without them:
+# the arm values do not (not in the quotes, or the comparator's label in no
+# quote with the control's value), the row is kept without its arms:
 # `blanked` names the arm fields to blank (without_unverified_arms()), and
 # the flag arms_not_verified hides it until reviewed. A label quoted with the
-# treatment arm's value is a swap and rejects the row. A label with no
-# control arm's value to tie (untied_label()) is in `blanked` too, unflagged.
+# treatment arm's value or size is a swap and rejects the row. Arm sizes no
+# label ties to their arms (untied_sizes()) and then a label with no control
+# arm's value to tie (untied_label()) are in `blanked` too, unflagged.
 verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   section <- efficacy_section_texts(section_text)
   sections <- section$sections
@@ -745,12 +779,16 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     errors <- c(errors, arms$unverified)
     warnings <- c(warnings, arms$warnings)
   }
-  dropped <- if (length(errors) == 0 && untied_label(row)) {
-    "comparator_column_label"
+  dropped <- if (length(errors) == 0) {
+    untied_sizes(row, quotes)
   } else {
     character()
   }
   row <- without_unverified_arms(row, dropped)
+  if (length(errors) == 0 && untied_label(row)) {
+    dropped <- c(dropped, "comparator_column_label")
+    row <- without_unverified_arms(row, "comparator_column_label")
+  }
   status <- dplyr::case_when(
     length(errors) > 0 ~ "failed",
     length(warnings) > 0 ~ "reassembled",
