@@ -2,6 +2,7 @@
 // trap, Escape, the page inert behind it). While open it borrows a chip's facet section from the store
 // (same controls and state) and puts it back when it closes; filters apply live.
 import { UI } from "./labels.js";
+import { closeIcon } from "./links.js";
 
 // onClear(keys): the sheet's Clear button resets these filter keys.
 export function createSheet(dialog, { onClear }) {
@@ -18,6 +19,7 @@ export function createSheet(dialog, { onClear }) {
   clear.addEventListener("click", () => onClear(current.clears));
   done.addEventListener("click", () => dialog.close());
   // A visible way out besides the backdrop, Escape and "Show N medicines".
+  closeButton.append(closeIcon());
   closeButton.setAttribute("aria-label", UI.sheet.close);
   closeButton.title = UI.sheet.close;
   closeButton.addEventListener("click", () => dialog.close());

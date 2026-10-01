@@ -36,6 +36,11 @@ const externalIcon = () => icon("link-icon", ["M9.5 2.5h4v4", "M13.5 2.5 7.5 8.5
 // chevron, which in the area tree's rows is the expand button.
 export const openIcon = () => icon("link-icon", ["M3.5 1.75h6l3 3v9.5h-9z", "M9.5 1.75v3h3", "M6 8.5h4", "M6 11.25h4"]);
 
+// An x: the one glyph of every close and remove button (design sweep 2026-10-01, B11: a text "×"
+// at 24px and 18px beside an SVG x): the filter chips' remove buttons, the sheet's and the intro
+// card's close buttons, the activity table's class toggle. Sized by its button (style.css).
+export const closeIcon = () => icon("close-icon", ["M4 4l8 8M12 4l-8 8"]);
+
 // anchor: an <a> to another website. Adds the icon (at the end of iconParent, the anchor itself
 // by default), the destination for screen readers (after its aria-label, else as visually hidden
 // text) and as its tooltip.

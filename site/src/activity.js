@@ -15,6 +15,7 @@ import { appendCodeBadge } from "./atc-picker.js";
 import { defaultSortDirection } from "./facets.js";
 import { companyBadge } from "./holders.js";
 import { UI } from "./labels.js";
+import { closeIcon } from "./links.js";
 
 const STEPS = 5;
 const formatCount = d3.format(",");
@@ -92,7 +93,7 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
     filterButton(button, parent.label, isSet(parent.filter), null, parent.explanation ?? null);
     if (parent.badge) appendCodeBadge(button, parent.badge);
     button.append("span").attr("class", "activity-parent-name").attr("aria-hidden", "true").text(parent.name);
-    button.append("span").attr("class", "activity-parent-remove").attr("aria-hidden", "true").text("×");
+    button.node().append(closeIcon());
   }
   if (rows.length === 0) {
     root.append("p").attr("class", "muted").text(UI.breakdown.empty);

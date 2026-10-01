@@ -800,7 +800,7 @@ button {
   height: 15px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -991,10 +991,38 @@ button {
   stroke-linecap: round;
 }
 
-.chip-icon-remove {
+/* The one close glyph (links.js closeIcon(); design sweep 2026-10-01, B11: a text "×" at 24px and
+   18px beside this SVG): 16px, sized by its button below. */
+.close-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.chip-remove .close-icon {
   width: 12px;
   height: 12px;
-  stroke-width: 2;
+}
+
+.sheet-close .close-icon,
+.intro-close .close-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.activity-parent-button .close-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* UI icons draw one stroke (B11: 0.98 to 2px, as each viewBox scaled its own): 1.5px on screen at any
+   size; a pressed sort arrow 2px. The intro's illustrations keep their 2px. */
+:is(.theme-icon, .chip-icon, .close-icon, .download-icon, .view-options-icon, .view-options-chevron, .info-icon, .link-icon, .sort-icon, .search-icon, .intro-arrow) :is(path, circle, line, polyline, rect) {
+  vector-effect: non-scaling-stroke;
 }
 
 .filter-chip-active {
@@ -2705,7 +2733,7 @@ input::placeholder {
   height: 16px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.4;
+  stroke-width: 1.5;
   stroke-linecap: round;
 }
 
@@ -4095,7 +4123,7 @@ td .doc-links {
   vertical-align: -0.05em;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -5092,7 +5120,7 @@ table.activity {
 }
 
 :is(.activity, .conditions-table) .sort-button[aria-pressed="true"] svg {
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 /* The class the columns split (one ATC class selected): a pressed toggle, badge, name and ×. */
@@ -5121,11 +5149,6 @@ table.activity {
   cursor: pointer;
 }
 
-.activity-parent-remove {
-  font-size: 1.125rem;
-  line-height: 1;
-}
-
 /* The ATC columns' names: only where tooltips cannot show (touch screens, phones). */
 .activity-legend {
   display: none;
@@ -5144,7 +5167,7 @@ table.activity {
   height: 14px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -5158,7 +5181,7 @@ table.activity {
 }
 
 .segmented button[aria-pressed="true"] .sort-icon {
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 /* Pressed toggles (the filter a header sets is the current one; the sort shown): the accent wash
@@ -5221,7 +5244,7 @@ table.activity {
   color: var(--ink-secondary);
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
@@ -5476,7 +5499,7 @@ table.activity {
   vertical-align: -2px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -5501,11 +5524,12 @@ table.activity {
 }
 
 @container (max-width: 639.98px) {
+  /* The x (the 20px close glyph, B11) level with the first title: 14px down (11px for the text "×"). */
   .intro-close {
     top: 0;
     right: 0;
     align-items: flex-start;
-    padding-top: 11px;
+    padding-top: 14px;
   }
 }
 

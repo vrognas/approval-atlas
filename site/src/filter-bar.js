@@ -6,22 +6,22 @@
 // the same control (a removed pill's chip gets it: its open button).
 import { statusTip, typeTip } from "./badges.js";
 import { UI } from "./labels.js";
+import { closeIcon } from "./links.js";
 import { modalityTip } from "./modalities.js";
 
 // The explanation of a chip naming one value (chip.tip), by its filter.
 const TIPS = { type: typeTip, status: statusTip, mod: modalityTip };
 const SVG = "http://www.w3.org/2000/svg";
 
-// A 14px stroke icon (aria-hidden): "add" (a circled plus) or "remove" (an x).
-function icon(kind) {
+// A 14px stroke icon (aria-hidden): a circled plus. The remove buttons' x is links.js closeIcon(),
+// the one close glyph.
+function addIcon() {
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", "0 0 16 16");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
-  svg.setAttribute("class", `chip-icon chip-icon-${kind}`);
-  const shapes = kind === "add"
-    ? [["circle", { cx: "8", cy: "8", r: "6.25" }], ["path", { d: "M8 5v6M5 8h6" }]]
-    : [["path", { d: "M4 4l8 8M12 4l-8 8" }]];
+  svg.setAttribute("class", "chip-icon chip-icon-add");
+  const shapes = [["circle", { cx: "8", cy: "8", r: "6.25" }], ["path", { d: "M8 5v6M5 8h6" }]];
   for (const [tag, attributes] of shapes) {
     const shape = svg.appendChild(document.createElementNS(SVG, tag));
     for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
@@ -64,7 +64,7 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
     open.setAttribute("aria-expanded", String(openKey === chip.key));
     open.addEventListener("click", () => onOpen(chip.key));
     if (!chip.active) {
-      open.append(icon("add"), name);
+      open.append(addIcon(), name);
       return open;
     }
     // Read as "Medicine type: Biosimilar" (the "|" is aria-hidden; a hidden colon stands in).
@@ -88,7 +88,7 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
     remove.dataset.focusKey = `${chip.key}:remove`;
     remove.setAttribute("aria-label", UI.filters.remove(chip.key, chip.value));
     remove.title = UI.filters.remove(chip.key, chip.value);
-    remove.append(icon("remove"));
+    remove.append(closeIcon());
     remove.addEventListener("click", () => onRemove(chip));
     pill.append(open, remove);
     return pill;
