@@ -148,13 +148,20 @@ test_that("the effort and the token limit can be changed", {
   expect_equal(sample_params(max_tokens = 32000L)$max_tokens, 32000L)
 })
 
+test_that("batch requests carry the models' output limit of 128000", {
+  expect_equal(efficacy_batch_max_tokens, 128000L)
+  expect_equal(
+    sample_params(max_tokens = efficacy_batch_max_tokens)$max_tokens, 128000L
+  )
+})
+
 test_that("the system prompt states the rules the verifier relies on", {
   prompt <- efficacy_system_prompt()
   expect_length(prompt, 1)
   expect_match(prompt, "never add trial names", fixed = TRUE)
   expect_match(prompt, "comparator_column_label", fixed = TRUE)
-  expect_match(prompt, "1 to 3 verbatim quotes of at", fixed = TRUE)
-  expect_match(prompt, "most 50 words", fixed = TRUE)
+  expect_match(prompt, "one verbatim quote of at most 50 words", fixed = TRUE)
+  expect_match(prompt, "at most three", fixed = TRUE)
   expect_match(prompt, "ci_is_range", fixed = TRUE)
   expect_match(prompt, "not a statement of significance", fixed = TRUE)
   expect_match(

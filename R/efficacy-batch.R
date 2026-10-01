@@ -3,9 +3,13 @@
 # against the text they came from. Submitting and collecting the batch is in
 # efficacy-batch-run.R.
 
-# Ruling R8: long sections with many rows would be truncated at 16000; a
-# batch has no HTTP timeout to fear.
-efficacy_batch_max_tokens <- 32000L
+# Ruling R8: the whole output the models allow (claude-sonnet-5-5 and
+# claude-opus-5-5: 128000 tokens, thinking included), as a batch has no HTTP
+# timeout to fear. At 32000 the gold evaluation of 2026-10-01 cut off 5 of 18
+# answers (Keytruda, Opdivo, Tecentriq, Imfinzi, Tevimbra); its token use puts
+# Keytruda's section 5.1 at about 150000, so the longest sections may still
+# be cut off (.remember/efficacy/fix-truncation-scorer.md).
+efficacy_batch_max_tokens <- 128000L
 
 efficacy_custom_id <- function(product_number) {
   gsub("/", "-", product_number, fixed = TRUE)

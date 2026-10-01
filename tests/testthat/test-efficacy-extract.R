@@ -610,7 +610,9 @@ test_that("the batch is polled until it ends; the request holds the section", {
   run <- suppressMessages(extract_first())
   expect_equal(polls, 3L)
   expect_equal(sent[[1]]$custom_id, "EMEA-H-C-004164")
-  expect_equal(sent[[1]]$params$max_tokens, 32000L)
+  # The models' output limit: a batch has no HTTP timeout (Keytruda and
+  # Opdivo were cut off at 32000 in the gold evaluation of 2026-10-01).
+  expect_equal(sent[[1]]$params$max_tokens, 128000L)
   expect_match(
     sent[[1]]$params$messages[[1]]$content,
     "Hazard ratio 0.47",

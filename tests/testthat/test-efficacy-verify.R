@@ -106,6 +106,26 @@ test_that("a quote that is not in the text fails", {
   expect_match(paste(result$errors, collapse = " "), "quote not in the text")
 })
 
+test_that("one quote holding every number of the row is enough", {
+  # What the prompt asks for first: a single quote. KEYNOTE-024's PFS row
+  # without its context quote ("The primary efficacy outcome measure was
+  # PFS ..."); MARIPOSA's gold row has only the one quote.
+  text <- read_efficacy_section("Keytruda")
+  pfs <- Filter(
+    \(row) row$trial == "KEYNOTE-024" && row$endpoint == "PFS",
+    gold_rows("Keytruda")
+  )[[1]]
+  pfs$quotes <- pfs$quotes[grepl("Hazard ratio", pfs$quotes, fixed = TRUE)]
+  expect_length(pfs$quotes, 1)
+  expect_false(verify_efficacy_row(pfs, text)$status == "failed")
+  mariposa <- Filter(
+    \(row) startsWith(row$trial, "MARIPOSA ("), gold_rows("Rybrevant")
+  )[[1]]
+  expect_length(mariposa$quotes, 1)
+  result <- verify_efficacy_row(mariposa, read_efficacy_section("Rybrevant"))
+  expect_false(result$status == "failed")
+})
+
 test_that("a quote found in only one of the texts passes", {
   row <- list(quotes = "Median OS 12.1 months", value = "12.1", trial = NULL)
   texts <- c("garbled Median OS 12 .1 months", "Median  OS 12.1\nmonths")

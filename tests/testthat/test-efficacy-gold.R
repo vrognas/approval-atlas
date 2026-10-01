@@ -204,6 +204,409 @@ test_that("a row with neither trial nor endpoint in common stays unpaired", {
   expect_equal(score$numeric_errors, 0L)
 })
 
+related <- function(first, second) {
+  gold_trial_names_related(gold_trial_names(first), gold_trial_names(second))
+}
+
+test_that("trial labels are related by a trial name they share", {
+  expect_false(related("RAINBOW", "REVEL"))
+  expect_false(related("RAINBOW", "RELAY"))
+  expect_false(related("KEYNOTE-189", "KEYNOTE-407"))
+  expect_false(related("Study 1540", "Study 1620"))
+  expect_false(related("MARIPOSA-2", "MARIPOSA (NSC3003)"))
+  expect_false(related("DESTINY-Lung01", "DESTINY-Lung02"))
+  expect_true(related("BO28984, ALEX", "ALEX (BO28984)"))
+  expect_true(related("BO40336; ALINA", "ALINA (BO40336)"))
+  expect_true(related(
+    "CodeBreaK 100 phase 2 part A", "Study 20170543 (CodeBreaK 100)"
+  ))
+  expect_true(related(
+    "Multicentre, randomised, open label phase 3 study of ALIMTA",
+    "Phase 3 study, ALIMTA vs docetaxel (name not given)"
+  ))
+  expect_true(related("CROWN (Study B7461006)", "CROWN (B7461006)"))
+  expect_true(related("GEOMETRY mono-1", "GEOMETRY mono-1 (Cohorts 4 and 6)"))
+  # Spellings of one name: separators, glued numbers, leading zeros.
+  expect_true(related("KEYNOTE 024", "KEYNOTE-024"))
+  expect_true(related("IMpower 110", "IMpower110 (GO29431)"))
+  expect_true(related("KEYNOTE-24", "KEYNOTE-024"))
+  # A description names no trial: the endpoint alone decides.
+  expect_true(related("pembrolizumab adjuvant study", "KEYNOTE-091"))
+  expect_true(related(NULL, "REVEL"))
+  # Phase numbers and generic words name no trial.
+  expect_equal(gold_trial_names("Phase III STUDY of ALIMTA"), "alimta")
+  expect_equal(gold_trial_names("KEYNOTE-024"), "keynote 24")
+  expect_equal(gold_trial_names("ALEX (BO28984)"), c("alex", "bo 28984"))
+  expect_equal(gold_trial_names("DESTINY-Lung02"), "destiny lung 2")
+})
+
+test_that("a registry number only links labels, never separates them", {
+  # Two labels with the same name and different numbers in brackets.
+  expect_true(related("ALINA (BO40336)", "ALINA (NCT03456076)"))
+  expect_true(related("ALEX (BO28984)", "ALEX (NCT02075840)"))
+  expect_true(related("ALEX", "ALEX (BO28984)"))
+  for (labels in list(
+    c("ALINA (BO40336)", "ALINA (NCT03456076)"),
+    c("ALEX (BO28984)", "ALEX (NCT02075840)")
+  )) {
+    gold_rows <- list(synthetic_row(
+      medicine = "Alecensa", trial = labels[1], endpoint = "PFS",
+      value = "0.47", ci_low = "0.34", ci_high = "0.65"
+    ))
+    wrong <- modifyList(gold_rows[[1]], list(trial = labels[2], value = "0.9"))
+    score <- score_against_gold(list(wrong), gold_rows)
+    expect_equal(score$numeric_errors, 1L, info = labels[2])
+    expect_equal(score$missed_rows, 0L, info = labels[2])
+  }
+})
+
+test_that("a trial never pairs with its numbered sibling", {
+  # A bare MARIPOSA row left over when the model's MARIPOSA-2 row failed
+  # verification paired with the gold's MARIPOSA-2 row.
+  expect_false(related("MARIPOSA", "MARIPOSA-2"))
+  expect_false(related("DESTINY", "DESTINY-Lung02"))
+  expect_false(related("FLAURA", "FLAURA2"))
+  expect_false(related("KEYNOTE", "KEYNOTE-024"))
+  # Words after a name that hold no number are no other trial.
+  expect_true(related("IMpower110 ITT", "IMpower110"))
+  gold_rows <- list(synthetic_row(
+    medicine = "Rybrevant", trial = "MARIPOSA-2", endpoint = "PFS",
+    value = "0.48", ci_low = "0.36", ci_high = "0.64"
+  ))
+  for (trial in c("MARIPOSA", "MARIPOSA (NSC3003)")) {
+    sibling <- modifyList(gold_rows[[1]], list(
+      trial = trial, value = "0.70", ci_low = "0.58", ci_high = "0.85"
+    ))
+    score <- score_against_gold(list(sibling), gold_rows)
+    expect_equal(score$numeric_errors, 0L, info = trial)
+    expect_equal(score$missed_rows, 1L, info = trial)
+    expect_equal(score$extra_rows, 1L, info = trial)
+  }
+  destiny <- list(synthetic_row(
+    medicine = "Enhertu", trial = "DESTINY-Lung02", endpoint = "ORR",
+    value = "49.0", ci_low = "39.0", ci_high = "59.1"
+  ))
+  bare <- modifyList(destiny[[1]], list(trial = "DESTINY", value = "54.9"))
+  expect_equal(score_against_gold(list(bare), destiny)$numeric_errors, 0L)
+})
+
+test_that("an endpoint alone does not pair two named trials (RAINBOW, REVEL)", {
+  # Cyramza's gastric-cancer RAINBOW PFS was paired with an NSCLC gold row by
+  # its endpoint alone (gold evaluation of 2026-10-01): a numeric error that
+  # was none.
+  gold_rows <- list(synthetic_row(
+    medicine = "Cyramza", trial = "REVEL", endpoint = "PFS",
+    value = "0.762", ci_low = "0.677", ci_high = "0.859"
+  ))
+  rainbow <- modifyList(gold_rows[[1]], list(
+    trial = "RAINBOW", value = "0.635", ci_low = "0.536", ci_high = "0.752"
+  ))
+  score <- score_against_gold(list(rainbow), gold_rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 1L)
+  relay <- modifyList(gold_rows[[1]], list(trial = "RELAY", value = "0.591"))
+  expect_equal(
+    score_against_gold(list(rainbow), list(relay))$numeric_errors, 0L
+  )
+})
+
+test_that("trials folded to one key still pair only with themselves", {
+  # Enhertu's SmPC reports DESTINY-Lung01, -Lung02 and -Lung04 (NSCLC), all
+  # keyed "destiny".
+  gold_rows <- list(synthetic_row(
+    medicine = "Enhertu", trial = "DESTINY-Lung02", endpoint = "ORR",
+    value = "49.0", ci_low = "39.0", ci_high = "59.1"
+  ))
+  lung01 <- modifyList(gold_rows[[1]], list(
+    trial = "DESTINY-Lung01", value = "54.9", ci_low = "44.2", ci_high = "65.4"
+  ))
+  score <- score_against_gold(list(lung01), gold_rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 1L)
+})
+
+test_that("a trial alone does not pair two different known endpoints", {
+  # Retsevmo's LIBRETTO-431 OS row was paired with the gold's PFS row of that
+  # trial (the extracted PFS row had failed verification).
+  gold_rows <- list(synthetic_row(
+    medicine = "Retsevmo", trial = "LIBRETTO-431", endpoint = "PFS",
+    value = "0.465", ci_low = "0.309", ci_high = "0.699"
+  ))
+  os <- modifyList(gold_rows[[1]], list(
+    endpoint = "Overall survival", value = "1.259", ci_low = "0.777",
+    ci_high = "2.040"
+  ))
+  score <- score_against_gold(list(os), gold_rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 1L)
+})
+
+test_that("a trial alone does not pair an endpoint its label does not name", {
+  # With its OS row kept apart, Retsevmo's LIBRETTO-431 "time to worsening"
+  # row was the next to pair with the gold's PFS row.
+  gold_rows <- list(synthetic_row(
+    medicine = "Retsevmo", trial = "LIBRETTO-431", endpoint = "PFS",
+    value = "0.465", ci_low = "0.309", ci_high = "0.699"
+  ))
+  extracted <- function(endpoint) {
+    list(modifyList(gold_rows[[1]], list(endpoint = endpoint, value = "0.34")))
+  }
+  for (endpoint in c(
+    "Time to worsening of patient-reported NSCLC symptoms",
+    "CNS progression-free survival",
+    "Time to intracranial progression",
+    "Second PFS after start of first subsequent therapy",
+    "Second progression-free survival",
+    "PFS2",
+    "PFS-2",
+    "PFS after first subsequent therapy"
+  )) {
+    score <- score_against_gold(extracted(endpoint), gold_rows)
+    expect_equal(score$numeric_errors, 0L, info = endpoint)
+    expect_equal(score$missed_rows, 1L, info = endpoint)
+  }
+  bicr <- score_against_gold(
+    extracted("Progression free survival by BICR"), gold_rows
+  )
+  expect_equal(bicr$numeric_errors, 1L)
+})
+
+test_that("an analysis or population named in the endpoint keeps it one", {
+  # "second" and "CNS" make another endpoint only as "second progression" or
+  # "CNS progression": a second interim analysis, or patients with CNS
+  # metastases, are the same endpoint, so a wrong value is an error.
+  gold_rows <- list(
+    synthetic_row(
+      medicine = "Keytruda", trial = "KEYNOTE-024", endpoint = "PFS",
+      value = "0.50", ci_low = "0.37", ci_high = "0.68"
+    ),
+    synthetic_row(
+      medicine = "Keytruda", trial = "KEYNOTE-024", endpoint = "OS",
+      value = "0.60", ci_low = "0.41", ci_high = "0.89"
+    )
+  )
+  wrong <- function(endpoint, row = 1) {
+    list(modifyList(gold_rows[[row]], list(endpoint = endpoint, value = "0.9")))
+  }
+  cases <- list(
+    list("PFS at second interim analysis", 1),
+    list("PFS by BICR at second interim analysis", 1),
+    list("Progression-free survival, second interim analysis", 1),
+    list("PFS in patients with baseline CNS metastases", 1),
+    list("Overall survival at second interim analysis", 2),
+    list("OS in patients with CNS metastases at baseline", 2)
+  )
+  for (case in cases) {
+    score <- score_against_gold(wrong(case[[1]], case[[2]]), gold_rows)
+    expect_equal(score$numeric_errors, 1L, info = case[[1]])
+    expect_equal(score$extra_rows, 0L, info = case[[1]])
+  }
+})
+
+test_that("labels name the known endpoints they spell out", {
+  expect_equal(
+    gold_endpoint_mentions("Confirmed objective response rate"), "ORR"
+  )
+  expect_equal(gold_endpoint_mentions("Confirmed ORR, laBCC"), "ORR")
+  expect_equal(gold_endpoint_mentions("Duration of response (months)"), "DOR")
+  expect_equal(
+    gold_endpoint_mentions("PFS at second interim analysis"), "PFS"
+  )
+  expect_equal(
+    gold_endpoint_mentions("PFS in patients with baseline CNS metastases"),
+    "PFS"
+  )
+  expect_length(gold_endpoint_mentions("Time to CNS progression"), 0)
+  expect_length(gold_endpoint_mentions("Intracranial ORR"), 0)
+  expect_length(gold_endpoint_mentions("CNS DFS (time to CNS recurrence)"), 0)
+  expect_length(gold_endpoint_mentions("PFS-2"), 0)
+  expect_length(gold_endpoint_mentions("Time to first subsequent therapy"), 0)
+  expect_length(gold_endpoint_mentions(NULL), 0)
+})
+
+test_that("a unit in parentheses is not read as an endpoint abbreviation", {
+  # Retsevmo's "Duration of response (months)" was keyed "MONTHS".
+  expect_equal(gold_endpoint("Duration of response (months)"), "DOR")
+  expect_equal(gold_endpoint("Objective response rate (CR + PR)"), "ORR")
+  expect_equal(gold_endpoint("OS (final analysis)"), "OS")
+  expect_equal(gold_endpoint("Time to CNS progression (TTP)"), "TTP")
+})
+
+test_that("a known endpoint named outside the parentheses wins", {
+  # Tecentriq's subgroup row was keyed "TC" by its parenthesised word.
+  expect_equal(gold_endpoint(paste(
+    "Overall survival by tumour PD-L1 Tumour Cell (TC) expression status,",
+    "PD-L1 < 1% group"
+  )), "OS")
+  expect_equal(gold_endpoint("Objective response rate (ORR: CR+ PR), laBCC"),
+               "ORR")
+  expect_equal(gold_endpoint("Progression free survival by BICR"), "PFS")
+  expect_equal(gold_endpoint("PFS at second interim analysis"), "PFS")
+  # Two endpoints named, or one with a qualifier: not read as one.
+  expect_equal(gold_endpoint("CNS progression-free survival"),
+               "CNS PROGRESSION FREE SURVIVAL")
+  expect_equal(gold_endpoint("PFS and OS"), "PFS AND OS")
+})
+
+test_that("an endpoint label naming the gold's endpoint still pairs by trial", {
+  rows <- gold()
+  extracted <- purrr::map(rows, as_extracted)
+  orr <- gold_index(rows, "Rybrevant", "CHRYSALIS", "ORR")
+  extracted[[orr]]$endpoint <- "Objective response rate by investigator"
+  extracted[[orr]]$value <- "40"
+  score <- score_against_gold(extracted, rows)
+  expect_equal(score$numeric_errors, 1L)
+  expect_equal(score$missed_rows, 0L)
+  expect_equal(score$extra_rows, 0L)
+})
+
+test_that("rows of another condition are not scored against the gold", {
+  # Retsevmo's thyroid-cancer LIBRETTO-001 response rate was paired with the
+  # gold's NSCLC row of the same trial and endpoint.
+  gold_rows <- list(synthetic_row(
+    medicine = "Retsevmo", trial = "LIBRETTO-001", endpoint = "ORR",
+    value = "61.5", ci_low = "55.2", ci_high = "67.6"
+  ))
+  thyroid <- modifyList(gold_rows[[1]], list(
+    indication = "advanced RET mutant medullary thyroid cancer (MTC)",
+    value = "77.6", ci_low = "70.2", ci_high = "84.0"
+  ))
+  expect_equal(score_against_gold(list(thyroid), gold_rows)$numeric_errors, 1L)
+  nsclc <- function(row) {
+    score_against_gold(list(row), gold_rows, condition = gold_condition)
+  }
+  score <- nsclc(thyroid)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 0L)
+  expect_equal(score$outside_rows, 1L)
+  expect_match(score$outside_keys, "^retsevmo\\|libretto-001\\|ORR")
+  # An NSCLC indication (EMA's lossy spelling too), or none, is scored.
+  lung <- modifyList(thyroid, list(
+    indication = "advanced RET fusion positive non?small cell lung cancer"
+  ))
+  expect_equal(nsclc(lung)$numeric_errors, 1L)
+  expect_equal(nsclc(lung)$outside_rows, 0L)
+  unstated <- thyroid
+  unstated$indication <- NULL
+  expect_equal(nsclc(unstated)$numeric_errors, 1L)
+})
+
+test_that("only a row naming another condition is left out of the score", {
+  gold_rows <- list(synthetic_row(
+    medicine = "Keytruda", trial = "KEYNOTE-024", endpoint = "PFS",
+    value = "0.50", ci_low = "0.37", ci_high = "0.68"
+  ))
+  with_indication <- function(indication) {
+    row <- modifyList(gold_rows[[1]], list(value = "0.9"))
+    row$indication <- indication
+    score_against_gold(list(row), gold_rows, condition = gold_condition)
+  }
+  # An indication copied without its condition is still scored.
+  for (indication in c(
+    "first-line treatment of metastatic disease in adults whose tumours
+    express PD-L1 with a >= 50% tumour proportion score",
+    "monotherapy, PD-L1 TPS >= 50%",
+    "metastatic non-squamous non-small cell lung carcinoma",
+    "NSCLC, or small cell lung cancer after platinum"
+  )) {
+    score <- with_indication(indication)
+    expect_equal(score$outside_rows, 0L, info = indication)
+    expect_equal(score$numeric_errors, 1L, info = indication)
+  }
+  for (indication in c(
+    "unresectable or metastatic melanoma",
+    "extensive-stage small cell lung cancer (ES-SCLC)",
+    "metastatic colorectal cancer (mCRC)",
+    "advanced or unresectable hepatocellular carcinoma",
+    "recurrent or metastatic cervical cancer",
+    "HER2-low breast cancer",
+    "advanced RET fusion positive solid tumours",
+    "locally advanced or metastatic urothelial carcinoma",
+    "malignant pleural mesothelioma",
+    "adjuvant treatment of adult patients with CSCC at high risk of recurrence"
+  )) {
+    score <- with_indication(indication)
+    expect_equal(score$outside_rows, 1L, info = indication)
+    expect_equal(score$numeric_errors, 0L, info = indication)
+  }
+})
+
+test_that("rows of another condition in a gold trial are listed for a check", {
+  # LIBRETTO-001 is a basket trial: its thyroid-cancer rows are left out
+  # rightly, but a mislabelled indication would hide a wrong number there.
+  gold_rows <- list(synthetic_row(
+    medicine = "Retsevmo", trial = "LIBRETTO-001", endpoint = "ORR",
+    value = "61.5", ci_low = "55.2", ci_high = "67.6"
+  ))
+  thyroid <- modifyList(gold_rows[[1]], list(
+    indication = "advanced RET mutant medullary thyroid cancer (MTC)",
+    value = "77.6", ci_low = "70.2", ci_high = "84.0"
+  ))
+  other_trial <- modifyList(thyroid, list(trial = "LIBRETTO-531"))
+  score <- score_against_gold(
+    list(thyroid, other_trial), gold_rows, condition = gold_condition
+  )
+  expect_equal(score$outside_rows, 2L)
+  expect_length(score$outside_gold_trial_keys, 1)
+  expect_match(score$outside_gold_trial_keys, "^retsevmo\\|libretto-001\\|")
+  result <- list(
+    model = "claude-sonnet-5-5", score = score, failed = list(),
+    dropped_rows = character(),
+    calls = dplyr::tibble(
+      medicine = "Retsevmo", status = "ok", reason = NA_character_,
+      rows_dropped = 0L
+    )
+  )
+  details <- gold_report_details(result)
+  heading <- grep("in a gold trial", details, fixed = TRUE)
+  expect_length(heading, 1)
+  expect_match(details[heading + 1], "libretto-001")
+})
+
+test_that("pitfalls look only at the rows that are scored", {
+  # Lumykras also has a colorectal-cancer indication: its DOR rows there are
+  # not the NSCLC row the range pitfall is about.
+  rows <- gold()
+  extracted <- purrr::map(rows, as_extracted)
+  extracted <- purrr::map(extracted, function(row) {
+    row$indication <- "advanced non-small cell lung cancer (NSCLC)"
+    row
+  })
+  dor <- gold_index(rows, "Lumykras", "CodeBreaK", "DoR")
+  colorectal <- modifyList(extracted[[dor]], list(
+    trial = "CodeBreaK 300", ci_is_range = FALSE,
+    indication = "metastatic colorectal cancer (mCRC) with KRAS G12C mutation"
+  ))
+  with_colorectal <- c(extracted, list(colorectal))
+  expect_false(
+    score_against_gold(with_colorectal, rows)$pitfalls[["lumykras_range"]]
+  )
+  scored <- score_against_gold(
+    with_colorectal, rows, condition = gold_condition
+  )
+  expect_true(scored$pitfalls[["lumykras_range"]])
+  expect_equal(scored$outside_rows, 1L)
+})
+
+test_that("ALEX rows without arm values fail the pitfall, with a note", {
+  rows <- gold()
+  extracted <- purrr::map(rows, as_extracted)
+  for (alex in gold_index(rows, "Alecensa", "ALEX")) {
+    extracted[[alex]]$arm_treatment <- NULL
+    extracted[[alex]]$arm_control <- NULL
+  }
+  score <- score_against_gold(extracted, rows)
+  expect_false(score$pitfalls[["alex_column_order"]])
+  expect_match(score$pitfall_notes, "without arm values", all = FALSE)
+  expect_false(any(grepl(
+    "alex", score_against_gold(rows, rows)$pitfall_notes, fixed = TRUE
+  )))
+})
+
 test_that("a lead row that disagrees with the gold lowers lead agreement", {
   rows <- gold()
   extracted <- purrr::map(rows, as_extracted, role = "later")
@@ -541,6 +944,7 @@ test_that("a gold evaluation batches each model and writes its files", {
   expect_equal(request$custom_id, "EMEA-H-C-004164")
   expect_equal(request$params$model, "claude-sonnet-5-5")
   expect_equal(request$params$max_tokens, efficacy_batch_max_tokens)
+  expect_equal(request$params$max_tokens, 128000L)
   content <- request$params$messages[[1]]$content
   expect_match(content, "Alecensa indications")
   # The section production sends: sliced from the page texts.
@@ -672,6 +1076,70 @@ test_that("a rerun reads a model's saved result instead of paying again", {
   expect_equal(saved$calls$status, original$calls$status)
   # The same report from the saved result as from the run that made it.
   expect_equal(readLines(report_path), report)
+})
+
+# A saved result whose score an older scorer wrote.
+write_stale_score <- function(path) {
+  saved <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  saved$score$numeric_errors <- 99L
+  saved$score$extra_rows <- 99L
+  jsonlite::write_json(
+    saved, path,
+    auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null", digits = NA
+  )
+}
+
+test_that("a saved result is scored again offline, from its kept rows", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  original <- run_gold(
+    inputs, fake_batch_api(list(fake_result(fake_message("Alecensa"))))
+  )[["claude-sonnet-5-5"]]
+  path <- file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  write_stale_score(path)
+  result <- rescore_saved_gold_result(path, inputs$gold_path)
+  expect_equal(result$score$numeric_errors, 0L)
+  expect_equal(result$score$extra_rows, 0L)
+  expect_equal(result$score$missed_rows, original$score$missed_rows)
+  expect_equal(result$score$pitfalls, original$score$pitfalls)
+  expect_equal(result$rows_kept, 4L)
+  expect_equal(result$calls$status, "ok")
+  expect_true(gold_model_passes(result) == gold_model_passes(original))
+})
+
+test_that("a rerun scores a saved result again, so a report has one scorer", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(fake_message("Alecensa")))
+  run_gold(inputs, fake_batch_api(answer))
+  write_stale_score(
+    file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  )
+  api <- fake_batch_api(answer)
+  result <- suppressMessages(run_gold(inputs, api))[["claude-sonnet-5-5"]]
+  expect_equal(api$calls$created, 0L)
+  expect_equal(result$score$numeric_errors, 0L)
+  expect_equal(result$score$extra_rows, 0L)
+  # The file holds the score the report shows, not the older one.
+  saved <- read_gold_result_file(
+    file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  )
+  expect_equal(saved$score$numeric_errors, 0L)
+  expect_equal(saved$score$extra_rows, 0L)
+  expect_equal(saved$score$pitfalls, result$score$pitfalls)
+  expect_equal(saved$rows_kept, result$rows_kept)
+  expect_equal(saved$rows, result$rows)
+})
+
+test_that("scoring a saved result offline leaves its file as it was", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  run_gold(inputs, fake_batch_api(list(fake_result(fake_message("Alecensa")))))
+  path <- file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+  write_stale_score(path)
+  before <- readLines(path)
+  rescore_saved_gold_result(path, inputs$gold_path)
+  expect_equal(readLines(path), before)
 })
 
 test_that("a saved result of other medicines is not reused", {
