@@ -22,6 +22,8 @@ import {
   normalizeYearRange,
   patchFilterParams,
   patchIsSet,
+  scheduleUrlWrite,
+  setHistoryWriter,
   togglePatch,
   withoutLookup,
 } from "./url.js";
@@ -325,6 +327,41 @@ test("lookup keys come first in the URL, then the filters; values round-trip", (
   assert.equal(query, "q=type+2+diabetes&med=EMEA%2FH%2FC%2F003820&sub=tenofovir+disoproxil&cond=D003924&co=g.roche&mah=A+%26+B%2C+C");
   assert.deepEqual(lookupOf(query), lookup);
   assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP }).toString(), "");
+});
+
+// Navigation fixes (dashboard.md #1): a push is written at once, before the new view's render
+// scrolls to its heading, so the entry left keeps where it was; replaces wait for the frame.
+test("scheduleUrlWrite pushes at once and replaces once per frame", (t) => {
+  const frames = [];
+  const writes = [];
+  const location = { pathname: "/", search: "", hash: "" };
+  globalThis.requestAnimationFrame = (callback) => frames.push(callback);
+  globalThis.window = { location };
+  t.after(() => {
+    delete globalThis.requestAnimationFrame;
+    delete globalThis.window;
+    setHistoryWriter(null);
+  });
+  setHistoryWriter({
+    push: (url) => { writes.push(["push", url]); location.search = url.slice(1); },
+    replace: (url) => { writes.push(["replace", url]); location.search = url.slice(1); },
+  });
+  const state = (patch) => ({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, ...patch });
+  scheduleUrlWrite(state({ type: ["Generic"] }));
+  assert.deepEqual(writes, []);
+  // A push in the same frame: written at once, with the latest state; the pending replace is dropped.
+  scheduleUrlWrite(state({ type: ["Generic"], med: "M1" }), true);
+  assert.deepEqual(writes, [["push", "/?med=M1&type=Generic"]]);
+  for (const frame of frames.splice(0)) frame();
+  assert.deepEqual(writes.length, 1);
+  // Replaces: at most one per frame, the latest state.
+  scheduleUrlWrite(state({ med: "M1", type: ["Biosimilar"] }));
+  scheduleUrlWrite(state({ med: "M1", type: ["Orphan"] }));
+  for (const frame of frames.splice(0)) frame();
+  assert.deepEqual(writes.slice(1), [["replace", "/?med=M1&type=Orphan"]]);
+  // The URL already shown is not written again.
+  scheduleUrlWrite(state({ med: "M1", type: ["Orphan"] }), true);
+  assert.equal(writes.length, 2);
 });
 
 test("before the filter domain is known, the URL's filter part is passed through verbatim", () => {

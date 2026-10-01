@@ -264,23 +264,45 @@ export function encodeUrl(state, filterParams = null) {
   return params;
 }
 
-// At most one history write per animation frame (Chrome silently drops bursts of
-// replaceState calls). Filter edits replace the entry; an opened result or drug class pushes one.
+// The history writer: main.js's (history-scroll.js: each entry keeps its scroll position), else
+// plain history calls.
+const plainWriter = {
+  push: (url) => window.history.pushState(null, "", url),
+  replace: (url) => window.history.replaceState(window.history.state, "", url),
+};
+let writer = plainWriter;
+export function setHistoryWriter(next) {
+  writer = next ?? plainWriter;
+}
+
+function writeUrl(state, push, filterParams) {
+  const query = encodeUrl(state, filterParams).toString();
+  const search = query ? `?${query}` : "";
+  if (search === window.location.search) return;
+  const url = `${window.location.pathname}${search}${window.location.hash}`;
+  if (push) writer.push(url);
+  else writer.replace(url);
+}
+
+// Filter edits replace the entry, at most once per animation frame (Chrome silently drops bursts of
+// replaceState calls). An opened result or drug class pushes one at once (one per click): the entry
+// left keeps where the page was before the new view's render scrolls to its heading (navigation
+// fixes 2026-10-01: pushed after that render, every Back landed at the top), and a replace still
+// pending is dropped (the push has the latest state).
 let pendingWrite = null;
 export function scheduleUrlWrite(state, push = false, filterParams = null) {
-  if (pendingWrite) {
-    pendingWrite = { state, push: pendingWrite.push || push, filterParams };
+  if (push) {
+    pendingWrite = null;
+    writeUrl(state, true, filterParams);
     return;
   }
-  pendingWrite = { state, push, filterParams };
+  const scheduled = pendingWrite !== null;
+  pendingWrite = { state, filterParams };
+  if (scheduled) return;
   requestAnimationFrame(() => {
-    const { state: latest, push: shouldPush, filterParams: latestFilters } = pendingWrite;
+    if (!pendingWrite) return; // a push wrote it meanwhile
+    const { state: latest, filterParams: latestFilters } = pendingWrite;
     pendingWrite = null;
-    const query = encodeUrl(latest, latestFilters).toString();
-    const search = query ? `?${query}` : "";
-    if (search === window.location.search) return;
-    const url = `${window.location.pathname}${search}${window.location.hash}`;
-    if (shouldPush) window.history.pushState(null, "", url);
-    else window.history.replaceState(null, "", url);
+    writeUrl(latest, false, latestFilters);
   });
 }

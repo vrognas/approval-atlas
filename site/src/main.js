@@ -56,6 +56,7 @@ import {
 } from "./facets.js";
 import { renderFilterChips, renderFilterSummary } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
+import { createHistoryScroll, restoreStep } from "./history-scroll.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
 import { SOURCES, UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
@@ -92,6 +93,7 @@ import {
   patchFilterParams,
   patchIsSet,
   scheduleUrlWrite,
+  setHistoryWriter,
   togglePatch,
   withoutLookup,
 } from "./url.js";
@@ -248,6 +250,9 @@ let lookup = null;
 // Whether a chip's filter popover is open (set once the dashboard exists): the intro card stays as
 // it is shown until it closes (intro.js introVisible() held).
 let filtersOpen = () => false;
+// Closes an open filter popover or sheet without handing focus back to its chip (set once the
+// dashboard exists): Back or Forward shows another view, which the open filters would edit unseen.
+let closeFiltersNow = () => {};
 let frame = 0;
 const urlNote = $("#url-note");
 // Filter edits (not the first render, the breakdown's mode, the tab or lookups) announce the new
@@ -262,6 +267,46 @@ let scrollAnchor = null;
 const keepInPlace = (element) => {
   scrollAnchor = { element, top: element.getBoundingClientRect().top };
 };
+
+// Scroll positions per history entry (history-scroll.js): the page restores them itself. A new view
+// (a push) scrolls to its heading, which takes focus (render()); Back and Forward return to where
+// the view was left, once it has rendered (a reload too, once the dashboard has). Until then scroll
+// anchoring is off (html.restoring-scroll), as it would move the page by the height of a card put
+// back above (lookup.md #1); a wheel, touch, key or pointer press ends a restore still waiting, so
+// the page never jumps under the user.
+const historyScroll = createHistoryScroll(window);
+setHistoryWriter(historyScroll);
+let pendingScroll = null;
+function stopRestoring() {
+  pendingScroll = null;
+  document.documentElement.classList.remove("restoring-scroll");
+}
+function startRestoring(y) {
+  pendingScroll = y;
+  document.documentElement.classList.add("restoring-scroll");
+}
+// After a render: final once the dashboard is there (the page's height then holds, short of later
+// data: the page's end will do).
+function restoreScroll() {
+  if (pendingScroll === null) return;
+  const step = restoreStep(pendingScroll, document.documentElement.scrollHeight - window.innerHeight, dashboard !== null);
+  if (!step) return;
+  window.scrollTo(0, step.y);
+  stopRestoring();
+}
+if (historyScroll.initial !== null) startRestoring(historyScroll.initial);
+// A second after the page stops scrolling, the entry notes where it is (for a reload; at most one
+// history write a second).
+let scrollSaveTimer = 0;
+window.addEventListener("scroll", () => {
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(historyScroll.save, 1000);
+}, { passive: true });
+for (const type of ["wheel", "touchstart", "keydown", "pointerdown"]) {
+  window.addEventListener(type, () => {
+    if (pendingScroll !== null) stopRestoring();
+  }, { capture: true, passive: true });
+}
 
 function applyUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -334,6 +379,7 @@ function render() {
     headline.focus({ preventScroll: true });
     headline.scrollIntoView({ block: "nearest" });
   }
+  restoreScroll();
 }
 
 function scheduleRender() {
@@ -975,7 +1021,11 @@ function startLookup([meta, searchRows, entryTermRows]) {
   applyUrl();
   searchBox.setText(state.q);
   scheduleUrlWrite(state, false, pendingFilters);
-  window.addEventListener("popstate", () => {
+  // Back or Forward: open filters close (dashboard.md #2), and the view returns to where it was left
+  // (the top when unknown) once rendered.
+  window.addEventListener("popstate", (event) => {
+    closeFiltersNow();
+    startRestoring(historyScroll.popped(event.state) ?? 0);
     applyUrl();
     searchBox.setText(state.q);
     scheduleRender();
@@ -1190,6 +1240,7 @@ function startDashboard(meta, [
     popover.close({ restoreFocus: false });
     sheet.close({ restoreFocus: false });
   };
+  closeFiltersNow = closeFilters;
   DESKTOP.addEventListener("change", () => {
     // A chip opens a popover from 1024px, a sheet below: the other one closes.
     if (DESKTOP.matches) sheet.close();

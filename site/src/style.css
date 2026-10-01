@@ -302,6 +302,14 @@ body {
   font: 16px/1.5 var(--font);
 }
 
+/* Back or Forward until the view is back where it was left (main.js restoreScroll()): no scroll
+   anchoring, which moved the page by the height of a card put back above the overview (8,000 to
+   10,000px down on phones). Otherwise it keeps the page still as data renders above. */
+.restoring-scroll,
+.restoring-scroll body {
+  overflow-anchor: none;
+}
+
 a {
   color: var(--link);
   text-decoration-color: var(--link-underline);
