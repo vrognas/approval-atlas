@@ -11,6 +11,13 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f3f3ee" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1b1c19" media="(prefers-color-scheme: dark)" />
+    <!-- The files the search needs first (main.js FIRST_FILES), asked for with the page rather than
+         once the script has run (bug hunt 2026-10-01: on Slow 4G they started 2.9 s in, after the
+         theme script, the script and the stylesheet). crossorigin: the same request as main.js's
+         fetch(), so it reuses this response. -->
+    <link rel="preload" href="/data/meta.json" as="fetch" crossorigin />
+    <link rel="preload" href="/data/ema_search_index.json" as="fetch" crossorigin />
+    <link rel="preload" href="/data/mesh_entry_terms.json" as="fetch" crossorigin />
     <!-- The viewer's chosen theme (data-theme) before the first paint: a classic script, as the CSP
          allows no inline script and a module runs after the first paint; before the stylesheet,
          so it runs as soon as it arrives. theme.js (the header's button) does the rest. -->
