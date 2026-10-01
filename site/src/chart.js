@@ -2,7 +2,8 @@ import * as d3 from "d3";
 import { companyBadge } from "./holders.js";
 import { UI } from "./labels.js";
 import { atPointer, tipBounds } from "./tips.js";
-import { attachYearBrush } from "./year-brush.js";
+import { attachYearBrush, yearTapAction } from "./year-brush.js";
+import { toggleYear } from "./year-slider.js";
 
 const HEIGHT = 320;
 const MARGIN = { top: 12, right: 8, bottom: 28, left: 40 };
@@ -86,8 +87,8 @@ export function placeTooltip(element, container, event) {
 }
 
 // One tooltip per chart container, at the pointer (event): the value leads, the series name
-// follows, keyed by a short line.
-export function showTooltip(container, event, title, items) {
+// follows, keyed by a short line. note: a line under them (what a second tap does), or null.
+export function showTooltip(container, event, title, items, note = null) {
   const tooltip = d3.select(container).selectAll(".tooltip").data([null]).join("div").attr("class", "tooltip").attr("hidden", null);
   tooltip.selectChildren().remove();
   tooltip.append("p").attr("class", "tooltip-title").text(title);
@@ -95,11 +96,34 @@ export function showTooltip(container, event, title, items) {
   rows.append("span").attr("class", "line-key").style("background", (item) => item.color).style("box-shadow", outline);
   rows.append("strong").text((item) => formatCount(item.value));
   rows.append("span").text((item) => item.label);
+  if (note) tooltip.append("p").attr("class", "tooltip-note").text(note);
   placeTooltip(tooltip.node(), container, event);
 }
 
 export function hideTooltip(container) {
   d3.select(container).select(".tooltip").attr("hidden", "");
+}
+
+// Pure: whether a chart's tapped tooltip stays when a pointer of this type moves over the chart. A
+// mouse takes over (bug hunt 2026-10-01 fix-up, a touch laptop: the tapped month stayed while the
+// mouse moved over the chart and away, until the next press): its tooltip follows the mouse again
+// and hides when it leaves. A finger or pen moving keeps it.
+export function keepsTap(pointerType) {
+  return pointerType !== "mouse";
+}
+
+// Per chart container, the document listener that hides its tapped tooltip on a press outside
+// inside (the chart's hit area); replaced on every render (a capturing pointerdown, so a press that
+// stops its own events still counts).
+const outsidePresses = new WeakMap();
+
+export function onPressOutside(container, inside, handler) {
+  outsidePresses.get(container)?.abort();
+  const controller = new AbortController();
+  outsidePresses.set(container, controller);
+  document.addEventListener("pointerdown", (event) => {
+    if (!inside.contains(event.target)) handler();
+  }, { capture: true, signal: controller.signal });
 }
 
 // types: the medicine types to list (the stacked ATC breakdown shows only those present).
@@ -219,24 +243,48 @@ export function renderChart(container, { rows, series, by }, { from, to }, onRan
       return columnPath(x(segment.row.year) + barOffset, top, barWidth, height, isTop ? CORNER_RADIUS : 0);
     });
 
-  attachYearBrush(svg.node(), x, [MARGIN.top, HEIGHT - MARGIN.bottom], { from, to }, onRange, onReadout);
-
-  // The brush overlay sits on top of the columns, so hover is resolved from the pointer's x.
-  svg.on("pointermove", (event) => {
-    const [pointerX] = d3.pointer(event);
-    const index = Math.floor((pointerX - x.range()[0]) / x.step());
-    const row = rows[index];
+  // A year's numbers in the tooltip at point (a pointer event or a touch), its column marked.
+  // Listed top to bottom, as stacked; the series without medicines that year are left out.
+  function showYear(row, point, note = null) {
     hits.classed("hover", (candidate) => candidate === row);
-    if (!row) return hideTooltip(container);
-    // Listed top to bottom, as stacked; the series without medicines that year are left out.
     const items = [...series].reverse()
       .filter((item) => row.counts.get(item.key) > 0)
       // A 2px key's outline would cover its hatch: the hatched one reads as a dashed line instead.
       .map((item) => ({ value: row.counts.get(item.key), label: item.label, color: swatchOf(item), stroke: item.hatch ? null : item.stroke }));
-    showTooltip(container, event, UI.years.tooltipTitle(row.year, row.total), items);
-  });
-  svg.on("pointerleave", () => {
+    showTooltip(container, point, UI.years.tooltipTitle(row.year, row.total), items, note);
+  }
+  // Touch (bug hunt 2026-10-01 fix-up: a tap set the year filter and showed nothing, so a phone could
+  // not read a year's numbers without changing the filter): a tap shows the year's numbers until a
+  // press outside the chart, and a second tap on that year sets the filter (yearTapAction()), as the
+  // tooltip's last line says. pinned: the year a tap shows, or null.
+  let pinned = null;
+  function hide() {
+    pinned = null;
     hits.classed("hover", false);
     hideTooltip(container);
+  }
+  const yearRange = [Number(years[0]), Number(years.at(-1))];
+  attachYearBrush(svg.node(), x, [MARGIN.top, HEIGHT - MARGIN.bottom], { from, to }, onRange, onReadout, (year, touch) => {
+    if (yearTapAction(pinned, year) === "filter") return false;
+    const next = toggleYear(year, { from, to }, yearRange);
+    showYear(rows.find((row) => Number(row.year) === year), touch, UI.years.tapAgain(year, next.from === null && next.to === null));
+    pinned = year;
+    return true;
+  });
+  onPressOutside(container, svg.node(), () => {
+    if (pinned !== null) hide();
+  });
+
+  // The brush overlay sits on top of the columns, so hover is resolved from the pointer's x.
+  svg.on("pointermove", (event) => {
+    if (!keepsTap(event.pointerType)) pinned = null;
+    const [pointerX] = d3.pointer(event);
+    const row = rows[Math.floor((pointerX - x.range()[0]) / x.step())];
+    if (!row) return hide();
+    showYear(row, event);
+  });
+  // A finger leaves on release, before its tap shows the year's numbers; a tapped year stays.
+  svg.on("pointerleave", () => {
+    if (pinned === null) hide();
   });
 }

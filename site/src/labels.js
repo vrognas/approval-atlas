@@ -269,7 +269,7 @@ const orphanEstimateOf = (ends = []) => {
 const orphanEstimate = (orphanEnd) => orphanEstimateOf([orphanEnd]);
 // The per-year chart's how-to, after what it counts (copy review 2026-09-29; adapted: the year slider is
 // the Approval year chip's since F · Spacious phase 1, not "above").
-const YEARS_HOW_TO = "EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.";
+const YEARS_HOW_TO = "EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all; on a touch screen the first tap shows its numbers), or drag across several years; with a keyboard, use the Approval year filter.";
 
 // A medicine card's modality source "EMA text naming …": the modality rules' text hints (the "text:…"
 // rule values of ema_medicine_modalities.json) in words; another rule "vaccine {kind}" reads "a {kind}
@@ -997,6 +997,9 @@ export const UI = {
       `Stacked column chart of EU approvals per year by ${by}, ${first} to ${last}: ` +
       `${formatCount(total)} medicines in total, most in ${peakYear} (${formatCount(peakCount)}).`,
     tooltipTitle: (year, total) => `${year}: ${plural(total, "approval", "approvals")}`,
+    // Under the numbers a tap shows on a touch screen (bug hunt 2026-10-01 fix-up): what a second tap
+    // on that year does (toggleYear()); alone: it is the one year shown, so every year comes back.
+    tapAgain: (year, alone) => (alone ? "Tap again to show every year." : `Tap again to show only ${year}.`),
     stack: {
       label: "Stack by",
       modes: { type: "Medicine type", atc: "ATC", mah: "Company", status: "Status", mod: "Modality" },

@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import { hideTooltip, showTooltip } from "./chart.js";
+import { hideTooltip, keepsTap, onPressOutside, showTooltip } from "./chart.js";
 import { UI, formatDate } from "./labels.js";
 
 const HEIGHT = 260;
@@ -19,10 +19,6 @@ export const TAP_SLOP = 10;
 export function isTap(down, up, slop = TAP_SLOP) {
   return down !== null && down.type !== "mouse" && down.id === up.id && Math.hypot(up.x - down.x, up.y - down.y) <= slop;
 }
-
-// Per chart container, the listener that hides its tapped tooltip on a tap elsewhere; replaced on
-// every render.
-const outsideTaps = new WeakMap();
 
 export function renderOverTimeLegend(list) {
   const items = d3.select(list).selectAll("li").data(SERIES).join("li");
@@ -102,7 +98,8 @@ export function renderOverTime(container, series, { from, to }) {
   const bisect = d3.bisector((date) => date).center;
   // Touch (bug hunt 2026-10-01: a tap showed nothing, as it fires no pointermove and the pointer
   // leaves on release): a tap shows the month tapped, as a hover does, and stays until a tap
-  // elsewhere; a pan (the page scrolls) hides it. press: the pointerdown; tapped: a tap shows.
+  // elsewhere; a pan (the page scrolls) hides it, and a mouse moving over the chart takes over
+  // (keepsTap()). press: the pointerdown; tapped: a tap shows.
   let press = null;
   let tapped = false;
   function show(event) {
@@ -128,7 +125,10 @@ export function renderOverTime(container, series, { from, to }) {
       press = { id: event.pointerId, type: event.pointerType, x: event.clientX, y: event.clientY };
       tapped = false;
     })
-    .on("pointermove", show)
+    .on("pointermove", (event) => {
+      if (!keepsTap(event.pointerType)) tapped = false;
+      show(event);
+    })
     .on("pointerup", (event) => {
       if (isTap(press, { id: event.pointerId, x: event.clientX, y: event.clientY })) {
         show(event);
@@ -142,10 +142,7 @@ export function renderOverTime(container, series, { from, to }) {
     .on("pointerleave", () => {
       if (!tapped) hide();
     });
-  outsideTaps.get(container)?.abort();
-  const outside = new AbortController();
-  outsideTaps.set(container, outside);
-  document.addEventListener("pointerdown", (event) => {
-    if (tapped && event.target !== overlay.node()) hide();
-  }, { capture: true, signal: outside.signal });
+  onPressOutside(container, overlay.node(), () => {
+    if (tapped) hide();
+  });
 }

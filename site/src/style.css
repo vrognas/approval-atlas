@@ -3704,6 +3704,14 @@ table.conditions-table {
   color: var(--ink-secondary);
 }
 
+/* Under the numbers a tap shows on a touch screen (chart.js): what a second tap on that year does. */
+.tooltip .tooltip-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--grid);
+  color: var(--ink-secondary);
+}
+
 /* Medicines table: a card whose table runs edge to edge; a size container, so its rows stack when
    the card is narrow (phones; below). */
 .table-card {

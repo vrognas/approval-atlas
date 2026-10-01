@@ -1001,7 +1001,7 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
   const { years } = labels.UI;
   assert.equal(years.stack.modes.status, "Status");
   assert.equal(years.by.status, "current status");
-  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.");
+  assert.equal(years.note(years.counting.status), "Year of EU marketing authorization; each medicine counted once, by its current status. EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all; on a touch screen the first tap shows its numbers), or drag across several years; with a keyboard, use the Approval year filter.");
   // The legend states the stack order, so position identifies a segment, not only its colour.
   assert.equal(years.legendLead, "Bottom to top:");
   // Owner calls 2026-09-30: stacked by status, the note says the colors are the status today and the
@@ -1009,6 +1009,10 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
   assert.match(years.noteStatus, /^Each medicine once, in the year it was first approved; colors show its status today\. EMA/);
   assert.equal(years.legendHeading, "Status today");
   assert.equal(years.title, "Medicines by year of approval");
+  // Bug hunt 2026-10-01 fix-up: on a touch screen a tap shows a year's numbers; the tooltip says what a
+  // second tap does (toggleYear(): that year alone, or every year when it is the one shown).
+  assert.equal(years.tapAgain(2016, false), "Tap again to show only 2016.");
+  assert.equal(years.tapAgain(2016, true), "Tap again to show every year.");
   assert.equal(years.undatedStatuses(366), "366 medicines without an approval date (refused, application withdrawn, pending…) are not in this chart.");
   assert.equal(years.undatedStatuses(1), "1 medicine without an approval date (refused, application withdrawn, pending…) is not in this chart.");
   // Phase 4c review: a year filter also leaves them out of every count.
@@ -1536,7 +1540,7 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   // Modality (M2 phase 2): groups, or one group's modalities; a medicine counts in each it has.
   assert.equal(years.by.mod, "modality group");
   assert.equal(years.by.modIn("Antibody"), "modality in Antibody");
-  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.`);
+  assert.equal(years.note(years.counting.mod), `Year of EU marketing authorization; a medicine whose substances have several modalities is counted in each. EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all; on a touch screen the first tap shows its numbers), or drag across several years; with a keyboard, use the Approval year filter.`);
   assert.equal(
     years.summary(1995, 2026, 1985, 2021, 95, years.by.type),
     "Stacked column chart of EU approvals per year by medicine type, 1995 to 2026: 1,985 medicines in total, most in 2021 (95).",
@@ -1544,7 +1548,7 @@ test("approvals per year: stack modes, the summary and the counting note per mod
   assert.equal(years.by.atcIn("L04 Immunosuppressants"), "ATC class in L04 Immunosuppressants");
   assert.equal(years.by.atc, "ATC group");
   assert.equal(years.by.mah, "company");
-  const howTo = "EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all), or drag across several years; with a keyboard, use the Approval year filter.";
+  const howTo = "EMA's annual reports count recommendations (CHMP opinions) instead, so their totals differ. Click a year to show only that year (click again for all; on a touch screen the first tap shows its numbers), or drag across several years; with a keyboard, use the Approval year filter.";
   assert.equal(years.note(years.counting.type), `Year of EU marketing authorization; each medicine counted once. ${howTo}`);
   assert.equal(years.note(years.counting.atc(6, false)), `Year of EU marketing authorization; a medicine with codes in several ATC classes is counted in each. ${howTo}`);
   // Phase 4c review: the top classes or holders and Other only when there is an Other segment.
