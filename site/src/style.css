@@ -5976,16 +5976,27 @@ table.activity {
   margin: 0;
 }
 
-/* More details: one disclosure after the blocks, the rest of the card (its hint says what). */
+/* More details: one disclosure after the blocks, the rest of the card (its hint says what). One
+   framed region, open or closed (design sweep 2026-10-01, B8: the summary and each section were
+   framed apart, so opened they read as more blocks): the summary its top row, the sections
+   unframed inside it, each under a hairline with its h2. */
 .more-details {
   margin: 12px 0 0;
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
 }
 
 .more-details > summary {
   padding: 12px var(--card-pad-compact);
-  border: 1px solid var(--grid);
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 11px;
+}
+
+.more-details > .card-section {
+  margin: 0;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: none;
 }
 
 .more-details > summary:hover .more-title {
