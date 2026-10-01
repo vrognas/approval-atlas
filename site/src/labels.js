@@ -97,7 +97,8 @@ export function statusDotTipLine(status, approved, ended, opinion = null) {
 // each explained by its tooltip (owner decision 2026-09-30: step 4's sentence repeated them). Step 4:
 // a positive opinion says how many days the EU decision usually takes (#12; decision: meta.json
 // opinion_to_decision as { median, p90 } days, null in older data) and, once past that, how long it
-// has waited by the data's date (asOf).
+// has waited by the data's date (asOf). None for an ended or refused status without EMA's date
+// (design sweep 2026-10-01, C3: Skysona's "Withdrawn." only repeated its status pill).
 export function statusSentence(status, date, opinion, { decision = null, asOf = null } = {}) {
   if (statusKind(status) === "authorized") return null;
   const on = date ? ` on ${formatDate(date)}` : "";
@@ -116,7 +117,7 @@ export function statusSentence(status, date, opinion, { decision = null, asOf = 
       waited !== null && waited > decision.median ? UI.card.waited(waited, decision.p90 !== null && waited > decision.p90) : null,
     ].filter(Boolean).join(" ");
   }
-  return `${statusLabel(status)}${on}.`;
+  return on ? `${statusLabel(status)}${on}.` : null;
 }
 
 // The start of an indication text for the medicine card's first screen: the whole text when short,
@@ -2003,7 +2004,9 @@ export const UI = {
   // "first"). Counted by the same substance set (equivalent spellings joined), not by EMA's
   // reference product, so Humira's biosimilars (whose reference is Trudexa) count.
   copies: {
-    none: "No generic or biosimilar authorized yet.",
+    // authorizedNow: the medicine itself is authorized now; else no "yet" (design sweep 2026-10-01,
+    // C3: Zinbryta, withdrawn in 2018, read "No generic or biosimilar authorized yet.").
+    none: (authorizedNow = true) => `No generic or biosimilar authorized${authorizedNow ? " yet" : ""}.`,
     // QA 2026-09-29 (#9): the card's Type fact, in place of EMA's type explanation (UI.typeTips),
     // where a curated copy type contradicts it (copies.js curatedTypeDiffers(): Riulvy, EMA
     // Generic, a hybrid of Tecfidera); type: the curated row's copy_type, reference: its reference_name.

@@ -851,7 +851,7 @@ export function createLookup(panel, {
         ? partNodes(UI.copies.line(summary.copies.map((entry) => ({
           ...entry, first: { name: entry.first.name_of_medicine, date: entry.first.marketing_authorisation_date },
         })), first ? substanceLabel : null), (position) => ({ med: summary.copies[position].first.ema_product_number }))
-        : UI.copies.none);
+        : UI.copies.none(statusKind(row.medicine_status) === "authorized"));
     }
     if (same) {
       // A first approval no longer authorized says so (Qdenga: Dengvaxia, since withdrawn).

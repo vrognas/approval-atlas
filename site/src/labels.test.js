@@ -371,10 +371,12 @@ test("the status dot's tip adds the approval date of a status other than Authori
 test("a medicine that is not authorized gets a status sentence built from EMA's dates only", () => {
   assert.equal(labels.statusSentence("Authorised", "2018-02-08", null), null);
   assert.equal(labels.statusSentence("Withdrawn", "2009-01-16", null), "Withdrawn on 16\u00a0Jan\u00a02009.");
-  assert.equal(labels.statusSentence("Withdrawn", null, null), "Withdrawn.");
-  assert.equal(labels.statusSentence("Suspended", null, null), "Suspended.");
+  // Without EMA's date it would only repeat the status pill (design sweep 2026-10-01, C3: Skysona).
+  assert.equal(labels.statusSentence("Withdrawn", null, null), null);
+  assert.equal(labels.statusSentence("Suspended", null, null), null);
   assert.equal(labels.statusSentence("Refused", "2004-09-07", null), "Refused on 7\u00a0Sep\u00a02004.");
-  assert.equal(labels.statusSentence("Refused", null, null), "Refused.");
+  assert.equal(labels.statusSentence("Refused", null, null), null);
+  assert.equal(labels.statusSentence("Application withdrawn", null, null), null);
   assert.equal(labels.statusSentence("Application withdrawn", "2006-01-19", null), "Application withdrawn on 19\u00a0Jan\u00a02006.");
   assert.equal(labels.statusSentence("Opinion", "2026-09-17", "Positive"), "Positive opinion on 17\u00a0Sep\u00a02026: EMA recommended approval.");
   assert.equal(labels.statusSentence("Opinion", "2025-05-22", "Negative"), "Negative opinion on 22\u00a0May\u00a02025: EMA recommended refusal.");
@@ -1414,7 +1416,10 @@ const partsText = (parts) => parts.map((part) => (typeof part === "string" ? par
 // Step 3 (#7): the medicine card's copies lines, counted by substance set, not by EMA's reference.
 test("copies lines: generics and biosimilars of the same substance, or none yet", () => {
   const { copies } = labels.UI;
-  assert.equal(copies.none, "No generic or biosimilar authorized yet.");
+  assert.equal(copies.none(), "No generic or biosimilar authorized yet.");
+  assert.equal(copies.none(true), "No generic or biosimilar authorized yet.");
+  // A medicine not authorized now (Zinbryta, withdrawn): no "yet" (design sweep 2026-10-01, C3).
+  assert.equal(copies.none(false), "No generic or biosimilar authorized.");
   const humira = copies.line([{ type: "Biosimilar", count: 10, companies: 8, first: { name: "Amgevita", date: "2017-03-21" } }]);
   assert.equal(partsText(humira), "10 biosimilars from 8 companies, first Amgevita 21\u00a0Mar\u00a02017.");
   assert.deepEqual(humira.filter((part) => typeof part !== "string"), [{ text: "Amgevita", link: 0 }]);
