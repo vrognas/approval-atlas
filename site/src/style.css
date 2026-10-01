@@ -2737,12 +2737,16 @@ input::placeholder {
   margin-top: 8px;
 }
 
+/* A bar row's text on the card's text edges, its hover wash and padding reaching 6px into the card's
+   padding (design sweep 2026-10-01, A9: labels and values sat 6px inside the takeaway's and the
+   tables' edges); a row followed by its condition or company page link keeps its right margin. */
 .bar-row {
   display: grid;
   grid-template-columns: minmax(8rem, 38%) 1fr 4.5ch;
   gap: 12px;
   align-items: center;
-  width: 100%;
+  width: calc(100% + 12px);
+  margin-inline: -6px;
   padding: 4px 6px;
   border: 0;
   border-radius: 8px;
@@ -4076,6 +4080,10 @@ td .doc-links {
 .bar-item > .bar-row {
   flex: 1;
   min-width: 0;
+}
+
+.bar-item > .bar-row:not(:last-child) {
+  margin-right: 0;
 }
 
 /* Status: an 8px dot in its status's hue (a .hue-* class: statusHue()), then the label in the
@@ -6472,6 +6480,11 @@ details > summary {
   min-height: 24px;
   margin: 8px 0;
   font-size: 0.875rem;
+}
+
+/* The checkbox on the page's text edge (A9: the browser's 4px left margin set it inside). */
+.toggle-all input {
+  margin-left: 0;
 }
 
 .related a {
