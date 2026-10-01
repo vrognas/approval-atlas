@@ -334,21 +334,26 @@ input[type="checkbox"] {
    search centred (560px at most), "What is this?" and the theme button; on the surface with a
    hairline under it. Below 1024px two rows (wordmark and buttons, then the search full width),
    sticky with the first row scrolling away, so the search stays at the top (main.js sets
-   --topbar-hide, how far it scrolls first, and --topbar-shown, what stays). */
+   --topbar-hide, how far it scrolls first, and --topbar-shown, what stays). The surface and hairline
+   span the page, its content the page column (design sweep 2026-10-01, A4: 1200px at most, 32px
+   gutters, 16px on phones; it sat 8px outside the column at 1280, 88px at 1440 and 16px at 721-1023),
+   and the search is centred on it: equal side tracks, the search narrower than 560px only where the
+   sides would be under 232px (the wordmark's about 195px and the gap; 1024-1099px). */
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 1fr minmax(0, min(560px, 100% - 464px)) 1fr;
   grid-template-areas: "brand search actions" "note note note";
   align-items: center;
   column-gap: 32px;
   grid-template-rows: minmax(64px, auto) auto;
-  padding: 0 32px;
+  padding: 0 max(32px, (100% - 1200px) / 2);
   border-bottom: 1px solid var(--grid);
   background: var(--surface);
 }
 
 .brand {
   grid-area: brand;
+  justify-self: start;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -390,6 +395,7 @@ input[type="checkbox"] {
 
 .topbar-actions {
   grid-area: actions;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -515,7 +521,11 @@ footer {
     grid-template-rows: auto;
     grid-template-areas: "brand actions" "search search" "note note";
     column-gap: 8px;
-    padding: 8px 16px 12px;
+    padding: 8px 32px 12px;
+  }
+
+  .brand {
+    justify-self: stretch;
   }
 
   /* Focused from the keyboard (Tab wrapping from the page's end, Shift+Tab from the search), the
@@ -545,7 +555,8 @@ footer {
 
 @media (max-width: 720px) {
   main,
-  footer {
+  footer,
+  .topbar {
     padding-left: 16px;
     padding-right: 16px;
   }
