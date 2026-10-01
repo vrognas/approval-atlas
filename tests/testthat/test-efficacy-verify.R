@@ -212,6 +212,21 @@ test_that("normalising removes page numbers, private-use glyphs, odd spaces", {
   expect_equal(normalise_efficacy_text("a\u00a0b\u2009c\u202fd"), "a b c d")
   expect_equal(normalise_efficacy_text("HR\uf0b7 0.5"), "HR 0.5")
   expect_equal(normalise_efficacy_text("end\fpage two"), "end page two")
+  # The Symbol font's "=" (Alecensa's "n = 67") is read both ways.
+  expect_equal(
+    symbol_font_renderings("n \uf03d 67, n\uf03d35"),
+    c("n \uf03d 67, n\uf03d35", "n = 67, n=35")
+  )
+  expect_equal(symbol_font_renderings("n = 67"), "n = 67")
+  section <- "Responders n \uf03d 67, HR 0.5 (0.4, 0.6)"
+  row <- list(
+    value = "0.5", ci_low = "0.4", ci_high = "0.6", n_treatment = 67L,
+    quotes = "Responders n 67, HR 0.5 (0.4, 0.6)"
+  )
+  expect_equal(verify_efficacy_row(row, section)$status, "exact")
+  row$quotes <- "Responders n = 67, HR 0.5 (0.4, 0.6)"
+  expect_equal(verify_efficacy_row(row, section)$status, "exact")
+  expect_equal(efficacy_quote_page(row$quotes, c("x", section)), 2L)
 })
 
 test_that("the page of a quote is found, also across a page break", {
@@ -224,6 +239,18 @@ test_that("the page of a quote is found, also across a page break", {
   expect_true(is.na(efficacy_quote_page("not there", "one page only")))
   expect_true(is.na(efficacy_quote_page("", pages)))
   expect_true(is.na(efficacy_quote_page("anything", character())))
+})
+
+test_that("the page of a table row quoted in reading order is found", {
+  quote <- "Stratified hazard ratio‡ (95% CI) 0.79 (0.64, 0.98)"
+  row <- "  Stratified hazard ratio (95% CI)        0.79 (0.64, 0.98)"
+  mark <- "                        ‡"
+  pages <- c("first page text", paste("Table 3", mark, row, sep = "\n"))
+  expect_equal(efficacy_quote_page(quote, pages), 2L)
+  # Its footnote mark at the foot of the page before.
+  pages <- c(paste("first page text", mark, sep = "\n"), row, "third")
+  expect_equal(efficacy_quote_page(quote, pages), 1L)
+  expect_true(is.na(efficacy_quote_page(quote, c("first", row))))
 })
 
 test_that("an arm size printed with a thousands comma is found", {
@@ -430,12 +457,15 @@ read_excerpt <- function(name) {
 
 # The arm sizes the 2026-10-01 gold evaluation rejected, in the notations
 # their SmPCs print (verbatim excerpts of the pilot's section texts).
+# Whether the section text states arm size `n` in an n notation.
+size_found <- function(n, text) {
+  arm_size_found(n, efficacy_section_texts(text))
+}
+
 test_that("arm sizes are found in the notations the SmPCs print", {
-  found <- function(n, text) {
-    arm_size_found(n, normalise_efficacy_text(text))
-  }
+  found <- size_found
   # Alecensa NP28761 and NP28673: "n = 67" with a Symbol-font "=", a
-  # private-use glyph the text drops ("n 67").
+  # private-use glyph normalising reads as "=".
   alecensa <- read_efficacy_section("Alecensa")[1]
   for (n in c(67L, 35L, 87L, 62L, 122L, 138L)) {
     expect_true(found(n, alecensa), info = n)
@@ -452,21 +482,58 @@ test_that("arm sizes are found in the notations the SmPCs print", {
 })
 
 test_that("an arm size stands whole, after n or N on its own", {
-  found <- function(n, text) arm_size_found(n, text)
+  found <- size_found
   expect_false(found(247L, "N 2470"))
   expect_false(found(247L, "N 247.5"))
   expect_false(found(247L, "N = 1,247"))
+  expect_false(found(247L, "N = 2470"))
   expect_false(found(247L, "43.3% (n = 107/247)"))
+  expect_false(found(247L, "an = 247"))
+  expect_false(found(247L, "N2 = 247"))
+  expect_true(found(247L, "(n = 247)"))
+  expect_true(found(1274L, "N = 1,274"))
+  # A column's bare "N 247": a line of its own, the count its only value.
+  expect_true(found(247L, " N                  247\n % (95% CI)  61.5"))
+  expect_true(found(1274L, " N   1,274"))
+  expect_false(found(247L, "N 2470"))
+  expect_false(found(247L, "N 247, median"))
+  expect_false(found(247L, "N 247 69"))
   expect_false(found(247L, "an 247"))
-  expect_false(found(247L, "N2 247"))
-  expect_true(found(247L, "N 247, median"))
-  expect_true(found(1274L, "N 1,274"))
+})
+
+# Review of the verifier tolerance (2026-10-01): a bare "n 189" reads as an
+# arm size wherever a table prints events or responders as "n".
+test_that("an event or responder count is not an arm size", {
+  found <- size_found
+  # BGB-A317-305 Table 9: "Disease progression or death, n" over "189 (69.0)",
+  # the events; the arm is "(n = 274)".
+  tevimbra <- read_excerpt("tevimbra-305")
+  expect_false(found(189L, tevimbra))
+  expect_true(found(274L, tevimbra))
+  expect_true(found(272L, tevimbra))
+  # Other tables of the pilot's sections (Tabrecta, Lorviqua, Enhertu, Opdivo).
+  expect_false(found(44L, "Number of responders, n 44"))
+  expect_false(found(37L, "Partial response, n 37 (52.9)"))
+  expect_false(found(12L, "Complete Response n 12 (4.8)"))
+  expect_false(found(164L, "Partial Response n 164 (65.6)"))
+  expect_false(found(161L, "N 161/588"))
+  row <- list(
+    trial = "BGB-A317-305", value = "0.68", ci_low = "0.56", ci_high = "0.83",
+    n_treatment = 189L, n_control = 272L,
+    quotes = c(
+      "Hazard ratioc (95% CI) 0.68 (0.56, 0.83)",
+      "Disease progression or death, n 189 (69.0) 216 (79.4) (%)"
+    )
+  )
+  result <- verify_efficacy_row(row, tevimbra)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "n_treatment = 189 not found", all = FALSE)
+  row$n_treatment <- 274L
+  expect_false(verify_efficacy_row(row, tevimbra)$status == "failed")
 })
 
 test_that("counts the SmPCs do not print as arm sizes stay rejected", {
-  found <- function(n, text) {
-    arm_size_found(n, normalise_efficacy_text(text))
-  }
+  found <- size_found
   # Tagrisso AURAex and AURA2: "In the 411 pre-treated ... patients".
   expect_false(found(411L, read_excerpt("tagrisso-aura")))
   expect_false(found(50L, read_excerpt("tagrisso-aura")))
@@ -478,11 +545,13 @@ test_that("counts the SmPCs do not print as arm sizes stay rejected", {
   expect_true(found(124L, lumykras))
 })
 
-quote_found <- function(quote, text) {
-  quotes_found(
+quote_source <- function(quote, text) {
+  quote_sources(
     normalise_efficacy_text(quote), normalise_efficacy_text(text), text
   )
 }
+
+quote_found <- function(quote, text) !is.na(quote_source(quote, text))
 
 # Quotes the model read off tables in reading order, which the layout text
 # prints across lines (the 2026-10-01 gold evaluation rejected them).
@@ -542,6 +611,199 @@ test_that("a quote whose numbers come from two rows still fails", {
     ),
     read_excerpt("tagrisso-laura")
   ))
+})
+
+# Review of the verifier tolerance (2026-10-01): a quote read across layout
+# lines must not take what changes a number from another line.
+test_that("a sign or a CI bound is not taken from another line", {
+  tevimbra <- read_excerpt("tevimbra-305")
+  hazard_ratio <- function(value, ci_low) {
+    verify_efficacy_row(list(
+      trial = "BGB-A317-305", value = value, ci_low = ci_low,
+      ci_high = "0.86",
+      quotes = sprintf("Hazard ratioc (95%% CI) %s (%s, 0.86)", value, ci_low)
+    ), tevimbra)
+  }
+  # The "-" of "p-valuec,d", the line below the row.
+  expect_equal(hazard_ratio("0.71", "-0.58")$status, "failed")
+  expect_equal(hazard_ratio("-0.71", "0.58")$status, "failed")
+  expect_equal(hazard_ratio("0.71", "0.58")$status, "exact")
+  expect_false(quote_found(
+    "Hazard ratioc (95% CI) 0.71 (-0.58, 0.86)", tevimbra
+  ))
+  expect_false(quote_found(
+    "Hazard ratioc (95% CI) -0.71 (0.58, 0.86)", tevimbra
+  ))
+  # LAURA's OS hazard ratio with the "NC" of the median OS row above it: the
+  # interval printed is (0.42, 1.56).
+  laura <- read_excerpt("tagrisso-laura")
+  os_interval <- function(ci_high) {
+    verify_efficacy_row(list(
+      trial = "LAURA", value = "0.81", ci_low = "0.42", ci_high = ci_high,
+      quotes = sprintf("HR (95%% CI); P-value 0.81 (0.42, %s)", ci_high)
+    ), laura)
+  }
+  expect_equal(os_interval("NC")$status, "failed")
+  expect_equal(os_interval("1.56")$status, "exact")
+})
+
+test_that("a value takes no CI from another column of its row", {
+  tevimbra <- read_excerpt("tevimbra-307")
+  row <- list(
+    trial = "BGB-A317-307", value = "0.45", ci_low = "0.31", ci_high = "0.60",
+    n_treatment = 120L, n_control = 121L,
+    quotes = paste(
+      "Stratified hazard ratioa (95% CI) 0.45 (0.33, 0.62)",
+      "0.43 (0.31, 0.60) -"
+    )
+  )
+  # T+PC's 0.45 with T+nPC's interval, the next column.
+  result <- verify_efficacy_row(row, tevimbra)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "value and CI not in one quote", all = FALSE)
+  row[c("ci_low", "ci_high")] <- list("0.33", "0.62")
+  expect_equal(verify_efficacy_row(row, tevimbra)$status, "exact")
+  # A CI level between value and CI is no other number.
+  binding <- function(quote, value, ci_low, ci_high) {
+    value_ci_binding(
+      list(value = value, ci_low = ci_low, ci_high = ci_high), quote
+    )
+  }
+  expect_equal(
+    binding("HR = 0.82 (95% CI: 0.67, 1.01)", "0.82", "0.67", "1.01"),
+    "adjacent"
+  )
+  expect_equal(
+    binding("HR 0.78 [95 % CI] [0.56; 1.08]", "0.78", "0.56", "1.08"),
+    "adjacent"
+  )
+  expect_equal(
+    binding("0.73 (95.9% CI: 0.5, 0.9)", "0.73", "0.5", "0.9"), "adjacent"
+  )
+  expect_equal(
+    binding("0.45 (0.33, 0.62) 0.43 (0.31, 0.60)", "0.45", "0.31", "0.60"),
+    "none"
+  )
+  expect_equal(
+    binding("HR 0.5 at 12 months (0.4, 0.6)", "0.5", "0.4", "0.6"), "none"
+  )
+})
+
+# Tables of the 2026-10-01 evaluation that print a row's values, then their
+# intervals in the same column order (Libtayo, Keytruda KEYNOTE-158,
+# Alecensa NP28673 and ALINA, Lorviqua): kept, flagged for a human.
+test_that("a CI paired with its value by column order is flagged", {
+  binding <- function(quote, value, ci_low, ci_high) {
+    value_ci_binding(
+      list(value = value, ci_low = ci_low, ci_high = ci_high), quote
+    )
+  }
+  libtayo <- paste(
+    "ORR 50.8% 44.9% 46.4% 95% CI for ORR (37.5, 64.1) (33.6, 56.6)",
+    "(33.0, 60.3)"
+  )
+  expect_equal(binding(libtayo, "44.9", "33.6", "56.6"), "column")
+  expect_equal(binding(libtayo, "46.4", "33.0", "60.3"), "column")
+  expect_equal(binding(libtayo, "44.9", "37.5", "64.1"), "none")
+  expect_equal(binding(libtayo, "50.8", "33.6", "56.6"), "none")
+  keynote <- paste(
+    "ORR % (95% CI) 52% 40% 63% 45% (40.6, 62.9) (28.0, 52.9) (43.7, 78.9)",
+    "(24.4, 67.8)"
+  )
+  expect_equal(binding(keynote, "40%", "28.0", "52.9"), "column")
+  expect_equal(binding(keynote, "45%", "43.7", "78.9"), "none")
+  # A count and its percentage in each cell.
+  alecensa <- paste(
+    "Responders n (%) 62 (50.8 %) 35 (52.2 %) [95 % CI] [41.6 %, 60.0 %]",
+    "[39.7 %, 64.6 %]"
+  )
+  expect_equal(binding(alecensa, "50.8", "41.6", "60.0"), "column")
+  expect_equal(binding(alecensa, "52.2", "39.7", "64.6"), "column")
+  expect_equal(binding(alecensa, "52.2", "41.6", "60.0"), "none")
+  # Words between the values and the intervals: a wrapped label.
+  expect_equal(binding(
+    paste(
+      "Objective response rate 27 (32.1%) 12 (22.2%) (ORR: CR+ PR) (95% CI)",
+      "(22.4, 43.2) (12.0, 35.6)"
+    ),
+    "22.2", "12.0", "35.6"
+  ), "column")
+  # NR among the values, NE in an interval; equal values in two columns.
+  libtayo_dor <- paste(
+    "Medianc (months) NR 41.9 41.3 (95% CI) (20.7, NE) (20.5, 54.6)",
+    "(40.8, 46.3)"
+  )
+  expect_equal(binding(libtayo_dor, "NR", "20.7", "NE"), "column")
+  expect_equal(binding(libtayo_dor, "41.3", "40.8", "46.3"), "column")
+  # One interval short: the columns do not match.
+  expect_equal(binding(
+    "Medianc (months) NR 41.9 41.3 (95% CI) (20.7, NE) (20.5, 54.6)",
+    "NR", "20.7", "NE"
+  ), "none")
+  expect_equal(binding(
+    "Stratified HR 0.24 0.24 (95 % CI)* (0.13, 0.45) (0.13, 0.43)",
+    "0.24", "0.13", "0.43"
+  ), "column")
+  # Not as many values as intervals, or an interval among the values.
+  expect_equal(binding(
+    "ORR 50.8% 44.9% (37.5, 64.1) (33.6, 56.6) (33.0, 60.3)",
+    "44.9", "33.6", "56.6"
+  ), "none")
+  expect_equal(binding(
+    "Stratified hazard ratioa (95% CI) 0.45 (0.33, 0.62) 0.43 (0.31, 0.60) -",
+    "0.45", "0.31", "0.60"
+  ), "none")
+  section <- paste(
+    "Study 1540 Group 2", libtayo, "(N=59) (N=78) (N=56)"
+  )
+  row <- list(
+    trial = "Study 1540", value = "44.9", ci_low = "33.6", ci_high = "56.6",
+    n_treatment = 78L, quotes = libtayo
+  )
+  result <- verify_efficacy_row(row, section)
+  expect_equal(result$status, "exact")
+  expect_true("ci_paired_by_column" %in% result$flags)
+  row$quotes <- "HR 44.9 (33.6, 56.6)"
+  section <- paste(section, row$quotes)
+  expect_false(
+    "ci_paired_by_column" %in% verify_efficacy_row(row, section)$flags
+  )
+})
+
+test_that("a row label is not taken from a line below the row", {
+  laura <- read_excerpt("tagrisso-laura")
+  # The PFS hazard ratio under "Overall Survival", the heading below it.
+  quote <- "Overall Survival HR (95% CI); P-value 0.16 (0.10, 0.24); P<0.001"
+  expect_false(quote_found(quote, laura))
+  row <- list(
+    trial = "LAURA", endpoint = "Overall Survival", value = "0.16",
+    ci_low = "0.10", ci_high = "0.24", n_treatment = 143L, n_control = 73L,
+    quotes = c(quote, "TAGRISSO Placebo (N=143) (N=73)")
+  )
+  expect_equal(verify_efficacy_row(row, laura)$status, "failed")
+})
+
+test_that("a quote read across layout lines is flagged for a human", {
+  tevimbra <- read_excerpt("tevimbra-307")
+  # The median OS row's label with the OS hazard ratio row's numbers, the
+  # line below: only a human can tell the label is not the row's.
+  row <- list(
+    trial = "BGB-A317-307", endpoint = "Median OS", value = "0.68",
+    ci_low = "0.45", ci_high = "1.01",
+    quotes = "Median OS (months) (95% CI) 0.68 (0.45, 1.01)"
+  )
+  expect_equal(
+    quote_source(row$quotes, tevimbra), "layout"
+  )
+  result <- verify_efficacy_row(row, tevimbra)
+  expect_equal(result$status, "exact")
+  expect_true("quote_across_lines" %in% result$flags)
+  # The row as printed: intact in the text, not flagged.
+  row$quotes <- "Stratified hazard ratio (95% CI) 0.68 (0.45, 1.01)"
+  expect_equal(quote_source(row$quotes, tevimbra), "verbatim")
+  expect_false(
+    "quote_across_lines" %in% verify_efficacy_row(row, tevimbra)$flags
+  )
 })
 
 test_that("a quote stitched across more than three lines still fails", {

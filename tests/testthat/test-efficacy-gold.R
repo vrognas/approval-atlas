@@ -107,6 +107,59 @@ test_that("missing and extra rows are counted", {
   expect_equal(score$missed_rows, 0L)
 })
 
+# Review of the verifier tolerance (2026-10-01): a row found but flagged is
+# hidden on the site until reviewed, so the score says how many there are.
+test_that("gold rows found only by a flagged row are counted as hidden", {
+  rows <- gold()
+  flagged <- rows
+  flagged[[1]]$flags <- list("quote_across_lines")
+  score <- score_against_gold(flagged, rows)
+  expect_equal(score$missed_rows, 0L)
+  expect_equal(score$flagged_rows, 1L)
+  expect_equal(score$flagged_found_rows, 1L)
+  expect_length(score$flagged_found_keys, 1)
+  clean <- score_against_gold(rows, rows)
+  expect_equal(clean$flagged_rows, 0L)
+  expect_equal(clean$flagged_found_rows, 0L)
+  # A flagged extra row finds no gold row.
+  extra <- modifyList(
+    rows[[1]], list(trial = "NEWTRIAL", flags = list("reassembled"))
+  )
+  score <- score_against_gold(c(rows, list(extra)), rows)
+  expect_equal(score$flagged_rows, 1L)
+  expect_equal(score$flagged_found_rows, 0L)
+})
+
+test_that("kept gold rows carry the flags production gives them", {
+  path <- testthat::test_path(
+    "fixtures", "efficacy", "tecentriq-pi-5.1.layout.txt"
+  )
+  section <- gsub(
+    "\f", "\n",
+    paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n"),
+    fixed = TRUE
+  )
+  medicine <- list(
+    medicine = "Tecentriq", ema_product_number = "EMEA/H/C/004143",
+    section = section
+  )
+  row <- list(
+    trial = "IMpower130", endpoint = "OS", value = "0.79", ci_low = "0.64",
+    ci_high = "0.98", n_treatment = 451L, n_control = 228L,
+    quotes = c(
+      "Stratified hazard ratio‡ (95% CI) 0.79 (0.64, 0.98)",
+      "Co-primary endpoints OS n=451 n=228"
+    )
+  )
+  checked <- gold_verified_rows(list(row), medicine)
+  flags <- unlist(checked$rows[[1]]$flags)
+  expect_true("quote_across_lines" %in% flags)
+  # A production flag (efficacy_flags()): is_primary not stated.
+  expect_true("is_primary_unknown" %in% flags)
+  # Its quote is placed, read across lines.
+  expect_false("page_unknown" %in% flags)
+})
+
 test_that("rows of the two IMpower110 analyses pair by their values", {
   rows <- gold()
   reversed <- rev(rows)
@@ -1770,4 +1823,35 @@ test_that("a saved result without per-call tokens still reports", {
   )
   table <- gold_report_table(list(result))
   expect_true(any(table == "| Output tokens per answered call | n/a |"))
+  # Scored before flagged rows were counted.
+  expect_true(any(
+    table == "| Scored rows flagged (hidden until reviewed) | n/a |"
+  ))
+  expect_true(any(
+    table == "| Gold rows found only by a flagged row | n/a |"
+  ))
+})
+
+test_that("the report counts the flagged rows, hidden until reviewed", {
+  result <- list(
+    model = "claude-sonnet-5-5", effort = "high",
+    calls = dplyr::tibble(
+      medicine = "Alecensa", status = "ok", reason = NA_character_,
+      rows_kept = 5L, rows_failed = 0L, rows_dropped = 0L
+    ),
+    rows_kept = 5L, rows_failed = 0L,
+    usage = list(input_tokens = 10, output_tokens = 20), cost = 0.1,
+    score = list(
+      numeric_errors = 0L, missed_rows = 1L, gold_rows = 4L, extra_rows = 2L,
+      outside_rows = 0L, lead_agreement = 1, pitfalls = c(a = TRUE),
+      flagged_rows = 3L, flagged_found_rows = 2L
+    )
+  )
+  table <- gold_report_table(list(result))
+  expect_true(any(
+    table == "| Scored rows flagged (hidden until reviewed) | 3 of 5 |"
+  ))
+  expect_true(any(
+    table == "| Gold rows found only by a flagged row | 2 of 3 |"
+  ))
 })

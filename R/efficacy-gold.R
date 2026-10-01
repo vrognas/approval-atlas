@@ -396,6 +396,9 @@ gold_row_table <- function(rows) {
     arm_control = arm_column("arm_control"),
     significance = tolower(text_column("significance_stated")),
     ci_is_range = purrr::map_lgl(rows, gold_ci_is_range),
+    # A kept row a human must check before the site shows it (gold rows have
+    # no flags).
+    flagged = purrr::map_lgl(rows, \(row) length(unlist(row$flags)) > 0),
     key = purrr::map_chr(rows, gold_row_key)
   )
   table$group <- paste(table$medicine, table$trial, table$endpoint, sep = "|")
@@ -722,7 +725,10 @@ gold_pitfalls <- function(extracted, gold, matched) {
 # not as extra; a row whose indication names no condition is scored. Those of
 # them that name a trial of the gold rows of their medicine are listed in
 # outside_gold_trial_keys, as their indication alone kept them out (a basket
-# trial such as LIBRETTO-001, or an NSCLC row given another indication).
+# trial such as LIBRETTO-001, or an NSCLC row given another indication). A
+# flagged row is scored as any other, but the site hides it until reviewed:
+# flagged_rows counts the scored ones, flagged_found_rows the gold rows found
+# only by one (matching pairs one row with one gold row).
 score_against_gold <- function(extracted, gold, condition = NULL) {
   extracted <- gold_row_table(extracted)
   gold <- gold_row_table(gold)
@@ -741,9 +747,12 @@ score_against_gold <- function(extracted, gold, condition = NULL) {
     extra_rows = sum(extra),
     outside_rows = nrow(others),
     gold_rows = nrow(gold),
+    flagged_rows = sum(extracted$flagged),
+    flagged_found_rows = sum(extracted$flagged[paired]),
     lead_agreement = gold_lead_agreement(extracted, gold, matched),
     pitfalls = pitfalls$pitfalls,
     pitfall_notes = pitfalls$notes,
+    flagged_found_keys = gold$key[partner[extracted$flagged[paired]]],
     numeric_error_keys = extracted$key[paired[wrong]],
     missed_keys = gold$key[setdiff(seq_len(nrow(gold)), matched)],
     extra_keys = extracted$key[extra],
@@ -865,10 +874,18 @@ gold_kept_row_fields <- c(
   "medicine", "ema_product_number", "row_order", "verification", "flags"
 )
 
+# The flags production gives a kept row (efficacy_flags()), its page looked
+# up in the section as one page, so the score can count the rows a human must
+# check before the site shows them.
+gold_row_flags <- function(row, verification, section) {
+  page <- efficacy_row_page(row, list(first_page = 1L, pages = section))
+  efficacy_flags(c(row, list(page = page)), verification)
+}
+
 # A medicine's answered rows (`orders`: their places in the answer) verified
 # against its section: the kept rows, without the arm fields that did not
-# verify and with their flags, and the failed rows, with their errors and the
-# row as the model gave it (`row`).
+# verify and with production's flags (gold_row_flags()), and the failed rows,
+# with their errors and the row as the model gave it (`row`).
 gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
   checked <- purrr::map2(rows, orders, function(row, order) {
     list(
@@ -882,11 +899,12 @@ gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
   list(
     rows = purrr::map(checked[passed], function(item) {
       verification <- item$verification
-      c(without_unverified_arms(item$row, verification$blanked), list(
+      row <- without_unverified_arms(item$row, verification$blanked)
+      c(row, list(
         medicine = medicine$medicine,
         ema_product_number = medicine$ema_product_number,
         row_order = item$order, verification = verification$status,
-        flags = as.list(verification$flags)
+        flags = as.list(gold_row_flags(row, verification, medicine$section))
       ))
     }),
     failed = purrr::map(checked[!passed], function(item) {
@@ -1286,6 +1304,11 @@ gold_output_tokens_per_answer <- function(result) {
   format(round(mean(calls$output_tokens[answered])), big.mark = ",")
 }
 
+# "3 of 5"; "n/a" for a score made before the count was (`count` NULL).
+gold_count_of <- function(count, total) {
+  if (is.null(count)) "n/a" else sprintf("%d of %d", count, total)
+}
+
 gold_report_table <- function(results) {
   labels <- purrr::map_chr(results, \(r) gold_result_variant(r)$label)
   cell <- function(extract) purrr::map_chr(results, extract)
@@ -1311,6 +1334,16 @@ gold_report_table <- function(results) {
       "Rows of other conditions (not scored)" = cell(
         \(r) as.character(r$score$outside_rows)
       ),
+      "Scored rows flagged (hidden until reviewed)" = cell(function(r) {
+        score <- r$score
+        scored <- score$extra_rows + score$gold_rows - score$missed_rows
+        gold_count_of(score$flagged_rows, scored)
+      }),
+      "Gold rows found only by a flagged row" = cell(function(r) {
+        score <- r$score
+        found <- score$gold_rows - score$missed_rows
+        gold_count_of(score$flagged_found_rows, found)
+      }),
       "Lead agreement" = cell(\(r) sprintf("%.3f", r$score$lead_agreement))
     ),
     purrr::set_names(
@@ -1376,6 +1409,10 @@ gold_report_details <- function(result) {
     listing("Pitfall notes", result$score$pitfall_notes),
     listing("Numeric errors", result$score$numeric_error_keys),
     listing("Missed gold rows", result$score$missed_keys),
+    listing(
+      "Gold rows found only by a flagged row (hidden until reviewed)",
+      unlist(result$score$flagged_found_keys)
+    ),
     listing("Extra rows", result$score$extra_keys),
     listing(
       "Rows of other conditions (not scored)", result$score$outside_keys
