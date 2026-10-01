@@ -5928,12 +5928,22 @@ table.activity {
   display: none;
 }
 
-.status-flags .chip {
+/* One qualifier chip wherever a qualifier shows (design sweep 2026-10-01, B4: the Status lead's
+   chips, the Type fact's PRIME and accelerated assessment, the result tables' markers were drawn
+   three ways): this hairline chip. The ATC flags of the tables ("incomplete", "EMA: R03") keep the
+   raised pill (two classes each: over .chip and .flag, later in the file). */
+.chip.flag-chip,
+.flag.flag-marker {
+  padding: 1px 10px;
   border: 1px solid var(--grid);
   border-radius: 8px;
   background: none;
   color: var(--ink-secondary);
   font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-flags .chip {
   white-space: normal;
 }
 
