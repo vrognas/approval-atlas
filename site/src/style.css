@@ -6537,18 +6537,52 @@ details > summary {
   font-size: 0.875rem;
 }
 
+/* "Show all statuses" (condition, company and text pages) looks as a filter's checkbox row (design
+   sweep 2026-10-01, B7: a native 13px checkbox where the filters' are 16px): the facet row's 16px
+   checkbox without the browser's margin, its padding (the negative margin keeps the checkbox on the
+   page's text edge, A9), the wash on hover and the accent wash while checked; 44px tall with a
+   20px checkbox on phones, as a sheet's rows. As wide as its text, not the line. */
 .toggle-all {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 24px;
-  margin: 8px 0;
+  gap: 8px;
+  min-height: 32px;
+  margin: 8px -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
   font-size: 0.875rem;
+  line-height: 1.25rem;
+  cursor: pointer;
 }
 
-/* The checkbox on the page's text edge (A9: the browser's 4px left margin set it inside). */
+.toggle-all:hover {
+  background: var(--wash);
+}
+
+.toggle-all:has(input:checked) {
+  background: var(--accent-wash);
+}
+
+.toggle-all:has(input:checked):hover {
+  background: linear-gradient(var(--wash), var(--wash)), var(--accent-wash);
+}
+
 .toggle-all input {
-  margin-left: 0;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .toggle-all {
+    min-height: 44px;
+  }
+
+  .toggle-all input {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 .related a {
