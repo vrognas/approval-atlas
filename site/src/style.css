@@ -2447,6 +2447,20 @@ input::placeholder {
   margin-bottom: 0;
 }
 
+/* A tapped tab's panel shows at once, before its cards are drawn for the current view (design sweep
+   2026-10-01, L3; main.js renderTabs()): its old cards dimmed, but only once that takes 150 ms, so a
+   fast render never blinks. An animation, as a panel that was hidden has no style to transition
+   from. */
+.tab-panel[aria-busy="true"] {
+  animation: tab-busy 1ms linear 150ms forwards;
+}
+
+@keyframes tab-busy {
+  to {
+    opacity: 0.5;
+  }
+}
+
 /* Phones: the strip scrolls sideways across the gutters (no page scroll), the tabs closer. */
 @media (max-width: 720px) {
   .tabs {

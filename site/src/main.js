@@ -134,6 +134,10 @@ const REGISTER_FILE = "ema_medicine_register_status.json";
 const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah", mod: "mod" };
 // Desktop from this width: a chip opens its popover; below it, a bottom sheet.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
+// Phones (style.css's phone block): a tap on the Medicines tab draws the table's first rows first
+// (design sweep 2026-10-01, L3).
+const PHONE = window.matchMedia("(max-width: 720px)");
+const TABLE_FIRST_ROWS = 20;
 // The facet section (index.html #facet-{id}) each filter chip opens, and the filter keys it sets.
 const CHIP_SECTIONS = { type: "type", mod: "modality", atc: "atc", area: "area", mah: "mah", status: "status", years: "years" };
 const CHIP_KEYS = { type: ["type"], mod: ["mod"], atc: ["atc"], area: ["area"], mah: ["mah"], status: ["status"], years: ["from", "to"] };
@@ -442,14 +446,24 @@ function render() {
   restoreScroll();
 }
 
-function scheduleRender() {
+// afterPaint: the render waits for the frame after the next paint (a tab's tap, design sweep
+// 2026-10-01, L3: the tab shows selected at once, its cards follow). Renders asked for meanwhile
+// are that one.
+function scheduleRender(afterPaint = false) {
   if (!frame) frame = requestAnimationFrame(() => {
+    if (afterPaint) {
+      setTimeout(() => {
+        frame = 0;
+        render();
+      }, 0);
+      return;
+    }
     frame = 0;
     render();
   });
 }
 
-function setState(patch, push = false) {
+function setState(patch, push = false, afterPaint = false) {
   // Navigations (push) move focus to the new headline instead.
   if (!push && FILTER_KEYS.some((key) => key in patch)) announceFilters = true;
   if (push) navigations += 1;
@@ -457,7 +471,7 @@ function setState(patch, push = false) {
   // Before the dashboard has loaded, filter changes go into the URL's kept filter part.
   if (!dashboard) pendingFilters = patchFilterParams(pendingFilters, patch);
   urlNote.hidden = true;
-  scheduleRender();
+  scheduleRender(afterPaint);
   scheduleUrlWrite(state, push, dashboard ? null : pendingFilters);
 }
 
@@ -1381,10 +1395,19 @@ function startDashboard(meta, [
   const plainClick = (event) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
   let focusTab = false;
   let tabShown = null;
+  // A tap on a tab (design sweep 2026-10-01, L3, Doherty Threshold: on a phone's CPU the Medicines
+  // tab painted nothing for up to 1.9 s): the tab shows selected and its panel at once, its cards
+  // render after that paint, and the medicines table adds its first rows first (phones).
+  let quickTab = false;
   function showTab(tab, focus = false) {
     focusTab = focus;
-    if (tab === state.tab) scheduleRender();
-    else setState({ tab }, true);
+    if (tab === state.tab) {
+      scheduleRender();
+      return;
+    }
+    renderTabs(tab);
+    quickTab = true;
+    setState({ tab }, true, true);
   }
   for (const button of tabButtons) {
     button.textContent = UI.tabs.names[button.dataset.tab];
@@ -1404,19 +1427,25 @@ function startDashboard(meta, [
   // The tabs and their panels follow the state: the tab shown aria-selected and the tab stop (the
   // others tabindex -1). The previews' links keep the rest of the view (filters, lookup) in their
   // hrefs, so a new browser tab opens the same view on that tab. Phones: the strip scrolls
-  // sideways, the tab shown kept in it.
-  function renderTabs() {
-    const hrefOf = (tab) => `?${encodeUrl({ ...state, tab })}`;
+  // sideways, the tab shown kept in it. tab: the tab to show (a tap shows it before the state's
+  // render, showTab()). A panel whose cards were drawn for another view is busy until they are
+  // drawn again (dimmed after 150 ms, style.css), so a tap never shows old counts as current.
+  const panelView = () => encodeUrl({ ...state, tab: DEFAULT_STATE.tab });
+  function renderTabs(tab = state.tab) {
+    const hrefOf = (to) => `?${encodeUrl({ ...state, tab: to })}`;
     for (const button of tabButtons) {
-      const current = button.dataset.tab === state.tab;
+      const current = button.dataset.tab === tab;
       button.setAttribute("aria-selected", String(current));
       button.tabIndex = current ? 0 : -1;
     }
     for (const link of previewTabLinks) link.href = hrefOf(link.dataset.tabLink);
-    for (const panel of tabPanels) panel.hidden = panel.dataset.tabPanel !== state.tab;
-    const current = tabButtons.find((button) => button.dataset.tab === state.tab);
-    if (tabShown !== state.tab) {
-      tabShown = state.tab;
+    for (const panel of tabPanels) {
+      panel.hidden = panel.dataset.tabPanel !== tab;
+      if (!panel.hidden && panel.dataset.drawnFor !== panelView()) panel.setAttribute("aria-busy", "true");
+    }
+    const current = tabButtons.find((button) => button.dataset.tab === tab);
+    if (tabShown !== tab) {
+      tabShown = tab;
       const nav = $("#tabs");
       const start = current.offsetLeft - nav.offsetLeft;
       if (start < nav.scrollLeft || start + current.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = Math.max(0, start - 16);
@@ -2531,8 +2560,14 @@ function startDashboard(meta, [
       safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
     } else {
       const undated = filtered.filter((product) => product.year === null).length;
-      safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area));
+      // A tap on the tab, on a phone: the first rows first, the rest of the page after each paint.
+      const first = quickTab && PHONE.matches ? TABLE_FIRST_ROWS : null;
+      safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area, first));
     }
+    quickTab = false;
+    const panel = tabPanels.find((element) => element.dataset.tabPanel === tab);
+    panel.dataset.drawnFor = panelView();
+    panel.removeAttribute("aria-busy");
     // The widths the charts were drawn at (the ResizeObserver below re-renders only on a change).
     for (const selector of CHART_SELECTORS) {
       const element = $(selector);

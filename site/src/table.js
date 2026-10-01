@@ -10,6 +10,19 @@ import { focusToolbarButton, toolbarKeydown } from "./toolbar.js";
 const PAGE_SIZE = 100;
 const HEADERS = UI.table.headers;
 
+// The sizes in which a page of count rows is added: all at once, or (first) that many first, then
+// as many again in each later task (design sweep 2026-10-01, L3: on a phone's CPU 100 rows held the
+// Medicines tab's first paint up to 1.9 s; 20 at a time keep each task short).
+export function rowChunks(count, first = null) {
+  if (!first || first >= count) return count > 0 ? [count] : [];
+  const chunks = [];
+  for (let start = 0; start < count; start += first) chunks.push(Math.min(first, count - start));
+  return chunks;
+}
+
+// After the next paint: a frame, then a task (its rows then never hold up the paint before them).
+const afterPaint = (callback) => requestAnimationFrame(() => setTimeout(callback, 0));
+
 function hasIndication(product) {
   return product.therapeutic_indication !== null;
 }
@@ -373,18 +386,41 @@ export function createTable(table, moreButton, captionNode, {
     groups.selectAll("td").attr("role", "cell");
   }
 
-  function showMore() {
-    const next = current.products.slice(shown, shown + PAGE_SIZE);
+  // Rows of the page still to add, in later tasks (rowChunks()), and the update they belong to (a
+  // rebuild drops them).
+  let pending = [];
+  let build = 0;
+
+  function addRows(count) {
+    const next = current.products.slice(shown, shown + count);
     appendRows(next);
     markPressed();
     shown += next.length;
-    const remaining = current.products.length - shown;
+    const remaining = current.products.length - shown - pending.reduce((sum, size) => sum + size, 0);
     d3.select(moreButton)
       .attr("hidden", remaining > 0 ? null : "")
       .text(UI.table.showMore(Math.min(PAGE_SIZE, remaining), current.products.length));
   }
 
-  d3.select(moreButton).on("click", showMore);
+  // The next page: first (phones, a tab just shown) its first rows, the rest after each paint.
+  function showMore(first = null) {
+    const chunks = rowChunks(Math.min(PAGE_SIZE, current.products.length - shown), first);
+    pending = chunks.slice(1);
+    addRows(chunks[0] ?? 0);
+    const mine = build;
+    const later = () => {
+      if (mine !== build || !pending.length) return;
+      addRows(pending.shift());
+      if (pending.length) afterPaint(later);
+    };
+    if (pending.length) afterPaint(later);
+  }
+
+  // "Show 100 more": the rows still pending first, then the next page.
+  d3.select(moreButton).on("click", () => {
+    while (pending.length) addRows(pending.shift());
+    showMore();
+  });
   // Named by the card's heading and described by the caption above the scroll area (inside it, a
   // wide table's caption was cut off on phones).
   d3.select(table).attr("role", "table").attr("aria-labelledby", "table-title").attr("aria-describedby", captionNode.id);
@@ -394,8 +430,9 @@ export function createTable(table, moreButton, captionNode, {
   // ATC codes selected in the filter, shown as pressed segments. documents: the documents index by
   // product (null until loaded); its arrival adds the links in place. notes: the MeSH notes (null
   // until loaded); their arrival adds the terms' explainers in place (termTip()). selectedArea: the
-  // area filter (state.area), shown as pressed branch chips.
-  return function update(products, caption, register, selectedAtc, documents, notes = null, selectedArea = []) {
+  // area filter (state.area), shown as pressed branch chips. first: when the rows are rebuilt, add
+  // that many first and the rest of the page after each paint (null: the whole page at once).
+  return function update(products, caption, register, selectedAtc, documents, notes = null, selectedArea = [], first = null) {
     const unchanged = current !== null && current.caption === caption && current.register === register &&
       current.products.length === products.length && current.products.every((product, index) => product === products[index]);
     if (unchanged) {
@@ -421,6 +458,8 @@ export function createTable(table, moreButton, captionNode, {
     }
     current = { products, caption, register, selectedAtc, documents, notes, selectedArea };
     shown = 0;
+    build += 1;
+    pending = [];
     const root = d3.select(table);
     root.selectChildren().remove();
     captionNode.textContent = caption;
@@ -439,7 +478,7 @@ export function createTable(table, moreButton, captionNode, {
       });
     headerSize.disconnect();
     headerSize.observe(root.select("thead").node());
-    showMore();
+    showMore(first);
     if (refocus) restoreFocus();
   };
 }
