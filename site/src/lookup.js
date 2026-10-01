@@ -40,7 +40,7 @@ import { buildModalityTree, modalityLines, modalitySource } from "./modalities.j
 import { espacenetUrl, glanceIsEstimate, protectionGlance, protectionSummary } from "./protection.js";
 import { endingByYear, protectionEnding } from "./protection-calendar.js";
 import {
-  buildConditions, conditionPhrases, didYouMean, euNumberIndex, foldSearchText, knownSubstance, medicineByNumber, medicineNumber, searchWithFallback, suggest,
+  buildConditions, conditionPhrases, didYouMean, euNumberIndex, foldSearchText, knownSubstance, medicineNumber, numberAnswer, searchWithFallback, suggest,
   textMatches, textPhrases,
 } from "./search.js";
 import { renderTimeline } from "./timeline.js";
@@ -314,6 +314,10 @@ export function createLookup(panel, {
   panel.addEventListener("keydown", (event) => toolbarKeydown(event, ".area-chip, .area-more"));
   // A failure in the ink, waiting muted (design sweep 2026-10-01, B11: they looked alike).
   const pending = (value) => el("p", { class: value === FAILED ? "muted state-error" : "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
+
+  // EU number -> EMA product number (search.js euNumberIndex()) of the register dataset as need()
+  // gives it: undefined while it loads, null when it failed (search.js numberAnswer(); C7 review).
+  const euNumbersOf = (register) => (register === undefined ? undefined : ready(register) ? euNumberIndex(register) : null);
 
   // The substance equivalents (step 3): none when the file is missing (older data), undefined while
   // it loads. setsOf(): the search index's medicines by substance set, kept for one equivalents value.
@@ -1237,6 +1241,12 @@ export function createLookup(panel, {
   // authorized now, that class), then, when no name matched, what can be searched, what cannot yet
   // and what is not in the data. hidden: matches of another status.
   function emptyState(query, hidden) {
+    // A typed EU or EMA product number (design sweep 2026-10-01, C7; here through a link or the text
+    // search option): the medicine it names, or that none was found (search.js numberAnswer()). An
+    // EU number waits for the register's numbers ("Loading…", not "Nothing … matches": C7 review),
+    // and reads as any query when they failed to load.
+    const number = numberAnswer(index, query, medicineNumber(query)?.kind === "eu" ? euNumbersOf(need("register")) : null);
+    if (number?.state === "loading") return pending(undefined);
     const [atc, atcCounts, conditions] = [need("atc"), need("atcCounts"), need("conditions")];
     const copy = UI.lookup.empty;
     const known = knownSubstance(index, query, ready(atc) ? atc.classes : []);
@@ -1256,21 +1266,18 @@ export function createLookup(panel, {
       patch: entry.kind === "medicine" ? { med: entry.value } : entry.kind === "substance" ? { sub: entry.value } : { q: entry.value },
     }));
     const links = (items) => items.map((item, position) => [position ? ", " : "", internalLink(item.label, item.patch)]);
-    // A typed EU or EMA product number (design sweep 2026-10-01, C7; here through a link or the text
-    // search option): the medicine it names, or that none has it, once the register's EU numbers
-    // are in (while they load, as any query).
-    const number = medicineNumber(query);
-    const register = number?.kind === "eu" ? need("register") : null;
-    const numbered = number ? medicineByNumber(index, query, register && ready(register) ? euNumberIndex(register) : null) : null;
+    const numbered = number?.state === "found" ? number : null;
     const numberLead = numbered
       ? [copy.numberOf(number.kind, number.number), internalLink(numbered.row.name_of_medicine, { med: numbered.row.ema_product_number }), "."]
-      : number && register !== undefined ? copy.noNumber(number.kind, number.number) : null;
+      : number?.state === "notFound" ? copy.noNumber(number.kind, number.number) : null;
     const lead = numberLead ?? (hidden ? copy.otherStatuses(hidden)
       : names.length ? copy.noText(query)
         : known ? copy.known(atcName(known.name), known.code)
           : copy.nothing(query));
     return el("div", { class: "empty-state" },
       el("p", { class: "empty-lead" }, lead),
+      // Why an EU number found none need not mean there is none (C7 review).
+      number?.state === "notFound" && number.kind === "eu" ? el("p", null, copy.euNumberSource) : null,
       known && classCount
         ? el("p", null, copy.sameClass, internalLink(atcClassLabel(level4, atc.names.get(level4) ?? null), classState(level4)), ` (${UI.lookup.classMeta(classCount)})`)
         : null,
@@ -1664,12 +1671,9 @@ export function createLookup(panel, {
     // datasets a query needs besides them (a typed EU number: the register; design sweep C7).
     searchLoading: (extra = []) => [...SEARCH_DATASETS, ...extra].filter((name) => datasets.need(name) === undefined).length > 0,
     searchSettled: (extra = []) => datasets.settled([...SEARCH_DATASETS, ...extra]),
-    // EU number -> EMA product number (search.js euNumberIndex()), asking for the register; null
-    // until it has loaded (or when it failed).
-    euNumbers: () => {
-      const register = datasets.need("register");
-      return ready(register) ? euNumberIndex(register) : null;
-    },
+    // EU number -> EMA product number (search.js euNumberIndex()), asking for the register;
+    // undefined while it loads, null when it failed (euNumbersOf()).
+    euNumbers: () => euNumbersOf(datasets.need("register")),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [datasets.peek("atc"), datasets.peek("atcCounts")];

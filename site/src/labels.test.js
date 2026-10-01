@@ -1321,12 +1321,20 @@ test("search copy: retried and empty lists, did you mean, the indication-text op
     `${empty.notInData}${empty.registers}${empty.registersAfter}${empty.packNumber}`,
     "Not in the data: medicines authorized only nationally. Find them in the national medicine registers (EMA's list). A medicine authorized through EMA has an EU number (EU/1/…) on its pack, which you can search for.",
   );
-  // Design sweep 2026-10-01 (C7): a typed number (search.js medicineNumber()) names its medicine,
-  // or says no medicine has it; the pack hint is left out after a number (lookup.js emptyState()).
+  // Design sweep 2026-10-01 (C7): a typed number (search.js numberAnswer()) names its medicine,
+  // or says none was found; the pack hint is left out after a number (lookup.js emptyState()). An
+  // EU number claims no absence: the Union Register, its source, misses some medicines (C7 review:
+  // Glivec's EU/1/01/198).
   assert.equal(`${empty.notInData}${empty.registers}${empty.registersAfter}`, "Not in the data: medicines authorized only nationally. Find them in the national medicine registers (EMA's list).");
   assert.equal(empty.numberOf("eu", "EU/1/21/1608"), "EU/1/21/1608 is the EU number of ");
   assert.equal(empty.numberOf("ema", "EMEA/H/C/005422"), "EMEA/H/C/005422 is the EMA product number of ");
-  assert.equal(empty.noNumber("eu", "EU/1/99/9999"), "No medicine in the EMA data has the EU number EU/1/99/9999.");
+  assert.equal(empty.noNumber("eu", "EU/1/01/198"), "No medicine found with the EU number EU/1/01/198.");
+  assert.equal(empty.euNumberSource, "EU numbers come from the EU Union Register, which does not list every medicine here. Try the name on the pack.");
+  assert.equal(
+    empty.numberNote("eu", "EU/1/01/198"),
+    "No medicine found with the EU number EU/1/01/198. EU numbers come from the EU Union Register, which does not list every medicine here. Try the name on the pack.",
+  );
+  assert.equal(empty.numberNote("ema", "EMEA/H/C/999999"), "No medicine in the EMA data has the EMA product number EMEA/H/C/999999.");
   assert.equal(empty.noNumber("ema", "EMEA/H/C/999999"), "No medicine in the EMA data has the EMA product number EMEA/H/C/999999.");
   assert.equal(labels.UI.lookup.medicineMeta("Authorised", "2021", null, "EU/1/21/1608"), "EU/1/21/1608 · Authorized · 2021");
   assert.equal(condition.alsoSearched("acetylsalicylic acid"), "Also searching for “acetylsalicylic acid”, the name EMA uses.");

@@ -1654,10 +1654,18 @@ export const UI = {
       // After registersAfter, unless the query was a number itself (design sweep 2026-10-01, C7:
       // "EU/1/21/1608" ended on this hint while numbers found nothing; they are searchable now).
       packNumber: " A medicine authorized through EMA has an EU number (EU/1/…) on its pack, which you can search for.",
-      // A typed EU or EMA product number (search.js medicineNumber()): the medicine it names (its
-      // name a link after numberOf), or that no medicine in the data has it.
+      // A typed EU or EMA product number (search.js numberAnswer()): the medicine it names (its
+      // name a link after numberOf), or that none was found. An EMA product number not in the data
+      // is no medicine's; EU numbers come from the Union Register, which misses some medicines here
+      // (Glivec's EU/1/01/198, 2026-09-30), so for one it claims no absence and says why
+      // (euNumberSource, a paragraph of its own under the lead; C7 review). numberNote: the list's
+      // note, both in one.
       numberOf: (kind, number) => `${number} is the ${kind === "eu" ? "EU number" : "EMA product number"} of `,
-      noNumber: (kind, number) => `No medicine in the EMA data has the ${kind === "eu" ? "EU number" : "EMA product number"} ${number}.`,
+      noNumber: (kind, number) => (kind === "eu"
+        ? `No medicine found with the EU number ${number}.`
+        : `No medicine in the EMA data has the EMA product number ${number}.`),
+      euNumberSource: "EU numbers come from the EU Union Register, which does not list every medicine here. Try the name on the pack.",
+      numberNote: (kind, number) => [UI.lookup.empty.noNumber(kind, number), kind === "eu" ? UI.lookup.empty.euNumberSource : null].filter(Boolean).join(" "),
     },
     conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     classMeta: (count, unnamed = false) => [unnamed ? NO_ATC_NAME : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),

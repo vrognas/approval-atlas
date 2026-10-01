@@ -20,6 +20,7 @@ import {
   matchesWords,
   medicineByNumber,
   medicineNumber,
+  numberAnswer,
   queryWords,
   relaxedQueries,
   searchWithFallback,
@@ -278,6 +279,34 @@ test("a typed number names its medicine: by EMA product number at once, by EU nu
   assert.equal(medicineByNumber(numbered, "EMEA/H/C/999999"), null);
   // Not also listed by name.
   assert.deepEqual(suggest(numbered, null, "wegovy").numbered, null);
+});
+
+// C7 review: Glivec's EU number EU/1/01/198 (no row in the register file) and Wegovy's, with the
+// register file failed or still loading, were all "No medicine in the EMA data has the EU number …".
+test("numberAnswer says what a typed number tells, and for an EU number only once the register's numbers are in", () => {
+  const rows = [
+    { ema_product_number: "EMEA/H/C/005422", name_of_medicine: "Wegovy", substances: "semaglutide", substance_keys: ["semaglutide"], medicine_status: "Authorised", marketing_authorisation_date: "2022-01-06", medicine_type: "Other" },
+    { ema_product_number: "EMEA/H/C/000406", name_of_medicine: "Glivec", substances: "imatinib", substance_keys: ["imatinib"], medicine_status: "Authorised", marketing_authorisation_date: "2001-11-07", medicine_type: "Other" },
+  ];
+  const numbered = buildLookupIndex(rows, []);
+  // Glivec has no register row, so its EU number is not among the register's.
+  const euNumbers = euNumberIndex(new Map([["EMEA/H/C/005422", { ema_product_number: "EMEA/H/C/005422", eu_number: "EU/1/21/1608" }]]));
+  const wegovy = numbered.byNumber.get("EMEA/H/C/005422");
+  assert.equal(numberAnswer(numbered, "wegovy", euNumbers), null);
+  assert.deepEqual(numberAnswer(numbered, "EU/1/21/1608/001", euNumbers), { kind: "eu", number: "EU/1/21/1608", row: wegovy, state: "found" });
+  assert.deepEqual(numberAnswer(numbered, "EU/1/01/198", euNumbers), { kind: "eu", number: "EU/1/01/198", row: null, state: "notFound" });
+  // The register's numbers loading (undefined) or failed (null): nothing is known of an EU number.
+  assert.deepEqual(numberAnswer(numbered, "EU/1/21/1608", undefined), { kind: "eu", number: "EU/1/21/1608", row: null, state: "loading" });
+  assert.deepEqual(numberAnswer(numbered, "EU/1/21/1608", null), { kind: "eu", number: "EU/1/21/1608", row: null, state: "unavailable" });
+  // An EMA product number needs no register: the search index lists every medicine.
+  for (const euState of [undefined, null, euNumbers]) {
+    assert.equal(numberAnswer(numbered, "000406", euState).row.name_of_medicine, "Glivec");
+    assert.equal(numberAnswer(numbered, "EMEA/H/C/999999", euState).state, "notFound");
+  }
+  // medicineByNumber() and suggest() name the medicine found only.
+  assert.equal(medicineByNumber(numbered, "EU/1/21/1608", undefined), null);
+  assert.equal(suggest(numbered, null, "EU/1/21/1608", { euNumbers: undefined }).numbered, null);
+  assert.deepEqual(medicineByNumber(numbered, "EU/1/21/1608", euNumbers), { row: wegovy, kind: "eu", number: "EU/1/21/1608" });
 });
 
 const registerFile = new URL("../public/data/ema_medicine_register_status.json", import.meta.url);

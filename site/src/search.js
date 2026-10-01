@@ -331,17 +331,30 @@ export function euNumberIndex(register) {
   return euNumberMaps.get(register);
 }
 
-// The medicine a typed number names: { row (its search-index row), kind, number } or null.
-// euNumbers: euNumberIndex() of the register, null while it loads (an EU number then finds none).
-export function medicineByNumber(index, query, euNumbers = null) {
+// What a typed number tells: null for a query that is no number (medicineNumber()), else { kind,
+// number, row, state }. state "found": row is its medicine; "notFound": none (an EMA product number
+// not in the search index, which lists every medicine; or an EU number not among the Union
+// Register's, which misses some medicines here, e.g. Glivec, so the copy for it claims no absence);
+// for an EU number, "loading" while the register's numbers load (euNumbers undefined) and
+// "unavailable" when they failed to load (null): nothing can be said about it then (C7 review).
+// euNumbers: euNumberIndex() of the register, undefined or null as above.
+export function numberAnswer(index, query, euNumbers) {
   const found = medicineNumber(query);
   if (!found) return null;
-  const row = index.byNumber.get(found.kind === "ema" ? found.number : euNumbers?.get(found.number));
-  return row ? { row, ...found } : null;
+  if (found.kind === "eu" && !euNumbers) return { ...found, row: null, state: euNumbers === undefined ? "loading" : "unavailable" };
+  const row = index.byNumber.get(found.kind === "ema" ? found.number : euNumbers.get(found.number)) ?? null;
+  return { ...found, row, state: row ? "found" : "notFound" };
+}
+
+// The medicine a typed number names: { row (its search-index row), kind, number } or null.
+// euNumbers as numberAnswer()'s (an EU number finds none without them).
+export function medicineByNumber(index, query, euNumbers = null) {
+  const answer = numberAnswer(index, query, euNumbers);
+  return answer?.row ? { row: answer.row, kind: answer.kind, number: answer.number } : null;
 }
 
 // Grouped suggestions; conditions stay empty until their background data (conditions) has loaded.
-// numbered: the medicine a typed number names (medicineByNumber(); euNumbers as there), or null.
+// numbered: the medicine a typed number names (medicineByNumber(); euNumbers as numberAnswer()'s), or null.
 export function suggest(index, conditions, query, { euNumbers = null } = {}) {
   const folded = foldSearchText(query);
   const words = queryWords(query);

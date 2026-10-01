@@ -72,7 +72,7 @@ import { LATER, calendarBuckets, protectionEnding } from "./protection-calendar.
 import { createSearchBox } from "./search-box.js";
 import { createRecent, keptOpenedClass, openedClass, recentEntry, recentLookupState } from "./recent.js";
 import {
-  MIN_QUERY, buildLookupIndex, didYouMean, euNumberStarted, foldSearchText, knownSubstance, medicineNumber, searchWithFallback, suggest, suggestAtcClasses,
+  MIN_QUERY, buildLookupIndex, didYouMean, euNumberStarted, foldSearchText, knownSubstance, numberAnswer, searchWithFallback, suggest, suggestAtcClasses,
 } from "./search.js";
 import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
@@ -1072,7 +1072,9 @@ function fuzzyOption(entry, substanceCount) {
 // lookup.md #2): the conditions, drug classes or companies are still loading: more suggestions can
 // come ("Loading…" under the list, search-box.js), so nothing found is no "No matches" yet; the
 // close names guessed from the search index show meanwhile (review: they waited for the data).
-function searchSuggestions(index, query, run, atcClasses, substanceCount, loading = false) {
+// euNumbers: the register's EU numbers as search.js numberAnswer() takes them (undefined while they
+// load, null when they failed).
+function searchSuggestions(index, query, run, atcClasses, substanceCount, loading = false, euNumbers = null) {
   const text = query.trim();
   if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text, loading: false };
   const copy = UI.lookup;
@@ -1081,11 +1083,15 @@ function searchSuggestions(index, query, run, atcClasses, substanceCount, loadin
   let note = shownFor ? copy.showingFor(shownFor) : null;
   const extra = [];
   if (!found) {
+    // A number none was found for says so (C7): only once that can be known, i.e. for an EU number
+    // once the register's numbers are in (while they load, the list is loading; when they failed,
+    // the usual note shows: C7 review); a WHO substance with no medicine through EMA likewise.
+    const number = numberAnswer(index, text, euNumbers);
+    if (number?.state === "loading") loading = true;
     if (!loading) {
-      // A number no medicine has says so (C7); a WHO substance with no medicine through EMA likewise.
-      const number = medicineNumber(text);
       const known = number ? null : knownSubstance(index, text, atcClasses);
-      note = number ? copy.empty.noNumber(number.kind, number.number) : known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+      note = number?.state === "notFound" ? copy.empty.numberNote(number.kind, number.number)
+        : known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
     }
     const fuzzy = didYouMean(index, text, atcClasses);
     if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map((entry) => fuzzyOption(entry, substanceCount)) });
@@ -1169,7 +1175,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
       const equivalents = lookup.equivalents() ?? noEquivalents;
       const substanceCount = (substance) => substanceAuthorizedCount(substance.key, index.substances, equivalents);
       const sets = numberSets(query);
-      const euNumbers = sets.length ? lookup.euNumbers() : null;
+      const euNumbers = sets.length ? lookup.euNumbers() : null; // undefined while loading, null when failed
       const run = (text) => suggestionGroups(
         suggest(index, lookup.conditions(), text, { euNumbers }),
         atc ? suggestAtcClasses(text, atc.classes, atc.counts) : [],
@@ -1177,7 +1183,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
         lookup.medicines(),
         substanceCount,
       );
-      return searchSuggestions(index, query, run, atc?.classes ?? [], substanceCount, lookup.searchLoading(sets));
+      return searchSuggestions(index, query, run, atc?.classes ?? [], substanceCount, lookup.searchLoading(sets), euNumbers);
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
