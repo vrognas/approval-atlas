@@ -497,6 +497,24 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_match(run$failed_rows$errors[[1]][1], "0.67")
 })
 
+test_that("a row whose arms do not verify is kept without them, flagged", {
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(
+    alex_row(
+      arm_treatment = "34.8", arm_control = "10.9",
+      arm_measure = "median months"
+    )
+  )))
+  run <- extract_first()
+  expect_equal(run$extractions$rows_kept, 1L)
+  expect_equal(run$extractions$rows_failed, 0L)
+  expect_equal(run$rows$value, "0.47")
+  expect_true(is.na(run$rows$arm_treatment))
+  expect_true(is.na(run$rows$arm_control))
+  expect_true(is.na(run$rows$arm_measure))
+  expect_true(is.na(run$rows$comparator_column_label))
+  expect_true("arms_not_verified" %in% run$rows$flags[[1]])
+})
+
 test_that("an indication not in the medicine's section 4.1 is flagged", {
   local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(
     alex_row(indication = "ALK-positive NSCLC"),

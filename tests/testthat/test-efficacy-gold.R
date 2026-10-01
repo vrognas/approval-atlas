@@ -592,19 +592,117 @@ test_that("pitfalls look only at the rows that are scored", {
   expect_equal(scored$outside_rows, 1L)
 })
 
-test_that("ALEX rows without arm values fail the pitfall, with a note", {
+test_that("ALEX rows without arm values leave the pitfall not testable", {
+  # The verifier blanks arms it cannot verify: a row without arms is no swap.
   rows <- gold()
   extracted <- purrr::map(rows, as_extracted)
-  for (alex in gold_index(rows, "Alecensa", "ALEX")) {
-    extracted[[alex]]$arm_treatment <- NULL
-    extracted[[alex]]$arm_control <- NULL
+  alex <- gold_index(rows, "Alecensa", "ALEX")
+  for (index in alex) {
+    extracted[[index]]$arm_treatment <- NULL
+    extracted[[index]]$arm_control <- NULL
   }
   score <- score_against_gold(extracted, rows)
-  expect_false(score$pitfalls[["alex_column_order"]])
-  expect_match(score$pitfall_notes, "without arm values", all = FALSE)
+  expect_true(is.na(score$pitfalls[["alex_column_order"]]))
+  expect_match(score$pitfall_notes, "no arm values", all = FALSE)
+  expect_match(score$pitfall_notes, "not testable", all = FALSE)
   expect_false(any(grepl(
     "alex", score_against_gold(rows, rows)$pitfall_notes, fixed = TRUE
   )))
+  # The ALEX rows found with arms are tested, in the gold's order.
+  with_arms <- extracted
+  with_arms[[alex[1]]] <- as_extracted(rows[[alex[1]]])
+  score <- score_against_gold(with_arms, rows)
+  expect_true(score$pitfalls[["alex_column_order"]])
+  expect_match(score$pitfall_notes, "1 of the 2 ALEX rows", all = FALSE)
+  swapped <- with_arms
+  swapped[[alex[1]]][c("arm_treatment", "arm_control")] <-
+    rows[[alex[1]]][c("arm_control", "arm_treatment")]
+  expect_false(
+    score_against_gold(swapped, rows)$pitfalls[["alex_column_order"]]
+  )
+  # No ALEX row at all: not testable either, and the note says so.
+  score <- score_against_gold(extracted[-alex], rows)
+  expect_true(is.na(score$pitfalls[["alex_column_order"]]))
+  expect_match(score$pitfall_notes, "no ALEX row was extracted", all = FALSE)
+})
+
+test_that("a true row of another analysis is an extra row, no numeric error", {
+  # Tecentriq IMpower130 on 2026-10-01: its primary OS row failed verification,
+  # and the exploratory one with longer follow-up was paired with the gold's
+  # primary row as a numeric error.
+  rows <- gold()
+  os <- gold_index(rows, "Tecentriq", "IMpower130", "OS")
+  extracted <- purrr::map(rows, as_extracted)
+  extracted[[os]] <- modifyList(extracted[[os]], list(
+    analysis_role = "exploratory",
+    analysis = paste(
+      "Exploratory analysis with longer follow up (median: 24.1 months)"
+    ),
+    value = "0.82", ci_low = "0.67", ci_high = "1.01"
+  ))
+  score <- score_against_gold(extracted, rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 1L)
+  # Said to be the primary analysis, the same numbers are a numeric error.
+  extracted[[os]]$analysis_role <- "primary"
+  expect_equal(score_against_gold(extracted, rows)$numeric_errors, 1L)
+  # Another analysis printing the gold's numbers still pairs with it.
+  same <- purrr::map(rows, as_extracted)
+  same[[os]]$analysis_role <- "later"
+  score <- score_against_gold(same, rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 0L)
+})
+
+test_that("rows of differently dated analyses pair only on the same numbers", {
+  # Tevimbra BGB-A317-307 on 2026-10-01: the interim analysis's T+nPC row
+  # (0.45, CI 0.32 to 0.64) was paired with the gold's final T+PC row (0.45,
+  # 0.33 to 0.62) by their equal values.
+  final <- synthetic_row(
+    trial = "BGB-A317-307", endpoint = "PFS", value = "0.45",
+    ci_low = "0.33", ci_high = "0.62",
+    analysis = "final analysis, data cut-off 30-Sep-2020"
+  )
+  interim <- modifyList(final, list(
+    analysis = paste(
+      "interim analysis (data cut-off 06-Dec-2019), T+nPC arm versus PC arm"
+    ),
+    ci_low = "0.32", ci_high = "0.64"
+  ))
+  score <- score_against_gold(list(interim), list(final))
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 1L)
+  both <- score_against_gold(list(interim, final), list(final))
+  expect_equal(both$numeric_errors, 0L)
+  expect_equal(both$missed_rows, 0L)
+  # Undated, the interim row is a numeric error of the gold's row.
+  undated <- modifyList(interim, list(analysis = "interim analysis"))
+  expect_equal(
+    score_against_gold(list(undated), list(final))$numeric_errors, 1L
+  )
+})
+
+test_that("analysis texts are read for the dates they state", {
+  expect_equal(
+    gold_analysis_dates("final analysis, data cut-off 30-Sep-2020"),
+    "2020-09-30"
+  )
+  expect_equal(
+    gold_analysis_dates("primary analysis, data cutoff Jun 14, 2021"),
+    "2021-06-14"
+  )
+  expect_equal(
+    gold_analysis_dates("updated pre-specified EFS, DCO 10 May 2024"),
+    "2024-05-10"
+  )
+  expect_equal(
+    gold_analysis_dates("primary analysis (17 January 2020), interim"),
+    "2020-01-17"
+  )
+  expect_equal(gold_analysis_dates("median follow-up 21 months"), character())
+  expect_equal(gold_analysis_dates(NULL), character())
 })
 
 test_that("a lead row that disagrees with the gold lowers lead agreement", {
@@ -780,6 +878,19 @@ test_that("a model passes with no numeric error, leads and pitfalls", {
   expect_false(gold_model_passes(bad(lead_agreement = 0.9)))
   expect_false(gold_model_passes(bad(pitfalls = c(a = TRUE, b = FALSE))))
   expect_false(gold_model_passes(bad(pitfalls = c(a = TRUE, b = NA))))
+})
+
+test_that("a pitfall not testable keeps a model from passing, said so", {
+  result <- acceptable()
+  result$score$pitfalls <- c(a = TRUE, alex_column_order = NA)
+  expect_false(gold_model_passes(result))
+  expect_equal(
+    gold_acceptance_problems(result),
+    "pitfall not testable: alex_column_order"
+  )
+  expect_equal(gold_pitfall_text(NA), "not testable")
+  expect_equal(gold_pitfall_text(TRUE), "pass")
+  expect_equal(gold_pitfall_text(FALSE), "FAIL")
 })
 
 test_that("a model that misses more than 5% of the gold rows fails", {
@@ -1152,6 +1263,138 @@ test_that("scoring a saved result offline leaves its file as it was", {
   before <- readLines(path)
   rescore_saved_gold_result(path, inputs$gold_path)
   expect_equal(readLines(path), before)
+})
+
+# Alecensa's fake answer with ALEX OS's treatment arm one its quotes do not
+# hold (the verifier blanks its arms) and ALINA's value changed (it fails).
+alecensa_answer <- function() {
+  message <- fake_message("Alecensa")
+  answer <- jsonlite::fromJSON(
+    message$content[[1]]$text, simplifyVector = FALSE
+  )
+  answer$rows[[3]]$arm_treatment <- "99.9"
+  answer$rows[[1]]$value <- "0.99"
+  message$content[[1]]$text <- jsonlite::toJSON(
+    answer, auto_unbox = TRUE, null = "null"
+  )
+  message
+}
+
+test_that("an answer keeps its raw rows; unverified arms are blanked", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  api <- fake_batch_api(list(fake_result(alecensa_answer())))
+  result <- run_gold(inputs, api)[["claude-sonnet-5-5"]]
+  expect_length(result$raw_rows, 4)
+  expect_equal(result$raw_rows[[3]]$row$arm_treatment, "99.9")
+  expect_equal(result$rows_kept, 3L)
+  expect_equal(result$rows_failed, 1L)
+  expect_equal(result$failed[[1]]$row$value, "0.99")
+  alex_os <- Filter(\(row) row$row_order == 3L, result$rows)[[1]]
+  expect_null(alex_os$arm_treatment)
+  expect_null(alex_os$arm_control)
+  expect_true("arms_not_verified" %in% unlist(alex_os$flags))
+})
+
+gold_result_file <- function(inputs) {
+  file.path(inputs$output_directory, "gold-eval-claude-sonnet-5-5.json")
+}
+
+write_saved_result <- function(saved, path) {
+  jsonlite::write_json(
+    saved, path,
+    auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null", digits = NA
+  )
+}
+
+# The saved result as an older verifier wrote it: ALEX OS failed on its arm.
+write_older_verifier <- function(path) {
+  saved <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  os <- which(purrr::map_int(saved$rows, "row_order") == 3L)
+  saved$failed <- c(saved$failed, list(list(
+    medicine = "Alecensa", trial = "ALEX (BO28984)", endpoint = "OS",
+    errors = "arm_treatment = '99.9' not in the quotes",
+    row = saved$raw_rows[[3]]$row
+  )))
+  saved$rows <- saved$rows[-os]
+  saved$rows_kept <- 2L
+  saved$rows_failed <- 2L
+  write_saved_result(saved, path)
+}
+
+reverify_saved <- function(inputs) {
+  reverify_saved_gold_result(
+    gold_result_file(inputs), inputs$gold_path, inputs$selection_path,
+    inputs$text_directory, inputs$medicines_path
+  )
+}
+
+test_that("a saved result is verified again offline, from its raw rows", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  run_gold(inputs, fake_batch_api(list(fake_result(alecensa_answer()))))
+  path <- gold_result_file(inputs)
+  write_older_verifier(path)
+  before <- readLines(path)
+  result <- reverify_saved(inputs)
+  expect_equal(result$rows_kept, 3L)
+  expect_equal(result$rows_failed, 1L)
+  expect_equal(result$calls$rows_kept, 3L)
+  expect_equal(result$calls$rows_failed, 1L)
+  expect_equal(result$failed_not_reverified, 0L)
+  expect_equal(purrr::map_int(result$rows, "row_order"), c(2L, 3L, 4L))
+  alex_os <- result$rows[[2]]
+  expect_null(alex_os$arm_treatment)
+  expect_true("arms_not_verified" %in% unlist(alex_os$flags))
+  # The file is left as it was.
+  expect_equal(readLines(path), before)
+})
+
+test_that("a result saved without raw rows keeps its failed rows as listed", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  run_gold(inputs, fake_batch_api(list(fake_result(alecensa_answer()))))
+  path <- gold_result_file(inputs)
+  saved <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  saved$raw_rows <- NULL
+  saved$failed <- purrr::map(saved$failed, \(item) item[names(item) != "row"])
+  write_saved_result(saved, path)
+  result <- reverify_saved(inputs)
+  expect_equal(result$rows_kept, 3L)
+  expect_equal(result$rows_failed, 1L)
+  expect_equal(result$failed_not_reverified, 1L)
+  expect_equal(result$failed[[1]]$trial, "ALINA (BO40336)")
+  expect_match(
+    gold_report_details(result), "saved without their row", all = FALSE
+  )
+})
+
+test_that("a rerun verifies a saved result again before scoring it", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  answer <- list(fake_result(alecensa_answer()))
+  run_gold(inputs, fake_batch_api(answer))
+  write_older_verifier(gold_result_file(inputs))
+  api <- fake_batch_api(answer)
+  result <- suppressMessages(run_gold(inputs, api))[["claude-sonnet-5-5"]]
+  expect_equal(api$calls$created, 0L)
+  expect_equal(result$rows_kept, 3L)
+  saved <- read_gold_result_file(gold_result_file(inputs))
+  expect_equal(saved$rows_kept, 3L)
+  expect_equal(saved$rows, result$rows)
+})
+
+test_that("a pitfall not testable is saved and read back as NA", {
+  directory <- withr::local_tempdir()
+  inputs <- gold_run_inputs(directory)
+  result <- run_gold(
+    inputs, fake_batch_api(list(fake_result(fake_message("Alecensa"))))
+  )[["claude-sonnet-5-5"]]
+  result$score$pitfalls[["alex_column_order"]] <- NA
+  write_gold_result(result, inputs$output_directory)
+  saved <- read_gold_result_file(gold_result_file(inputs))
+  expect_true(is.na(saved$score$pitfalls[["alex_column_order"]]))
+  expect_equal(names(saved$score$pitfalls), names(result$score$pitfalls))
 })
 
 test_that("a saved result of other medicines is not reused", {

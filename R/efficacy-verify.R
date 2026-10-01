@@ -111,8 +111,19 @@ arm_size_found <- function(n, section) {
   # Thousands printed with a space ("1 274") or a comma ("1,274").
   any(purrr::map_lgl(
     arm_size_spellings(n),
-    \(size) grepl(paste0("[nN]\\s?=\\s?", size, "\\b"), section, perl = TRUE)
+    \(size) grepl(arm_size_pattern(size), section, perl = TRUE)
   ))
+}
+
+# The arm-size notations the SmPCs print: "n=", "n =", "N = ", "(N=143)", a
+# table header's "(n = 74)" and a column's "N 247" (Alecensa's Symbol-font "="
+# is a private-use glyph, so its "n = 67" reads "n 67"). The letter stands on
+# its own and the count whole: "N 2470" and "n = 107/247" are not 247.
+arm_size_pattern <- function(size) {
+  paste0(
+    "(?<![A-Za-z0-9])[nN](?:\\s*=\\s*|\\s+)", escape_regex(size),
+    "(?![0-9]|[.,][0-9])"
+  )
 }
 
 # The same count as printed with or without a thousands separator.
@@ -177,6 +188,119 @@ quote_in_a_section <- function(quote, sections) {
   any(purrr::map_lgl(sections, \(section) grepl(quote, section, fixed = TRUE)))
 }
 
+# Words (letters and digits together: "ratioa", "Gastric02"), numbers and
+# every other character on its own: a quote read across layout lines is
+# compared token by token, whitespace aside.
+layout_tokens <- function(text) {
+  pattern <- "[\\p{L}\\p{N}]+(?:\\.[\\p{N}]+)*|[^\\s\\p{L}\\p{N}]"
+  regmatches(text, gregexpr(pattern, text, perl = TRUE))
+}
+
+# A section's lines that hold text, normalised as the section, each as its
+# tokens.
+section_line_tokens <- function(section_text) {
+  lines <- strsplit(strip_page_number_lines(section_text), "\n", fixed = TRUE)
+  lines <- normalise_spacing(unlist(lines))
+  layout_tokens(lines[nzchar(lines)])
+}
+
+# The tokens of a quote that are values (numbers, NR, NE, NA), all but a CI
+# level ("95" in "(95% CI)", a label a wrapped row can print on another line).
+quote_value_positions <- function(tokens) {
+  values <- grepl("^([0-9]+(\\.[0-9]+)?|NR|NE|NA)$", tokens)
+  after <- function(offset) c(tokens[-seq_len(offset)], rep("", offset))
+  ci_level <- after(1) == "%" &
+    grepl("^(ci|confidence)", tolower(after(2)))
+  values & !ci_level
+}
+
+# Whether the quote's tokens can be read off the window's lines: from each
+# line a run of consecutive tokens, in the line's order, the runs interleaved
+# as the quote reads them; a value only from the line `row` (NA: the quote
+# holds none).
+quote_reads_window <- function(tokens, values, lines, row) {
+  memo <- new.env(hash = TRUE)
+  read_from <- function(index, positions) {
+    if (index > length(tokens)) {
+      return(TRUE)
+    }
+    key <- paste(c(index, positions), collapse = ",")
+    known <- get0(key, envir = memo, inherits = FALSE)
+    if (!is.null(known)) {
+      return(known)
+    }
+    found <- FALSE
+    for (line in seq_along(lines)) {
+      if (values[index] && !identical(line, row)) next
+      # A line's run goes on from where it stopped, or starts anywhere.
+      next_token <- positions[line]
+      starts <- if (next_token > 0) {
+        next_token[identical(lines[[line]][next_token], tokens[index])]
+      } else {
+        which(lines[[line]] == tokens[index])
+      }
+      for (start in starts) {
+        moved <- positions
+        moved[line] <- start + 1L
+        if (read_from(index + 1L, moved)) {
+          found <- TRUE
+          break
+        }
+      }
+      if (found) break
+    }
+    assign(key, found, envir = memo)
+    found
+  }
+  read_from(1L, integer(length(lines)))
+}
+
+# Whether the line holds `values` in this order.
+holds_in_order <- function(line, values) {
+  position <- 0L
+  for (value in values) {
+    later <- which(line == value & seq_along(line) > position)
+    if (length(later) == 0) {
+      return(FALSE)
+    }
+    position <- later[1]
+  }
+  TRUE
+}
+
+# A quote the model read off a table in reading order ("Stratified hazard
+# ratio‡ (95% CI) 0.79 (0.64, 0.98)", where the layout text prints the
+# footnote mark on the line above): its tokens stand in at most three
+# consecutive lines of `line_tokens` (section_line_tokens()), as runs of
+# consecutive tokens of each line in its order, and its values all in one
+# run of one line, so no other number stands between them and no value comes
+# from another row. The other lines add only words and marks: a row label
+# wrapped onto the next line, a footnote mark printed above, column headers.
+quote_in_layout_lines <- function(quote, line_tokens) {
+  tokens <- layout_tokens(quote)[[1]]
+  if (length(tokens) == 0) {
+    return(FALSE)
+  }
+  values <- quote_value_positions(tokens)
+  rows <- if (any(values)) {
+    which(purrr::map_lgl(line_tokens, holds_in_order, values = tokens[values]))
+  } else {
+    seq_along(line_tokens)
+  }
+  for (row in rows) {
+    for (first in max(1L, row - 2L):row) {
+      window <- first:min(length(line_tokens), first + 2L)
+      lines <- line_tokens[window]
+      if (!all(tokens %in% unlist(lines))) next
+      row_in_window <- if (any(values)) row - first + 1L else NA_integer_
+      if (quote_reads_window(tokens, values, lines, row_in_window)) {
+        return(TRUE)
+      }
+    }
+  }
+  FALSE
+}
+
 # A number field held by one quote: intact, or as all its numbers (a value
 # reassembled from split table cells).
 quote_holds_number <- function(value, quote) {
@@ -194,23 +318,66 @@ contains_folded <- function(text, within) {
 
 # The comparator's column label and the control arm's values stand in one
 # quote, so arms read from the wrong column cannot pass (ALEX prints the
-# comparator first).
-comparator_label_error <- function(row, quotes) {
+# comparator first). A label in a quote with the treatment arm's values and
+# not the control's is a swap (`swap`, which rejects the row); a label in no
+# quote with the control's values is only unverified (`unverified`).
+comparator_label_check <- function(row, quotes) {
   label <- row[["comparator_column_label"]]
   control <- row[["arm_control"]]
+  treatment <- row[["arm_treatment"]]
   if (is_absent(label) || is_absent(control)) {
-    return(NULL)
+    return(list())
   }
-  together <- purrr::map_lgl(quotes, function(quote) {
-    contains_folded(label, quote) && quote_holds_number(control, quote)
-  })
-  if (any(together)) {
-    return(NULL)
+  with_label <- quotes[purrr::map_lgl(quotes, contains_folded, text = label)]
+  holds <- function(value) {
+    purrr::map_lgl(with_label, \(quote) quote_holds_number(value, quote))
   }
-  sprintf(
+  if (any(holds(control))) {
+    return(list())
+  }
+  if (!is_absent(treatment) && any(holds(treatment))) {
+    return(list(swap = sprintf(
+      paste(
+        "comparator_column_label '%s' not in a quote with arm_control '%s'",
+        "but with arm_treatment '%s' (arms swapped)"
+      ),
+      label, control, treatment
+    )))
+  }
+  list(unverified = sprintf(
     "comparator_column_label '%s' not in a quote with arm_control '%s'",
     label, control
+  ))
+}
+
+# What the row says about each arm (the values, their measure and the
+# comparator's column label): blanked together when they do not verify.
+efficacy_arm_fields <- c(
+  "arm_treatment", "arm_control", "arm_measure", "comparator_column_label"
+)
+efficacy_arm_number_fields <- c("arm_treatment", "arm_control")
+
+# The arm values in the quotes and the comparator's label with the control's
+# values: `swap` (an error), `unverified` (what did not verify) and
+# `warnings` (values reassembled from split table cells).
+check_arms <- function(row, quotes, quotes_text) {
+  checks <- purrr::map(efficacy_arm_number_fields, function(field) {
+    check_number_field(field, row[[field]], quotes_text)
+  })
+  label <- comparator_label_check(row, quotes)
+  list(
+    swap = label$swap,
+    unverified = c(unlist(purrr::map(checks, "error")), label$unverified),
+    warnings = unlist(purrr::map(checks, "warning")) %||% character()
   )
+}
+
+# The fields verify_efficacy_row() blanked (`blanked`) as not stated (NULL, as
+# the parser gives a field the model left empty), so an arm that did not
+# verify is never shown.
+without_unverified_arms <- function(row, blanked) {
+  row[blanked] <- list(NULL)
+  row
 }
 
 # Displayed text the section does not hold (case and spacing aside): the
@@ -262,17 +429,37 @@ verification_flags <- function(row, quotes, sections, indication_text) {
   names(checks)[checks]
 }
 
+# Each quote intact in a section text, else read off at most three of its
+# layout lines (quote_in_layout_lines()).
+quotes_found <- function(quotes, sections, section_text) {
+  found <- purrr::map_lgl(quotes, quote_in_a_section, sections = sections)
+  if (all(found)) {
+    return(found)
+  }
+  line_tokens <- purrr::map(section_text, section_line_tokens)
+  found[!found] <- purrr::map_lgl(quotes[!found], function(quote) {
+    any(purrr::map_lgl(line_tokens, quote_in_layout_lines, quote = quote))
+  })
+  found
+}
+
 # `section_text` is one or more renderings of the same section (layout and
-# flow text): a quote passes when it occurs intact in any of them.
+# flow text): a quote passes when it occurs intact in any of them, or read
+# across at most three of its layout lines (quote_in_layout_lines()).
 # `indication_text` is the medicine's section 4.1, for the indication check
-# (none without it).
+# (none without it). When everything else verifies but the arms do not (arm
+# values not in the quotes, or the comparator's label in no quote with the
+# control's values), the row is kept without them: `blanked` names the arm
+# fields to blank (without_unverified_arms()), and the flag
+# arms_not_verified hides it until reviewed. A label quoted with the treatment
+# arm's values is a swap and rejects the row.
 verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   sections <- purrr::map_chr(section_text, normalise_efficacy_text)
   all_sections <- paste(sections, collapse = " ")
   row <- normalise_number_fields(row)
   quotes <- purrr::map_chr(row[["quotes"]], normalise_efficacy_text)
   quotes <- quotes[nzchar(quotes)]
-  found <- purrr::map_lgl(quotes, quote_in_a_section, sections = sections)
+  found <- quotes_found(quotes, sections, section_text)
   errors <- sprintf("quote not in the text: %s", substr(quotes[!found], 1, 80))
   if (length(quotes) == 0) {
     errors <- "no quote: every row needs at least one verbatim quote"
@@ -282,7 +469,7 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   }
   warnings <- character()
   quotes_text <- paste(quotes, collapse = " || ")
-  for (field in efficacy_number_fields) {
+  for (field in setdiff(efficacy_number_fields, efficacy_arm_number_fields)) {
     check <- check_number_field(field, row[[field]], quotes_text)
     errors <- c(errors, check$error)
     warnings <- c(warnings, check$warning)
@@ -293,7 +480,8 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
       row[["value"]], row[["ci_low"]], row[["ci_high"]]
     ))
   }
-  errors <- c(errors, comparator_label_error(row, quotes))
+  arms <- check_arms(row, quotes, quotes_text)
+  errors <- c(errors, arms$swap)
   for (field in c("n_treatment", "n_control")) {
     if (!arm_size_found(row[[field]], all_sections)) {
       errors <- c(
@@ -309,16 +497,28 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
       row[["trial"]], paste(missing_parts, collapse = ", ")
     ))
   }
+  blanked <- character()
+  if (length(arms$unverified) > 0 && length(errors) == 0) {
+    blanked <- efficacy_arm_fields[!purrr::map_lgl(
+      efficacy_arm_fields, \(field) is_absent(row[[field]])
+    )]
+    row <- without_unverified_arms(row, blanked)
+  } else {
+    errors <- c(errors, arms$unverified)
+    warnings <- c(warnings, arms$warnings)
+  }
   status <- dplyr::case_when(
     length(errors) > 0 ~ "failed",
     length(warnings) > 0 ~ "reassembled",
     .default = "exact"
   )
+  flags <- verification_flags(row, quotes, sections, indication_text)
   list(
     status = status,
     errors = errors,
     warnings = warnings,
-    flags = verification_flags(row, quotes, sections, indication_text)
+    flags = c(flags, if (length(blanked) > 0) "arms_not_verified"),
+    blanked = blanked
   )
 }
 

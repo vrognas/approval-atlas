@@ -278,9 +278,17 @@ test_that("the comparator's column label shares a quote with its arm", {
     paste(result$errors, collapse = " "),
     "comparator_column_label 'crizotinib' not in a quote with arm_control"
   )
+  expect_match(paste(result$errors, collapse = " "), "arms swapped")
+  # A label in no quote is unverified, not a swap: the arms are blanked.
   invented <- row
   invented$comparator_column_label <- "Docetaxel"
-  expect_equal(verify_efficacy_row(invented, section)$status, "failed")
+  result <- verify_efficacy_row(invented, section)
+  expect_equal(result$status, "exact")
+  expect_setequal(
+    result$blanked,
+    c("arm_treatment", "arm_control", "comparator_column_label")
+  )
+  expect_true("arms_not_verified" %in% result$flags)
 })
 
 test_that("a label without control values is only looked up in the text", {
@@ -414,4 +422,242 @@ test_that("a three-digit number is not found inside a thousands number", {
   expect_equal(
     verify_efficacy_row(row, "234 patients, 1,234 in all")$status, "exact"
   )
+})
+
+read_excerpt <- function(name) {
+  read_efficacy_fixture(paste0("excerpt-", name, ".layout.txt"))
+}
+
+# The arm sizes the 2026-10-01 gold evaluation rejected, in the notations
+# their SmPCs print (verbatim excerpts of the pilot's section texts).
+test_that("arm sizes are found in the notations the SmPCs print", {
+  found <- function(n, text) {
+    arm_size_found(n, normalise_efficacy_text(text))
+  }
+  # Alecensa NP28761 and NP28673: "n = 67" with a Symbol-font "=", a
+  # private-use glyph the text drops ("n 67").
+  alecensa <- read_efficacy_section("Alecensa")[1]
+  for (n in c(67L, 35L, 87L, 62L, 122L, 138L)) {
+    expect_true(found(n, alecensa), info = n)
+  }
+  # Retsevmo LIBRETTO-001: a column header "N" over its count ("N 247").
+  retsevmo <- read_excerpt("retsevmo-libretto-001")
+  expect_true(found(69L, retsevmo))
+  expect_true(found(247L, retsevmo))
+  # Tagrisso LAURA "(N=143)", Tevimbra "(N = 120)", a header's "(n = 74)".
+  expect_true(found(143L, read_excerpt("tagrisso-laura")))
+  expect_true(found(120L, read_excerpt("tevimbra-307")))
+  expect_true(found(74L, "Pemetrexed + Platinum (n = 74)"))
+  expect_true(found(74L, "N=74"))
+})
+
+test_that("an arm size stands whole, after n or N on its own", {
+  found <- function(n, text) arm_size_found(n, text)
+  expect_false(found(247L, "N 2470"))
+  expect_false(found(247L, "N 247.5"))
+  expect_false(found(247L, "N = 1,247"))
+  expect_false(found(247L, "43.3% (n = 107/247)"))
+  expect_false(found(247L, "an 247"))
+  expect_false(found(247L, "N2 247"))
+  expect_true(found(247L, "N 247, median"))
+  expect_true(found(1274L, "N 1,274"))
+})
+
+test_that("counts the SmPCs do not print as arm sizes stay rejected", {
+  found <- function(n, text) {
+    arm_size_found(n, normalise_efficacy_text(text))
+  }
+  # Tagrisso AURAex and AURA2: "In the 411 pre-treated ... patients".
+  expect_false(found(411L, read_excerpt("tagrisso-aura")))
+  expect_false(found(50L, read_excerpt("tagrisso-aura")))
+  # Imfinzi PACIFIC: only a forest plot's "Events/N" denominators, "103/212".
+  expect_false(found(212L, read_excerpt("imfinzi-pacific")))
+  # Lumykras CodeBreaK 100 DOR: "Number of responders 46" (N = 124).
+  lumykras <- read_efficacy_section("Lumykras")[1]
+  expect_false(found(46L, lumykras))
+  expect_true(found(124L, lumykras))
+})
+
+quote_found <- function(quote, text) {
+  quotes_found(
+    normalise_efficacy_text(quote), normalise_efficacy_text(text), text
+  )
+}
+
+# Quotes the model read off tables in reading order, which the layout text
+# prints across lines (the 2026-10-01 gold evaluation rejected them).
+test_that("a table row quoted in reading order is found in its layout lines", {
+  tecentriq <- read_efficacy_section("Tecentriq")[1]
+  # IMpower130 OS: the footnote mark sits on the line above the row.
+  expect_true(quote_found(
+    "Stratified hazard ratio‡ (95% CI) 0.79 (0.64, 0.98)", tecentriq
+  ))
+  # MATTERHORN EFS: the footnote letter "c" on the line above.
+  expect_true(quote_found(
+    "HR (95% CI)c 0.71 (0.58, 0.86)", read_excerpt("imfinzi-matterhorn")
+  ))
+  # LAURA: the arms' names, a row label, then their sizes, on three lines.
+  expect_true(quote_found(
+    "TAGRISSO Placebo (N=143) (N=73)", read_excerpt("tagrisso-laura")
+  ))
+  # BGB-A317-307: the row label's "CI)" wrapped onto the next line.
+  expect_true(quote_found(
+    paste(
+      "Stratified hazard ratioa (95% CI) 0.45 (0.33, 0.62)",
+      "0.43 (0.31, 0.60) -"
+    ),
+    read_excerpt("tevimbra-307")
+  ))
+  # Runs of spaces between cells and spaces around "," do not matter.
+  expect_true(quote_found(
+    "Stratified hazard ratio (95 % CI) 0.79 (0.64,0.98)", tecentriq
+  ))
+})
+
+test_that("a quote whose numbers come from two rows still fails", {
+  tecentriq <- read_efficacy_section("Tecentriq")[1]
+  # IMpower130 OS: the HR row's label and value with the medians' CI row.
+  expect_false(quote_found(
+    "Stratified hazard ratio (95% CI) 0.79 (16.0, 21.2)", tecentriq
+  ))
+  # The treatment arm's median with its CI from the next row, skipping the
+  # control arm's median.
+  expect_false(quote_found(
+    "Median time to events (months) 18.6 (16.0, 21.2)", tecentriq
+  ))
+  tevimbra <- read_excerpt("tevimbra-307")
+  # One row's cells out of their order, or a value with another column's CI.
+  expect_false(quote_found(
+    "Stratified hazard ratioa (95% CI) 0.43 (0.31, 0.60) 0.45 (0.33, 0.62)",
+    tevimbra
+  ))
+  expect_false(quote_found(
+    "Stratified hazard ratioa (95% CI) 0.43 (0.33, 0.62)", tevimbra
+  ))
+  # LAURA: the header and the PFS hazard ratio, five lines apart.
+  expect_false(quote_found(
+    paste(
+      "TAGRISSO Placebo (N=143) (N=73)",
+      "HR (95% CI); P-value 0.16 (0.10, 0.24); P<0.001"
+    ),
+    read_excerpt("tagrisso-laura")
+  ))
+})
+
+test_that("a quote stitched across more than three lines still fails", {
+  # MARIPOSA OS as the model quoted it (its first 80 characters, the rest as
+  # the table prints it): the header with the OS rows, skipping the PFS rows.
+  quote <- paste(
+    "Rybrevant + lazertinib Osimertinib (N=429) (N=429) Overall survival",
+    "(OS) Number of events 173 (40%) 217 (51%) Median, months (95% CI)",
+    "NE (42.9, NE) 36.7 (33.4, 41.0) Hazard Ratio (95% CI); p-value",
+    "0.75 (0.61, 0.92); p=0.0048"
+  )
+  rybrevant <- read_efficacy_section("Rybrevant")[1]
+  expect_false(quote_found(quote, rybrevant))
+  # Its hazard ratio row alone is verbatim.
+  expect_true(quote_found(
+    "Hazard Ratio (95% CI); p-value 0.75 (0.61, 0.92); p=0.0048", rybrevant
+  ))
+})
+
+test_that("a row read across layout lines verifies, the CI rule on top", {
+  text <- read_excerpt("imfinzi-matterhorn")
+  row <- list(
+    trial = "MATTERHORN", quotes = "HR (95% CI)c 0.71 (0.58, 0.86)",
+    value = "0.71", ci_low = "0.58", ci_high = "0.86", n_treatment = 474L,
+    n_control = 474L
+  )
+  result <- verify_efficacy_row(row, text)
+  expect_equal(result$status, "exact")
+  expect_equal(result$errors, character())
+  row$ci_low <- "0.63"
+  expect_equal(verify_efficacy_row(row, text)$status, "failed")
+  # Value and CI apart in two quotes, each found: the CI rule rejects it.
+  row$ci_low <- "0.58"
+  row$quotes <- c("HR (95% CI)c 0.71", "(0.58, 0.86)")
+  result <- verify_efficacy_row(row, text)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "value and CI not in one quote", all = FALSE)
+})
+
+# Tecentriq IMpower130's OS row as the 2026-10-01 evaluation answered it: the
+# medians as arm values, which its HR quote does not hold.
+impower130_os <- function(...) {
+  row <- list(
+    trial = "IMpower130", quotes = c(
+      "Stratified hazard ratio‡ (95% CI) 0.79 (0.64, 0.98)",
+      "Co-primary endpoints OS n=451 n=228"
+    ),
+    value = "0.79", ci_low = "0.64", ci_high = "0.98", n_treatment = 451L,
+    n_control = 228L, comparator = "nab-paclitaxel and carboplatin",
+    comparator_column_label = "Nab-paclitaxel + Carboplatin",
+    arm_treatment = "18.6", arm_control = "13.9",
+    arm_measure = "median months"
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  row
+}
+
+test_that("arms that do not verify are blanked and flagged, not rejected", {
+  text <- read_efficacy_section("Tecentriq")
+  result <- verify_efficacy_row(impower130_os(), text)
+  expect_equal(result$status, "exact")
+  expect_setequal(result$blanked, efficacy_arm_fields)
+  expect_true("arms_not_verified" %in% result$flags)
+  kept <- without_unverified_arms(impower130_os(), result$blanked)
+  for (field in efficacy_arm_fields) {
+    expect_null(kept[[field]], info = field)
+  }
+  expect_true(all(efficacy_arm_fields %in% names(kept)))
+  expect_equal(kept$value, "0.79")
+  expect_equal(kept$ci_low, "0.64")
+  expect_equal(kept$trial, "IMpower130")
+  # The arms quoted too, and no label: nothing is blanked.
+  medians <- "Median time to events (months) 18.6 13.9"
+  verified <- impower130_os(quotes = c(impower130_os()$quotes, medians))
+  verified$comparator_column_label <- NULL
+  result <- verify_efficacy_row(verified, text)
+  expect_equal(result$blanked, character())
+  expect_false("arms_not_verified" %in% result$flags)
+})
+
+test_that("arms are not what rejects a row whose value fails", {
+  text <- read_efficacy_section("Tecentriq")
+  result <- verify_efficacy_row(impower130_os(value = "0.80"), text)
+  expect_equal(result$status, "failed")
+  expect_equal(result$blanked, character())
+  expect_match(result$errors, "value = '0.80'", all = FALSE)
+  expect_match(result$errors, "arm_treatment = '18.6'", all = FALSE)
+})
+
+test_that("a swap is rejected even when everything else verifies", {
+  section <- paste(
+    "In ALEX, HR 0.47 (0.34, 0.65). Alecensa median NR.",
+    "Crizotinib median 11.1 months."
+  )
+  row <- list(
+    quotes = c("HR 0.47 (0.34, 0.65).", "Crizotinib median 11.1 months."),
+    value = "0.47", ci_low = "0.34", ci_high = "0.65",
+    comparator = "crizotinib", comparator_column_label = "Crizotinib",
+    arm_treatment = "11.1", arm_control = "NR"
+  )
+  result <- verify_efficacy_row(row, section)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "arms swapped", all = FALSE)
+  expect_equal(result$blanked, character())
+})
+
+test_that("an arm value reassembled from cells is no warning once blanked", {
+  section <- "HR 0.5 (0.4, 0.6) Median 7.0 5.5 95% CI (6.2, 7.3) (4.4, 5.9)"
+  row <- list(
+    quotes = c("HR 0.5 (0.4, 0.6)", "Median 7.0 5.5 95% CI (6.2, 7.3)"),
+    value = "0.5", ci_low = "0.4", ci_high = "0.6",
+    arm_treatment = "7.0 (6.2, 7.3)", arm_control = "5.5 (4.4, 5.9)"
+  )
+  result <- verify_efficacy_row(row, section)
+  expect_equal(result$status, "exact")
+  expect_equal(result$warnings, character())
+  expect_setequal(result$blanked, c("arm_treatment", "arm_control"))
 })
