@@ -2356,9 +2356,20 @@ input::placeholder {
   margin: 0;
 }
 
+/* At least 24px tall everywhere (bug hunt 2026-10-01: 21px), 44px on phones and touch screens (a
+   phone in landscape, 844px wide, has no phone rules). */
 .preview-tab-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   font-size: 0.875rem;
   font-weight: 500;
+}
+
+@media (pointer: coarse) {
+  .preview-tab-link {
+    min-height: 44px;
+  }
 }
 
 .preview-list {
@@ -2395,11 +2406,16 @@ input::placeholder {
   flex: none;
 }
 
-/* The row gives the 44px height on phones: no taller hit area of its own (the phone rule for
-   holder displays' company links would make a wrapped name 66px, over its neighbours). */
-.preview-row a.company-link {
+/* The row's link fills its row (bug hunt 2026-10-01: a 20px name in a 44px row, so a tap under
+   "Novartis" opened the next row's Intas): a block as wide as the label column, padded to the row's
+   32px (44px on phones) for a one-line name, a wrapped name's row as much taller; no negative
+   margin, so it never reaches over its neighbours (the holder displays' phone rule for company
+   links would). */
+.preview-row .preview-label > a {
+  display: block;
+  flex: 1 1 auto;
   margin: 0;
-  padding: 0;
+  padding: 6px 0;
 }
 
 .preview-bar {
@@ -2432,9 +2448,11 @@ input::placeholder {
     min-height: 44px;
   }
 
+  .preview-row .preview-label > a {
+    padding: 12px 0;
+  }
+
   .preview-tab-link {
-    display: inline-flex;
-    align-items: center;
     min-height: 44px;
   }
 }
@@ -6195,8 +6213,12 @@ details > summary {
   margin: 0;
 }
 
+/* At least 24px tall (bug hunt 2026-10-01: 21px), its text where it was: the padding within its 4px
+   gap above and none below. 44px on phones (below). */
 .block-indication .indication > summary {
   margin-top: 4px;
+  margin-block: max(0px, 4px - (24px - 1lh) / 2) min(0px, (1lh - 24px) / 2);
+  padding-block: max(0px, (24px - 1lh) / 2);
   color: var(--link);
   font-size: 0.875rem;
   font-weight: 400;
@@ -6749,6 +6771,37 @@ mark {
     margin-block: -2px;
     padding-block: max(0px, (24px - 1lh) / 2);
     margin-block: min(0px, (1lh - 24px) / 2);
+  }
+
+  /* The company page's protection list (bug hunt 2026-10-01: its medicine links were 21px tall, a
+     year's links side by side 8px apart): each link 44px tall, so each line of the list is 44px,
+     its years and commas centred on it. And the links of a never-authorized medicine's Documents
+     block ("EMA medicine page" was 21px): 44px rows. Real heights, as the lines above and below
+     hold other links (a negative margin would reach over them). */
+  :is(.pc-company-list, .block-documents .doc-list) a {
+    display: inline-block;
+    padding-block: 11.5px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+  }
+
+  .pc-company-list > li + li,
+  .block-documents .doc-list > li {
+    margin: 0;
+  }
+
+  /* "Show full indication": 44px tall (it was 21px); it starts where its 4px gap did, the text 7.5px
+     lower, and its lower 11.5px lies in the next part's 12px top margin (the full text's, the
+     therapeutic areas', the pivotal results' line's). */
+  .block-indication .indication > summary {
+    margin-block: 0 -11.5px;
+    margin-block: 0 min(0px, (1lh - 44px) / 2);
+    padding-block: 11.5px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+  }
+
+  .block-indication .indication > p,
+  .block-indication .indication + .block-facts {
+    margin-top: 12px;
   }
 
   /* Branch chips: the button's transparent rim around its fill makes the hit area 44px tall (the
