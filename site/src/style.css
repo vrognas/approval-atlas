@@ -2130,19 +2130,36 @@ input::placeholder {
   background: var(--accent);
 }
 
-/* Cards: surface, hairline, no shadow. */
-.chart-card {
-  margin: 24px 0;
-  padding: 24px;
-  border: 1px solid var(--grid);
-  border-radius: 12px;
-  background: var(--surface);
+/* One text inset per kind of framed region (design sweep 2026-10-01, A1: the page had 137, 141 and
+   145px insets at 1440 and 31, 33 and 37px on one phone card): --card-pad for the dashboard's cards
+   (.chart-card, .table-card), --card-pad-compact for every frame inside a lookup card (the medicine
+   card's blocks, More details' summary and sections, .card-section, the result tables), whose phone
+   values are the blocks' own (chosen for the first screen). */
+:root {
+  --card-pad: 24px;
+  --card-pad-compact: 16px;
 }
 
 @media (max-width: 720px) {
-  .chart-card {
-    padding: 16px;
+  :root {
+    --card-pad: 16px;
+    --card-pad-compact: 14px;
   }
+}
+
+@media (max-width: 359px) {
+  :root {
+    --card-pad-compact: 12px;
+  }
+}
+
+/* Cards: surface, hairline, no shadow. */
+.chart-card {
+  margin: 24px 0;
+  padding: var(--card-pad);
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
 }
 
 .card-head {
@@ -3715,19 +3732,20 @@ table.conditions-table {
 /* Medicines table: a card whose table runs edge to edge; a size container, so its rows stack when
    the card is narrow (phones; below). */
 .table-card {
-  padding: 20px 0 16px;
+  padding: var(--card-pad) 0 16px;
   container-type: inline-size;
 }
 
-/* The table's caption, above the scroll area so a wide table cannot cut it off. */
+/* The table's caption, above the scroll area so a wide table cannot cut it off. Head, caption,
+   "Show next" and the rows on the other cards' text edge (--card-pad; A1). */
 .table-caption {
-  margin: 0 20px 12px;
+  margin: 0 var(--card-pad) 12px;
   color: var(--ink-secondary);
   font-size: 0.875rem;
 }
 
 .table-card > .card-head {
-  margin: 0 20px 8px;
+  margin: 0 var(--card-pad) 8px;
 }
 
 .table-card > .card-head h2 {
@@ -3735,7 +3753,11 @@ table.conditions-table {
 }
 
 .table-card > .more {
-  margin: 12px 20px 0;
+  margin: 12px var(--card-pad) 0;
+}
+
+#medicines-table :is(th, td):last-child {
+  padding-right: var(--card-pad);
 }
 
 /* Positioned, so visually hidden (absolute) text in cells scrolls with the table instead of
@@ -3755,9 +3777,9 @@ table.conditions-table {
   }
 
   /* The indication under its medicine starts where the Medicine column's text does (the dot column's
-     14px and 24px, then the cell's 12px). */
+     --card-pad less 6px and its 24px, then the cell's 12px: 54px). */
   #medicines-table tr.indication > td {
-    padding-left: 50px;
+    padding-left: calc(var(--card-pad) + 30px);
   }
 }
 
@@ -3795,7 +3817,7 @@ table.conditions-table {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    padding: 12px 16px;
+    padding: 12px var(--card-pad);
   }
 
   #medicines-table tr.indication {
@@ -4053,17 +4075,19 @@ td.status-cell {
 }
 
 /* The medicines table's status dot column (owner decision 2026-09-30; table.js renderStatusDot()):
-   as narrow as its dot, the mark in line with the caption's text (14px, then the carrier's 6px), so
-   the first page's table is 2px wider at min-content than with "Approved · Status" (1,020px against
-   1,018px). The dot's 24px carrier (WCAG 2.5.8) is centred on the medicine name's first line (10px
-   down, the name's 20px line 12px down); its 12px mark is the status's colour (statusColor(), set by
-   table.js) in a shape per status kind (badges.js statusShape()), drawn in currentColor, so forced
-   colors keep the shape in the text colour. The short label shows on phones only (below). */
+   as narrow as its dot, the mark in line with the caption's text (--card-pad less the carrier's 6px:
+   18px since the design sweep's A1, 2026-10-01; 14px against the caption's 20px before), so the
+   first page's table is 2px wider at min-content than with "Approved · Status" (1,020px against
+   1,018px; 1,028px with the card's 24px insets). The dot's 24px carrier (WCAG 2.5.8) is centred on
+   the medicine name's first line (10px down, the name's 20px line 12px down); its 12px mark is the
+   status's colour (statusColor(), set by table.js) in a shape per status kind (badges.js
+   statusShape()), drawn in currentColor, so forced colors keep the shape in the text colour. The
+   short label shows on phones only (below). */
 th.status-dot-head,
 td.status-dot-cell {
   width: 1px;
   padding-right: 0;
-  padding-left: 14px;
+  padding-left: calc(var(--card-pad) - 6px);
 }
 
 td.status-dot-cell {
@@ -5559,7 +5583,7 @@ table.activity {
 /* Step 2 (#2): an empty indication-text search says why. */
 .empty-state {
   margin: 8px 0 16px;
-  padding: 12px 16px;
+  padding: 12px var(--card-pad-compact);
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5617,7 +5641,7 @@ table.activity {
 
 .card-section {
   margin: 16px 0;
-  padding: 16px 20px;
+  padding: 16px var(--card-pad-compact);
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5661,7 +5685,7 @@ table.activity {
 
 .card-block {
   min-width: 0;
-  padding: 14px 16px 16px;
+  padding: 14px var(--card-pad-compact) 16px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5813,7 +5837,7 @@ table.activity {
 }
 
 .more-details > summary {
-  padding: 12px 16px;
+  padding: 12px var(--card-pad-compact);
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5848,7 +5872,7 @@ table.activity {
   }
 
   .card-block {
-    padding: 10px 14px 12px;
+    padding: 10px var(--card-pad-compact) 12px;
   }
 
   .card .block-title {
@@ -5948,7 +5972,7 @@ table.activity {
   }
 
   .card-block {
-    padding: 8px 12px 10px;
+    padding: 8px var(--card-pad-compact) 10px;
   }
 
   .card .block-title {
@@ -6417,12 +6441,12 @@ details > summary {
 }
 
 .result-table :is(th, td):first-child {
-  padding-left: 16px;
+  padding-left: var(--card-pad-compact);
   overflow-wrap: anywhere;
 }
 
 .result-table :is(th, td):last-child {
-  padding-right: 16px;
+  padding-right: var(--card-pad-compact);
 }
 
 .result-table td.status-cell {
@@ -6490,7 +6514,7 @@ details > summary {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    padding: 12px 16px;
+    padding: 12px var(--card-pad-compact);
     border-bottom: 1px solid var(--grid);
   }
 
@@ -6568,7 +6592,7 @@ details > summary {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    padding: 12px 16px;
+    padding: 12px var(--card-pad-compact);
     border-bottom: 1px solid var(--grid);
   }
 
