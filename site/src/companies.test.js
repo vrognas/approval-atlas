@@ -14,6 +14,7 @@ import {
   suggestCompanies,
   toggleCompany,
 } from "./companies.js";
+import { HOLDER_NAME_FIXES, holderName } from "./labels.js";
 
 // Companies part 2 (user decisions 2026-09-28): group › company › EMA holder name, the medicine's
 // EMA holder name always kept. Rows shaped as companies.json and ema_medicine_companies.json.
@@ -528,6 +529,28 @@ test("company filter labels: an EMA holder name is named as one (the sentence's 
   assert.equal(companies.selectionName(["g.galenus/c.galenus/Roche Registration Ltd.", "g.roche/c.roche/Roche Registration Ltd."]), "Roche Registration Ltd. (EMA holder name)");
 });
 
+// Design sweep 2026-10-01 (C8): EMA's file spells Primavax's holder "Pasteur Mà¨rieux MSD", which the
+// search showed as "matches “Pasteur Mà¨rieux MSD”". Shown as the company spelled it everywhere a
+// holder name reaches (labels.js holderName()); the rows given stay as they were.
+test("a holder name with a broken encoding in EMA's file shows as the company spelled it", () => {
+  const [bad, good] = [...HOLDER_NAME_FIXES][0];
+  assert.equal(holderName(bad), good);
+  assert.equal(holderName("Roche Registration GmbH"), "Roche Registration GmbH");
+  assert.equal(holderName(null), null);
+  const rows = [
+    group("g.spmsd", "Sanofi Pasteur MSD, SNC", "SPM", { monogram_source: "derived", member_holders: [bad], ownership: [{ holder: bad, note: "A note", evidence_url: "https://example.org/" }] }),
+    company("c.spmsd", "Sanofi Pasteur MSD, SNC", "g.spmsd", { member_holders: [bad, "Sanofi Pasteur MSD, SNC"] }),
+  ];
+  const fixed = buildCompanies(rows, [medicine("P1", bad, "c.spmsd", "g.spmsd")]);
+  assert.equal(fixed.entry("P1").holder, good);
+  assert.ok(fixed.values().includes(good));
+  assert.ok(!fixed.values().includes(bad));
+  assert.deepEqual(fixed.row("c.spmsd").member_holders, [good, "Sanofi Pasteur MSD, SNC"]);
+  assert.deepEqual(fixed.ownership("g.spmsd").flatMap((item) => item.holders), [good]);
+  assert.doesNotMatch(JSON.stringify(suggestCompanies(fixed, "pasteur")), /Mà¨rieux/);
+  assert.equal(rows[1].member_holders[0], bad);
+});
+
 // The data files as the pipeline writes them (skipped before a run): every medicine with a group is
 // in the tree, each value selected loads as a row that shows it, and no row count exceeds its parent's.
 const dataDir = new URL("../public/data/", import.meta.url);
@@ -549,7 +572,8 @@ test(
     assert.ok(unshown.every((value) => value === "Not stated"), unshown.join(", "));
     // Every row selects exactly the medicines it counts (a value shown under several rows by the
     // row's path), and a value loads as rows holding exactly its medicines.
-    const products = medicines.map((row) => ({ ema_product_number: row.ema_product_number, mah: row.holder_ema ?? "Not stated", company_key: row.company_key, group_key: row.group_key }));
+    // The holder name as products read it (approvals.js buildProducts(): holderName(), C8).
+    const products = medicines.map((row) => ({ ema_product_number: row.ema_product_number, mah: holderName(row.holder_ema) ?? "Not stated", company_key: row.company_key, group_key: row.group_key }));
     const rowKeys = (parent) => real.rows(parent).flatMap((key) => [key, ...rowKeys(key)]);
     const matching = (value) => products.filter((product) => matchesCompany(value, product));
     const wrong = rowKeys(null).filter((key) => matching(real.rowValue(key)).length !== counts.get(key));
@@ -561,5 +585,9 @@ test(
     assert.deepEqual(rowKeys(null).filter((key) => real.rowShows(key) === "Not stated"), []);
     const groups = rows.filter((row) => row.kind === "group");
     assert.equal(new Set(groups.map((row) => row.monogram)).size, groups.length);
+    // Every holder name labels.js fixes is still in EMA's data (C8), and none is shown as EMA spells it.
+    const holders = new Set(medicines.map((row) => row.holder_ema));
+    assert.deepEqual([...HOLDER_NAME_FIXES.keys()].filter((name) => !holders.has(name)), []);
+    assert.deepEqual(real.values().filter((value) => HOLDER_NAME_FIXES.has(value)), []);
   },
 );

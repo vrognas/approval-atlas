@@ -11,7 +11,7 @@
 // row under it when it has holder rows). Filter values (state.mah): group keys, company keys and
 // EMA holder names (older links carry those), and, for a row whose value also shows elsewhere, the
 // row's path, so a row selects exactly the medicines it counts; combined with OR. No DOM.
-import { NOT_STATED, UI } from "./labels.js";
+import { NOT_STATED, UI, holderName } from "./labels.js";
 import { MAX_SUGGESTIONS, MIN_QUERY, foldSearchText, matchesWords, queryWords, searchWords } from "./search.js";
 
 // Group and company keys are id-safe slugs ("g.<slug>", "c.<slug>"), so "/" only separates a
@@ -55,9 +55,24 @@ function byFrequency(values) {
 
 const distinct = (values) => [...new Set(values)];
 
-// companyRows: companies.json; medicineRows: ema_medicine_companies.json. isAuthorized(number):
-// the medicine counts as authorized (the search's counts).
-export function buildCompanies(companyRows, medicineRows, { isAuthorized = () => false } = {}) {
+// The fields of a companies.json and an ema_medicine_companies.json row that hold EMA holder names,
+// and a row with them as shown (holderName()); the fields a row lacks stay absent.
+const shownList = (list) => list?.map(holderName);
+const COMPANY_NAME_FIELDS = {
+  member_holders: shownList,
+  original_holders: shownList,
+  ownership: (items) => items?.map((item) => ({ ...item, holder: holderName(item.holder) })),
+};
+const MEDICINE_NAME_FIELDS = { holder_ema: holderName, holder_register: holderName, holder_used: holderName };
+const shownNames = (row, fields) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, fields[key] ? fields[key](value) : value]));
+
+// companyFile: companies.json; medicineFile: ema_medicine_companies.json. isAuthorized(number):
+// the medicine counts as authorized (the search's counts). EMA's holder names as the site shows
+// them (labels.js holderName(): a broken encoding fixed; design sweep 2026-10-01, C8), as
+// approvals.js buildProducts() reads a medicine's, so filter values and tree rows agree.
+export function buildCompanies(companyFile, medicineFile, { isAuthorized = () => false } = {}) {
+  const companyRows = companyFile.map((row) => shownNames(row, COMPANY_NAME_FIELDS));
+  const medicineRows = medicineFile.map((row) => shownNames(row, MEDICINE_NAME_FIELDS));
   const rows = new Map(companyRows.map((row) => [row.key, row]));
   const byProduct = new Map(medicineRows.map((row) => [row.ema_product_number, row]));
   // group -> company -> EMA holder name (null: EMA names none) -> product numbers.

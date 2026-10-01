@@ -37,6 +37,14 @@ export function statusLabel(status) {
   return STATUS_LABELS[status] ?? status;
 }
 
+// EMA's file spells a holder name with a broken character encoding (design sweep 2026-10-01, C8:
+// Primavax's holder, which the search showed as "matches “Pasteur Mà¨rieux MSD”"): shown as the
+// company spelled it. The data files keep EMA's text; a test checks each is still in them.
+export const HOLDER_NAME_FIXES = new Map([["Pasteur Mà¨rieux MSD", "Pasteur Mérieux MSD"]]);
+export function holderName(name) {
+  return HOLDER_NAME_FIXES.get(name) ?? name;
+}
+
 // A status with EMA's opinion when that opinion was negative (step 2, #11: not a pending one), for
 // the search's meta line and the medicine card's Status block; opinion: ema_medicines
 // opinion_status, null until that file has loaded.

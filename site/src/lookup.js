@@ -24,6 +24,7 @@ import {
   atcOriginFlag,
   atcOriginText,
   formatDate,
+  holderName,
   indicationLead,
   statusDateLine,
   statusKind,
@@ -363,7 +364,7 @@ export function createLookup(panel, {
     const companies = need("companies");
     const entry = ready(companies) ? companies.entry(number) : null;
     if (entry) return holderDisplay(entry, { link: companyLink });
-    return ready(medicines) ? medicines.get(number)?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : null;
+    return ready(medicines) ? holderName(medicines.get(number)?.marketing_authorisation_developer_applicant_holder) ?? NOT_STATED : null;
   }
 
   // A provenance line: the note, then a link to its evidence and, for a sponsor renamed since
@@ -1121,7 +1122,7 @@ export function createLookup(panel, {
     const holderText = (number) => {
       const entry = ready(companies) ? companies.entry(number) : null;
       if (entry?.group) return UI.companies.tipHolder(entry.group.name, entry.holder);
-      return ready(medicines) ? medicines.get(number)?.marketing_authorisation_developer_applicant_holder ?? null : null;
+      return ready(medicines) ? holderName(medicines.get(number)?.marketing_authorisation_developer_applicant_holder) ?? null : null;
     };
     const items = rows.map((row) => ({
       id: row.ema_product_number,

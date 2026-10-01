@@ -1,7 +1,7 @@
 // Pure data helpers: no DOM, no D3, so they run under node:test.
 import { buildAreaTree } from "./areas.js";
 import { atcCode, atcPrefixes } from "./atc.js";
-import { NOT_STATED } from "./labels.js";
+import { NOT_STATED, holderName } from "./labels.js";
 
 export const MEDICINE_TYPES = ["Advanced therapy", "Biosimilar", "Generic", "Other"];
 
@@ -79,8 +79,9 @@ export function buildProducts(medicines, {
     const modalities = modalitiesByProduct.get(medicine.ema_product_number) ?? [];
     return {
       ...medicine,
-      mah: medicine.marketing_authorisation_developer_applicant_holder ?? NOT_STATED,
-      holder_ema: medicine.marketing_authorisation_developer_applicant_holder ?? null,
+      // EMA's holder name as shown (holderName(): a broken encoding fixed, C8), as companies.js reads it.
+      mah: holderName(medicine.marketing_authorisation_developer_applicant_holder) ?? NOT_STATED,
+      holder_ema: holderName(medicine.marketing_authorisation_developer_applicant_holder) ?? null,
       holder_register: company?.holder_register ?? null,
       holder_basis: company?.holder_basis ?? null,
       company_key: company?.company_key ?? null,
