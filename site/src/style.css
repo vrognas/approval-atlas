@@ -2418,6 +2418,25 @@ input::placeholder {
   padding: 6px 0;
 }
 
+/* A company row's badge is inside its link (overview-previews.js labelOf(); bug hunt 2026-10-01
+   fix-up: a tap on the badge, or in the gap beside it near the row's edge, opened nothing or the next
+   row's page), so the whole label column is the row's target. The name, beside the badge as before,
+   carries the underline: the link's own would run under the monogram too. Top-aligned, the 20px
+   badge level with the name's first 20px line (baseline-aligned, it sat 1px lower and made the rows
+   1-2px taller than 32px and 44px). */
+.preview-row .preview-label > a.preview-lead-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.preview-lead-link > .preview-name {
+  min-width: 0;
+  text-decoration: underline 1px var(--link-underline);
+  text-underline-offset: 3px;
+}
+
 .preview-bar {
   display: block;
   height: 8px;

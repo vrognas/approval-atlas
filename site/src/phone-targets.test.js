@@ -49,6 +49,16 @@ test("the Overview previews' links fill their rows; their tab links are 24px, 44
   assert.match(flat(blocks("@media (pointer: coarse) {").join(" ")), /\.preview-tab-link \{ min-height: 44px; \}/);
 });
 
+test("the Overview previews' company badges are part of their row's link", () => {
+  // Fix-up: a tap on the badge opened nothing, and one in the gap beside it near the row's edge the
+  // next row's page. The badge goes inside the link, the name in a span with the link's underline.
+  const previews = readFileSync(new URL("./overview-previews.js", import.meta.url), "utf8");
+  assert.match(previews, /label\.replaceChildren\(lead, node\("span", "preview-name", \.\.\.label\.childNodes\)\)/);
+  const all = flat(css);
+  assert.match(declarations(all, ".preview-row .preview-label > a.preview-lead-link"), /display: flex;.*gap: 6px;.*text-decoration: none/);
+  assert.match(declarations(all, ".preview-lead-link > .preview-name"), /text-decoration: underline 1px var\(--link-underline\)/);
+});
+
 test("phones: Show full indication, a Documents block's links and the company protection list are 44px", () => {
   assert.match(declarations(phones, ".block-indication .indication > summary"), /padding-block: max\(0px, \(44px - 1lh\) \/ 2\)/);
   assert.match(declarations(phones, ":is(.pc-company-list, .block-documents .doc-list) a"), /display: inline-block;.*padding-block: max\(0px, \(44px - 1lh\) \/ 2\)/);

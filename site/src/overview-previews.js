@@ -32,8 +32,20 @@ function node(tag, className, ...children) {
   return element;
 }
 
-// container: a preview card's .preview-body. rows: [{ key, lead (a node before the label, or null),
-// label (text or a node), count, unit (what the count counts, read after it) }]. line: a line in
+// A row's label. A lead (a company's badge) before a link goes inside it, the name after it in a span
+// (bug hunt 2026-10-01 fix-up: the badge and the gap beside it were no part of the link, so a tap
+// there near the row's edge could open the next row's page): the whole label is the row's target.
+// The name carries the link's underline, which would otherwise run under the badge's monogram too.
+function labelOf({ lead, label }) {
+  if (!lead || label?.nodeName !== "A") return node("span", "preview-label", lead, lead ? " " : null, label);
+  label.classList.add("preview-lead-link");
+  label.replaceChildren(lead, node("span", "preview-name", ...label.childNodes));
+  return node("span", "preview-label", label);
+}
+
+// container: a preview card's .preview-body. rows: [{ key, lead (a node before the label, inside it
+// when it is a link, or null), label (text or a node), count, unit (what the count counts, read after
+// it) }]. line: a line in
 // place of the rows (loading, none), or null; caption: a muted line under the rows, or null; scale:
 // the count a full bar stands for (the largest by default). Rebuilt on every render; a focused link
 // keeps its focus (by its row's key).
@@ -50,7 +62,7 @@ export function renderPreview(container, { rows = [], line = null, caption = nul
     const fill = node("span", "preview-fill");
     fill.style.width = `${shares[index].width}%`;
     const item = node("li", "preview-row",
-      node("span", "preview-label", row.lead, row.lead ? " " : null, row.label),
+      labelOf(row),
       node("span", `preview-bar${shares[index].clamped ? " pc-clamped" : ""}`, fill),
       node("span", "preview-count", formatCount(row.count), node("span", "visually-hidden", ` ${row.unit}`)));
     item.dataset.key = row.key;
