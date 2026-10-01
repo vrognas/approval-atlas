@@ -7398,6 +7398,24 @@ mark {
     margin: -10px 0;
   }
 
+  /* A not-authorized medicine's lead (C3b), whose status often takes a second line: an area 10px
+     above and below the link's 24px box makes it 44px tall without taking room in the line,
+     positioned, so painted over that second line's text (review of C3b: the line took the bottom
+     10px of a 44px box's taps); its focus ring stays on the 24px box (a 44px box's struck through
+     the second line), as "List them". */
+  .lead-plain a.lead-link {
+    position: relative;
+    display: inline-block;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .lead-plain a.lead-link::before {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+
   /* The pivotal results' teaser: inline, so it wraps with the text in full (its lines, 24px each,
      are its target); 14px, so it takes fewer lines on a phone. */
   .card .efficacy-teaser {

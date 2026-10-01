@@ -93,6 +93,16 @@ test("phones: Limits of the estimate, the documents sublist and List them are 44
   assert.match(declarations(flat(css), ".pc-orphan-toggle"), /min-height: 24px/);
 });
 
+test("phones: a not-authorized medicine's protection lead keeps its 44px area over its second line", () => {
+  // Review of C3b: its 44px box lay under the lead's second line, which took the bottom 10px of its
+  // taps, and its focus ring struck through that line. An area 10px above and below the 24px box,
+  // positioned so it is painted over that line, as List them.
+  assert.match(declarations(phones, ".lead-plain a.lead-link"), /position: relative;.*display: inline-block;.*min-height: 0;.*margin: 0/);
+  assert.match(declarations(phones, ".lead-plain a.lead-link::before"), /content: "";.*position: absolute;.*inset: -10px 0/);
+  // Authorized medicines' leads (20px answer type) keep their 44px box.
+  assert.match(declarations(phones, "a.lead-link"), /min-height: 44px;.*margin: -10px 0/);
+});
+
 test("phones: the activity table's company column is narrow, its name under the badge", () => {
   assert.match(declarations(phones, '.activity th[scope="row"]'), /width: 7\.5rem;.*max-width: 7\.5rem/);
   assert.match(declarations(phones, '.activity th[scope="row"] button'), /grid-template-areas: "badge total" "name name"/);
