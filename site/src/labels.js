@@ -717,11 +717,13 @@ export const UI = {
   kicker: { medicine: "Medicine", substance: "Active substance", condition: "Condition", text: "Indication text", company: "Company" },
 
   // The four types with their share of the medicines matching the filters (by default the authorized
-  // ones); the headline states those medicines (owner decision 2026-09-29).
+  // ones); the headline states those medicines (owner decision 2026-09-29). Orphan first (it is no
+  // type), then the types in their one display order (facets.js TYPE_ORDER; design sweep
+  // 2026-10-01, B5), as the dek's clauses.
   tiles: [
     { key: "orphan", label: "Orphan", caption: "Medicines with an orphan designation" },
-    { key: "biosimilar", label: "Biosimilar", caption: "Biosimilar medicines" },
     { key: "generic", label: "Generic", caption: "Generic medicines" },
+    { key: "biosimilar", label: "Biosimilar", caption: "Biosimilar medicines" },
     { key: "advancedTherapy", label: "Advanced therapy", caption: "Advanced therapy medicinal products" },
   ],
   // What a tile's share is of (copy review 2026-09-29, adapted: one caption for the four tiles, by

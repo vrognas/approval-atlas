@@ -2131,7 +2131,9 @@ function startDashboard(meta, [
     if (stackMode === "type") {
       return {
         keysOf: (product) => [product.medicine_type],
-        series: MEDICINE_TYPES.map((type) => ({ key: type, label: type, color: typeColor(type) })),
+        // Bottom to top in the types' one display order (design sweep 2026-10-01, B5: Other, the
+        // largest, on the baseline, as in the breakdown's bars, its legend and the type filter).
+        series: TYPE_ORDER.map((type) => ({ key: type, label: type, color: typeColor(type) })),
         by: UI.years.by.type,
         counting: UI.years.counting.type,
       };

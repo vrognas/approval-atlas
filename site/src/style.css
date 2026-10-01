@@ -85,7 +85,8 @@
   --co-krka-1: #daf1e3; --co-krka-mid: #409661; --co-krka-text: #1d5d36;
   --co-csl-1: #f2d9da; --co-csl-mid: #b33d41; --co-csl-text: #5e1c1e;
   --co-gedeon-richter-1: #dae3f1; --co-gedeon-richter-mid: #385d94; --co-gedeon-richter-text: #1c375e;
-  /* Medicine types (marks use the mids; stacked bottom to top Other, Generic, Biosimilar, Advanced therapy). */
+  /* Medicine types (marks use the mids; stacked bottom to top Other, Generic, Biosimilar, Advanced
+     therapy, the one display order: facets.js TYPE_ORDER). */
   --type-other: var(--blue-mid);
   --type-generic: var(--gold-mid);
   --type-biosimilar: var(--teal-mid);

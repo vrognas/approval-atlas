@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import * as labels from "./labels.js";
+import { TYPE_ORDER } from "./facets.js";
 
 // Values only: raw EMA keys such as "Authorised" are allowed as object keys.
 function* textValues(value) {
@@ -470,10 +471,12 @@ test("the medicines table: a status dot column first, then a narrow Approved col
 test("tiles: the four types with their share", () => {
   assert.deepEqual(labels.UI.tiles.map((tile) => [tile.key, tile.label]), [
     ["orphan", "Orphan"],
-    ["biosimilar", "Biosimilar"],
     ["generic", "Generic"],
+    ["biosimilar", "Biosimilar"],
     ["advancedTherapy", "Advanced therapy"],
   ]);
+  // Design sweep 2026-10-01 (B5): the types in TYPE_ORDER after Orphan, as every legend and stack.
+  assert.deepEqual(labels.UI.tiles.slice(1).map((tile) => tile.label), TYPE_ORDER.filter((type) => type !== "Other"));
   for (const tile of labels.UI.tiles) assert.equal(tile.captionFiltered, undefined, tile.key);
   // Copy review 2026-09-29 (adapted): one caption for the four shares, by the medicines shown.
   assert.deepEqual(["authorized", "all", "filtered"].map(labels.UI.tileShare), ["Share of the authorized medicines", "Share of all medicines", "Share of the matching medicines"]);
