@@ -1503,14 +1503,31 @@ test("protection copy: strip cell, basis note and the other-company reason", () 
   // The lead's first words (its body-type part) start every own-estimate value.
   for (const value of [protection.glance.until(2031, 2032), protection.glance.ended, protection.glance.unclear]) assert.ok(value.startsWith(`${protection.glance.label} `), value);
   // Owner decision 2026-09-30: "(est.)" unless the Union Register publishes the end.
-  assert.equal(protection.glance.orphan(2033, "computed"), "Orphan exclusivity until 2033\u00a0(est.)");
-  assert.equal(protection.glance.orphan(2033, "register"), "Orphan exclusivity until 2033");
-  assert.equal(protection.glance.orphan(2033, null), "Orphan exclusivity until 2033\u00a0(est.)");
+  assert.equal(protection.glance.orphan(2033, "computed"), "Orphan market exclusivity until 2033\u00a0(est.)");
+  assert.equal(protection.glance.orphan(2033, "register"), "Orphan market exclusivity until 2033");
+  assert.equal(protection.glance.orphan(2033, null), "Orphan market exclusivity until 2033\u00a0(est.)");
   assert.equal(protection.basisNote, "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.");
   assert.ok(!protection.caveats.includes("Based only on EU central authorization dates."));
   for (const text of [card.estimate, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {
     assert.doesNotMatch(text, /patent/i);
   }
+});
+
+// Owner decision 2026-10-01 (C4): one name for the protection card, its Overview preview and the
+// company page's list; one range form, "X – Y", for data exclusivity as for market protection; one
+// term, "orphan market exclusivity"; "(est.)" on every computed end.
+test("protection copy: one card name, one range form, one orphan term", () => {
+  const { protection, protectionCalendar, previews } = labels.UI;
+  assert.equal(protectionCalendar.title, "Market protection ending (est.)");
+  assert.equal(previews.protection.title, protectionCalendar.title);
+  assert.equal(protectionCalendar.company.title, protectionCalendar.title);
+  assert.equal(protection.dataExclusivityRange("2018-03-15", "2028-11-18", false), "Data exclusivity ends (est.) 15 Mar 2018 – 18 Nov 2028");
+  assert.equal(protection.dataExclusivityRange("2007-02-26", "2024-07-01", true), "Data exclusivity ended (est.) 26 Feb 2007 – 1 Jul 2024");
+  // The same form as the market protection range under it.
+  assert.equal(protection.dataExclusivityRange("2018-03-15", "2028-11-18", false).replace("Data exclusivity", ""),
+    protection.marketProtection("2018-03-15", "2028-11-18", false).replace("Market protection", ""));
+  assert.match(protection.glance.orphan(2033, "computed"), /^Orphan market exclusivity until /);
+  assert.ok(protection.caveats.every((text) => !/orphan exclusivity/i.test(text)), "one term: orphan market exclusivity");
 });
 
 // Backlog (step 4 review): the legal basis is no longer EMA's flags alone; copies EMA does not flag

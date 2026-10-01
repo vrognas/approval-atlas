@@ -16,6 +16,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 // on the line of what they belong to.
 export const NBSP = "\u00a0";
 const EST = `${NBSP}(est.)`;
+// One name for the protection card, its Overview preview and the company page's list (owner
+// decision 2026-10-01, C4: the card was "Protection ending (est.)", its preview this).
+const PROTECTION_ENDING = `Market protection ending${EST}`;
 
 // "2018-02-08" -> "8 Feb 2018" (no-break spaces) for display; data, URL and state keep ISO dates.
 export function formatDate(iso) {
@@ -479,7 +482,7 @@ export const UI = {
       none: "No condition of these medicines is ranked.",
     },
     protection: {
-      title: `Market protection ending${EST}`,
+      title: PROTECTION_ENDING,
       caption: "Currently authorized medicines by the year their estimated market protection ends at the earliest.",
       unit: (count) => (count === 1 ? "medicine" : "medicines"),
     },
@@ -1887,8 +1890,9 @@ export const UI = {
     // ended: the date (the range's later end) is before the data date.
     dataExclusivity: (date, ended) => `Data exclusivity ${ended ? "ended" : "ends"}${EST} ${formatDate(date)}`,
     // Counted from another company's first approval and from the company's own (owner request
-    // 2026-09-28: data_exclusivity_end_max); ended: the later end is before the data date.
-    dataExclusivityRange: (min, max, ended) => `Data exclusivity ${ended ? "ended" : "ends"}${EST} between ${formatDate(min)} and ${formatDate(max)}`,
+    // 2026-09-28: data_exclusivity_end_max); ended: the later end is before the data date. "X – Y",
+    // as the market protection range under it (owner decision 2026-10-01, C4: was "between X and Y").
+    dataExclusivityRange: (min, max, ended) => `Data exclusivity ${ended ? "ended" : "ends"}${EST} ${formatDate(min)}${NBSP}– ${formatDate(max)}`,
     marketProtection: (min, max, ended) => `Market protection ${ended ? "ended" : "ends"}${EST} ${formatDate(min)}${NBSP}– ${formatDate(max)}`,
     // Step 2 (#1): earlier national authorizations are not in the data.
     // name: a medicine approved that day (step 3 review: never the reference with another's date),
@@ -1944,8 +1948,9 @@ export const UI = {
       follows: (name) => `Follows ${name}`,
       // An estimate like the lead's "Market protection until …" (owner decision 2026-09-30: computed dates say so).
       referenceUntil: (name, from, to) => `${name}'s protection until ${from === to ? from : `${from}–${to}`}${EST}`,
-      // source: the end's end_source ("(est.)" unless the register publishes it).
-      orphan: (year, source) => `Orphan exclusivity until ${year}${orphanEstimate({ source })}`,
+      // source: the end's end_source ("(est.)" unless the register publishes it). "Orphan market
+      // exclusivity", as everywhere else (owner decision 2026-10-01, C4: was "Orphan exclusivity").
+      orphan: (year, source) => `Orphan market exclusivity until ${year}${orphanEstimate({ source })}`,
       link: ", see the estimate in More details",
     },
     orphan: (condition, date, source, ended) =>
@@ -1958,7 +1963,7 @@ export const UI = {
     caveats: [
       "Not legal advice.",
       "The possible extra year (for a significant new indication) is not known, so market protection is shown as a range.",
-      "Ignores pediatric rewards other than a pediatric-use marketing authorization's own protection, orphan exclusivity reductions and derogations.",
+      "Ignores pediatric rewards other than a pediatric-use marketing authorization's own protection, orphan market exclusivity reductions and derogations.",
       "The legal basis comes from EMA's generic and biosimilar flags and from EMA documents checked by hand (hybrids and other unflagged copies, pediatric-use marketing authorizations). Copies not yet checked count as medicines of their own.",
       "The EU pharmaceutical reform (not adopted as of September 2026) would change the rules only for new applications.",
     ],
@@ -1967,7 +1972,7 @@ export const UI = {
   // Draft (loss-of-exclusivity calendar, 2026-09-29; protection-calendar.js): the dashboard card
   // "Estimated protection ending" and the company page's list. Estimates only, never "patent".
   protectionCalendar: {
-    title: `Protection ending${EST}`,
+    title: PROTECTION_ENDING,
     note: `Currently authorized medicines whose EU market protection${EST} still runs, by the earliest year it can end. Select a year to list them. ${CALENDAR_CAVEATS}`,
     loading: "Loading estimates…",
     summary: (running, authorized, filtered) =>
@@ -2015,7 +2020,7 @@ export const UI = {
     // The company page (?co=): its currently authorized medicines by end year (orphan-only ones by
     // the year their orphan market exclusivity ends); unclear ones as the dashboard's line.
     company: {
-      title: `Protection ending${EST}`,
+      title: PROTECTION_ENDING,
       note: `Its currently authorized medicines by the earliest year their EU market protection can end${EST}; where only orphan market exclusivity still runs, by the year it ends. ${CALENDAR_CAVEATS}`,
       none: "None of its currently authorized medicines has estimated market protection or orphan market exclusivity running.",
       orphan: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} until ${orphanEnd.end.slice(0, 4)}`,

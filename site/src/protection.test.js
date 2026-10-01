@@ -116,9 +116,9 @@ test("data exclusivity counted from another company's medicine is a range when R
     data_exclusivity_end: "2018-03-15", data_exclusivity_end_max: "2028-11-18", market_protection_end_min: "2020-03-15", market_protection_end_max: "2031-11-18", status: "unclear",
   };
   const lines = protectionSummary(menQuadfi, [], "meningococcal group a, c, w-135 and y conjugate vaccine", "2026-09-28", "Menveo").lines;
-  assert.equal(lines[1], "Data exclusivity ends\u00a0(est.) between 15\u00a0Mar\u00a02018 and 18\u00a0Nov\u00a02028");
+  assert.equal(lines[1], "Data exclusivity ends\u00a0(est.) 15\u00a0Mar\u00a02018\u00a0– 18\u00a0Nov\u00a02028");
   assert.equal(protectionSummary({ ...menQuadfi, data_exclusivity_end_max: "2026-01-01" }, [], "x", "2026-09-28").lines[1],
-    "Data exclusivity ended\u00a0(est.) between 15\u00a0Mar\u00a02018 and 1\u00a0Jan\u00a02026");
+    "Data exclusivity ended\u00a0(est.) 15\u00a0Mar\u00a02018\u00a0– 1\u00a0Jan\u00a02026");
   // Null (older data, other rows) or the same date: one date, as before.
   assert.equal(protectionSummary({ ...menQuadfi, data_exclusivity_end_max: null }, [], "x", "2026-09-28").lines[1], "Data exclusivity ended\u00a0(est.) 15\u00a0Mar\u00a02018");
   assert.equal(protectionSummary({ ...menQuadfi, data_exclusivity_end_max: "2018-03-15" }, [], "x", "2026-09-28").lines[1], "Data exclusivity ended\u00a0(est.) 15\u00a0Mar\u00a02018");
@@ -368,7 +368,7 @@ test("protectionGlance: a copy follows its reference and never shows the referen
   assert.deepEqual(protectionGlance(buprenorphineNeuraxpharm, [], "2026-09-29"), { value: "None of its own", reference: null, orphan: null });
   // Its own orphan exclusivity still shows.
   assert.equal(protectionGlance(palbociclibViatris, [{ condition: "A", exclusivity_end: "2033-05-30", end_source: "register" }], "2026-09-29").orphan,
-    "Orphan exclusivity until 2033");
+    "Orphan market exclusivity until 2033");
 });
 
 // F · Spacious, phase 4: the medicine card's protection lead says "(est.)" after an estimate of the
@@ -397,7 +397,7 @@ test("protectionGlance: orphan market exclusivity still running is named with it
     { condition: "C", exclusivity_end: "2031-01-01", end_source: "computed" },
     { condition: "D", exclusivity_end: null, end_source: null, designation_status: "Withdrawn" },
   ];
-  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Market protection ended", reference: null, orphan: "Orphan exclusivity until 2033" });
+  assert.deepEqual(protectionGlance({ ...own, status: "ended" }, orphan, "2026-09-28"), { value: "Market protection ended", reference: null, orphan: "Orphan market exclusivity until 2033" });
   assert.equal(protectionGlance({ ...own, status: "ended" }, orphan.slice(0, 1), "2026-09-28").orphan, null);
 });
 
@@ -409,13 +409,13 @@ test("protectionGlance: the orphan line marks a computed end as an estimate, a r
     { condition: "A", exclusivity_end: "2019-06-22", end_source: "register" },
     { condition: "B", exclusivity_end: "2029-08-28", end_source: "computed" },
   ];
-  assert.equal(protectionGlance({ ...own, status: "ended" }, computed, "2026-09-29").orphan, "Orphan exclusivity until 2029\u00a0(est.)");
+  assert.equal(protectionGlance({ ...own, status: "ended" }, computed, "2026-09-29").orphan, "Orphan market exclusivity until 2029\u00a0(est.)");
   const sameDay = [
     { condition: "A", exclusivity_end: "2030-02-19", end_source: "register" },
     { condition: "B", exclusivity_end: "2030-02-19", end_source: "computed" },
   ];
-  assert.equal(protectionGlance({ ...own, status: "ended" }, sameDay, "2026-09-29").orphan, "Orphan exclusivity until 2030");
-  assert.equal(protectionGlance({ ...own, status: "ended" }, [...sameDay].reverse(), "2026-09-29").orphan, "Orphan exclusivity until 2030");
+  assert.equal(protectionGlance({ ...own, status: "ended" }, sameDay, "2026-09-29").orphan, "Orphan market exclusivity until 2030");
+  assert.equal(protectionGlance({ ...own, status: "ended" }, [...sameDay].reverse(), "2026-09-29").orphan, "Orphan market exclusivity until 2030");
 });
 
 test("the Espacenet link searches the first INN", () => {
