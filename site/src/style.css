@@ -1148,9 +1148,13 @@ button {
     margin-top: 4px;
   }
 
-  /* Phones: the table card's Download CSV only (the page header stays short). */
+  /* Phones: the table card's Download CSV only (the page header stays short), 44px tall. */
   .page-head .download {
     display: none;
+  }
+
+  .download {
+    min-height: 44px;
   }
 
   .filter-clear {

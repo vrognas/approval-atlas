@@ -1662,7 +1662,7 @@ function startDashboard(meta, [
     });
     saveFile(text, csvFileName(dataDate), "text/csv;charset=utf-8");
   };
-  $("#table-download").textContent = UI.csv.button;
+  $("#table-download-text").textContent = UI.csv.button;
   $("#page-download-text").textContent = UI.csv.button;
   for (const button of [$("#table-download"), $("#page-download")]) button.addEventListener("click", downloadCsv);
 

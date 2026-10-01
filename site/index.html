@@ -371,7 +371,8 @@
           <!-- "Download CSV" (main.js, csv.js): every medicine the table lists; the caption says which. -->
           <div class="card-head">
             <h2 id="table-title">Medicines</h2>
-            <button id="table-download" class="more" type="button" aria-describedby="table-caption"></button>
+            <!-- The page header's button's look (design sweep 2026-10-01, B2): one Download CSV look. -->
+            <button id="table-download" class="more download" type="button" aria-describedby="table-caption"><svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span id="table-download-text"></span></button>
           </div>
           <p id="table-caption" class="table-caption"></p>
           <div class="table-scroll">
