@@ -11,7 +11,7 @@ import { UI } from "./labels.js";
 import { ORPHAN_ONLY, barShares, orphanEndsOf } from "./protection-calendar.js";
 
 const COPY = UI.protectionCalendar;
-// The selected year lists its first medicines; "Show all" the rest.
+// The selected year lists its first medicines; "Show {n} more" the rest.
 const LIST_LIMIT = 20;
 
 function node(tag, className, ...children) {
@@ -119,7 +119,7 @@ function orphanOnlyList(list, orphanOnly, showAll, actions) {
   ]);
 }
 
-// A titled list of medicines (the first LIST_LIMIT, then "Show all"): name, company, substances,
+// A titled list of medicines (the first LIST_LIMIT, then "Show {n} more"): name, company, substances,
 // then lines(row). Links carry focus keys, so a re-render keeps a focused one.
 function listOf(list, titleText, rows, showAll, { onShowAll, medicineLink, companyOf, substancesOf }, lines) {
   const title = list.appendChild(node("h3", "pc-list-title", titleText));

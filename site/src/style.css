@@ -3886,7 +3886,7 @@ table.conditions-table {
 }
 
 /* The table's caption, above the scroll area so a wide table cannot cut it off. Head, caption,
-   "Show next" and the rows on the other cards' text edge (--card-pad; A1). */
+   "Show 100 more" and the rows on the other cards' text edge (--card-pad; A1). */
 .table-caption {
   max-width: 70ch;
   margin: 0 var(--card-pad) 12px;
