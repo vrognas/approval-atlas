@@ -79,12 +79,15 @@ test("the Try line's separators belong to the example before them and take no wi
   assert.match(declarations(all, ".try"), /column-gap: 20px/);
 });
 
-test("the search's first files are preloaded as fetch() asks for them, before the theme script", () => {
+test("the search's first files but the MeSH terms are preloaded as fetch() asks for them, before the theme script", () => {
   const theme = html.indexOf('<script src="/theme-init.js">');
-  for (const file of ["meta.json", "ema_search_index.json", "mesh_entry_terms.json"]) {
+  for (const file of ["meta.json", "ema_search_index.json"]) {
     const link = html.indexOf(`<link rel="preload" href="/data/${file}" as="fetch" crossorigin />`);
     assert.ok(link !== -1 && link < theme, file);
   }
+  // Fix-up: with the MeSH terms too, their bytes shared Slow 4G's bandwidth with the stylesheet, and
+  // the first paint came 0.24 s later; main.js asks for them once it runs.
+  assert.doesNotMatch(html, /rel="preload" href="\/data\/mesh_entry_terms\.json"/);
   // main.js loads exactly these first.
   const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
   assert.match(main, /const FIRST_FILES = \["meta\.json", "ema_search_index\.json", "mesh_entry_terms\.json"\];/);
