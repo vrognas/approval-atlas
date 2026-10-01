@@ -497,6 +497,158 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_match(run$failed_rows$errors[[1]][1], "0.67")
 })
 
+test_that("a row whose arms do not verify is kept without them, flagged", {
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(
+    alex_row(
+      arm_treatment = "34.8", arm_control = "10.9",
+      arm_measure = "median months"
+    )
+  )))
+  run <- extract_first()
+  expect_equal(run$extractions$rows_kept, 1L)
+  expect_equal(run$extractions$rows_failed, 0L)
+  expect_equal(run$rows$value, "0.47")
+  expect_true(is.na(run$rows$arm_treatment))
+  expect_true(is.na(run$rows$arm_control))
+  expect_true(is.na(run$rows$arm_measure))
+  expect_true(is.na(run$rows$comparator_column_label))
+  expect_true("arms_not_verified" %in% run$rows$flags[[1]])
+})
+
+# A verbatim excerpt of a pilot section (tests/testthat/fixtures/efficacy)
+# as the page texts of a product information: section 5.1, then 5.2.
+read_fixture_text <- function(name) {
+  path <- testthat::test_path("fixtures", "efficacy", name)
+  paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+}
+
+excerpt_pages <- function(name) {
+  text <- read_fixture_text(paste0("excerpt-", name, ".layout.txt"))
+  c(
+    paste("5.1 Pharmacodynamic properties", text, sep = "\n"),
+    "5.2 Pharmacokinetic properties"
+  )
+}
+
+# One answered row checked as production checks it (check_answer_row()), then
+# taken to the site file: the failed row, or the record with its merged row
+# (`rows`, its review) and the rows the site file shows of it (`site`).
+row_to_site <- function(pages, ...) {
+  row <- normalise_efficacy_row(answer_row(...))$row
+  plan_row <- list(
+    ema_product_number = "EMEA/H/C/005919",
+    therapeutic_indication = NA_character_,
+    document_url = "https://www.ema.europa.eu/pi.pdf",
+    document_last_updated_date = as.Date("2026-09-01")
+  )
+  submission <- list(plan_row = plan_row, section = slice_smpc_efficacy(pages))
+  checked <- check_answer_row(
+    row, 1L, submission, "claude-sonnet-5-5", as.Date("2026-10-01")
+  )
+  if (!is.null(checked$failed)) {
+    return(checked)
+  }
+  rows <- merge_efficacy_reviews(
+    efficacy_row_table(list(checked$record)), empty_efficacy_rows()
+  )
+  medicines <- dplyr::tibble(ema_product_number = plan_row$ema_product_number)
+  c(checked, list(rows = rows, site = build_efficacy_table(rows, medicines)))
+}
+
+# Review of the verifier tolerance (2026-10-01): whole rows that borrowed a
+# number, an interval, an arm size or a label from elsewhere in a table.
+test_that("a row that borrows from another line or column never ships", {
+  tevimbra_307 <- excerpt_pages("tevimbra-307")
+  # T+PC's 0.45 with T+nPC's interval, the next column of the row.
+  borrowed_ci <- row_to_site(
+    tevimbra_307,
+    trial = "BGB-A317-307", endpoint = "PFS", comparator = "paclitaxel",
+    comparator_column_label = "Paclitaxel", n_treatment = "120",
+    n_control = "121", value = "0.45", ci_low = "0.31", ci_high = "0.60",
+    ci_level = "95", quotes = list(paste(
+      "Stratified hazard ratioa (95% CI) 0.45 (0.33, 0.62)",
+      "0.43 (0.31, 0.60) -"
+    ))
+  )
+  expect_match(
+    borrowed_ci$failed$errors[[1]], "value and CI not in one quote",
+    all = FALSE
+  )
+  tevimbra_305 <- excerpt_pages("tevimbra-305")
+  # The events count "n 189" as the arm size (the arm is n = 274).
+  events <- row_to_site(
+    tevimbra_305,
+    trial = "BGB-A317-305", endpoint = "PFS", n_treatment = "189",
+    n_control = "272", value = "0.68", ci_low = "0.56", ci_high = "0.83",
+    ci_level = "95", quotes = list(
+      "Hazard ratioc (95% CI) 0.68 (0.56, 0.83)",
+      "Disease progression or death, n 189 (69.0) 216 (79.4) (%)"
+    )
+  )
+  expect_match(events$failed$errors[[1]], "n_treatment = 189", all = FALSE)
+  # A sign from the line below.
+  sign <- row_to_site(
+    tevimbra_305,
+    trial = "BGB-A317-305", endpoint = "OS", value = "0.71",
+    ci_low = "-0.58", ci_high = "0.86", ci_level = "95",
+    quotes = list("Hazard ratioc (95% CI) 0.71 (-0.58, 0.86)")
+  )
+  expect_false(is.null(sign$failed))
+  # LAURA's PFS hazard ratio labelled with the "Overall Survival" below it.
+  laura <- row_to_site(
+    excerpt_pages("tagrisso-laura"),
+    trial = "LAURA", endpoint = "Overall Survival", n_treatment = "143",
+    n_control = "73", value = "0.16", ci_low = "0.10", ci_high = "0.24",
+    ci_level = "95", quotes = list(
+      "Overall Survival HR (95% CI); P-value 0.16 (0.10, 0.24); P<0.001",
+      "TAGRISSO Placebo (N=143) (N=73)"
+    )
+  )
+  expect_match(laura$failed$errors[[1]], "quote not in the text", all = FALSE)
+  # BGB-A317-307's median OS label above its hazard ratio row's numbers: kept,
+  # but hidden until a human has looked.
+  median_os <- row_to_site(
+    tevimbra_307,
+    trial = "BGB-A317-307", endpoint = "Median OS", n_treatment = "120",
+    n_control = "121", value = "0.68", ci_low = "0.45", ci_high = "1.01",
+    ci_level = "95",
+    quotes = list("Median OS (months) (95% CI) 0.68 (0.45, 1.01)")
+  )
+  expect_true("quote_across_lines" %in% median_os$record$flags)
+  expect_equal(median_os$rows$review, "flagged")
+  expect_equal(nrow(median_os$site), 0L)
+})
+
+test_that("a row quoted in reading order gets its page, flagged for review", {
+  text <- read_fixture_text("tecentriq-pi-5.1.layout.txt")
+  pages <- strsplit(text, "\f", fixed = TRUE)[[1]]
+  # IMpower130 OS as the 2026-10-01 evaluation answered it: its hazard ratio
+  # row with the footnote mark printed on the line above, and the arm sizes.
+  impower130 <- row_to_site(
+    pages,
+    trial = "IMpower130", endpoint = "OS", n_treatment = "451",
+    n_control = "228", value = "0.79", ci_low = "0.64", ci_high = "0.98",
+    ci_level = "95", quotes = list(
+      "Stratified hazard ratio‡ (95% CI) 0.79 (0.64, 0.98)",
+      "Co-primary endpoints OS n=451 n=228"
+    )
+  )
+  expected_page <- grep("hazard ratio \\(95% CI\\) +0\\.79", pages)
+  expect_length(expected_page, 1)
+  expect_equal(impower130$record$page, expected_page)
+  expect_false("page_unknown" %in% impower130$record$flags)
+  expect_true("quote_across_lines" %in% impower130$record$flags)
+  expect_equal(nrow(impower130$site), 0L)
+  # Once a human has looked, it is shown with its page.
+  reviewed <- impower130$rows
+  reviewed$review <- "reviewed_ok"
+  site <- build_efficacy_table(
+    reviewed, dplyr::tibble(ema_product_number = "EMEA/H/C/005919")
+  )
+  expect_equal(nrow(site), 1L)
+  expect_equal(site$page, expected_page)
+})
+
 test_that("an indication not in the medicine's section 4.1 is flagged", {
   local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(
     alex_row(indication = "ALK-positive NSCLC"),

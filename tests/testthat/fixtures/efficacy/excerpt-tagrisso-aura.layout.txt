@@ -1,0 +1,17 @@
+In the 411 pre-treated EGFR T790M mutation-positive patients, the total ORR by BICR was 66%
+(95% CI: 61, 71). In patients with a confirmed response by BICR, the median DoR was 12.5 months
+(95% CI: 11.1, NE). The ORR by BICR in AURAex was 62% (95% CI: 55, 68) and 70% (95% CI:
+63, 77) in AURA2. The median PFS was 11.0 months (95% CI: 9.6, 12.4).
+
+Objective response rates by BICR above 50% were observed in all predefined subgroups analysed,
+including line of therapy, ethnicity, age and region.
+
+In the evaluable for response population, 85% (223/262) had documentation of response at the time of
+the first scan (6 weeks); 94% (247/262) had documentation of response at the time of the second scan
+(12 weeks).
+
+CNS metastases efficacy data in Phase 2 studies (AURAex and AURA2)
+
+A BICR assessment of CNS efficacy by RECIST v 1.1 was performed in a subgroup of 50 (out of 411)
+patients identified to have measurable CNS metastases on a baseline brain scan. A CNS ORR of 54%
+(27/50 patients; 95% CI: 39.3, 68.2) was observed with 12% of these responses being complete

@@ -182,7 +182,8 @@ efficacy_row_page <- function(row, section) {
   section$first_page + efficacy_quote_page(longest, section$pages) - 1L
 }
 
-# One answered row: verified against the section, or listed as failed.
+# One answered row: verified against the section (without the arm fields
+# that did not verify), or listed as failed.
 check_answer_row <- function(row, order, submission, model, today) {
   plan_row <- submission$plan_row
   verification <- verify_efficacy_row(
@@ -193,6 +194,7 @@ check_answer_row <- function(row, order, submission, model, today) {
       plan_row$ema_product_number, row, verification$errors
     )))
   }
+  row <- without_unverified_arms(row, verification$blanked)
   record <- c(row, list(
     ema_product_number = plan_row$ema_product_number,
     row_order = order,
