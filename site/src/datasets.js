@@ -25,6 +25,7 @@ export function settledOrAfter(promise, ms) {
 // onLoad(name): a dataset arrived, or changed after a retry.
 export function createDatasets(definitions, loadFile, onLoad) {
   const values = new Map();
+  const loads = new Map(); // each dataset's latest first load, settled after its onLoad
   const incomplete = new Set(); // built without an optional file, not retried yet
   const retryDue = new Set(); // incomplete at a new view: retried by the next need()
   const loadRows = (file) => (typeof file === "string" ? loadFile(file) : loadFile(file.optional).catch(() => null));
@@ -42,14 +43,21 @@ export function createDatasets(definitions, loadFile, onLoad) {
     if (retryDue.delete(name)) reload(name);
     if (values.has(name)) return values.get(name);
     values.set(name, undefined);
-    load(name).then(({ build, complete }) => {
+    loads.set(name, load(name).then(({ build, complete }) => {
       if (!complete) incomplete.add(name);
       return build();
     }, () => FAILED).then((value) => {
       values.set(name, value);
       onLoad(name);
-    });
+    }));
     return undefined;
+  }
+
+  // Resolves once none of the named datasets is loading (each built or FAILED, its onLoad run);
+  // at once for those never asked for (bug hunt 2026-10-01: the search waits for its datasets).
+  function settled(names) {
+    const loading = names.filter((name) => values.has(name) && values.get(name) === undefined);
+    return Promise.allSettled(loading.map((name) => loads.get(name))).then(() => undefined);
   }
 
   // One built without an optional file asks for it once more, and changes only if it arrives (a
@@ -71,5 +79,5 @@ export function createDatasets(definitions, loadFile, onLoad) {
   }
 
   // The value as need() gives it, without starting a load.
-  return { need, retry, peek: (name) => values.get(name) };
+  return { need, retry, settled, peek: (name) => values.get(name) };
 }

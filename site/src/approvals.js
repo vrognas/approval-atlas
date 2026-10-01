@@ -117,11 +117,17 @@ export function isAuthorizedNow(product) {
   return product.medicine_status === "Authorised" && product.authorized_from !== null;
 }
 
+// A search-index row (ema_search_index.json) currently authorized, as isAuthorizedNow() reads an
+// ema_medicines row: status Authorised with an approval date (a data-file test keeps them alike).
+export function isListedAuthorizedNow(row) {
+  return row.medicine_status === "Authorised" && Boolean(row.marketing_authorisation_date);
+}
+
 // A lookup list of search-index rows (ema_search_index.json): the currently authorized ones (as
 // isAuthorizedNow(): status Authorised with an approval date, so a list's count matches its
 // headline's), or every status when showAll is set or none is currently authorized.
 export function authorizedFirst(rows, showAll) {
-  const authorized = rows.filter((row) => row.medicine_status === "Authorised" && Boolean(row.marketing_authorisation_date));
+  const authorized = rows.filter(isListedAuthorizedNow);
   const everyStatus = showAll || authorized.length === 0;
   return { current: authorized.length, everyStatus, shown: everyStatus ? rows : authorized };
 }

@@ -192,6 +192,9 @@ export function buildLookupIndex(searchRows, entryTermRows) {
       substances.get(key).products.push(row);
     }
   }
+  // Bug hunt 2026-10-01 (lookup.md #8): the suggestions' meta counts the medicines with status
+  // Authorised, in every group.
+  for (const substance of substances.values()) substance.authorized = substance.products.filter(isAuthorised).length;
   return {
     medicines: searchRows.map((row) => ({ row, folded: foldSearchText(row.name_of_medicine), tokens: searchWords(row.name_of_medicine) })),
     byNumber: new Map(searchRows.map((row) => [row.ema_product_number, row])),
@@ -321,13 +324,36 @@ const CLICK_ONLY = new Set(["fuzzy", "text"]);
 // code, or an option marked named: a company group's curated monogram or other name, a condition's
 // exact entry term, a substance's other name), first in group order, else the only suggestion
 // unless it is weak (found only through a derived monogram), else null (a text search). groups:
-// the search box's [{ key, options: [{ label, value, named, weak }] }].
-export function submitChoice(groups, query) {
+// the search box's [{ key, options: [{ label, value, named, weak }] }]. onlyNamed (bug hunt
+// 2026-10-01, lookup.md #2: data still loading): the suggestion the query names only, as more can come.
+export function submitChoice(groups, query, { onlyNamed = false } = {}) {
   const folded = foldSearchText(query);
   const options = groups.filter((group) => !CLICK_ONLY.has(group.key)).flatMap((group) => group.options.map((option) => ({ group: group.key, option })));
-  const named = options.find(({ group, option }) => option.named || foldSearchText(option.label) === folded || (group === "classes" && foldSearchText(option.value) === folded));
-  const choice = named ?? (options.length === 1 && !options[0].option.weak ? options[0] : null);
+  const named = options.find(({ group, option }) => namesQuery(group, option, folded));
+  const only = !onlyNamed && options.length === 1 && !options[0].option.weak ? options[0] : null;
+  const choice = named ?? only;
   return choice ? { group: choice.group, value: choice.option.value } : null;
+}
+
+// Whether a suggestion is the one the folded query names: marked named, its label, or a class's code.
+function namesQuery(groupKey, option, folded) {
+  return Boolean(option.named) || foldSearchText(option.label) === folded || (groupKey === "classes" && foldSearchText(option.value) === folded);
+}
+
+// Bug hunt 2026-10-01 (lookup.md #2): background data arriving under an open list rebuilt it with
+// the new groups above those shown ("Roche", the company, above Bondenza, which moved 70px down),
+// so a tap aimed at an option then hit another. The groups shown (shownKeys, in order) keep their
+// order and the new ones follow them, after the indication-text search too, until the next
+// keystroke sorts the list as usual; unless a new group holds the suggestion the query names
+// (Psoriasis, L04AC, Roche): the answer, sorted as usual (the same groups returned).
+export function keepShownOrder(shownKeys, groups, query) {
+  const folded = foldSearchText(query);
+  const shown = new Set(shownKeys);
+  const added = groups.filter((group) => !shown.has(group.key));
+  if (added.some((group) => group.options.some((option) => namesQuery(group.key, option, folded)))) return groups;
+  const position = new Map(shownKeys.map((key, order) => [key, order]));
+  const kept = groups.filter((group) => shown.has(group.key)).sort((a, b) => position.get(a.key) - position.get(b.key));
+  return [...kept, ...added];
 }
 
 // Laws of UX, second pass (owner decision 2026-09-30; Hick's Law, Choice Overload): on a phone, with
@@ -344,7 +370,7 @@ export function collapseGroups(groups, query, { limit = PHONE_GROUP_LIMIT, expan
   const folded = foldSearchText(query);
   return groups.map((group) => {
     if (!COLLAPSIBLE.has(group.key)) return { ...group, hidden: 0 };
-    const named = (option) => option.named || foldSearchText(option.label) === folded || (group.key === "classes" && foldSearchText(option.value) === folded);
+    const named = (option) => namesQuery(group.key, option, folded);
     const options = [...group.options.filter(named), ...group.options.filter((option) => !named(option))];
     if (expanded.has(group.key) || options.length <= limit + 1) return { ...group, options, hidden: 0 };
     return { ...group, options: options.slice(0, limit), hidden: options.length - limit };

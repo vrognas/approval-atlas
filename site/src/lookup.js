@@ -2,7 +2,7 @@
 // a kicker, an answer headline and (medicine, substance) its blocks (F · Spacious, phase 4).
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
-import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
+import { authorizedFirst, isListedAuthorizedNow, statusDate } from "./approvals.js";
 import { areaChips, fillTerm } from "./area-chips.js";
 import { termBranches } from "./areas.js";
 import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, buildAtcExplanations, mainAtcCode } from "./atc.js";
@@ -195,6 +195,9 @@ const byDate = (direction) => (a, b) => {
 };
 const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substance_keys)].sort().join("|") : null);
 
+// The datasets the search's conditions, drug classes and companies come from (searchLoading()).
+const SEARCH_DATASETS = ["conditions", "atc", "atcCounts", "companies"];
+
 // meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
 // decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
 // opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
@@ -214,9 +217,11 @@ export function createLookup(panel, {
       explanations: buildAtcExplanations(explanationRows),
     })],
     // Medicines currently authorized per ATC prefix, no filters: ladder counts, drug-class suggestions.
-    atcCounts: [["ema_medicines.json", "ema_medicine_atc_codes.json"], (medicines, rows) => {
+    // From the search index, not ema_medicines.json (bug hunt 2026-10-01: that 515 KB file came last
+    // on slow Wi-Fi, about 3 s after the classes' names, and the suggestions waited for it).
+    atcCounts: [["ema_medicine_atc_codes.json"], (rows) => {
       const byProduct = groupBy(rows, "ema_product_number");
-      return atcPrefixCounts(medicines.filter(isAuthorizedNow).map((medicine) => ({ atc: byProduct.get(medicine.ema_product_number) ?? [] })));
+      return atcPrefixCounts([...index.byNumber.values()].filter(isListedAuthorizedNow).map((row) => ({ atc: byProduct.get(row.ema_product_number) ?? [] })));
     }],
     areas: [["ema_medicine_therapeutic_areas.json"], (rows) => groupBy(rows, "ema_product_number")],
     // With the terms' MeSH branches, for their chips (areas.js termBranches()).
@@ -1631,6 +1636,11 @@ export function createLookup(panel, {
     // Draft (loss-of-exclusivity calendar): the protection dataset as need() gives it (undefined
     // while loading or not asked for yet, FAILED), without starting a load.
     protection: () => datasets.peek("protection"),
+    // The datasets the search suggests from besides the index (conditions, drug classes, companies;
+    // bug hunt 2026-10-01): whether one is still loading (asking for any not loaded, or failed before
+    // a new view), and a Promise settled once none is (main.js: "Loading…", and Enter waits).
+    searchLoading: () => SEARCH_DATASETS.filter((name) => datasets.need(name) === undefined).length > 0,
+    searchSettled: () => datasets.settled(SEARCH_DATASETS),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [datasets.peek("atc"), datasets.peek("atcCounts")];

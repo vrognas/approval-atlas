@@ -1246,8 +1246,14 @@ test("search copy: retried and empty lists, did you mean, the indication-text op
   assert.equal(lookup.showingFor("ozempic"), "Showing results for “ozempic”");
   assert.equal(lookup.searchText("NSCLC"), "Search indication texts for “NSCLC”");
   assert.equal(lookup.groups.fuzzy, "Did you mean");
-  assert.equal(lookup.substanceMeta(2, "adrenaline"), "matches “adrenaline” · 2 medicines");
-  assert.equal(lookup.substanceMeta(1), "1 medicine");
+  // Bug hunt 2026-10-01 (lookup.md #8): authorized ones, as the other groups count.
+  assert.equal(lookup.substanceMeta(2, "adrenaline"), "matches “adrenaline” · 2 authorized");
+  assert.equal(lookup.substanceMeta(1), "1 authorized");
+  assert.equal(lookup.substanceMeta(0), "0 authorized");
+  assert.equal(lookup.substanceMeta(11), lookup.conditionMeta(null, 11));
+  // While the conditions, drug classes or companies load, an empty list says so (not "No matches").
+  assert.equal(lookup.loading, "Loading…");
+  assert.equal(lookup.status(lookup.loading, 0), "Loading…");
   assert.equal(lookup.whoMeta("N02BE01"), "ATC N02BE01 · not in EMA's central procedure");
   assert.equal(lookup.status("Showing results for “ozempic”", 1), "Showing results for “ozempic”. 1 suggestion");
   assert.equal(lookup.status(lookup.noMatches, 0), "No matches");

@@ -2,9 +2,12 @@
 // selection). DOM focus stays on the input (aria-activedescendant). Text is set via textContent only.
 // Markup is static in index.html: input[role=combobox], [role=listbox], a polite status element.
 import { UI } from "./labels.js";
-import { collapseGroups, submitChoice } from "./search.js";
+import { collapseGroups, keepShownOrder, submitChoice } from "./search.js";
 
 const DEBOUNCE_MS = 120;
+// How long Enter waits at most for the search's background data (bug hunt 2026-10-01): about the
+// gap between the search and that data on slow conference Wi-Fi (1.5-2.5 s at 1.6 Mbps).
+const ENTER_WAIT_MS = 3000;
 const COPY = UI.lookup;
 // Laws of UX, second pass (2026-09-30): on phones (as style.css's 44px options) each group shows a
 // few options and a "Show 5 more" option expanding it in place (collapseGroups()); desktop unchanged.
@@ -20,10 +23,21 @@ const PHONE = window.matchMedia("(max-width: 720px)");
 // recent (2026-09-29): { group(), clear() } for the viewer's recently viewed, listed while the field
 // is focused and empty: group() gives the group (recent.js recentGroup(), null when empty), whose
 // options open as picked suggestions but the last, Clear (action "clear": clear(), focus kept).
-export function createSearchBox(input, listbox, status, { suggestionsFor, onPick, onSubmit, recent = null }) {
+// pending(): a Promise settled once the background data suggestions come from has arrived, null
+// when none is loading; navigations(): a count of the history entries pushed or popped (bug hunt
+// 2026-10-01, lookup.md #2: Enter in the first seconds on slow Wi-Fi ran a text search for
+// "psoriasis", as the conditions had not arrived).
+export function createSearchBox(input, listbox, status, {
+  suggestionsFor, onPick, onSubmit, recent = null, pending = () => null, navigations = () => 0,
+}) {
   let options = [];
   let active = -1;
   let timer = 0;
+  // The group keys the list shows, in order, and the query they are for: data arriving under the
+  // open list keeps them in place (keepShownOrder()).
+  let listed = null;
+  // Each Enter, pick, keystroke, Escape and setText: an Enter waiting for data is dropped by any.
+  let submits = 0;
   // The groups a "Show … more" expanded (phones), until the text changes.
   let expanded = new Set();
   // Suggestions were asked for (typing, arrow keys) and not dismissed since: data arriving later
@@ -39,16 +53,20 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     active = -1;
   }
 
-  function renderList() {
+  // keepOrder: background data arrived under the open list; the groups shown keep their places.
+  function renderList({ keepOrder = false } = {}) {
     requested = true;
     const recentGroup = input.value.trim() === "" ? recent?.group() ?? null : null;
     const result = recentGroup ? { groups: [recentGroup], note: null } : suggestionsFor(input.value);
+    const query = result.query ?? input.value;
     let groups = result.groups.filter((group) => group.options.length > 0);
+    if (keepOrder && !recentGroup && listed?.query === query) groups = keepShownOrder(listed.keys, groups, query);
+    listed = { query, keys: groups.map((group) => group.key) };
     // Phones: a few options per group, then "Show 5 more …" (an action option expanding it in place;
     // it names what it adds, as more can match than a group holds: MAX_SUGGESTIONS).
     let hidden = 0;
     if (PHONE.matches && !recentGroup) {
-      groups = collapseGroups(groups, result.query ?? input.value, { expanded }).map((group) => {
+      groups = collapseGroups(groups, query, { expanded }).map((group) => {
         hidden += group.hidden;
         if (!group.hidden) return group;
         return { ...group, options: [...group.options, { label: COPY.showMore(group.hidden, group.key), value: group.key, added: group.hidden, action: "expand" }] };
@@ -134,6 +152,7 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
       expand(option);
       return;
     }
+    submits += 1;
     close();
     if (option.action === "clear") {
       recent.clear();
@@ -143,8 +162,45 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     onPick(option.group, option.value);
   }
 
+  // Enter without a picked option: the suggestion the text names (or the only one) opens as if
+  // picked; else a text search. A retried query ("Ozempic 1 mg" shown for "ozempic") is the one
+  // labels are compared with. While background data is loading (bug hunt 2026-10-01) only a named
+  // suggestion opens ("humira"); else Enter waits (the list shown, "Loading…" announced), trying
+  // again as each dataset arrives (refresh(): "psoriasis" opens with the conditions), and chooses
+  // as usual once all have, or ENTER_WAIT_MS passed; dropped when the text changed, another Enter,
+  // pick or Escape came, or a navigation happened (a link, Back) meanwhile.
+  let waiting = null; // { serial, text, view }
+  function choose(text, onlyNamed) {
+    const result = suggestionsFor(text);
+    const choice = submitChoice(result.groups, result.query, { onlyNamed });
+    if (!choice && onlyNamed) return false;
+    close();
+    if (choice) onPick(choice.group, choice.value);
+    else onSubmit(text.trim());
+    return true;
+  }
+  function submit() {
+    const text = input.value;
+    const serial = ++submits;
+    const loading = pending();
+    if (choose(text, loading !== null)) return;
+    waiting = { serial, text, view: navigations() };
+    renderList();
+    status.textContent = COPY.loading;
+    const cap = new Promise((resolve) => setTimeout(resolve, ENTER_WAIT_MS));
+    Promise.race([loading, cap]).then(() => resume(true));
+  }
+  // final: every dataset in, or the time is up: the usual choice.
+  function resume(final) {
+    if (!waiting) return;
+    const { serial, text, view } = waiting;
+    if (serial !== submits || input.value !== text || navigations() !== view) waiting = null;
+    else if (choose(text, !final && pending() !== null)) waiting = null;
+  }
+
   input.addEventListener("input", () => {
     expanded = new Set();
+    submits += 1;
     clearTimeout(timer);
     timer = setTimeout(renderList, DEBOUNCE_MS);
   });
@@ -159,16 +215,9 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
     } else if (event.key === "Enter") {
       clearTimeout(timer);
       if (isOpen && active >= 0) pick(active);
-      else if (input.value.trim().length >= 2) {
-        // The suggestion the text names (or the only one) opens as if picked; else a text search.
-        // A retried query ("Ozempic 1 mg" shown for "ozempic") is the one labels are compared with.
-        const result = suggestionsFor(input.value);
-        const choice = submitChoice(result.groups, result.query);
-        close();
-        if (choice) onPick(choice.group, choice.value);
-        else onSubmit(input.value.trim());
-      }
+      else if (input.value.trim().length >= 2) submit();
     } else if (event.key === "Escape") {
+      submits += 1;
       if (isOpen) close();
       else input.value = "";
     } else {
@@ -219,15 +268,23 @@ export function createSearchBox(input, listbox, status, { suggestionsFor, onPick
 
   return {
     // New background data (conditions, drug classes) arrived: refresh an open list in place, or
-    // show one for a query that had no matches yet.
+    // show one for a query that had no matches yet. An open list keeps the groups and the active
+    // option it shows where they are, new groups after them (keepShownOrder(); bug hunt 2026-10-01).
     refresh() {
       // An empty field shows the recently viewed list, which background data does not change: not
       // rebuilt (review 2026-09-29: it reset the active option and repeated the announcement).
       if (input.value.trim() === "") return;
       if (pressing) return; // rebuilt under a press, the click would miss its option
-      if (!listbox.hidden || (requested && input.value.trim().length >= 2)) renderList();
+      resume(false); // an Enter waiting for this data (it closes the list when it opens a choice)
+      if (!listbox.hidden) {
+        const current = options[active];
+        renderList({ keepOrder: true });
+        const same = current ? options.findIndex((option) => option.listGroup === current.listGroup && option.value === current.value && option.action === current.action) : -1;
+        if (same >= 0) setActive(same);
+      } else if (requested && input.value.trim().length >= 2) renderList();
     },
     setText(text) {
+      submits += 1;
       input.value = text;
       close();
     },

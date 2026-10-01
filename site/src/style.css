@@ -533,6 +533,14 @@ footer {
   html {
     scroll-padding-top: calc(var(--topbar-shown, 72px) + 8px);
   }
+
+  /* While the search has focus, nothing else needs to clear the bar: the browser scrolls the caret
+     into view outside that padding on each keystroke, which the stuck field never reaches, so the
+     page behind moved up 53px per character typed from a scrolled page (bug hunt 2026-10-01; a
+     scroll-margin on the field does not apply to the caret). */
+  html:has(#lookup-input:focus) {
+    scroll-padding-top: 0;
+  }
 }
 
 @media (max-width: 720px) {
@@ -5364,8 +5372,10 @@ table.activity {
   }
 }
 
+/* A swipe past the list's end scrolls no further: not the page behind it (bug hunt 2026-10-01). */
 .lookup [role="listbox"] {
   max-height: min(440px, 65vh);
+  overscroll-behavior: contain;
 }
 
 [role="listbox"] [role="group"] {

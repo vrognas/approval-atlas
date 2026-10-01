@@ -22,6 +22,7 @@ import {
   searchWords,
   spellingVariant,
   submitChoice,
+  keepShownOrder,
   suggest,
   suggestAtcClasses,
   textMatches,
@@ -250,6 +251,15 @@ test("substances match INN items and carry their product count", () => {
   assert.deepEqual(suggest(index, null, "ADALIMUMAB").substances.map((s) => [s.name, s.products.length]), [["adalimumab", 3]]);
 });
 
+// Bug hunt 2026-10-01 (lookup.md #8): the suggestions' meta counts medicines with status
+// Authorised in every group; substances counted every status ("17 medicines" beside "52 authorized").
+test("substances carry their authorized count, as conditions and companies do", () => {
+  assert.deepEqual(suggest(index, null, "ADALIMUMAB").substances.map((s) => [s.name, s.authorized]), [["adalimumab", 2]]);
+  assert.equal(index.substances.get("pembrolizumab").authorized, 1);
+  // Through another name too (#19: "adrenaline" for epinephrine).
+  assert.deepEqual(suggest(index, null, "adrenaline").substances.map((s) => [s.name, s.synonym, s.authorized]), [["epinephrine", "adrenaline", 1]]);
+});
+
 test("conditions: every word must start a word of one entry term; words under 4 characters match whole", () => {
   assert.deepEqual(suggest(index, conditions, "hiv").conditions.map((c) => c.ui), ["D5"]);
   assert.deepEqual(suggest(index, conditions, "rheum arth").conditions.map((c) => c.ui), ["D4"]);
@@ -396,6 +406,49 @@ test("submitChoice: 'ALL' and 'CAR' open no company through a derived monogram",
   assert.equal(submitChoice(all, "ALL"), null);
   const car = [{ key: "medicines", options: [{ label: "Carvykti", value: "M3" }] }, { key: "companies", options: [{ label: "Carisma Therapeutics", value: "g.carisma", weak: true }] }];
   assert.equal(submitChoice(car, "CAR"), null);
+});
+
+// Bug hunt 2026-10-01 (lookup.md #2): with the conditions, drug classes or companies still loading,
+// Enter opens a suggestion the query names at once (a brand typed in the first seconds), but not
+// the only one: another may come with the data ("roche": Bondenza now, the company Roche then).
+test("submitChoice with onlyNamed: the suggestion the query names, never the only one", () => {
+  const one = [{ key: "medicines", options: [{ label: "Bondenza (previously Ibandronic Acid Roche)", value: "P1" }] }];
+  assert.deepEqual(submitChoice(one, "roche"), { group: "medicines", value: "P1" });
+  assert.equal(submitChoice(one, "roche", { onlyNamed: true }), null);
+  const groups = [
+    { key: "medicines", options: [{ label: "Humira", value: "P2" }] },
+    { key: "classes", options: [{ label: "L04AC Interleukin Inhibitors", value: "L04AC" }] },
+    { key: "companies", options: [{ label: "MSD (Merck & Co.)", value: "g.msd", named: true }] },
+  ];
+  assert.deepEqual(submitChoice(groups, "humira", { onlyNamed: true }), { group: "medicines", value: "P2" });
+  assert.deepEqual(submitChoice(groups, "L04ac", { onlyNamed: true }), { group: "classes", value: "L04AC" });
+  assert.deepEqual(submitChoice(groups, "msd", { onlyNamed: true }), { group: "companies", value: "g.msd" });
+});
+
+// Bug hunt 2026-10-01 (lookup.md #2): data arriving under an open list rebuilt it with the new
+// groups above the options shown ("Roche" above Bondenza, 70px down), so a tap aimed at an option
+// in that moment hit another. New groups now follow those shown, unless one names the query.
+test("keepShownOrder: the groups shown keep their order, new ones follow; a group naming the query re-sorts", () => {
+  const group = (key, ...labels) => ({ key, options: labels.map((label) => ({ label, value: label })) });
+  const text = group("text", "Search indication texts for “interleukin”");
+  const keys = (groups) => groups.map((entry) => entry.key);
+  // The drug classes arrive: after the text search shown last, not between it and the substances.
+  const next = [group("medicines", "Interleukin Test"), group("substances", "interleukin x"), group("classes", "L04AC Interleukin Inhibitors"), text];
+  assert.deepEqual(keys(keepShownOrder(["medicines", "substances", "text"], next, "interleukin")), ["medicines", "substances", "text", "classes"]);
+  // A group shown before and gone now stays gone (did you mean, once something matches).
+  assert.deepEqual(keys(keepShownOrder(["fuzzy", "text"], [group("conditions", "Interleukin Deficiency"), text], "interleukin")), ["text", "conditions"]);
+  // Nothing shown before: as given.
+  assert.deepEqual(keys(keepShownOrder([], next, "interleukin")), keys(next));
+  // A new group naming the query (named, its label, a class's code) sorts as usual.
+  const roche = [{ key: "companies", options: [{ label: "Roche", value: "g.roche", named: true }] }, group("medicines", "Bondenza"), text];
+  assert.equal(keepShownOrder(["medicines", "text"], roche, "roche"), roche);
+  const psoriasis = [group("conditions", "Psoriasis"), text];
+  assert.equal(keepShownOrder(["text"], psoriasis, "PSORIASIS"), psoriasis);
+  const l04ac = [{ key: "classes", options: [{ label: "L04AC Interleukin Inhibitors", value: "L04AC" }] }, text];
+  assert.equal(keepShownOrder(["text"], l04ac, "l04ac"), l04ac);
+  // A group shown before that names the query does not re-sort (it already showed).
+  const humira = [group("medicines", "Humira"), group("classes", "L04AB04 Adalimumab"), text];
+  assert.deepEqual(keys(keepShownOrder(["medicines", "text"], humira, "humira")), ["medicines", "text", "classes"]);
 });
 
 test("suggest: 'IL-17' no longer finds Lutetium Billev (previously Illuzyce); 'glp1' reads as GLP-1", () => {

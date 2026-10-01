@@ -256,6 +256,9 @@ let filtersOpen = () => false;
 // True when one was open.
 let closeFiltersNow = () => false;
 let frame = 0;
+// History entries pushed or popped so far: an Enter waiting for the search's data (search-box.js)
+// is dropped when one comes first (bug hunt 2026-10-01).
+let navigations = 0;
 const urlNote = $("#url-note");
 // Filter edits (not the first render, the breakdown's mode, the tab or lookups) announce the new
 // headline, debounced (url.js FILTER_KEYS: every state key but the views, by and tab).
@@ -447,6 +450,7 @@ function scheduleRender() {
 function setState(patch, push = false) {
   // Navigations (push) move focus to the new headline instead.
   if (!push && FILTER_KEYS.some((key) => key in patch)) announceFilters = true;
+  if (push) navigations += 1;
   state = { ...state, ...patch };
   // Before the dashboard has loaded, filter changes go into the URL's kept filter part.
   if (!dashboard) pendingFilters = patchFilterParams(pendingFilters, patch);
@@ -928,7 +932,7 @@ function suggestionGroups(result, classes, companies, medicines) {
       key: "substances",
       label: copy.groups.substances,
       options: result.substances.map((substance) => ({
-        label: substance.name, meta: copy.substanceMeta(substance.products.length, substance.synonym), value: substance.key, named: substance.named,
+        label: substance.name, meta: copy.substanceMeta(substance.authorized, substance.synonym), value: substance.key, named: substance.named,
       })),
     },
     {
@@ -954,7 +958,7 @@ function fuzzyOption(entry) {
   if (entry.kind === "medicine") {
     return { label: entry.label, meta: copy.medicineMeta(entry.row.medicine_status, entry.row.marketing_authorisation_date?.slice(0, 4)), value: entry.value, pick: "medicines" };
   }
-  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(entry.substance.products.length), value: entry.value, pick: "substances" };
+  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(entry.substance.authorized), value: entry.value, pick: "substances" };
   return { label: atcName(entry.label), meta: copy.whoMeta(entry.code), value: entry.value, pick: "text" };
 }
 
@@ -963,7 +967,9 @@ function fuzzyOption(entry) {
 // matches, "No matches" (or that the WHO substance named has no medicine through EMA, #2) and up
 // to 3 close names (#5); always last, the indication-text search for the typed text (#14).
 // run(text): suggestionGroups() for a query. atcClasses: atc_classes.json rows, [] until loaded.
-function searchSuggestions(index, query, run, atcClasses) {
+// loading (bug hunt 2026-10-01, lookup.md #2): the conditions, drug classes or companies are still
+// loading: a list with nothing yet says "Loading…", not "No matches", and guesses no close names.
+function searchSuggestions(index, query, run, atcClasses, loading = false) {
   const text = query.trim();
   if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text };
   const copy = UI.lookup;
@@ -971,7 +977,9 @@ function searchSuggestions(index, query, run, atcClasses) {
   const found = groups.some((group) => group.options.length > 0);
   let note = shownFor ? copy.showingFor(shownFor) : null;
   const extra = [];
-  if (!found) {
+  if (!found && loading) {
+    note = copy.loading;
+  } else if (!found) {
     const known = knownSubstance(index, text, atcClasses);
     note = known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
     const fuzzy = didYouMean(index, text, atcClasses);
@@ -1051,11 +1059,14 @@ function startLookup([meta, searchRows, entryTermRows]) {
         companies ? suggestCompanies(companies, text) : [],
         lookup.medicines(),
       );
-      return searchSuggestions(index, query, run, atc?.classes ?? []);
+      return searchSuggestions(index, query, run, atc?.classes ?? [], lookup.searchLoading());
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
     recent,
+    // Enter waits for these (bug hunt 2026-10-01), unless a navigation comes first.
+    pending: () => (lookup.searchLoading() ? lookup.searchSettled() : null),
+    navigations: () => navigations,
   });
   // Conditions, drug classes and companies join the suggestions once their background data has
   // loaded (and a condition or company page's title its name); so do EMA's opinions (a negative
@@ -1086,6 +1097,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
   // shows the same view: nothing to close or render, the entry's place when known (the browser
   // scrolls to a new fragment itself).
   window.addEventListener("popstate", (event) => {
+    navigations += 1;
     const { place, hashOnly } = historyScroll.popped(event.state);
     if (hashOnly) {
       if (place) {

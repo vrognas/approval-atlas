@@ -12,6 +12,7 @@ import {
   countTiles,
   distinctSorted,
   isAuthorizedNow,
+  isListedAuthorizedNow,
   newestFirst,
   sortBreakdownRows,
   statusDate,
@@ -269,6 +270,25 @@ test(
     const expected = JSON.parse(readFileSync(seriesFile, "utf8"));
     const all = JSON.parse(readFileSync(new URL("ema_medicines.json", dataDir), "utf8"));
     assert.deepEqual(authorizedSeries(all, expected.map((row) => row.date)), expected);
+  },
+);
+
+// Bug hunt 2026-10-01 (lookup.md #2): the drug-class suggestions' counts come from the search index,
+// not ema_medicines.json (515 KB gzipped, the last search file to arrive on slow Wi-Fi).
+test("isListedAuthorizedNow: a search-index row authorized with an approval date", () => {
+  assert.deepEqual(medicines.filter(isListedAuthorizedNow).map((row) => row.ema_product_number), ["EMEA/H/C/000001", "EMEA/H/C/000003"]);
+});
+
+const indexFile = new URL("ema_search_index.json", dataDir);
+test(
+  "the search index's currently authorized rows are ema_medicines.json's (isAuthorizedNow())",
+  { skip: existsSync(indexFile) ? false : "site/public/data/ema_search_index.json not found: run the pipeline first" },
+  () => {
+    const numbers = (rows) => rows.map((row) => row.ema_product_number).sort();
+    const indexRows = JSON.parse(readFileSync(indexFile, "utf8"));
+    const all = JSON.parse(readFileSync(new URL("ema_medicines.json", dataDir), "utf8"));
+    assert.equal(indexRows.length, all.length);
+    assert.deepEqual(numbers(indexRows.filter(isListedAuthorizedNow)), numbers(all.filter(isAuthorizedNow)));
   },
 );
 
