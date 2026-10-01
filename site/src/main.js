@@ -71,7 +71,9 @@ import { renderProtectionCalendar } from "./protection-calendar-card.js";
 import { LATER, calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
 import { createRecent, keptOpenedClass, openedClass, recentEntry, recentLookupState } from "./recent.js";
-import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
+import {
+  MIN_QUERY, buildLookupIndex, didYouMean, euNumberStarted, foldSearchText, knownSubstance, medicineNumber, searchWithFallback, suggest, suggestAtcClasses,
+} from "./search.js";
 import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
 import { tabsKeydown } from "./tabs.js";
@@ -1019,10 +1021,12 @@ function suggestionGroups(result, classes, companies, medicines, substanceCount)
     {
       key: "medicines",
       label: copy.groups.medicines,
-      options: result.medicines.map((row) => ({
+      // First the medicine a typed EU or EMA product number names (C7), named: Enter opens it.
+      options: [...(result.numbered ? [result.numbered] : []), ...result.medicines.map((row) => ({ row }))].map(({ row, number = null }) => ({
         label: row.name_of_medicine,
-        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4), medicines?.get(row.ema_product_number)?.opinion_status),
+        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4), medicines?.get(row.ema_product_number)?.opinion_status, number),
         value: row.ema_product_number,
+        named: number !== null,
       })),
     },
     {
@@ -1078,8 +1082,10 @@ function searchSuggestions(index, query, run, atcClasses, substanceCount, loadin
   const extra = [];
   if (!found) {
     if (!loading) {
-      const known = knownSubstance(index, text, atcClasses);
-      note = known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+      // A number no medicine has says so (C7); a WHO substance with no medicine through EMA likewise.
+      const number = medicineNumber(text);
+      const known = number ? null : knownSubstance(index, text, atcClasses);
+      note = number ? copy.empty.noNumber(number.kind, number.number) : known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
     }
     const fuzzy = didYouMean(index, text, atcClasses);
     if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map((entry) => fuzzyOption(entry, substanceCount)) });
@@ -1151,6 +1157,10 @@ function startLookup([meta, searchRows, entryTermRows]) {
     text: (value) => ({ q: value }), // the indication-text search
   };
   const noEquivalents = new Map();
+  // A typed EU number (C7) needs the Union Register's numbers: the register dataset, asked for as
+  // soon as one is being typed ("EU/"; an open list keeps its order, so it must be in by the last
+  // digit) and waited for only then (an EMA product number is in the search index).
+  const numberSets = (text) => (euNumberStarted(text) ? ["register"] : []);
   const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
     suggestionsFor: (query) => {
       const atc = lookup.atcClasses();
@@ -1158,27 +1168,32 @@ function startLookup([meta, searchRows, entryTermRows]) {
       // Under all its spellings once the equivalents have loaded, as its card counts.
       const equivalents = lookup.equivalents() ?? noEquivalents;
       const substanceCount = (substance) => substanceAuthorizedCount(substance.key, index.substances, equivalents);
+      const sets = numberSets(query);
+      const euNumbers = sets.length ? lookup.euNumbers() : null;
       const run = (text) => suggestionGroups(
-        suggest(index, lookup.conditions(), text),
+        suggest(index, lookup.conditions(), text, { euNumbers }),
         atc ? suggestAtcClasses(text, atc.classes, atc.counts) : [],
         companies ? suggestCompanies(companies, text) : [],
         lookup.medicines(),
         substanceCount,
       );
-      return searchSuggestions(index, query, run, atc?.classes ?? [], substanceCount, lookup.searchLoading());
+      return searchSuggestions(index, query, run, atc?.classes ?? [], substanceCount, lookup.searchLoading(sets));
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
     recent,
     // Enter waits for these (bug hunt 2026-10-01), unless a navigation comes first.
-    pending: () => (lookup.searchLoading() ? lookup.searchSettled() : null),
+    pending: () => {
+      const sets = numberSets(input.value);
+      return lookup.searchLoading(sets) ? lookup.searchSettled(sets) : null;
+    },
     navigations: () => navigations,
   });
   // Conditions, drug classes and companies join the suggestions once their background data has
   // loaded (and a condition or company page's title its name); so do EMA's opinions (a negative
-  // one is named in a medicine's meta line).
+  // one is named in a medicine's meta line) and the EU numbers (C7).
   lookup.onData((name) => {
-    if (["conditions", "atc", "atcCounts", "companies", "medicines", "equivalents"].includes(name)) searchBox.refresh();
+    if (["conditions", "atc", "atcCounts", "companies", "medicines", "equivalents", "register"].includes(name)) searchBox.refresh();
     if (name === "conditions" || name === "companies") updateTitle();
     // A restore waiting for the card's data: once the lookup has rendered it (after the listeners).
     queueMicrotask(restoreScroll);
@@ -2544,6 +2559,9 @@ function startDashboard(meta, [
   loadFile(REGISTER_FILE).then((rows) => {
     register = new Map(rows.map((row) => [row.ema_product_number, row]));
     scheduleRender();
+    // The search's EU numbers from the same file (C7: built now, a typed one finds its medicine in
+    // the list's first render, not under the text search when it arrives).
+    lookup.need("register");
   }, () => {});
   // The table's PI and EPAR links: the primary documents (small, shared with the cards; the
   // documents index where that file is missing) in the background; the therapeutic area groups'

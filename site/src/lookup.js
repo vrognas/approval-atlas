@@ -38,7 +38,10 @@ import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
 import { buildModalityTree, modalityLines, modalitySource } from "./modalities.js";
 import { espacenetUrl, glanceIsEstimate, protectionGlance, protectionSummary } from "./protection.js";
 import { endingByYear, protectionEnding } from "./protection-calendar.js";
-import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
+import {
+  buildConditions, conditionPhrases, didYouMean, euNumberIndex, foldSearchText, knownSubstance, medicineByNumber, medicineNumber, searchWithFallback, suggest,
+  textMatches, textPhrases,
+} from "./search.js";
 import { renderTimeline } from "./timeline.js";
 import { toolbarKeydown } from "./toolbar.js";
 import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState, showsEveryStatus } from "./url.js";
@@ -1252,10 +1255,19 @@ export function createLookup(panel, {
       patch: entry.kind === "medicine" ? { med: entry.value } : entry.kind === "substance" ? { sub: entry.value } : { q: entry.value },
     }));
     const links = (items) => items.map((item, position) => [position ? ", " : "", internalLink(item.label, item.patch)]);
-    const lead = hidden ? copy.otherStatuses(hidden)
+    // A typed EU or EMA product number (design sweep 2026-10-01, C7; here through a link or the text
+    // search option): the medicine it names, or that none has it, once the register's EU numbers
+    // are in (while they load, as any query).
+    const number = medicineNumber(query);
+    const register = number?.kind === "eu" ? need("register") : null;
+    const numbered = number ? medicineByNumber(index, query, register && ready(register) ? euNumberIndex(register) : null) : null;
+    const numberLead = numbered
+      ? [copy.numberOf(number.kind, number.number), internalLink(numbered.row.name_of_medicine, { med: numbered.row.ema_product_number }), "."]
+      : number && register !== undefined ? copy.noNumber(number.kind, number.number) : null;
+    const lead = numberLead ?? (hidden ? copy.otherStatuses(hidden)
       : names.length ? copy.noText(query)
         : known ? copy.known(atcName(known.name), known.code)
-          : copy.nothing(query);
+          : copy.nothing(query));
     return el("div", { class: "empty-state" },
       el("p", { class: "empty-lead" }, lead),
       known && classCount
@@ -1263,10 +1275,11 @@ export function createLookup(panel, {
         : null,
       names.length ? el("p", null, copy.names, links(names)) : null,
       fuzzy.length ? el("p", null, copy.didYouMean, links(fuzzy)) : null,
-      hidden || names.length ? null : el("ul", { class: "empty-list" },
+      hidden || names.length || numbered ? null : el("ul", { class: "empty-list" },
         el("li", null, copy.searchable),
         el("li", null, copy.notYet),
-        el("li", null, copy.notInData, externalLink(copy.registers, NATIONAL_REGISTERS_URL), copy.registersAfter)));
+        // The pack's EU number as a way in, unless the query was a number itself.
+        el("li", null, copy.notInData, externalLink(copy.registers, NATIONAL_REGISTERS_URL), copy.registersAfter, number ? null : copy.packNumber)));
   }
 
   function conditionResults(ui, query) {
@@ -1646,9 +1659,16 @@ export function createLookup(panel, {
     protection: () => datasets.peek("protection"),
     // The datasets the search suggests from besides the index (conditions, drug classes, companies;
     // bug hunt 2026-10-01): whether one is still loading (asking for any not loaded, or failed before
-    // a new view), and a Promise settled once none is (main.js: "Loading…", and Enter waits).
-    searchLoading: () => SEARCH_DATASETS.filter((name) => datasets.need(name) === undefined).length > 0,
-    searchSettled: () => datasets.settled(SEARCH_DATASETS),
+    // a new view), and a Promise settled once none is (main.js: "Loading…", and Enter waits). extra:
+    // datasets a query needs besides them (a typed EU number: the register; design sweep C7).
+    searchLoading: (extra = []) => [...SEARCH_DATASETS, ...extra].filter((name) => datasets.need(name) === undefined).length > 0,
+    searchSettled: (extra = []) => datasets.settled([...SEARCH_DATASETS, ...extra]),
+    // EU number -> EMA product number (search.js euNumberIndex()), asking for the register; null
+    // until it has loaded (or when it failed).
+    euNumbers: () => {
+      const register = datasets.need("register");
+      return ready(register) ? euNumberIndex(register) : null;
+    },
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [datasets.peek("atc"), datasets.peek("atcCounts")];

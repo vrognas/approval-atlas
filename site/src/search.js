@@ -301,15 +301,57 @@ function suggestConditions(index, conditions, words) {
     .slice(0, MAX_SUGGESTIONS);
 }
 
+// Design sweep 2026-10-01 (C7): a medicine's numbers as typed, "EU/1/21/1608" and "EMEA/H/C/005422"
+// found nothing. Its EMA product number ("EMEA/H/C/005422", or its six digits alone) or the EU
+// number on its pack ("EU/1/21/1608", a pack's own "EU/1/21/1608/001"), any case, spaces around the
+// slashes allowed: { kind: "ema" | "eu", number } in the data's form, or null.
+const EMA_NUMBER = /^(?:EMEA\s*\/\s*H\s*\/\s*C\s*\/\s*)?(\d{6})$/i;
+const EU_NUMBER = /^EU\s*\/\s*([12])\s*\/\s*(\d{2})\s*\/\s*(\d{3,4})(?:\s*\/\s*\d{1,4})?$/i;
+export function medicineNumber(query) {
+  const text = query.trim();
+  const ema = EMA_NUMBER.exec(text);
+  if (ema) return { kind: "ema", number: `EMEA/H/C/${ema[1]}` };
+  const eu = EU_NUMBER.exec(text);
+  return eu ? { kind: "eu", number: `EU/${eu[1]}/${eu[2]}/${eu[3]}` } : null;
+}
+
+// An EU number being typed ("EU/", "eu / 1/21"): the search asks for the register's EU numbers
+// then, so they are in by the last digit (main.js).
+export function euNumberStarted(query) {
+  return /^\s*eu\s*\//i.test(query);
+}
+
+// EU number -> EMA product number, from the lookup's register dataset (product number -> its
+// ema_medicine_register_status.json row); built once per dataset.
+const euNumberMaps = new WeakMap();
+export function euNumberIndex(register) {
+  if (!euNumberMaps.has(register)) {
+    euNumberMaps.set(register, new Map([...register.values()].filter((row) => row.eu_number).map((row) => [row.eu_number, row.ema_product_number])));
+  }
+  return euNumberMaps.get(register);
+}
+
+// The medicine a typed number names: { row (its search-index row), kind, number } or null.
+// euNumbers: euNumberIndex() of the register, null while it loads (an EU number then finds none).
+export function medicineByNumber(index, query, euNumbers = null) {
+  const found = medicineNumber(query);
+  if (!found) return null;
+  const row = index.byNumber.get(found.kind === "ema" ? found.number : euNumbers?.get(found.number));
+  return row ? { row, ...found } : null;
+}
+
 // Grouped suggestions; conditions stay empty until their background data (conditions) has loaded.
-export function suggest(index, conditions, query) {
+// numbered: the medicine a typed number names (medicineByNumber(); euNumbers as there), or null.
+export function suggest(index, conditions, query, { euNumbers = null } = {}) {
   const folded = foldSearchText(query);
   const words = queryWords(query);
-  if (folded.length < MIN_QUERY || words.length === 0) return { medicines: [], substances: [], conditions: [] };
+  const numbered = medicineByNumber(index, query, euNumbers);
+  if (folded.length < MIN_QUERY || words.length === 0) return { medicines: [], substances: [], conditions: [], numbered };
   return {
-    medicines: suggestMedicines(index, folded, words),
+    medicines: suggestMedicines(index, folded, words).filter((row) => row !== numbered?.row),
     substances: suggestSubstances(index, folded, words, query),
     conditions: conditions ? suggestConditions(index, conditions, words) : [],
+    numbered,
   };
 }
 

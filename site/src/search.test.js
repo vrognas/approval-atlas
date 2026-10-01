@@ -10,12 +10,16 @@ import {
   conditionPhrases,
   didYouMean,
   editDistance,
+  euNumberIndex,
+  euNumberStarted,
   findWholeWord,
   foldSearchText,
   foldWithMap,
   knownSubstance,
   makeSnippet,
   matchesWords,
+  medicineByNumber,
+  medicineNumber,
   queryWords,
   relaxedQueries,
   searchWithFallback,
@@ -237,8 +241,60 @@ test("buildConditions finds a descriptor by its name", () => {
 });
 
 test("suggest needs at least 2 characters", () => {
-  assert.deepEqual(suggest(index, conditions, "k"), { medicines: [], substances: [], conditions: [] });
+  assert.deepEqual(suggest(index, conditions, "k"), { medicines: [], substances: [], conditions: [], numbered: null });
 });
+
+// Design sweep 2026-10-01 (C7): "EU/1/21/1608", "EMEA/H/C/005422" and "005422" found nothing.
+test("medicineNumber reads an EMA product number or a pack's EU number as typed", () => {
+  const wegovy = { kind: "ema", number: "EMEA/H/C/005422" };
+  assert.deepEqual(medicineNumber("EMEA/H/C/005422"), wegovy);
+  assert.deepEqual(medicineNumber(" emea / h / c / 005422 "), wegovy);
+  assert.deepEqual(medicineNumber("005422"), wegovy);
+  const eu = { kind: "eu", number: "EU/1/21/1608" };
+  assert.deepEqual(medicineNumber("EU/1/21/1608"), eu);
+  assert.deepEqual(medicineNumber("eu/1/21/1608/001"), eu); // a pack's own number
+  assert.deepEqual(medicineNumber("EU / 1 / 21 / 1608"), eu);
+  assert.deepEqual(medicineNumber("EU/1/96/023"), { kind: "eu", number: "EU/1/96/023" });
+  for (const text of ["5422", "0054221", "wegovy", "EU/1/21", "EU/3/21/1608", "L04AC", "glp 1"]) assert.equal(medicineNumber(text), null, text);
+  // Typing one: the search asks for the register's EU numbers from "EU/" on.
+  for (const text of ["EU/", " eu / 1", "EU/1/21/1608"]) assert.equal(euNumberStarted(text), true, text);
+  for (const text of ["EU", "eurneffy", "005422", "EMEA/H/C/005422"]) assert.equal(euNumberStarted(text), false, text);
+});
+
+test("a typed number names its medicine: by EMA product number at once, by EU number once the register is in", () => {
+  const rows = [{ ema_product_number: "EMEA/H/C/005422", name_of_medicine: "Wegovy", substances: "semaglutide", substance_keys: ["semaglutide"], medicine_status: "Authorised", marketing_authorisation_date: "2022-01-06", medicine_type: "Other" }];
+  const numbered = buildLookupIndex(rows, []);
+  const register = new Map([["EMEA/H/C/005422", { ema_product_number: "EMEA/H/C/005422", eu_number: "EU/1/21/1608" }], ["EMEA/H/C/000001", { ema_product_number: "EMEA/H/C/000001", eu_number: null }]]);
+  const euNumbers = euNumberIndex(register);
+  assert.equal(euNumberIndex(register), euNumbers); // built once per dataset
+  assert.deepEqual(Object.fromEntries(euNumbers), { "EU/1/21/1608": "EMEA/H/C/005422" });
+  assert.equal(suggest(numbered, null, "EMEA/H/C/005422").numbered.row.name_of_medicine, "Wegovy");
+  assert.deepEqual(suggest(numbered, null, "005422").numbered.number, "EMEA/H/C/005422");
+  const found = suggest(numbered, null, "EU/1/21/1608/001", { euNumbers });
+  assert.equal(found.numbered.row.name_of_medicine, "Wegovy");
+  assert.equal(found.numbered.number, "EU/1/21/1608");
+  assert.equal(suggest(numbered, null, "EU/1/21/1608").numbered, null); // the register not in yet
+  assert.equal(medicineByNumber(numbered, "EU/1/99/9999", euNumbers), null);
+  assert.equal(medicineByNumber(numbered, "EMEA/H/C/999999"), null);
+  // Not also listed by name.
+  assert.deepEqual(suggest(numbered, null, "wegovy").numbered, null);
+});
+
+const registerFile = new URL("../public/data/ema_medicine_register_status.json", import.meta.url);
+test(
+  "on the real data, every EU number reads as one and names a medicine of the search index (C7)",
+  { skip: existsSync(registerFile) && existsSync(new URL("../public/data/ema_search_index.json", import.meta.url)) ? false : "data files not found" },
+  () => {
+    const rows = JSON.parse(readFileSync(registerFile, "utf8"));
+    const searchIndex = buildLookupIndex(JSON.parse(readFileSync(new URL("../public/data/ema_search_index.json", import.meta.url), "utf8")), []);
+    const euNumbers = euNumberIndex(new Map(rows.map((row) => [row.ema_product_number, row])));
+    const unread = rows.filter((row) => row.eu_number && medicineNumber(row.eu_number)?.number !== row.eu_number);
+    assert.deepEqual(unread, []);
+    const missing = rows.filter((row) => row.eu_number && medicineByNumber(searchIndex, `${row.eu_number}/001`, euNumbers)?.row.ema_product_number !== row.ema_product_number);
+    assert.deepEqual(missing.map((row) => row.eu_number), []);
+    assert.deepEqual([...searchIndex.byNumber.keys()].filter((number) => medicineNumber(number)?.number !== number), []);
+  },
+);
 
 test("medicine names match by word start; exact and prefix matches first, then authorized, then name", () => {
   assert.deepEqual(suggest(index, null, "hu").medicines.map((m) => m.name_of_medicine), ["Humira", "Hulio", "Hulk"]);

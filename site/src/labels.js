@@ -1609,8 +1609,9 @@ export const UI = {
     moreOf: (count, group) => `${formatCount(count)} more ${(UI.lookup.groupNouns[group] ?? ["suggestion", "suggestions"])[count === 1 ? 0 : 1]}`,
     showMore: (count, group) => `Show ${UI.lookup.moreOf(count, group)}`,
     expanded: (count, group) => `Showing ${UI.lookup.moreOf(count, group)}`,
-    // opinion: EMA's opinion (statusOpinionLabel()), once ema_medicines.json has loaded.
-    medicineMeta: (status, year, opinion = null) => [statusOpinionLabel(status, opinion), year].filter(Boolean).join(" · "),
+    // opinion: EMA's opinion (statusOpinionLabel()), once ema_medicines.json has loaded; number: the
+    // EU or EMA product number the query named (design sweep 2026-10-01, C7), in the data's form.
+    medicineMeta: (status, year, opinion = null, number = null) => [number, statusOpinionLabel(status, opinion), year].filter(Boolean).join(" · "),
     // synonym: another name of the substance that matched (#19: "adrenaline" for epinephrine);
     // count: its medicines with status Authorised, as the other groups count (bug hunt 2026-10-01),
     // under all its spellings, as its card counts (copies.js substanceAuthorizedCount()).
@@ -1641,7 +1642,14 @@ export const UI = {
       notYet: "Not searchable yet: development codes (such as MK-3475) and brand names used outside the EU.",
       notInData: "Not in the data: medicines authorized only nationally. Find them in the ",
       registers: "national medicine registers",
-      registersAfter: " (EMA's list). A medicine authorized through EMA has an EU number (EU/1/…) on its pack.",
+      registersAfter: " (EMA's list).",
+      // After registersAfter, unless the query was a number itself (design sweep 2026-10-01, C7:
+      // "EU/1/21/1608" ended on this hint while numbers found nothing; they are searchable now).
+      packNumber: " A medicine authorized through EMA has an EU number (EU/1/…) on its pack, which you can search for.",
+      // A typed EU or EMA product number (search.js medicineNumber()): the medicine it names (its
+      // name a link after numberOf), or that no medicine in the data has it.
+      numberOf: (kind, number) => `${number} is the ${kind === "eu" ? "EU number" : "EMA product number"} of `,
+      noNumber: (kind, number) => `No medicine in the EMA data has the ${kind === "eu" ? "EU number" : "EMA product number"} ${number}.`,
     },
     conditionMeta: (synonym, count) => [synonym ? `matches “${synonym}”` : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
     classMeta: (count, unnamed = false) => [unnamed ? NO_ATC_NAME : null, `${formatCount(count)} authorized`].filter(Boolean).join(" · "),
