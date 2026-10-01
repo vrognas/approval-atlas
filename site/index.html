@@ -336,12 +336,16 @@
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
             <div class="card-title">
-              <h2 id="chart-title">Medicines by year of approval</h2>
+              <h2 id="chart-title" tabindex="-1"></h2>
               <button class="info-button" type="button" aria-expanded="false" aria-controls="chart-info" aria-describedby="chart-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
             </div>
             <button class="view-options-button" type="button" aria-expanded="false" aria-controls="chart-options" aria-describedby="chart-title"><svg class="view-options-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4h7M13 4h1M2 12h1M7 12h7" /><circle cx="11" cy="4" r="2" /><circle cx="5" cy="12" r="2" /></svg><span class="view-options-text"></span><svg class="view-options-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></button>
           </div>
           <p id="chart-takeaway" class="card-takeaway"></p>
+          <!-- Under the default status filter (owner decision 2026-10-01, L4): the chart counts the
+               medicines still authorized, so older years lose those withdrawn since; its button widens
+               the status filter. -->
+          <p id="chart-scope" class="card-scope" hidden><span id="chart-scope-text"></span> <button id="chart-scope-widen" class="lead-button" type="button"></button></p>
           <div id="chart-options" class="view-options" hidden>
             <div class="card-tools">
               <span id="chart-stack-label" class="tools-label"></span>

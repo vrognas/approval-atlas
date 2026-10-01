@@ -1064,8 +1064,17 @@ export const UI = {
     noteStatus: `Each medicine once, in the year it was first approved; colors show its status today. ${YEARS_HOW_TO}`,
     // Stacked by status, before the legend's "Bottom to top:" (owner call 2026-09-30).
     legendHeading: "Status today",
-    // The card's title (owner call 2026-09-30; was "Approvals per year").
+    // The card's title (owner call 2026-09-30; was "Approvals per year"); under the default status
+    // filter titleAuthorized, and under the takeaway the scope line with its widen button (owner
+    // decision 2026-10-01, L4: by default older years lose the medicines withdrawn since, 2000 shows
+    // 19 of its 35 approvals).
     title: "Medicines by year of approval",
+    titleAuthorized: "Authorized medicines by year of approval",
+    scope: {
+      text: "Only medicines still authorized: earlier years lose those withdrawn since.",
+      include: "Include them",
+      includeLabel: "Include them: show medicines of every status",
+    },
     // The segment on top of the stacks beyond the top ones.
     other: { atc: "Other classes", mah: "Other companies" },
     // The segment on top for the medicines a mode cannot place, so every mode gives the same yearly

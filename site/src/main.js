@@ -1673,6 +1673,17 @@ function startDashboard(meta, [
       statusStackButton.focus();
     });
   d3.select("#chart-stack-hint-after").text(UI.years.stack.statusHint.after);
+  // Under the default status filter (owner decision 2026-10-01, L4): the scope line under the
+  // takeaway; its button widens the status filter and moves focus to the card's title, which then
+  // names every status's medicines.
+  d3.select("#chart-scope-text").text(UI.years.scope.text);
+  d3.select("#chart-scope-widen")
+    .text(UI.years.scope.include)
+    .attr("aria-label", UI.years.scope.includeLabel)
+    .on("click", () => {
+      setState({ status: [] });
+      $("#chart-title").focus();
+    });
 
   const substanceIndex = buildSubstanceIndex(substanceRows);
   const areaBranches = termBranches(branchRows);
@@ -2288,6 +2299,11 @@ function startDashboard(meta, [
   }
 
   function renderYears(withoutDateFilter) {
+    // By default (authorized only) the chart counts the medicines still authorized: its title and
+    // scope line say so (owner decision 2026-10-01, L4).
+    const authorizedOnly = isDefaultStatus(state.status);
+    $("#chart-title").textContent = authorizedOnly ? UI.years.titleAuthorized : UI.years.title;
+    $("#chart-scope").hidden = !authorizedOnly;
     stackMode = yearStackMode(stackMode, state.status);
     offerStatusStack(statusStackAvailable(state.status));
     d3.selectAll("#chart-stack button").attr("aria-pressed", function pressed() {

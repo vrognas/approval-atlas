@@ -2818,6 +2818,35 @@ input::placeholder {
   display: none;
 }
 
+/* Under a card's takeaway, on a line of its own (owner decision 2026-10-01, L4): what the card
+   leaves out under the default status filter ("Only medicines still authorized: …"), quiet, then
+   the button that widens it (.lead-button: 44px tall on phones, so the line makes room for it and
+   keeps it clear of the legend below). */
+.card-scope {
+  max-width: 70ch;
+  margin: -4px 0 8px;
+  color: var(--muted);
+  font-size: var(--font-size-13);
+  line-height: 1.25rem;
+}
+
+.card-scope[hidden] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .card-scope {
+    margin: 0 0 12px;
+    line-height: 1.375rem;
+  }
+}
+
+/* The By year card's title takes focus after its scope line's button widened the status filter,
+   only to announce it; it is not a control. */
+#chart-title:focus {
+  outline: none;
+}
+
 /* The (i) panel: the card's method description, the View options panel's hairline above it. */
 .card-info {
   margin: 8px 0 12px;

@@ -1046,6 +1046,13 @@ test("approvals per year by status: the mode, its summary phrase, counting note,
   assert.match(years.noteStatus, /^Each medicine once, in the year it was first approved; colors show its status today\. EMA/);
   assert.equal(years.legendHeading, "Status today");
   assert.equal(years.title, "Medicines by year of approval");
+  // Owner decision 2026-10-01 (L4): under the default status filter the chart counts the medicines
+  // still authorized, so its title says so and a line under the takeaway says what older years lose,
+  // its button widening the filter (named by its visible text first, WCAG 2.5.3).
+  assert.equal(years.titleAuthorized, "Authorized medicines by year of approval");
+  assert.equal(years.scope.text, "Only medicines still authorized: earlier years lose those withdrawn since.");
+  assert.equal(years.scope.include, labels.UI.statusScope.include);
+  assert.ok(years.scope.includeLabel.startsWith(`${years.scope.include}: `));
   // Bug hunt 2026-10-01 fix-up: on a touch screen a tap shows a year's numbers; the tooltip says what a
   // second tap does (toggleYear(): that year alone, or every year when it is the one shown).
   assert.equal(years.tapAgain(2016, false), "Tap again to show only 2016.");
