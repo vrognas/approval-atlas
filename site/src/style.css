@@ -2335,6 +2335,12 @@ input::placeholder {
   margin-top: 16px;
 }
 
+/* Every tab ends the main column's 32px above the footer (design sweep 2026-10-01, A8: a last card's
+   24px margin made it 56px on every tab but the Overview). */
+.tab-panel > :last-child {
+  margin-bottom: 0;
+}
+
 /* Phones: the strip scrolls sideways across the gutters (no page scroll), the tabs closer. */
 @media (max-width: 720px) {
   .tabs {
@@ -7121,12 +7127,20 @@ mark {
 }
 
 footer {
-  padding-top: 16px;
-  border-top: 1px solid var(--grid);
   color: var(--ink-secondary);
   font-size: 0.875rem;
   /* Long URLs in the attribution wrap at 320px instead of scrolling the page. */
   overflow-wrap: anywhere;
+}
+
+/* The footer's hairline on the page column, as the tab strip's (design sweep 2026-10-01, A7: a
+   border on the footer ran 32px past the column at each side, and across the viewport below
+   1264px). */
+footer::before {
+  content: "";
+  display: block;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--grid);
 }
 
 footer p {
