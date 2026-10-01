@@ -116,6 +116,40 @@ test_that("a lasting failure waits for a new PI, another model or ONLY", {
   }
 })
 
+test_that("a lasting failure is planned again at another effort", {
+  plan_at <- function(extractions, effort) {
+    plan_efficacy_extractions(
+      medicines_sample(), documents_sample(), extractions, 10,
+      only = NULL, effort = effort
+    )$ema_product_number
+  }
+  both <- c("EMEA/H/C/004164", "EMEA/H/C/005522")
+  # Recorded before the effort was a setting: every request was at high.
+  failed <- alecensa_extraction("failed", "max_tokens")
+  expect_equal(plan_at(failed, "high"), "EMEA/H/C/005522")
+  expect_equal(plan_at(failed, "medium"), both)
+  failed$extractor_effort <- "medium"
+  expect_equal(plan_at(failed, "medium"), "EMEA/H/C/005522")
+  expect_equal(plan_at(failed, "high"), both)
+  # As for the model: a product extracted without failing is not redone,
+  # nor one that failed before any request.
+  expect_equal(plan_at(alecensa_extraction("ok"), "low"), "EMEA/H/C/005522")
+  no_text <- alecensa_extraction(
+    "failed", "no text read from the PDF",
+    model = NA_character_
+  )
+  expect_equal(plan_at(no_text, "low"), "EMEA/H/C/005522")
+})
+
+test_that("the effort comes from APPROVAL_ATLAS_EFFICACY_EFFORT", {
+  expect_equal(efficacy_effort_from_env(""), "high")
+  expect_equal(efficacy_effort_from_env(" medium "), "medium")
+  expect_error(efficacy_effort_from_env("turbo"), "turbo")
+  expect_error(efficacy_effort_from_env("medium,high"), "one effort")
+  withr::local_envvar(APPROVAL_ATLAS_EFFICACY_EFFORT = "xhigh")
+  expect_equal(efficacy_effort_from_env(), "xhigh")
+})
+
 test_that("the newest product information of a product is planned", {
   documents <- dplyr::bind_rows(
     documents_sample(),
@@ -444,6 +478,7 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_equal(run$extractions$rows_kept, 2L)
   expect_equal(run$extractions$rows_failed, 1L)
   expect_equal(run$extractions$extractor_model, "claude-sonnet-5-5")
+  expect_equal(run$extractions$extractor_effort, "high")
   expect_equal(run$rows$row_order, c(1L, 3L))
   expect_equal(run$rows$page, c(3L, 3L))
   expect_equal(run$rows$verification, c("exact", "exact"))
@@ -510,6 +545,7 @@ test_that("no section 5.1 and a missing PDF are recorded without a request", {
   run <- extract_efficacy_batch(plan_sample(), "claude-sonnet-5-5", 0)
   expect_equal(run$extractions$status, c("no_section", "not_found"))
   expect_equal(run$extractions$extractor_model, c(NA_character_, NA))
+  expect_equal(run$extractions$extractor_effort, c(NA_character_, NA))
 })
 
 test_that("a fetch stop keeps what was fetched and leaves the rest", {
@@ -968,7 +1004,7 @@ test_that("the batch id is shown before it is saved; a failed save warns", {
   pending_path <- withr::local_tempfile(fileext = ".json")
   local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
   local_mocked_bindings(
-    write_pending_batch = function(path, batch_id, model, plan) {
+    write_pending_batch = function(path, batch_id, model, plan, effort) {
       stop("disk full")
     }
   )
@@ -1031,4 +1067,103 @@ test_that("a batch still pending after a run keeps its file", {
   )
   expect_equal(nrow(run$extracted), 0)
   expect_true(file.exists(file.path(directory, "pending-batch.json")))
+})
+
+test_that("the effort goes into the request, the record and the pending file", {
+  pending_path <- withr::local_tempfile(fileext = ".json")
+  sent <- NULL
+  saved <- NULL
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
+  local_mocked_bindings(
+    create_claude_batch = function(requests) {
+      sent <<- requests
+      "msgbatch_1"
+    },
+    claude_batch_status = function(batch_id) {
+      saved <<- read_pending_batch(pending_path)
+      list(status = "ended", results_url = "https://x/results")
+    }
+  )
+  run <- suppressMessages(extract_efficacy_batch(
+    plan_sample(budget = 1), "claude-sonnet-5-5",
+    poll_seconds = 0, today = as.Date("2026-09-30"),
+    pending_path = pending_path, effort = "medium"
+  ))
+  expect_equal(sent[[1]]$params$output_config$effort, "medium")
+  expect_equal(saved$effort, "medium")
+  expect_equal(run$extractions$extractor_model, "claude-sonnet-5-5")
+  expect_equal(run$extractions$extractor_effort, "medium")
+})
+
+test_that("a run at another effort extracts a lasting failure again", {
+  directory <- withr::local_tempdir()
+  write_run_inputs(directory)
+  withr::local_envvar(APPROVAL_ATLAS_EFFICACY_ONLY = "")
+  local_batch(alex_pages(), batch_answer(
+    "EMEA-H-C-003933",
+    list(alex_row(value = "0.99"))
+  ))
+  suppressMessages(run_in(directory))
+  expect_message(run_in(directory), "No product to extract")
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-003933", list()))
+  expect_message(
+    run <- run_in(directory, effort = "max"),
+    "at effort \"max\""
+  )
+  expect_equal(run$extracted$status, "no_rows")
+  expect_equal(run$extracted$extractor_effort, "max")
+  extractions <- read_efficacy_extractions(
+    file.path(directory, "extractions.json")
+  )
+  expect_equal(
+    extractions$extractor_effort[
+      extractions$ema_product_number == "EMEA/H/C/003933"
+    ],
+    "max"
+  )
+})
+
+test_that("an unknown effort stops the extractor before anything", {
+  directory <- withr::local_tempdir()
+  write_run_inputs(directory)
+  local_mocked_bindings(
+    fetch_efficacy_pages = function(plan_row) stop("no fetch expected"),
+    create_claude_batch = function(requests) stop("no batch expected")
+  )
+  expect_error(run_in(directory, effort = "turbo"), "turbo")
+  expect_error(run_in(directory, effort = c("low", "high")), "one effort")
+  expect_false(file.exists(file.path(directory, "pending-batch.json")))
+})
+
+test_that("a resumed batch keeps its effort; one saved without it is high", {
+  for (effort in c("low", NA)) {
+    directory <- pending_run_directory()
+    pending_path <- file.path(directory, "pending-batch.json")
+    pending <- read_pending_batch(pending_path)
+    write_pending_batch(
+      pending_path, pending$batch_id, pending$model, pending$plan[1, ],
+      effort = dplyr::coalesce(effort, "low")
+    )
+    if (is.na(effort)) {
+      # As written before the effort was saved.
+      lines <- readLines(pending_path)
+      writeLines(lines[!grepl("\"effort\"", lines)], pending_path)
+      expect_equal(read_pending_batch(pending_path)$effort, "high")
+    }
+    local_batch(
+      alex_pages(),
+      batch_answer("EMEA-H-C-003933", list(alex_row()))
+    )
+    local_mocked_bindings(
+      create_claude_batch = function(requests) stop("no new batch expected"),
+      fetch_efficacy_pages = function(plan_row) stop("no fetch expected"),
+      cached_efficacy_pages = function(plan_row) alex_pages()
+    )
+    run <- suppressMessages(run_in(directory, effort = "medium"))
+    expect_equal(run$extracted$extractor_model, "claude-opus-5-5")
+    expect_equal(
+      run$extracted$extractor_effort,
+      dplyr::coalesce(effort, "high")
+    )
+  }
 })

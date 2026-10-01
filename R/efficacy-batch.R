@@ -93,7 +93,8 @@ efficacy_extraction_record <- function(plan_row,
                                        reason = NA_character_,
                                        rows_kept = 0L,
                                        rows_failed = 0L,
-                                       model = NA_character_) {
+                                       model = NA_character_,
+                                       effort = NA_character_) {
   typed_table(list(list(
     ema_product_number = plan_row$ema_product_number,
     document_url = plan_row$document_url,
@@ -103,6 +104,7 @@ efficacy_extraction_record <- function(plan_row,
     rows_kept = rows_kept,
     rows_failed = rows_failed,
     extractor_model = model,
+    extractor_effort = effort,
     extracted_at = today
   )), efficacy_extraction_types)
 }
@@ -127,7 +129,7 @@ failed_efficacy_row <- function(product_number, row, errors) {
 
 # Fetches and slices every planned product until EMA says stop: products
 # without section 5.1 or a PDF are recorded at once, the others get a request.
-prepare_efficacy_requests <- function(plan, model, today) {
+prepare_efficacy_requests <- function(plan, model, effort, today) {
   records <- list()
   submissions <- list()
   for (index in seq_len(nrow(plan))) {
@@ -160,6 +162,7 @@ prepare_efficacy_requests <- function(plan, model, today) {
       dplyr::coalesce(plan_row$therapeutic_indication, ""),
       section$text,
       model,
+      effort = effort,
       max_tokens = efficacy_batch_max_tokens
     )
     submissions <- c(submissions, list(list(
@@ -205,12 +208,12 @@ check_answer_row <- function(row, order, submission, model, today) {
   list(record = record)
 }
 
-efficacy_outcome <- function(submission, result, model, today) {
+efficacy_outcome <- function(submission, result, model, effort, today) {
   plan_row <- submission$plan_row
   failed <- function(reason) {
     list(extraction = efficacy_extraction_record(
       plan_row, "failed", today,
-      reason = reason, model = model
+      reason = reason, model = model, effort = effort
     ))
   }
   if (is.null(result)) {
@@ -250,7 +253,7 @@ efficacy_outcome <- function(submission, result, model, today) {
     extraction = efficacy_extraction_record(
       plan_row, status, today,
       reason = reason, rows_kept = nrow(rows),
-      rows_failed = nrow(failed_rows), model = model
+      rows_failed = nrow(failed_rows), model = model, effort = effort
     ),
     rows = rows,
     failed_rows = failed_rows

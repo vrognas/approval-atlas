@@ -132,13 +132,48 @@ efficacy_system_prompt <- function() {
   )
 }
 
+# The API's effort levels (output_config.effort).
+efficacy_effort_levels <- c("low", "medium", "high", "xhigh", "max")
+
+efficacy_default_effort <- "high"
+
+# The effort of every request made before the effort was a setting (this
+# file's default then): a pending batch, saved result or extraction record
+# that names none was asked at it.
+efficacy_legacy_effort <- "high"
+
+# Stops, before any request, on an effort the API does not know; `setting`
+# names where it came from.
+check_efficacy_efforts <- function(efforts, setting) {
+  unknown <- unique(efforts[!efforts %in% efficacy_effort_levels])
+  levels <- c(i = "The API's effort levels: {.val {efficacy_effort_levels}}.")
+  if (length(efforts) == 0) {
+    cli::cli_abort(c("{setting} names no effort level.", levels))
+  }
+  if (length(unknown) > 0) {
+    cli::cli_abort(c("{setting}: unknown effort {.val {unknown}}.", levels))
+  }
+  invisible(efforts)
+}
+
+# The effort levels of a comma list (an environment variable), the default
+# when it names none.
+efficacy_efforts_from_text <- function(value, setting) {
+  efforts <- trimws(strsplit(value, ",", fixed = TRUE)[[1]])
+  efforts <- unique(efforts[nzchar(efforts)])
+  if (length(efforts) == 0) {
+    return(efficacy_default_effort)
+  }
+  check_efficacy_efforts(efforts, setting)
+}
+
 # The system prompt is below the minimum prefix the API caches, so it carries
 # no cache_control marker: claiming a cache here would be wrong.
 efficacy_request_params <- function(medicine_name,
                                     indication_text,
                                     section_text,
                                     model,
-                                    effort = "high",
+                                    effort = efficacy_default_effort,
                                     max_tokens = 16000L) {
   content <- paste0(
     "Medicine: ", medicine_name, "\n\n",

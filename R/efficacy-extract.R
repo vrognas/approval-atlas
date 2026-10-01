@@ -30,6 +30,24 @@ efficacy_budget_from_env <- function(value =
   as.integer(value)
 }
 
+# One effort level of the API (`setting` names where it came from).
+check_efficacy_effort <- function(effort, setting) {
+  check_efficacy_efforts(effort, setting)
+  if (length(effort) != 1) {
+    cli::cli_abort("{setting} must name one effort level, not {.val {effort}}.")
+  }
+  invisible(effort)
+}
+
+# APPROVAL_ATLAS_EFFICACY_EFFORT: one effort level, "high" when unset.
+efficacy_effort_from_env <- function(value =
+                                       Sys.getenv(
+                                         "APPROVAL_ATLAS_EFFICACY_EFFORT"
+                                       )) {
+  setting <- "APPROVAL_ATLAS_EFFICACY_EFFORT"
+  check_efficacy_effort(efficacy_efforts_from_text(value, setting), setting)
+}
+
 # A comma list of product numbers, or NULL when unset.
 efficacy_only_from_env <- function(value =
                                      Sys.getenv(
@@ -78,7 +96,8 @@ efficacy_extraction_types <- c(
   ema_product_number = "character", document_url = "character",
   document_last_updated_date = "Date", status = "character",
   reason = "character", rows_kept = "integer", rows_failed = "integer",
-  extractor_model = "character", extracted_at = "Date"
+  extractor_model = "character", extractor_effort = "character",
+  extracted_at = "Date"
 )
 
 empty_typed_column <- function(type) {
@@ -154,7 +173,7 @@ read_efficacy_extractions <- function(path = efficacy_extractions_path) {
 # the batch never answered. Others (a request the API refused as invalid,
 # truncated, refused, no row verified, no text read) would fail again and be
 # billed again, so they wait for new product information, another model or
-# APPROVAL_ATLAS_EFFICACY_ONLY (ruling R9).
+# effort, or APPROVAL_ATLAS_EFFICACY_ONLY (ruling R9).
 is_transient_efficacy_failure <- function(reason) {
   grepl(
     paste0(
@@ -167,14 +186,17 @@ is_transient_efficacy_failure <- function(reason) {
 
 # Authorised medicines with product information that were never extracted,
 # whose product information changed since, or whose extraction failed in a
-# way worth retrying; with `only`, exactly the listed products (extracted or
-# not, so they can be extracted again). Newest documents first.
+# way worth retrying (transient, or a lasting failure with another model or
+# effort level than now); with `only`, exactly the listed products (extracted
+# or not, so they can be extracted again). Newest documents first. A record
+# with a model and no effort was asked at the legacy effort.
 plan_efficacy_extractions <- function(medicines,
                                       documents,
                                       extractions,
                                       budget,
                                       only = efficacy_only_from_env(),
-                                      model = efficacy_default_model) {
+                                      model = efficacy_default_model,
+                                      effort = efficacy_default_effort) {
   product_information <- documents |>
     dplyr::filter(.data$document_type == "product-information") |>
     dplyr::arrange(
@@ -198,8 +220,14 @@ plan_efficacy_extractions <- function(medicines,
       extracted_document_date = "document_last_updated_date",
       extracted_status = "status",
       extracted_reason = "reason",
-      extracted_model = "extractor_model"
-    )
+      extracted_model = "extractor_model",
+      extracted_effort = "extractor_effort"
+    ) |>
+    dplyr::mutate(extracted_effort = dplyr::if_else(
+      is.na(.data$extracted_model),
+      .data$extracted_effort,
+      dplyr::coalesce(.data$extracted_effort, efficacy_legacy_effort)
+    ))
   candidates <- medicines |>
     dplyr::filter(.data$medicine_status == "Authorised") |>
     dplyr::select(
@@ -226,7 +254,8 @@ plan_efficacy_extractions <- function(medicines,
         ) |
         (dplyr::coalesce(.data$extracted_status == "failed", FALSE) & (
           is_transient_efficacy_failure(.data$extracted_reason) |
-            dplyr::coalesce(.data$extracted_model != model, FALSE)
+            dplyr::coalesce(.data$extracted_model != model, FALSE) |
+            dplyr::coalesce(.data$extracted_effort != effort, FALSE)
         ))
     )
   } else {
@@ -265,6 +294,7 @@ efficacy_pipeline_hint <- c(
 
 run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
                                     model = efficacy_default_model,
+                                    effort = efficacy_default_effort,
                                     poll_seconds = 60,
                                     medicines_path =
                                       "site/public/data/ema_medicines.json",
@@ -277,6 +307,7 @@ run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
                                       efficacy_extractions_path,
                                     pending_path = efficacy_pending_path,
                                     today = Sys.Date()) {
+  check_efficacy_effort(effort, "`effort`")
   inputs <- c(medicines_path, documents_path)
   missing <- inputs[!file.exists(inputs)]
   if (length(missing) > 0) {
@@ -294,7 +325,7 @@ run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
       read_epar_documents(documents_path)$data
     )
     plan <- plan_efficacy_extractions(medicines, documents, old_extractions,
-                                      budget, model = model)
+                                      budget, model = model, effort = effort)
     if (nrow(plan) == 0) {
       cli::cli_inform("No product to extract.")
       return(invisible(list(
@@ -304,10 +335,11 @@ run_efficacy_extraction <- function(budget = efficacy_budget_from_env(),
       )))
     }
     cli::cli_inform(
-      "{nrow(plan)} product{?s} to extract with {.val {model}}."
+      "{nrow(plan)} product{?s} to extract with {.val {model}} at effort
+      {.val {effort}}."
     )
     run <- extract_efficacy_batch(plan, model, poll_seconds, today,
-                                  pending_path)
+                                  pending_path, effort = effort)
   }
   replaced <- run$extractions$ema_product_number[
     run$extractions$status %in% efficacy_replacing_statuses
@@ -379,8 +411,8 @@ report_efficacy_run <- function(run, rows) {
   report_failed_extractions(
     failed[!transient, ],
     paste(
-      "Failed, not retried until the product information or the model",
-      "changes, or APPROVAL_ATLAS_EFFICACY_ONLY lists it (ruling R9):"
+      "Failed, not retried until the product information, the model or the",
+      "effort changes, or APPROVAL_ATLAS_EFFICACY_ONLY lists it (ruling R9):"
     )
   )
   if (nrow(run$failed_rows) > 0) {
