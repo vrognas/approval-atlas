@@ -81,10 +81,21 @@ const shownActive = new WeakMap();
 // The width of the edges' fade (style.css: the chip row's and the tab strip's mask).
 export const STRIP_FADE = 40;
 
+// Scrolls a sideways-scrolling row (phones) so its item shows clear of the edges' fades
+// (revealScroll()). Not scrollIntoView, which would move the page too.
+function revealItem(row, item, behavior) {
+  if (row.scrollWidth <= row.clientWidth) return;
+  const rowBox = row.getBoundingClientRect();
+  const box = item.getBoundingClientRect();
+  const start = box.left - rowBox.left - row.clientLeft + row.scrollLeft;
+  const left = revealScroll(row.scrollLeft, row.clientWidth, row.scrollWidth, start, start + box.width, STRIP_FADE);
+  if (left !== null) row.scrollTo({ left, behavior });
+}
+
 // Phones (the row scrolls sideways): the first active chip into view, when the active chips changed
-// and no control of the row has focus (focus brings its own control into view). Not scrollIntoView,
-// which would move the page too; smooth but under reduced motion, and on the first render. A row not
-// laid out yet (hidden) waits for its first size (the ResizeObserver below).
+// and no control of the row has focus (focus brings its own control into view: revealOnFocus()).
+// Smooth but under reduced motion, and on the first render. A row not laid out yet (hidden) waits
+// for its first size (the ResizeObserver below).
 function revealActive(row, focused = row.contains(document.activeElement)) {
   const pills = [...row.querySelectorAll(".filter-chip-active")];
   const active = pills.map((pill) => pill.dataset.chip).join(" ");
@@ -92,14 +103,28 @@ function revealActive(row, focused = row.contains(document.activeElement)) {
   const first = !shownActive.has(row);
   shownActive.set(row, active);
   const chip = focused ? null : pills[0];
-  if (!chip || row.scrollWidth <= row.clientWidth) return;
-  const rowBox = row.getBoundingClientRect();
-  const box = chip.getBoundingClientRect();
-  const start = box.left - rowBox.left + row.scrollLeft;
-  const left = revealScroll(row.scrollLeft, row.clientWidth, row.scrollWidth, start, start + box.width, STRIP_FADE);
-  if (left === null) return;
+  if (!chip) return;
   const instant = first || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  row.scrollTo({ left, behavior: instant ? "auto" : "smooth" });
+  revealItem(row, chip, instant ? "auto" : "smooth");
+}
+
+// Pure: the item of a sideways-scrolling row (selector: a chip, a tab) to bring clear of the edges'
+// fades when focus moves to target, or null. Only focus that shows (:focus-visible: the keyboard's):
+// a tap or a click focuses its control too, and a scroll between its press and its release would put
+// another control under the pointer and lose the click. A chip's remove button reveals its whole pill.
+export function focusRevealItem(target, selector) {
+  if (!target?.matches?.(":focus-visible")) return null;
+  return target.closest?.(selector) ?? null;
+}
+
+// Keyboard focus on a chip or tab under the row's edge fade (design sweep 2026-10-01, L6 fix-up:
+// Chrome leaves a partly shown control where it is, so ArrowRight to Companies at 390px left "Com"
+// and its focus ring in the fade): the row scrolls it clear of the fades at once, as focus moves.
+export function revealOnFocus(row, selector) {
+  row.addEventListener("focusin", (event) => {
+    const item = focusRevealItem(event.target, selector);
+    if (item && row.contains(item)) revealItem(row, item, "auto");
+  });
 }
 
 // row: the chips' container (#filter-chips). chips: filterChips(). openKey: the chip whose popover
@@ -148,6 +173,7 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
   row.replaceChildren(...nodes);
   if (!faded.has(row)) {
     faded.add(row);
+    revealOnFocus(row, ".filter-chip");
     row.addEventListener("scroll", () => fadeEdges(row), { passive: true });
     new ResizeObserver(() => {
       revealActive(row);

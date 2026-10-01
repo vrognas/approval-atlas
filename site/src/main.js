@@ -54,7 +54,7 @@ import {
   yearStackMode,
   yearStacks,
 } from "./facets.js";
-import { STRIP_FADE, fadeEdges, renderFilterChips, renderFilterSummary, revealScroll, watchEdgeFade } from "./filter-bar.js";
+import { STRIP_FADE, fadeEdges, renderFilterChips, renderFilterSummary, revealOnFocus, revealScroll, watchEdgeFade } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { createHistoryScroll, placeAt, restoreStep } from "./history-scroll.js";
 import { companyBadge, holderDisplay } from "./holders.js";
@@ -1417,8 +1417,10 @@ function startDashboard(meta, [
   }
   $("#tabs").addEventListener("keydown", tabsKeydown);
   // Phones: the strip's edges fade where more tabs lie beyond them, as the chip row's (design sweep
-  // 2026-10-01, L6: at 390px By year and Medicines were hidden behind a hard cut).
+  // 2026-10-01, L6: at 390px By year and Medicines were hidden behind a hard cut), and a tab the keys
+  // focus scrolls clear of them.
   watchEdgeFade($("#tabs"));
+  revealOnFocus($("#tabs"), "[role=tab]");
   for (const link of previewTabLinks) {
     link.textContent = UI.previews.tabLink(UI.tabs.names[link.dataset.tabLink]);
     link.addEventListener("click", (event) => {

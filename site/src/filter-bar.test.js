@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { edgeFade, revealScroll } from "./filter-bar.js";
+import { edgeFade, focusRevealItem, revealScroll } from "./filter-bar.js";
 
 // Review of F · Spacious phase 1: on phones the chip row scrolls sideways with 2 of 7 chips showing
 // at 320px and no hint that more follow. An edge fades where more chips lie beyond it.
@@ -34,4 +34,32 @@ test("revealScroll: the scroll that shows a chip clear of the edges, or null whe
   assert.equal(revealScroll(0, 390, 1200, 500, 900, 40), 500);
   // Sub-pixel differences are no scroll.
   assert.equal(revealScroll(308.4, 390, 900, 554, 658, 40), null);
+});
+
+// Review of L6: ArrowRight from Overview focused Companies at 356-436px in the 390px tab strip
+// (623px wide), Chrome leaving the partly shown tab where it was, so "Com" and its focus ring lay in
+// the right edge's 40px fade; at 320px Medicines (534-607 in the strip, scrolled 236) lay 91px in it.
+test("focusRevealItem: keyboard focus reveals the chip or tab holding it; a tap or click none", () => {
+  const tablist = { id: "tabs" };
+  const tab = { id: "companies" };
+  const pill = { id: "pill" };
+  const target = (focusVisible, parents) => ({
+    matches: (selector) => selector === ":focus-visible" && focusVisible,
+    closest: (selector) => parents[selector] ?? null,
+  });
+  assert.equal(focusRevealItem(target(true, { "[role=tab]": tab, "[role=tablist]": tablist }), "[role=tab]"), tab);
+  // A chip's remove button: its whole pill.
+  assert.equal(focusRevealItem(target(true, { ".filter-chip": pill }), ".filter-chip"), pill);
+  // Focus a tap or click gave: no scroll between press and release, which would lose the click.
+  assert.equal(focusRevealItem(target(false, { "[role=tab]": tab }), "[role=tab]"), null);
+  // Focus outside any item, or no element.
+  assert.equal(focusRevealItem(target(true, {}), "[role=tab]"), null);
+  assert.equal(focusRevealItem(null, "[role=tab]"), null);
+  assert.equal(focusRevealItem({}, "[role=tab]"), null);
+  // The scrolls it gives: Companies ends 40px clear of the edge; Medicines at the strip's end, where
+  // no fade shows.
+  assert.equal(revealScroll(0, 390, 623, 356, 436, 40), 86);
+  assert.equal(revealScroll(236, 320, 623, 534, 607, 40), 303);
+  // Overview, back at the start: the strip's start (its 16px padding before the tab).
+  assert.equal(revealScroll(233, 390, 623, 16, 84, 40), 0);
 });
