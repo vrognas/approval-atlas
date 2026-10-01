@@ -164,13 +164,41 @@ test_that("the system prompt states the rules the verifier relies on", {
   expect_match(prompt, "at most three", fixed = TRUE)
   expect_match(prompt, "ci_is_range", fixed = TRUE)
   expect_match(prompt, "not a statement of significance", fixed = TRUE)
-  expect_match(
-    prompt,
-    "Copy population, regimen and comparator verbatim from the text",
-    fixed = TRUE
-  )
   expect_match(prompt, "the arm sizes (n_treatment, n_control)", fixed = TRUE)
   expect_match(prompt, "the same quote as arm_control", fixed = TRUE)
+})
+
+test_that("the system prompt asks for text copied, not written", {
+  prompt <- efficacy_system_prompt()
+  has <- function(phrase) expect_match(prompt, phrase, fixed = TRUE)
+  has("population, regimen, comparator, endpoint and assessment")
+  has("the shortest span of section 5.1 that states")
+  has("Do not paraphrase, expand or abbreviate")
+  has("do not join words printed apart")
+  has("copy the comparator's header into comparator_column_label")
+  has("\"\" when no table with a column per arm holds the result")
+  # The instructions these replace are gone.
+  expect_no_match(prompt, "never summarise or reword", fixed = TRUE)
+  expect_no_match(prompt, "must appear inside a quote", fixed = TRUE)
+})
+
+test_that("the schema describes the fields copied from the text", {
+  properties <- efficacy_row_schema()$properties$rows$items$properties
+  described <- c(
+    "population", "regimen", "comparator", "comparator_column_label",
+    "endpoint", "assessment"
+  )
+  for (field in described) {
+    expect_type(properties[[field]]$description, "character")
+  }
+  expect_match(properties$endpoint$description, "as printed", fixed = TRUE)
+  expect_match(
+    properties$comparator_column_label$description,
+    "no table has a column per arm",
+    fixed = TRUE
+  )
+  expect_null(properties$trial$description)
+  expect_equal(properties$trial, list(type = "string"))
 })
 
 test_that("text that is only spaces is not stated", {
@@ -195,7 +223,7 @@ test_that("the system prompt defines every enum value and the empty cases", {
   has("is left out")
   has("never paraphrased")
   has("\"\" when no given indication applies")
-  has("and the arm values (arm_treatment, arm_control) must appear inside")
+  has("the arm values (arm_treatment, arm_control), with")
   has("For every field the text does not state, use \"\"")
   has("Never estimate.")
 })

@@ -209,6 +209,33 @@ test_that("flags name every reason a row needs a human", {
   ))
 })
 
+test_that("only arm values need the comparator's column label", {
+  exact <- list(status = "exact", warnings = character())
+  # KEYNOTE-024 (Keytruda): the HR alone, from a table or a sentence.
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "0.50", comparator = "chemotherapy",
+    comparator_column_label = NULL, effect_type = "hr"
+  )
+  expect_equal(efficacy_flags(row, exact), character())
+  # REGARD (Cyramza): medians from a sentence, which prints no column label.
+  with_arms <- c(row, list(arm_treatment = "5.2", arm_control = "3.8"))
+  expect_equal(efficacy_flags(with_arms, exact), "comparator_label_missing")
+  only_control <- c(row, list(arm_control = "3.8"))
+  expect_equal(efficacy_flags(only_control, exact), "comparator_label_missing")
+  with_arms$comparator_column_label <- "placebo"
+  expect_equal(efficacy_flags(with_arms, exact), character())
+  # Arms blanked as not verified: arms_not_verified alone hides the row.
+  blanked <- without_unverified_arms(
+    c(row, list(arm_treatment = "5.2", arm_control = "3.8")),
+    c("arm_treatment", "arm_control")
+  )
+  expect_equal(
+    efficacy_flags(blanked, list(flags = "arms_not_verified")),
+    "arms_not_verified"
+  )
+})
+
 test_that("a clean row has no flags; single-arm HRs and ranges are flagged", {
   row <- list(
     ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",

@@ -45,6 +45,17 @@ mentions_not_reached <- function(text) {
   !is_absent(text) && grepl("\\b(NR|NE)\\b", text, perl = TRUE)
 }
 
+# Arm values given without the comparator's column label, which ties the
+# control's values to their column (comparator_label_check()). A row without
+# arm values has nothing for a label to tie: its effect is one number for
+# both arms, and prose results print no column label at all.
+arm_values_unlabelled <- function(row) {
+  has_arms <- !is_absent(row[["arm_treatment"]]) ||
+    !is_absent(row[["arm_control"]])
+  has_arms && !is_absent(row[["comparator"]]) &&
+    is_absent(row[["comparator_column_label"]])
+}
+
 # Every reason a verified row needs a human before it is shown.
 efficacy_flags <- function(row, verification) {
   ci_level <- row[["ci_level"]]
@@ -63,8 +74,7 @@ efficacy_flags <- function(row, verification) {
       \(field) mentions_not_reached(row[[field]])
     )),
     single_arm_hr = single_arm_hr,
-    comparator_label_missing = !is_absent(row[["comparator"]]) &&
-      is_absent(row[["comparator_column_label"]]),
+    comparator_label_missing = arm_values_unlabelled(row),
     # A row given its page (extracted rows) whose quote was not placed.
     page_unknown = "page" %in% names(row) && is_absent(row[["page"]])
   )
