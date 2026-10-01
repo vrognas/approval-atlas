@@ -393,6 +393,12 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
+/* The date itself never breaks (A10; main.js renderDataDate()): where the line wraps (320px phones,
+   below), it wraps before the date. */
+.brand-day {
+  white-space: nowrap;
+}
+
 .topbar-actions {
   grid-area: actions;
   justify-self: end;
@@ -2233,6 +2239,15 @@ input::placeholder {
   }
 }
 
+/* The breakdown's mode switch in its card head as tall as View options beside it, 32px (design sweep
+   2026-10-01, A10: 35px); 44px on phones (below). */
+@media (min-width: 721px) {
+  #breakdown-by button {
+    min-height: 30px;
+    padding-block: 0;
+  }
+}
+
 /* Phones: with Modality (M2 phase 2) the five "Stack by" and four "Break down by" segments no
    longer fit in one row (335px at 320px): they wrap, each a chip with its own border. */
 @media (max-width: 599px) {
@@ -2293,10 +2308,15 @@ input::placeholder {
   display: none;
 }
 
+/* Each tab as wide as its name in the shown tab's weight (design sweep 2026-10-01, A10: the shown
+   tab's 600 weight widened it 1.8px and moved every later tab): a hidden bold copy of the name
+   (data-label, set by main.js) under it, of no height and no part of its name. */
 .tab {
   display: flex;
   flex: none;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
   min-height: 44px;
   padding: 0;
   border: 0;
@@ -2307,6 +2327,15 @@ input::placeholder {
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.tab::after {
+  content: attr(data-label);
+  content: attr(data-label) / "";
+  height: 0;
+  overflow: hidden;
+  font-weight: 600;
+  visibility: hidden;
 }
 
 .tab:hover {
@@ -5784,13 +5813,30 @@ table.activity {
 }
 
 /* The Status block's lead: the status pill, "since" and the date, then the qualifier chips, wrapping
-   as whole items. */
+   as whole items, on one baseline (design sweep 2026-10-01, A10: centred, the pill's text sat 6-7px
+   above "since"'s). */
 .card .status-lead {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: 6px 10px;
   margin: 0 0 12px;
+}
+
+/* The pill's baseline its text's (its dot, an empty first item, would otherwise give it one at the
+   dot's foot), the dot still centred. */
+.card .status-lead .status {
+  align-items: baseline;
+}
+
+.card .status-lead .status::before {
+  align-self: center;
+}
+
+/* On the baseline the 26px pill sits 3px below the date's 28px line and would end 1px under it,
+   moving the document buttons 1px down on phones: the line keeps the date's height. */
+.card .status-lead .status-tip {
+  margin-bottom: -1px;
 }
 
 .status-since {

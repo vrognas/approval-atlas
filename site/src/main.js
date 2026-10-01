@@ -930,8 +930,23 @@ function focusQuietly(element) {
 // source line (the data's date follows with meta.json), the search field's name and placeholder, the
 // page heading, the filter bar's name, the footer and the About disclosure (without the data's
 // versions and dates until meta.json has loaded: renderFooter(meta)).
+// The wordmark's date line, the date in a run that does not wrap (A10: at 320px the line broke inside
+// the date, "30 Sep / 2026"; now before it).
+function renderDataDate(date) {
+  const [lead, day] = UI.dataDateRuns(date);
+  const node = document.querySelector("#data-date");
+  if (!day) {
+    node.textContent = lead;
+    return;
+  }
+  const run = document.createElement("span");
+  run.className = "brand-day";
+  run.textContent = day;
+  node.replaceChildren(lead, run);
+}
+
 function renderAbout() {
-  d3.select("#data-date").text(UI.dataDate(null));
+  renderDataDate(null);
   d3.select("#page-title").text(UI.page.title(SOURCES));
   d3.select("#page-scope").text(UI.page.scope(SOURCES));
   d3.select("#filter-bar-label").text(UI.filters.label);
@@ -1104,7 +1119,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
       firstFile = null;
     });
   }
-  d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
+  renderDataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10));
   renderFooter(meta);
   showOfflineNote(meta);
 
@@ -1351,6 +1366,8 @@ function startDashboard(meta, [
   }
   for (const button of tabButtons) {
     button.textContent = UI.tabs.names[button.dataset.tab];
+    // Its name again for style.css's hidden bold copy, which keeps the tab as wide shown or not (A10).
+    button.dataset.label = UI.tabs.names[button.dataset.tab];
     button.addEventListener("click", () => showTab(button.dataset.tab));
   }
   $("#tabs").addEventListener("keydown", tabsKeydown);

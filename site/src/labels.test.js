@@ -294,6 +294,13 @@ test("the top bar shows the source and the data date in display form", () => {
   assert.equal(labels.UI.offline("2026-09-26"), "Offline: data as of 26 Sep 2026");
 });
 
+test("the top bar's data date as runs, the date last and whole (design sweep A10)", () => {
+  // main.js keeps the last run on one line: at 320px the line broke inside the date.
+  assert.deepEqual(labels.UI.dataDateRuns("2026-09-30"), ["EMA data as of ", labels.formatDate("2026-09-30")]);
+  assert.deepEqual(labels.UI.dataDateRuns(null), ["EMA data"]);
+  assert.equal(labels.UI.dataDateRuns("2026-09-30").join(""), labels.UI.dataDate("2026-09-30"));
+});
+
 test("raw EMA statuses fall into four kinds; unknown statuses count as ended", () => {
   const kinds = {
     Authorised: "authorized",

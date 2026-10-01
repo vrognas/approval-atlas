@@ -333,8 +333,10 @@ export const UI = {
   // Under the wordmark in the top bar (F · Spacious, phase 1): the source and the data's date ("EMA
   // data" until meta.json has loaded). The tagline and the scope line left the bar: beside the
   // search they did not fit one clean line; the intro card and the About disclosure say what the site
-  // covers (EMA's central procedure).
-  dataDate: (date) => (date ? `EMA data as of ${formatDate(date)}` : "EMA data"),
+  // covers (EMA's central procedure). dataDateRuns(): the same line as runs, the date last, which the
+  // top bar keeps on one line (design sweep A10: at 320px the line broke inside the date).
+  dataDateRuns: (date) => (date ? ["EMA data as of ", formatDate(date)] : ["EMA data"]),
+  dataDate: (date) => UI.dataDateRuns(date).join(""),
   // The dashboard's page heading (F · Spacious, phase 1): the answer headline is its lead paragraph.
   // Source-neutral since 2026-09-30 (owner decision: other regulators' data may follow); the scope
   // line under it names the sources (SOURCES): "Human medicines authorized EU-wide through EMA", or,
