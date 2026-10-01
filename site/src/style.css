@@ -2472,6 +2472,28 @@ input::placeholder {
   .tab {
     font-size: var(--font-size-15);
   }
+
+  /* Its edges fade where more tabs lie beyond them, as the chip row's (design sweep 2026-10-01, L6:
+     at 390px "Comp" was cut hard and By year and Medicines hidden, at 320px three tabs; main.js sets
+     .scroll-start / .scroll-end, filter-bar.js edgeFade()). The hairline under the strip stays whole:
+     its bottom 1px is a mask layer of its own. */
+  .tabs:is(.scroll-start, .scroll-end) {
+    mask-size: 100% calc(100% - 1px), 100% 1px;
+    mask-position: top, bottom;
+    mask-repeat: no-repeat;
+  }
+
+  .tabs.scroll-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent), linear-gradient(#000, #000);
+  }
+
+  .tabs.scroll-start {
+    mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent), linear-gradient(#000, #000);
+  }
+
+  .tabs.scroll-start.scroll-end {
+    mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent), linear-gradient(#000, #000);
+  }
 }
 
 /* The Overview's previews of other tabs (overview-previews.js): three cards side by side from a

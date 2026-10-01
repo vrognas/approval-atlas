@@ -42,13 +42,65 @@ export function edgeFade(scrollLeft, scrollWidth, clientWidth) {
   return { start: scrollLeft > 1, end: scrollLeft + clientWidth < scrollWidth - 1 };
 }
 
-// The row's fade classes (style.css), after a render, a scroll or a resize.
-function fadeEdges(row) {
+// The row's fade classes (style.css), after a render, a scroll or a resize. Also the tab strip's
+// (main.js; design sweep 2026-10-01, L6).
+export function fadeEdges(row) {
   const { start, end } = edgeFade(row.scrollLeft, row.scrollWidth, row.clientWidth);
   row.classList.toggle("scroll-start", start);
   row.classList.toggle("scroll-end", end);
 }
 const faded = new WeakSet();
+
+// Keeps an element's fade classes in step with its scrolling and its size (the tab strip).
+export function watchEdgeFade(element) {
+  element.addEventListener("scroll", () => fadeEdges(element), { passive: true });
+  new ResizeObserver(() => fadeEdges(element)).observe(element);
+  fadeEdges(element);
+}
+
+// Pure: the scrollLeft that shows a chip (start and end in the row's scroll coordinates) margin clear
+// of the row's edges (their fades); one too wide for that centred, one wider than the row from its
+// start; null when it already shows (design sweep 2026-10-01, L5: ?mah=g.roche at 390px left the
+// Company chip at 554-658px, off the row, and the headline does not name Roche).
+export function revealScroll(scrollLeft, clientWidth, scrollWidth, start, end, margin) {
+  const width = end - start;
+  let left = scrollLeft;
+  if (width + 2 * margin > clientWidth) {
+    if (start >= left && end <= left + clientWidth) return null;
+    left = width > clientWidth ? start : start - (clientWidth - width) / 2;
+  } else {
+    if (end + margin > left + clientWidth) left = end + margin - clientWidth;
+    if (start - margin < left) left = start - margin;
+  }
+  left = Math.max(0, Math.min(left, scrollWidth - clientWidth));
+  return Math.abs(left - scrollLeft) < 1 ? null : left;
+}
+
+// The active chips the row last showed, so it scrolls only when they change (and on the first render).
+const shownActive = new WeakMap();
+// The width of the edges' fade (style.css: the chip row's and the tab strip's mask).
+export const STRIP_FADE = 40;
+
+// Phones (the row scrolls sideways): the first active chip into view, when the active chips changed
+// and no control of the row has focus (focus brings its own control into view). Not scrollIntoView,
+// which would move the page too; smooth but under reduced motion, and on the first render. A row not
+// laid out yet (hidden) waits for its first size (the ResizeObserver below).
+function revealActive(row, focused = row.contains(document.activeElement)) {
+  const pills = [...row.querySelectorAll(".filter-chip-active")];
+  const active = pills.map((pill) => pill.dataset.chip).join(" ");
+  if (shownActive.get(row) === active || row.clientWidth === 0) return;
+  const first = !shownActive.has(row);
+  shownActive.set(row, active);
+  const chip = focused ? null : pills[0];
+  if (!chip || row.scrollWidth <= row.clientWidth) return;
+  const rowBox = row.getBoundingClientRect();
+  const box = chip.getBoundingClientRect();
+  const start = box.left - rowBox.left + row.scrollLeft;
+  const left = revealScroll(row.scrollLeft, row.clientWidth, row.scrollWidth, start, start + box.width, STRIP_FADE);
+  if (left === null) return;
+  const instant = first || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  row.scrollTo({ left, behavior: instant ? "auto" : "smooth" });
+}
 
 // row: the chips' container (#filter-chips). chips: filterChips(). openKey: the chip whose popover
 // is open (aria-expanded), or null. onOpen(key), onRemove(chip).
@@ -97,8 +149,12 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
   if (!faded.has(row)) {
     faded.add(row);
     row.addEventListener("scroll", () => fadeEdges(row), { passive: true });
-    new ResizeObserver(() => fadeEdges(row)).observe(row);
+    new ResizeObserver(() => {
+      revealActive(row);
+      fadeEdges(row);
+    }).observe(row);
   }
+  revealActive(row, Boolean(focused));
   fadeEdges(row);
   if (!focused) return;
   const chipKey = focused.split(":")[0];

@@ -54,7 +54,7 @@ import {
   yearStackMode,
   yearStacks,
 } from "./facets.js";
-import { renderFilterChips, renderFilterSummary } from "./filter-bar.js";
+import { STRIP_FADE, fadeEdges, renderFilterChips, renderFilterSummary, revealScroll, watchEdgeFade } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
 import { createHistoryScroll, placeAt, restoreStep } from "./history-scroll.js";
 import { companyBadge, holderDisplay } from "./holders.js";
@@ -1416,6 +1416,9 @@ function startDashboard(meta, [
     button.addEventListener("click", () => showTab(button.dataset.tab));
   }
   $("#tabs").addEventListener("keydown", tabsKeydown);
+  // Phones: the strip's edges fade where more tabs lie beyond them, as the chip row's (design sweep
+  // 2026-10-01, L6: at 390px By year and Medicines were hidden behind a hard cut).
+  watchEdgeFade($("#tabs"));
   for (const link of previewTabLinks) {
     link.textContent = UI.previews.tabLink(UI.tabs.names[link.dataset.tabLink]);
     link.addEventListener("click", (event) => {
@@ -1448,8 +1451,11 @@ function startDashboard(meta, [
       tabShown = tab;
       const nav = $("#tabs");
       const start = current.offsetLeft - nav.offsetLeft;
-      if (start < nav.scrollLeft || start + current.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = Math.max(0, start - 16);
+      // Clear of the edges' fades (L6), as the chip row shows its active chip.
+      const left = revealScroll(nav.scrollLeft, nav.clientWidth, nav.scrollWidth, start, start + current.offsetWidth, STRIP_FADE);
+      if (left !== null) nav.scrollLeft = left;
     }
+    fadeEdges($("#tabs"));
     if (focusTab) {
       focusTab = false;
       $("#tabs").scrollIntoView({ block: "start" });
