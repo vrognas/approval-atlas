@@ -204,7 +204,7 @@ test("the About disclosure states scope, intended use and privacy", () => {
   assert.deepEqual(about.use("2026-09-28"), [
     "For information only: not medical, legal or regulatory advice, and not meant for decisions about any patient's care, so it is not a medical device. Check the official product information and ask a health professional. Approval Atlas does not recommend any medicine.",
     "Data are processed automatically and partly checked by hand; they can lag EMA or contain errors. Provided as is, without warranty.",
-    "Protection dates are rough estimates from EU central approval dates only: not patent or supplementary protection certificate data, and not legal advice.",
+    "Protection dates are rough estimates from central EU approval dates only: not patent or supplementary protection certificate data, and not legal advice.",
     "Company groups show the current owner as curated here (as of 28\u00a0Sep\u00a02026), not an official record.",
   ]);
   assert.equal(about.use(null)[3], "Company groups show the current owner as curated here, not an official record.");
@@ -306,6 +306,18 @@ test("dates, (est.) and a date range's dash never start a line on their own", ()
   const values = [...textValues(labels)];
   assert.ok(values.some((text) => /\u00a0\(est\.\)/.test(text)));
   assert.deepEqual(values.filter((text) => /[ \t]\((partly )?est\.\)/.test(text)), []);
+});
+
+// Owner decision 2026-10-01 (C5): one term per concept in the copy (function bodies included):
+// "central EU approval" (the basis note said "EU central (EMA) approval dates" beside "Counted from
+// the first central EU approval"), and "these filters", as the headline's "match these filters".
+test("one term per concept: central EU approval, these filters", () => {
+  const values = [...textValues(labels)];
+  assert.ok(values.some((text) => /central EU approval/.test(text)));
+  assert.deepEqual(values.filter((text) => /EU central|\bcentral approval/.test(text)), []);
+  assert.deepEqual(values.filter((text) => /current filters|matching the filters|match the filters/.test(text)), []);
+  assert.equal(labels.UI.protection.basisNote, "Estimated from central EU approval dates (EMA) only; earlier national authorizations are not counted.");
+  assert.equal(labels.UI.breakdown.empty, "No medicines match these filters.");
 });
 
 test("the top bar shows the source and the data date in display form", () => {
@@ -744,7 +756,7 @@ test("the therapeutic area tree: search, rows, included areas, the static row an
   assert.equal(labels.UI.activity.otherTitle, "Other therapeutic areas");
   assert.equal(
     labels.UI.conditions.subtitle(33, true, true),
-    "Conditions of the 33 medicines matching the filters, within the selected areas, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.",
+    "Conditions of the 33 medicines matching these filters, within the selected areas, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.",
   );
 });
 
@@ -1079,12 +1091,12 @@ test("the conditions card names its ranking, what it counts, its columns and sor
   // review 2026-09-29), then what a treatment is (step 4, #10: distinct substance sets, a combination
   // on its own); then where the broad categories are (owner decision 2026-09-29: not ranked here).
   assert.equal(conditions.subtitle(2351, false), "Conditions of all 2,351 medicines in the EMA data, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
-  assert.equal(conditions.subtitle(33, true), "Conditions of the 33 medicines matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
-  assert.equal(conditions.subtitle(1, true), "Conditions of the 1 medicine matching the filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(33, true), "Conditions of the 33 medicines matching these filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(1, true), "Conditions of the 1 medicine matching these filters, each with its narrower ones; treatments are the active substances or combinations of the authorized ones. Broad categories such as Neoplasms are in the therapeutic area filter.");
   // Owner decision 2026-09-29 ("Authorized by default"): only authorized medicines shown.
   assert.equal(conditions.subtitle(1573, false, false, true), "Conditions of all 1,573 authorized medicines, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
-  assert.equal(conditions.subtitle(33, true, true, true), "Conditions of the 33 authorized medicines matching the filters, within the selected areas, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
-  assert.equal(conditions.subtitle(1, true, false, true), "Conditions of the 1 authorized medicine matching the filters, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(33, true, true, true), "Conditions of the 33 authorized medicines matching these filters, within the selected areas, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
+  assert.equal(conditions.subtitle(1, true, false, true), "Conditions of the 1 authorized medicine matching these filters, each with its narrower ones; treatments are their active substances or combinations. Broad categories such as Neoplasms are in the therapeutic area filter.");
   assert.equal(conditions.authorizedTip(120), "120 authorized medicines");
   assert.equal(conditions.authorizedTip(1), "1 authorized medicine");
   assert.deepEqual(conditions.headers, { condition: "Condition", treatments: "Treatments", medicines: "Authorized medicines" });
@@ -1109,7 +1121,7 @@ test("the conditions card names its ranking, what it counts, its columns and sor
   assert.equal(conditions.unlisted(1), "1 condition without an authorized treatment is not listed.");
   assert.equal(conditions.substances(16), "16 active substances or combinations");
   assert.equal(conditions.substances(1), "1 active substance or combination");
-  assert.equal(conditions.empty(0), "No medicines match the current filters.");
+  assert.equal(conditions.empty(0), "No medicines match these filters.");
   assert.equal(conditions.empty(1), "No therapeutic area is listed for this medicine.");
   assert.equal(conditions.empty(3), "No therapeutic areas are listed for these medicines.");
   // None of the conditions has an authorized medicine (e.g. only withdrawn ones shown): nothing to
@@ -1224,7 +1236,7 @@ test("the ATC breakdown copy counts medicines of every status", () => {
   assert.equal(labels.UI.breakdown.mah.titleIn("Sanofi", false), "Medicines of Sanofi by company");
   assert.equal(labels.UI.breakdown.mah.titleIn("Genzyme Europe B.V.", true), "Medicines of Genzyme Europe B.V. by EMA holder name");
   assert.equal(labels.UI.breakdown.mah.titleLeaf("Roche"), "Medicines of Roche");
-  assert.equal(labels.UI.breakdown.empty, "No medicines match the current filters.");
+  assert.equal(labels.UI.breakdown.empty, "No medicines match these filters.");
   // Phase 4c review: retired and incomplete codes are mapped (atcCode()), so the note says how.
   // Phase 4e: curated codes (checked by hand) complete the rest.
   assert.equal(atc.note, "Retired codes count under the class WHO moved them to. Missing or incomplete EMA codes are filled in where possible: from the product information (SmPC), else from WHO's ATC index, its temporary list or the SmPC text, checked by hand.");
@@ -1467,25 +1479,25 @@ test("copies lines: generics and biosimilars of the same substance, or none yet"
 test("copies lines: a copy's card names the other medicines of its substance and its first central approval", () => {
   const { copies } = labels.UI;
   const hyrimoz = copies.same(10, "adalimumab", 1, { name: "Trudexa", date: "2003-09-01" });
-  assert.equal(partsText(hyrimoz), "10 other authorized medicines have the same active substance (adalimumab); first central approval 1\u00a0Sep\u00a02003 (Trudexa).");
+  assert.equal(partsText(hyrimoz), "10 other authorized medicines have the same active substance (adalimumab); first central EU approval 1\u00a0Sep\u00a02003 (Trudexa).");
   assert.deepEqual(hyrimoz.filter((part) => typeof part !== "string"), [{ text: "adalimumab", link: "substance" }, { text: "Trudexa", link: "first" }]);
   assert.equal(partsText(copies.same(1, "sitagliptin + metformin hydrochloride", 2, null)), "1 other authorized medicine has the same active substances (sitagliptin + metformin hydrochloride).");
   assert.equal(partsText(copies.same(0, "x", 1, null)), "No other authorized medicine has the same active substance (x).");
   // Step 4 (owner request 2026-09-28): a first approval no longer authorized says so, so "No other
   // authorized medicine" does not read against it (Qdenga: Dengvaxia, withdrawn).
   const qdenga = copies.same(0, "dengue tetravalent vaccine (live, attenuated)", 1, { name: "Dengvaxia", date: "2018-12-12", status: "Withdrawn" });
-  assert.equal(partsText(qdenga), "No other authorized medicine has the same active substance (dengue tetravalent vaccine (live, attenuated)); the first central approval was Dengvaxia (12\u00a0Dec\u00a02018), since withdrawn.");
+  assert.equal(partsText(qdenga), "No other authorized medicine has the same active substance (dengue tetravalent vaccine (live, attenuated)); the first central EU approval was Dengvaxia (12\u00a0Dec\u00a02018), since withdrawn.");
   assert.deepEqual(qdenga.filter((part) => typeof part !== "string"), [{ text: "dengue tetravalent vaccine (live, attenuated)", link: "substance" }, { text: "Dengvaxia", link: "first" }]);
-  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Expired" })), "2 other authorized medicines have the same active substance (x); the first central approval was Y (1\u00a0Jan\u00a02010), since expired.");
+  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Expired" })), "2 other authorized medicines have the same active substance (x); the first central EU approval was Y (1\u00a0Jan\u00a02010), since expired.");
   // Authorized, or its status unknown: as before.
-  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Authorised" })), "2 other authorized medicines have the same active substance (x); first central approval 1\u00a0Jan\u00a02010 (Y).");
+  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Authorised" })), "2 other authorized medicines have the same active substance (x); first central EU approval 1\u00a0Jan\u00a02010 (Y).");
 });
 
 // Step 3 (#8): salt spellings of one substance on the substance card.
 test("substance card: another spelling of the same substance, with its medicines and first approval", () => {
   const { substance } = labels.UI;
   const line = substance.sibling("dasatinib (anhydrous)", 3, { name: "Sprycel", date: "2006-11-20" });
-  assert.equal(partsText(line), "Also listed as dasatinib (anhydrous): 3 medicines, first central approval 20\u00a0Nov\u00a02006 (Sprycel).");
+  assert.equal(partsText(line), "Also listed as dasatinib (anhydrous): 3 medicines, first central EU approval 20\u00a0Nov\u00a02006 (Sprycel).");
   assert.deepEqual(line.filter((part) => typeof part !== "string"), [{ text: "dasatinib (anhydrous)", link: "sibling" }]);
   assert.equal(partsText(substance.sibling("x", 1, null)), "Also listed as x: 1 medicine.");
   // Step 3 review: with other spellings, the headline and strip count them all, the list this one's.
@@ -1506,7 +1518,7 @@ test("protection copy: strip cell, basis note and the other-company reason", () 
   assert.equal(protection.glance.orphan(2033, "computed"), "Orphan market exclusivity until 2033\u00a0(est.)");
   assert.equal(protection.glance.orphan(2033, "register"), "Orphan market exclusivity until 2033");
   assert.equal(protection.glance.orphan(2033, null), "Orphan market exclusivity until 2033\u00a0(est.)");
-  assert.equal(protection.basisNote, "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.");
+  assert.equal(protection.basisNote, "Estimated from central EU approval dates (EMA) only; earlier national authorizations are not counted.");
   assert.ok(!protection.caveats.includes("Based only on EU central authorization dates."));
   for (const text of [card.estimate, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {
     assert.doesNotMatch(text, /patent/i);

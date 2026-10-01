@@ -288,7 +288,7 @@ test("the calendar's labels: the unclear line names the latest year, the empty y
   assert.equal(copy.unclear(38, 2027), "38 more medicines may lose market protection by 2027: their earliest estimated end has passed, their latest has not. Not counted above.");
   assert.equal(copy.unclear(1, 2026), "1 more medicine may lose market protection by 2026: its earliest estimated end has passed, its latest has not. Not counted above.");
   assert.equal(copy.empty("2028", false), "No medicine counted here has its earliest estimated end in 2028.");
-  assert.equal(copy.empty("2028", true), "No medicine matching the filters counted here has its earliest estimated end in 2028.");
+  assert.equal(copy.empty("2028", true), "No medicine matching these filters counted here has its earliest estimated end in 2028.");
   assert.equal(copy.orphanOnlyLine(20, 2027, 2036), "20 more medicines have orphan market exclusivity\u00a0(est.) running after their estimated market protection, ending 2027–2036. Not counted above.");
   assert.equal(copy.orphanOnlyLine(1, 2029, 2029), "1 more medicine has orphan market exclusivity\u00a0(est.) running after its estimated market protection, ending 2029. Not counted above.");
   assert.equal(copy.orphanOnlyTitle(20), "Orphan market exclusivity\u00a0(est.) after market protection: 20 medicines");

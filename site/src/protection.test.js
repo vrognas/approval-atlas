@@ -52,7 +52,7 @@ test("a generic whose reference is not centrally authorized shows no dates", () 
   const missing = { ...own, basis: "reference_not_found", reference_product_number: null, reference_name: null, counted_from: null, data_exclusivity_end: null, market_protection_end_min: null, market_protection_end_max: null, status: null };
   assert.deepEqual(protectionSummary(missing, [], "x", "2026-09-26"), {
     status: "Data/market protection: None of its own",
-    lines: ["No protection of its own; its reference medicine was not found among EU central authorizations"],
+    lines: ["No protection of its own; its reference medicine was not found among central EU approvals"],
     orphan: [],
   });
 });
@@ -208,20 +208,20 @@ test("a curated copy of a nationally authorized medicine names its reference and
   const summary = protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: buprenorphineNeuraxpharmCopy });
   assert.equal(summary.status, "Data/market protection: None of its own");
   assert.deepEqual(summary.lines, [[
-    "No protection of its own; a hybrid of Subutex (authorized nationally, so no EU central date to count from).",
+    "No protection of its own; a hybrid of Subutex (authorized nationally, so no central EU approval date to count from).",
     " ",
     { text: "Source", url: "https://www.ema.europa.eu/en/medicines/human/EPAR/buprenorphine-neuraxpharm" },
   ]]);
   // The copy type as the row gives it (Sugammadex Adroiq is a generic, Tuznue a biosimilar).
   assert.equal(protectionSummary(buprenorphineNeuraxpharm, [], "x", "2026-09-29", null, { curated: { ...buprenorphineNeuraxpharmCopy, copy_type: "generic" } }).lines[0][0],
-    "No protection of its own; a generic of Subutex (authorized nationally, so no EU central date to count from).");
+    "No protection of its own; a generic of Subutex (authorized nationally, so no central EU approval date to count from).");
   // No https evidence: the sentence alone.
   assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "x", "2026-09-29", null, { curated: { ...buprenorphineNeuraxpharmCopy, evidence_url: "http://example.org" } }).lines,
-    ["No protection of its own; a hybrid of Subutex (authorized nationally, so no EU central date to count from)."]);
+    ["No protection of its own; a hybrid of Subutex (authorized nationally, so no central EU approval date to count from)."]);
 });
 
 test("without its curated row (older data, a missing file) a copy without a central reference reads as before", () => {
-  const generic = "No protection of its own; its reference medicine was not found among EU central authorizations";
+  const generic = "No protection of its own; its reference medicine was not found among central EU approvals";
   assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null).lines, [generic]);
   assert.deepEqual(protectionSummary(buprenorphineNeuraxpharm, [], "buprenorphine", "2026-09-29", null, { curated: undefined }).lines, [generic]);
   // A generic EMA flags whose reference is national has no curated row either.

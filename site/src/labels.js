@@ -276,7 +276,7 @@ const statusCount = ({ status, count }) => `${formatCount(count)} ${STATUS_PHRAS
 // The dek lists this many statuses; the rest are summed up.
 const DEK_STATUSES = 4;
 // Draft (loss-of-exclusivity calendar): the caveats of its captions (the medicine card's, shortened).
-const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance (from its own approval for a pediatric-use marketing authorization), or 11 with the possible extra year; each range spans both. The estimates ignore derogations and pediatric rewards other than a pediatric-use marketing authorization's own protection; copies not yet checked by hand count as medicines of their own. Not legal advice.";
+const CALENDAR_CAVEATS = "Estimated from central EU approval dates (EMA) only; earlier national authorizations are not counted. Market protection runs 10 years from the first central EU approval of the active substance (from its own approval for a pediatric-use marketing authorization), or 11 with the possible extra year; each range spans both. The estimates ignore derogations and pediatric rewards other than a pediatric-use marketing authorization's own protection; copies not yet checked by hand count as medicines of their own. Not legal advice.";
 // Orphan market exclusivity ends (owner decision 2026-09-30, "be specific where you can, else
 // estimate"): an end the Union Register publishes (end_source "register") is exact, no mark; one
 // computed from the link date (+ 10 years + extension) is an estimate, "(est.)". A label covering
@@ -911,7 +911,7 @@ export const UI = {
       titleLeaf: (name) => `Medicines in ${name}`,
       note: "A medicine whose substances have several modalities appears in each.",
     },
-    empty: "No medicines match the current filters.",
+    empty: "No medicines match these filters.",
     // Bar order (UI state): most first, or ATC classes by code, areas in MeSH tree order (owner
     // request 2026-09-28, as the tree), modalities in tree order and holders by name.
     sort: { label: "Sort", count: "Count", key: { atc: "Code", area: "MeSH", mah: "Name", mod: "Tree" } },
@@ -935,7 +935,7 @@ export const UI = {
     // 2026-09-29).
     subtitle: (count, filtered, within = false, authorizedOnly = false) => {
       const medicines = authorizedOnly ? plural(count, "authorized medicine", "authorized medicines") : plural(count, "medicine", "medicines");
-      const which = filtered ? `Conditions of the ${medicines} matching the filters` : `Conditions of all ${medicines}${authorizedOnly ? "" : " in the EMA data"}`;
+      const which = filtered ? `Conditions of the ${medicines} matching these filters` : `Conditions of all ${medicines}${authorizedOnly ? "" : " in the EMA data"}`;
       const treatments = authorizedOnly ? "their active substances or combinations" : "the active substances or combinations of the authorized ones";
       return `${which}${within ? ", within the selected areas" : ""}, each with its narrower ones; treatments are ${treatments}. Broad categories such as Neoplasms are in the therapeutic area filter.`;
     },
@@ -959,7 +959,7 @@ export const UI = {
     substances: (count) => plural(count, "active substance or combination", "active substances or combinations"),
     // count: the medicines shown, none of which has a therapeutic area.
     empty: (count) => {
-      if (count === 0) return "No medicines match the current filters.";
+      if (count === 0) return "No medicines match these filters.";
       return count === 1 ? "No therapeutic area is listed for this medicine." : "No therapeutic areas are listed for these medicines.";
     },
     // count: the conditions of the medicines shown, none with an authorized medicine (e.g. only
@@ -1021,7 +1021,7 @@ export const UI = {
       `${plural(count, "medicine", "medicines")} without an approval date (refused, application withdrawn, pending…) ${count === 1 ? "is" : "are"} not in this chart${ranged ? ", and the year filter leaves them out of every count" : ""}.`,
     // Before the legend (in stack order): position tells the segments apart, not only colour.
     legendLead: "Bottom to top:",
-    empty: "No medicines with an approval date match the current filters.",
+    empty: "No medicines with an approval date match these filters.",
     // by: what the columns are stacked by (UI.years.by).
     summary: (first, last, total, peakYear, peakCount, by) =>
       `Stacked column chart of EU approvals per year by ${by}, ${first} to ${last}: ` +
@@ -1916,11 +1916,11 @@ export const UI = {
     // Backlog (step 4 review): a curated copy of a central reference says what it is (type: the
     // row's copy_type), then links the EMA page that says so (copyEvidence), as nationalReference.
     curatedFollows: (type, name) => `No protection of its own; a ${copyTypeWord(type)} of ${name}.`,
-    referenceNotFound: "No protection of its own; its reference medicine was not found among EU central authorizations",
+    referenceNotFound: "No protection of its own; its reference medicine was not found among central EU approvals",
     // Step 4 review: a curated copy of a nationally authorized medicine (no central reference);
     // type: the row's copy_type; then a link to the EMA page that says so (copyEvidence).
     nationalReference: (type, name) =>
-      `No protection of its own; a ${copyTypeWord(type)} of ${name} (authorized nationally, so no EU central date to count from).`,
+      `No protection of its own; a ${copyTypeWord(type)} of ${name} (authorized nationally, so no central EU approval date to count from).`,
     copyEvidence: "Source",
     // Step 3 (#6): counted from another company group's earlier medicine of the same substance set
     // (basis other_company_reference; own: the medicine's own group's first approval date, or
@@ -1929,7 +1929,7 @@ export const UI = {
     otherCompany: (substance, name, date, own) =>
       `The first central EU approval of ${substance} was another company's medicine (${name ? `${name}, ` : ""}${formatDate(date)}). Counted from this company's own first approval${own ? ` (${formatDate(own)})` : ""}, protection would end later; the market protection range covers both.`,
     // Step 3 (#7, e): the estimate's basis, next to the chip (it used to sit in the collapsed caveats).
-    basisNote: "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.",
+    basisNote: "Estimated from central EU approval dates (EMA) only; earlier national authorizations are not counted.",
     // The medicine card's protection lead (protectionGlance(); the answer strip's "Protection (est.)"
     // cell before F · Spacious, phase 4): the market protection
     // range's years while protected, else the status; then orphan exclusivity still running.
@@ -1976,8 +1976,8 @@ export const UI = {
     note: `Currently authorized medicines whose EU market protection${EST} still runs, by the earliest year it can end. Select a year to list them. ${CALENDAR_CAVEATS}`,
     loading: "Loading estimates…",
     summary: (running, authorized, filtered) =>
-      `${formatCount(running)} of ${formatCount(authorized)} currently authorized medicines${filtered ? " matching the filters" : ""} ${running === 1 ? "has" : "have"} market protection running${EST}.`,
-    none: (filtered) => `No currently authorized medicine${filtered ? " matching the filters" : ""} has estimated market protection running.`,
+      `${formatCount(running)} of ${formatCount(authorized)} currently authorized medicines${filtered ? " matching these filters" : ""} ${running === 1 ? "has" : "have"} market protection running${EST}.`,
+    none: (filtered) => `No currently authorized medicine${filtered ? " matching these filters" : ""} has estimated market protection running.`,
     // The two segments of a year's bar: what they differ in (both end that year at the earliest).
     // orphan(ends): the orphan ends the bars count ({ source }; orphanEstimateOf()).
     legend: {
@@ -2009,7 +2009,7 @@ export const UI = {
     orphanOnlyTitle: (count, orphanEnds = []) => `Orphan market exclusivity${orphanEstimateOf(orphanEnds)} after market protection: ${plural(count, "medicine", "medicines")}`,
     orphanOnlyUntil: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} until ${formatDate(orphanEnd.end)}`,
     listTitle: (label, count) => `Earliest estimated end of market protection in ${label}: ${plural(count, "medicine", "medicines")}`,
-    empty: (label, filtered) => `No medicine${filtered ? " matching the filters" : ""} counted here has its earliest estimated end in ${label}.`,
+    empty: (label, filtered) => `No medicine${filtered ? " matching these filters" : ""} counted here has its earliest estimated end in ${label}.`,
     range: (min, max) => `Market protection ends${EST} ${formatDate(min)}${max && max !== min ? `${NBSP}– ${formatDate(max)}` : ""}`,
     ended: (date) => `Market protection ended${EST} ${formatDate(date)}`,
     // A copy (generic, biosimilar, hybrid) with its own orphan market exclusivity (morning QA 2026-09-29).
@@ -2041,7 +2041,7 @@ export const UI = {
     // first: { name, date } or null.
     sibling: (name, count, first) => [
       "Also listed as ", { text: name, link: "sibling" }, `: ${plural(count, "medicine", "medicines")}`,
-      first ? `, first central approval ${formatDate(first.date)} (${first.name})` : "", ".",
+      first ? `, first central EU approval ${formatDate(first.date)} (${first.name})` : "", ".",
     ],
   },
 
@@ -2080,8 +2080,8 @@ export const UI = {
         `${count === 0 ? "No other authorized medicine has" : `${plural(count, "other authorized medicine", "other authorized medicines")} ${count === 1 ? "has" : "have"}`} the same active ${substances === 1 ? "substance" : "substances"} (`,
         { text: substance, link: "substance" }, ")",
         !first ? []
-          : ended ? ["; the first central approval was ", { text: first.name, link: "first" }, ` (${formatDate(first.date)}), since ${statusLabel(first.status).toLowerCase()}`]
-            : [`; first central approval ${formatDate(first.date)} (`, { text: first.name, link: "first" }, ")"],
+          : ended ? ["; the first central EU approval was ", { text: first.name, link: "first" }, ` (${formatDate(first.date)}), since ${statusLabel(first.status).toLowerCase()}`]
+            : [`; first central EU approval ${formatDate(first.date)} (`, { text: first.name, link: "first" }, ")"],
         ".",
       ].flat();
     },
@@ -2200,7 +2200,7 @@ export const UI = {
     use: (date = null) => [
       "For information only: not medical, legal or regulatory advice, and not meant for decisions about any patient's care, so it is not a medical device. Check the official product information and ask a health professional. Approval Atlas does not recommend any medicine.",
       "Data are processed automatically and partly checked by hand; they can lag EMA or contain errors. Provided as is, without warranty.",
-      "Protection dates are rough estimates from EU central approval dates only: not patent or supplementary protection certificate data, and not legal advice.",
+      "Protection dates are rough estimates from central EU approval dates only: not patent or supplementary protection certificate data, and not legal advice.",
       `Company groups show the current owner as curated here${date ? ` (as of ${formatDate(date)})` : ""}, not an official record.`,
     ],
     // One list item per source (parts). explained: the data credits the ATC class explanations (owner
