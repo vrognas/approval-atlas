@@ -19,6 +19,17 @@ const EST = `${NBSP}(est.)`;
 // One name for the protection card, its Overview preview and the company page's list (owner
 // decision 2026-10-01, C4: the card was "Protection ending (est.)", its preview this).
 const PROTECTION_ENDING = `Market protection ending${EST}`;
+// A medicine not authorized now, as its protection lead names it (UI.protection.glance.notAuthorized()),
+// by EMA's raw status; other: a status not listed (one never authorized has no lead).
+const LEAD_STATUS = {
+  Withdrawn: (name) => `${name} is withdrawn`,
+  Suspended: (name) => `${name} is suspended`,
+  Expired: (name) => `${name}'s authorization has expired`,
+  Lapsed: (name) => `${name}'s authorization has lapsed`,
+  Revoked: (name) => `${name}'s authorization was revoked`,
+  "Application withdrawn": (name) => `${name}'s application was withdrawn`,
+  other: (name) => `${name} is not authorized now`,
+};
 
 // "2018-02-08" -> "8 Feb 2018" (no-break spaces) for display; data, URL and state keep ISO dates.
 export function formatDate(iso) {
@@ -1952,6 +1963,11 @@ export const UI = {
       // exclusivity", as everywhere else (owner decision 2026-10-01, C4: was "Orphan exclusivity").
       orphan: (year, source) => `Orphan market exclusivity until ${year}${orphanEstimate({ source })}`,
       link: ", see the estimate in More details",
+      // After the lead of a medicine not authorized now, which is then in the body type (owner
+      // decision 2026-10-01, C3b): its status, "Market protection until 2031–2032 (est.); Skysona is
+      // withdrawn." Never "would run … but": protection keeps running after a withdrawal, and generics
+      // can still refer to the dossier. status: EMA's raw status.
+      notAuthorized: (name, status) => `; ${(LEAD_STATUS[status] ?? LEAD_STATUS.other)(name)}.`,
     },
     orphan: (condition, date, source, ended) =>
       `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)}${source === "register" ? `${NBSP}(Union Register)` : EST}`,

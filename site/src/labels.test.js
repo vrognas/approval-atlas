@@ -1542,6 +1542,28 @@ test("protection copy: one card name, one range form, one orphan term", () => {
   assert.ok(protection.caveats.every((text) => !/orphan exclusivity/i.test(text)), "one term: orphan market exclusivity");
 });
 
+// Owner decision 2026-10-01 (C3b): a medicine not authorized now has its protection lead in the
+// body type, followed by its status; never "would run … but" (protection runs on after a withdrawal).
+test("protection lead: a medicine not authorized now says its status after the estimate", () => {
+  const { glance } = labels.UI.protection;
+  assert.equal(`${glance.until(2031, 2032)}${labels.UI.card.estimate}${glance.notAuthorized("Skysona", "Withdrawn")}`,
+    "Market protection until 2031–2032 (est.); Skysona is withdrawn.");
+  assert.equal(glance.notAuthorized("Oxbryta", "Suspended"), "; Oxbryta is suspended.");
+  assert.equal(glance.notAuthorized("Blenrep", "Expired"), "; Blenrep's authorization has expired.");
+  assert.equal(glance.notAuthorized("Temybric Ellipta", "Lapsed"), "; Temybric Ellipta's authorization has lapsed.");
+  assert.equal(glance.notAuthorized("Ocaliva", "Revoked"), "; Ocaliva's authorization was revoked.");
+  assert.equal(glance.notAuthorized("Graspa", "Application withdrawn"), "; Graspa's application was withdrawn.");
+  assert.equal(glance.notAuthorized("X", "Something new"), "; X is not authorized now.");
+  assert.doesNotMatch(glance.notAuthorized("Skysona", "Withdrawn"), /would|but/);
+});
+
+test("real data: every status of a dated medicine not authorized now has its own wording", { skip: !existsSync(new URL("../public/data/ema_search_index.json", import.meta.url)) }, () => {
+  const rows = JSON.parse(readFileSync(new URL("../public/data/ema_search_index.json", import.meta.url), "utf8"));
+  const statuses = new Set(rows.filter((row) => row.marketing_authorisation_date && labels.statusKind(row.medicine_status) !== "authorized").map((row) => row.medicine_status));
+  assert.ok(statuses.size > 0);
+  for (const status of statuses) assert.doesNotMatch(labels.UI.protection.glance.notAuthorized("X", status), /not authorized now/, status);
+});
+
 // Backlog (step 4 review): the legal basis is no longer EMA's flags alone; copies EMA does not flag
 // are checked by hand against their EPAR pages (ema_curated_copies.json), and not every one yet.
 test("protection caveats: the legal basis comes from EMA flags and from copies checked by hand", () => {

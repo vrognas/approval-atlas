@@ -782,7 +782,8 @@ export function createLookup(panel, {
   // The Protection and copies block's lead (F · Spacious, phase 4; the answer strip's "Protection
   // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after "Market protection until …" (glanceIsEstimate()),
   // as a link to the estimate in More details, then, muted, a copy's reference's years and orphan
-  // exclusivity still running. Medicines never approved have no estimate (null).
+  // exclusivity still running; for a medicine not authorized now, in the body type with its status
+  // (C3b). Medicines never approved have no estimate (null).
   function protectionLead(row) {
     if (!row.marketing_authorisation_date) return null;
     const protection = need("protection");
@@ -797,14 +798,19 @@ export function createLookup(panel, {
     const { label } = UI.protection.glance;
     const labelled = glance.value.startsWith(`${label} `);
     const shown = labelled ? glance.value.slice(label.length + 1) : glance.value;
+    // A medicine not authorized now (owner decision 2026-10-01, C3b): the whole lead in the body type
+    // (it is no answer to "is it protected?" for a medicine that cannot be sold), then its status:
+    // "Market protection until 2031–2032 (est.); Skysona is withdrawn."
+    const authorizedNow = statusKind(row.medicine_status) === "authorized";
     return el("div", { class: "protection-lead" },
-      el("p", { class: "answer-value" },
+      el("p", { class: authorizedNow ? "answer-value" : "lead-plain" },
         labelled ? [el("span", { class: "lead-label", "aria-hidden": "true" }, label), " "] : null,
         el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
           labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
           shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
         // Its no-break space keeps it on the line of the years (design sweep 2026-10-01, C1).
-        glanceIsEstimate(protectionRow) ? el("span", { class: "lead-estimate" }, UI.card.estimate) : null),
+        glanceIsEstimate(protectionRow) ? el("span", { class: "lead-estimate" }, UI.card.estimate) : null,
+        authorizedNow ? null : UI.protection.glance.notAuthorized(row.name_of_medicine, row.medicine_status)),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
       glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,
       glance.orphan ? el("p", { class: "lead-note" }, glance.orphan) : null);

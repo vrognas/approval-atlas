@@ -6064,6 +6064,22 @@ table.activity {
   font-weight: 400;
 }
 
+/* A medicine not authorized now (owner decision 2026-10-01, C3b): the protection lead in the body
+   type, as the copies lines under it, with its status after it ("…; Skysona is withdrawn."); its
+   label and "(est.)" as the rest of the sentence. */
+.card p.lead-plain {
+  margin: 0;
+  font-size: var(--font-size-15);
+  line-height: 1.375rem;
+}
+
+.lead-plain .lead-label,
+.lead-plain .lead-estimate {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
 .card .lead-note {
   margin: 2px 0 0;
   color: var(--ink-secondary);
@@ -6204,6 +6220,14 @@ table.activity {
   .block-protection .copies {
     font-size: var(--font-size-14);
     line-height: 1.25rem;
+  }
+
+  /* A not-authorized medicine's lead (C3b) in the copies' type; its 24px line and 2px under it keep
+     the 44px link (10px above and below the line) clear of the copies line under it. */
+  .card p.lead-plain {
+    padding-bottom: 2px;
+    font-size: var(--font-size-14);
+    line-height: 1.5rem;
   }
 
   .card .block-protection .protection-lead + .copies {
