@@ -172,7 +172,7 @@ test(
 );
 
 test("the Union Register chip and note use U.S. labels", () => {
-  assert.equal(labels.UI.register.chip("Withdrawn", "2026-05-04"), "EU register: Withdrawn (4 May 2026)");
+  assert.equal(labels.UI.register.chip("Withdrawn", "2026-05-04"), "EU register: Withdrawn (4\u00a0May\u00a02026)");
   assert.equal(labels.UI.register.chip("Active", null), "EU register: Active");
   assert.equal(
     labels.UI.register.note,
@@ -205,7 +205,7 @@ test("the About disclosure states scope, intended use and privacy", () => {
     "For information only: not medical, legal or regulatory advice, and not meant for decisions about any patient's care, so it is not a medical device. Check the official product information and ask a health professional. Approval Atlas does not recommend any medicine.",
     "Data are processed automatically and partly checked by hand; they can lag EMA or contain errors. Provided as is, without warranty.",
     "Protection dates are rough estimates from EU central approval dates only: not patent or supplementary protection certificate data, and not legal advice.",
-    "Company groups show the current owner as curated here (as of 28 Sep 2026), not an official record.",
+    "Company groups show the current owner as curated here (as of 28\u00a0Sep\u00a02026), not an official record.",
   ]);
   assert.equal(about.use(null)[3], "Company groups show the current owner as curated here, not an official record.");
   // GitHub logs IP addresses (its own page says so: not "may"); every item this browser keeps, and how to clear them.
@@ -231,7 +231,7 @@ test("the footer's three lines: sources with their licences, use and non-affilia
   const sources = footer.sources({ date: "2026-09-29", mesh: "MeSH 2026", chembl: "ChEMBL_37" });
   assert.equal(
     partsText(sources),
-    "Sources: European Medicines Agency (EMA), © EMA, data as of 29 Sep 2026 · MeSH® courtesy of the U.S. National Library of Medicine (MeSH 2026) · ATC © WHO Collaborating Centre for Drug Statistics Methodology · Union Register © European Union, CC BY 4.0, modified · ChEMBL (ChEMBL_37), CC BY-SA 3.0.",
+    "Sources: European Medicines Agency (EMA), © EMA, data as of 29\u00a0Sep\u00a02026 · MeSH® courtesy of the U.S. National Library of Medicine (MeSH 2026) · ATC © WHO Collaborating Centre for Drug Statistics Methodology · Union Register © European Union, CC BY 4.0, modified · ChEMBL (ChEMBL_37), CC BY-SA 3.0.",
   );
   assert.deepEqual(partsUrls(sources), [
     "https://www.ema.europa.eu/en/medicines/download-medicine-data",
@@ -286,20 +286,34 @@ test("About's sources: each credit and licence, the ChEMBL citation, WHO's names
 });
 
 test("dates display as day, abbreviated month and year; missing dates stay missing", () => {
-  assert.equal(labels.formatDate("2018-02-08"), "8 Feb 2018");
-  assert.equal(labels.formatDate("2026-09-26"), "26 Sep 2026");
-  assert.equal(labels.formatDate("2009-01-16"), "16 Jan 2009");
-  assert.equal(labels.formatDate("1995-12-31"), "31 Dec 1995");
+  assert.equal(labels.formatDate("2018-02-08"), "8\u00a0Feb\u00a02018");
+  assert.equal(labels.formatDate("2026-09-26"), "26\u00a0Sep\u00a02026");
+  assert.equal(labels.formatDate("2009-01-16"), "16\u00a0Jan\u00a02009");
+  assert.equal(labels.formatDate("1995-12-31"), "31\u00a0Dec\u00a01995");
   assert.equal(labels.formatDate(null), null);
   assert.equal(labels.formatDate(undefined), null);
+});
+
+// Design sweep 2026-10-01 (C1): on phones "first Amgevita 21 / Mar 2017." and "(est.)" alone began
+// lines. A date's parts, the "(est.)" after what it marks and a date range's dash are joined by
+// no-break spaces.
+test("dates, (est.) and a date range's dash never start a line on their own", () => {
+  assert.doesNotMatch(labels.formatDate("2017-03-21"), / /);
+  assert.equal(labels.NBSP, "\u00a0");
+  assert.equal(labels.UI.protection.marketProtection("2009-02-26", "2027-07-01", false), "Market protection ends\u00a0(est.) 26\u00a0Feb\u00a02009\u00a0– 1\u00a0Jul\u00a02027");
+  assert.equal(labels.UI.protectionCalendar.range("2026-10-14", "2027-10-14"), "Market protection ends\u00a0(est.) 14\u00a0Oct\u00a02026\u00a0– 14\u00a0Oct\u00a02027");
+  // No "(est.)" anywhere in the copy (function bodies included) after a plain space.
+  const values = [...textValues(labels)];
+  assert.ok(values.some((text) => /\u00a0\(est\.\)/.test(text)));
+  assert.deepEqual(values.filter((text) => /[ \t]\((partly )?est\.\)/.test(text)), []);
 });
 
 test("the top bar shows the source and the data date in display form", () => {
   // F · Spacious, phase 1: the wordmark's second line names EMA's data (the page header's scope line,
   // the intro card and the About disclosure say it covers EMA's central procedure).
-  assert.equal(labels.UI.dataDate("2026-09-26"), "EMA data as of 26 Sep 2026");
+  assert.equal(labels.UI.dataDate("2026-09-26"), "EMA data as of 26\u00a0Sep\u00a02026");
   assert.equal(labels.UI.dataDate(null), "EMA data");
-  assert.equal(labels.UI.offline("2026-09-26"), "Offline: data as of 26 Sep 2026");
+  assert.equal(labels.UI.offline("2026-09-26"), "Offline: data as of 26\u00a0Sep\u00a02026");
 });
 
 test("the top bar's data date as runs, the date last and whole (design sweep A10)", () => {
@@ -328,45 +342,45 @@ test("raw EMA statuses fall into four kinds; unknown statuses count as ended", (
 });
 
 test("the date line of the merged status cell: approval date, or end date and approval date", () => {
-  assert.equal(labels.statusDateLine("Authorised", "2026-09-21", null), "21 Sep 2026");
+  assert.equal(labels.statusDateLine("Authorised", "2026-09-21", null), "21\u00a0Sep\u00a02026");
   assert.equal(labels.statusDateLine("Authorised", null, null), "no approval date");
-  assert.equal(labels.statusDateLine("Withdrawn", "2006-06-19", "2009-01-16"), "16 Jan 2009 · approved 19 Jun 2006");
-  assert.equal(labels.statusDateLine("Withdrawn", "2006-06-19", null), "approved 19 Jun 2006");
-  assert.equal(labels.statusDateLine("Withdrawn from rolling review", null, "2021-10-29"), "29 Oct 2021");
+  assert.equal(labels.statusDateLine("Withdrawn", "2006-06-19", "2009-01-16"), "16\u00a0Jan\u00a02009 · approved 19\u00a0Jun\u00a02006");
+  assert.equal(labels.statusDateLine("Withdrawn", "2006-06-19", null), "approved 19\u00a0Jun\u00a02006");
+  assert.equal(labels.statusDateLine("Withdrawn from rolling review", null, "2021-10-29"), "29\u00a0Oct\u00a02021");
   assert.equal(labels.statusDateLine("Refused", null, null), null);
 });
 
 // Owner decision 2026-09-30: the medicines table's status dot names its status and dates.
 test("the status dot's name: since the approval, or the status and its end", () => {
-  assert.equal(labels.statusDotLine("Authorised", "2022-01-06", null), "Authorized since 6 Jan 2022");
+  assert.equal(labels.statusDotLine("Authorised", "2022-01-06", null), "Authorized since 6\u00a0Jan\u00a02022");
   assert.equal(labels.statusDotLine("Authorised", null, null), "Authorized, no approval date");
-  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16 Jan 2009");
+  assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16\u00a0Jan\u00a02009");
   assert.equal(labels.statusDotLine("Withdrawn", "2006-06-19", null), "Withdrawn");
-  assert.equal(labels.statusDotLine("Withdrawn from rolling review", null, "2021-10-29"), "Withdrawn from rolling review 29 Oct 2021");
+  assert.equal(labels.statusDotLine("Withdrawn from rolling review", null, "2021-10-29"), "Withdrawn from rolling review 29\u00a0Oct\u00a02021");
   assert.equal(labels.statusDotLine("Refused", null, null), "Refused");
   assert.equal(labels.statusDotLine("Opinion", null, null, "Negative"), "Opinion (negative)");
 });
 
 test("the status dot's tip adds the approval date of a status other than Authorized", () => {
-  assert.equal(labels.statusDotTipLine("Authorised", "2022-01-06", null), "Authorized since 6 Jan 2022");
-  assert.equal(labels.statusDotTipLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16 Jan 2009 (approved 19 Jun 2006)");
-  assert.equal(labels.statusDotTipLine("Withdrawn", "2006-06-19", null), "Withdrawn (approved 19 Jun 2006)");
+  assert.equal(labels.statusDotTipLine("Authorised", "2022-01-06", null), "Authorized since 6\u00a0Jan\u00a02022");
+  assert.equal(labels.statusDotTipLine("Withdrawn", "2006-06-19", "2009-01-16"), "Withdrawn 16\u00a0Jan\u00a02009 (approved 19\u00a0Jun\u00a02006)");
+  assert.equal(labels.statusDotTipLine("Withdrawn", "2006-06-19", null), "Withdrawn (approved 19\u00a0Jun\u00a02006)");
   assert.equal(labels.statusDotTipLine("Refused", null, null), "Refused");
 });
 
 test("a medicine that is not authorized gets a status sentence built from EMA's dates only", () => {
   assert.equal(labels.statusSentence("Authorised", "2018-02-08", null), null);
-  assert.equal(labels.statusSentence("Withdrawn", "2009-01-16", null), "Withdrawn on 16 Jan 2009.");
+  assert.equal(labels.statusSentence("Withdrawn", "2009-01-16", null), "Withdrawn on 16\u00a0Jan\u00a02009.");
   assert.equal(labels.statusSentence("Withdrawn", null, null), "Withdrawn.");
   assert.equal(labels.statusSentence("Suspended", null, null), "Suspended.");
-  assert.equal(labels.statusSentence("Refused", "2004-09-07", null), "Refused on 7 Sep 2004.");
+  assert.equal(labels.statusSentence("Refused", "2004-09-07", null), "Refused on 7\u00a0Sep\u00a02004.");
   assert.equal(labels.statusSentence("Refused", null, null), "Refused.");
-  assert.equal(labels.statusSentence("Application withdrawn", "2006-01-19", null), "Application withdrawn on 19 Jan 2006.");
-  assert.equal(labels.statusSentence("Opinion", "2026-09-17", "Positive"), "Positive opinion on 17 Sep 2026: EMA recommended approval.");
-  assert.equal(labels.statusSentence("Opinion", "2025-05-22", "Negative"), "Negative opinion on 22 May 2025: EMA recommended refusal.");
+  assert.equal(labels.statusSentence("Application withdrawn", "2006-01-19", null), "Application withdrawn on 19\u00a0Jan\u00a02006.");
+  assert.equal(labels.statusSentence("Opinion", "2026-09-17", "Positive"), "Positive opinion on 17\u00a0Sep\u00a02026: EMA recommended approval.");
+  assert.equal(labels.statusSentence("Opinion", "2025-05-22", "Negative"), "Negative opinion on 22\u00a0May\u00a02025: EMA recommended refusal.");
   assert.equal(labels.statusSentence("Opinion", null, null), "Opinion adopted; EU decision pending.");
   // Step 2 (#11): a negative opinion under re-examination says it was negative (the headline says "not").
-  assert.equal(labels.statusSentence("Opinion under re-examination", "2026-06-25", "Negative"), "Negative opinion on 25 Jun 2026; under re-examination at the company's request.");
+  assert.equal(labels.statusSentence("Opinion under re-examination", "2026-06-25", "Negative"), "Negative opinion on 25\u00a0Jun\u00a02026; under re-examination at the company's request.");
   assert.equal(labels.statusSentence("Opinion under re-examination", null, "Positive"), "Opinion under re-examination at the company's request.");
   assert.equal(labels.statusSentence("Opinion under re-examination", null, null), "Opinion under re-examination at the company's request.");
 });
@@ -379,13 +393,13 @@ test("a positive opinion says how long the EU decision usually takes, when the d
   const decision = { median: 57, p90: 69 };
   const usually = "The EU decision usually comes about 57 days after the opinion.";
   // Zeydovio: 11 days since its opinion, within the usual time.
-  assert.equal(statusSentence("Opinion", "2026-09-17", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 17 Sep 2026: EMA recommended approval. ${usually}`);
+  assert.equal(statusSentence("Opinion", "2026-09-17", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 17\u00a0Sep\u00a02026: EMA recommended approval. ${usually}`);
   // Pebrilzo: positive, no opinion date.
   assert.equal(statusSentence("Opinion", null, "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion: EMA recommended approval. ${usually}`);
   // No figure (older meta.json): as before.
-  assert.equal(statusSentence("Opinion", "2026-09-17", "Positive", { decision: null, asOf: "2026-09-28" }), "Positive opinion on 17 Sep 2026: EMA recommended approval.");
+  assert.equal(statusSentence("Opinion", "2026-09-17", "Positive", { decision: null, asOf: "2026-09-28" }), "Positive opinion on 17\u00a0Sep\u00a02026: EMA recommended approval.");
   // A negative opinion, an unknown one, a re-examination: no expectation.
-  assert.equal(statusSentence("Opinion", "2025-05-22", "Negative", { decision, asOf: "2026-09-28" }), "Negative opinion on 22 May 2025: EMA recommended refusal.");
+  assert.equal(statusSentence("Opinion", "2025-05-22", "Negative", { decision, asOf: "2026-09-28" }), "Negative opinion on 22\u00a0May\u00a02025: EMA recommended refusal.");
   assert.equal(statusSentence("Opinion", null, null, { decision, asOf: "2026-09-28" }), "Opinion adopted; EU decision pending.");
   assert.equal(statusSentence("Opinion under re-examination", null, "Positive", { decision, asOf: "2026-09-28" }), "Opinion under re-examination at the company's request.");
 });
@@ -397,17 +411,17 @@ test("a positive opinion past the usual time says how long it has waited", () =>
   const decision = { median: 57, p90: 69 };
   const usually = "The EU decision usually comes about 57 days after the opinion.";
   // Lynavoy: 67 days, past the median.
-  assert.equal(statusSentence("Opinion", "2026-07-23", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 23 Jul 2026: EMA recommended approval. ${usually} This one has waited 67 days so far.`);
+  assert.equal(statusSentence("Opinion", "2026-07-23", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 23\u00a0Jul\u00a02026: EMA recommended approval. ${usually} This one has waited 67 days so far.`);
   // Nylaspeg: 95 days, past 9 in 10.
   assert.equal(
     statusSentence("Opinion", "2026-06-25", "Positive", { decision, asOf: "2026-09-28" }),
-    `Positive opinion on 25 Jun 2026: EMA recommended approval. ${usually} This one has waited 95 days so far; 9 in 10 decisions of the last 5 years came sooner.`,
+    `Positive opinion on 25\u00a0Jun\u00a02026: EMA recommended approval. ${usually} This one has waited 95 days so far; 9 in 10 decisions of the last 5 years came sooner.`,
   );
   // At the median: not past it.
-  assert.equal(statusSentence("Opinion", "2026-08-02", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 2 Aug 2026: EMA recommended approval. ${usually}`);
+  assert.equal(statusSentence("Opinion", "2026-08-02", "Positive", { decision, asOf: "2026-09-28" }), `Positive opinion on 2\u00a0Aug\u00a02026: EMA recommended approval. ${usually}`);
   // No 90th percentile, or no data date: the median alone, and only what can be counted.
-  assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision: { median: 57, p90: null }, asOf: "2026-09-28" }), `Positive opinion on 25 Jun 2026: EMA recommended approval. ${usually} This one has waited 95 days so far.`);
-  assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision, asOf: null }), `Positive opinion on 25 Jun 2026: EMA recommended approval. ${usually}`);
+  assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision: { median: 57, p90: null }, asOf: "2026-09-28" }), `Positive opinion on 25\u00a0Jun\u00a02026: EMA recommended approval. ${usually} This one has waited 95 days so far.`);
+  assert.equal(statusSentence("Opinion", "2026-06-25", "Positive", { decision, asOf: null }), `Positive opinion on 25\u00a0Jun\u00a02026: EMA recommended approval. ${usually}`);
 });
 
 // Step 4 (#9) put a conditional authorization or exceptional circumstances in the sentence too;
@@ -419,7 +433,7 @@ test("an authorized medicine has no status sentence; its qualifiers are chips", 
   assert.equal(statusSentence("Authorised", "2006-01-08", null, { decision: { median: 57, p90: 69 }, asOf: "2026-09-28" }), null);
   assert.equal(labels.UI.card.qualifiers, undefined);
   for (const flag of ["conditional_approval", "exceptional_circumstances"]) assert.ok(labels.UI.flagTips[flag], flag);
-  assert.equal(statusSentence("Withdrawn", "2023-01-01", null), "Withdrawn on 1 Jan 2023.");
+  assert.equal(statusSentence("Withdrawn", "2023-01-01", null), "Withdrawn on 1\u00a0Jan\u00a02023.");
 });
 
 // Step 4 (#9): the flags' explanations (the chips beside the status, the result tables' markers,
@@ -921,7 +935,7 @@ test("the medicine card's blocks and More details", () => {
   assert.equal(card.more.summary, "More details");
   assert.equal(card.more.about, "About this medicine");
   assert.equal(card.more.allDocuments, "All documents");
-  assert.equal(card.estimate, "(est.)");
+  assert.equal(card.estimate, "\u00a0(est.)");
   assert.equal(card.since, "since");
   assert.equal(card.approvedOn, "approved");
   // A substance's "2 authorized first approved 20 Nov 2006": the first of them, not all.
@@ -1152,7 +1166,7 @@ test("the holder activity card: title, modes, cell names and the holder-name not
   // Companies part 2: the rows are company groups, each naming the EMA holder names behind it.
   assert.equal(activity.subtitle(15), "The 15 companies with the most matching medicines; a medicine can count in several columns.");
   assert.equal(activity.subtitle(1), "The company of the matching medicines; a medicine can count in several columns.");
-  assert.equal(activity.note("2026-09-28"), "Companies grouped by current owner as of 28 Sep 2026; each row's tooltip lists the EMA holder names.");
+  assert.equal(activity.note("2026-09-28"), "Companies grouped by current owner as of 28\u00a0Sep\u00a02026; each row's tooltip lists the EMA holder names.");
   assert.equal(activity.holder, "Company");
   assert.equal(activity.other, "Other");
 });
@@ -1354,7 +1368,7 @@ test("substance and condition answers name EMA or the central procedure", () => 
     UI.page.title(labels.SOURCES, { widened: true }),
   ];
   for (const text of texts) assert.match(text, /\bEMA\b|\bcentral/, text);
-  assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11 Feb 2003 (Avandamet)");
+  assert.equal(UI.substance.firstApproval("2003-02-11", "Avandamet"), "First central EU approval: 11\u00a0Feb\u00a02003 (Avandamet)");
   assert.equal(UI.substance.firstApproval(null, null), "No central EU approval date");
 });
 
@@ -1402,19 +1416,19 @@ test("copies lines: generics and biosimilars of the same substance, or none yet"
   const { copies } = labels.UI;
   assert.equal(copies.none, "No generic or biosimilar authorized yet.");
   const humira = copies.line([{ type: "Biosimilar", count: 10, companies: 8, first: { name: "Amgevita", date: "2017-03-21" } }]);
-  assert.equal(partsText(humira), "10 biosimilars from 8 companies, first Amgevita 21 Mar 2017.");
+  assert.equal(partsText(humira), "10 biosimilars from 8 companies, first Amgevita 21\u00a0Mar\u00a02017.");
   assert.deepEqual(humira.filter((part) => typeof part !== "string"), [{ text: "Amgevita", link: 0 }]);
   assert.equal(
     partsText(copies.line([
       { type: "Generic", count: 1, companies: 1, first: { name: "Dasatinib Accord Healthcare", date: "2024-07-26" } },
       { type: "Biosimilar", count: 2, companies: null, first: { name: "B", date: null } },
     ])),
-    "1 generic from 1 company, first Dasatinib Accord Healthcare 26 Jul 2024; 2 biosimilars, first B.",
+    "1 generic from 1 company, first Dasatinib Accord Healthcare 26\u00a0Jul\u00a02024; 2 biosimilars, first B.",
   );
   // Step 3 review: on a medicine that is not its substance's first (Opzelura, after Jakavi), the
   // copies are named as the substance's, not this medicine's.
   const opzelura = copies.line([{ type: "Generic", count: 1, companies: 1, first: { name: "Ruxolitinib Viatris", date: "2026-09-18" } }], "ruxolitinib");
-  assert.equal(partsText(opzelura), "1 generic of ruxolitinib from 1 company, first Ruxolitinib Viatris 18 Sep 2026.");
+  assert.equal(partsText(opzelura), "1 generic of ruxolitinib from 1 company, first Ruxolitinib Viatris 18\u00a0Sep\u00a02026.");
   assert.deepEqual(opzelura.filter((part) => typeof part !== "string"), [{ text: "Ruxolitinib Viatris", link: 0 }]);
   assert.equal(
     partsText(copies.line([{ type: "Biosimilar", count: 2, companies: null, first: { name: "B", date: null } }], "denosumab")),
@@ -1425,25 +1439,25 @@ test("copies lines: generics and biosimilars of the same substance, or none yet"
 test("copies lines: a copy's card names the other medicines of its substance and its first central approval", () => {
   const { copies } = labels.UI;
   const hyrimoz = copies.same(10, "adalimumab", 1, { name: "Trudexa", date: "2003-09-01" });
-  assert.equal(partsText(hyrimoz), "10 other authorized medicines have the same active substance (adalimumab); first central approval 1 Sep 2003 (Trudexa).");
+  assert.equal(partsText(hyrimoz), "10 other authorized medicines have the same active substance (adalimumab); first central approval 1\u00a0Sep\u00a02003 (Trudexa).");
   assert.deepEqual(hyrimoz.filter((part) => typeof part !== "string"), [{ text: "adalimumab", link: "substance" }, { text: "Trudexa", link: "first" }]);
   assert.equal(partsText(copies.same(1, "sitagliptin + metformin hydrochloride", 2, null)), "1 other authorized medicine has the same active substances (sitagliptin + metformin hydrochloride).");
   assert.equal(partsText(copies.same(0, "x", 1, null)), "No other authorized medicine has the same active substance (x).");
   // Step 4 (owner request 2026-09-28): a first approval no longer authorized says so, so "No other
   // authorized medicine" does not read against it (Qdenga: Dengvaxia, withdrawn).
   const qdenga = copies.same(0, "dengue tetravalent vaccine (live, attenuated)", 1, { name: "Dengvaxia", date: "2018-12-12", status: "Withdrawn" });
-  assert.equal(partsText(qdenga), "No other authorized medicine has the same active substance (dengue tetravalent vaccine (live, attenuated)); the first central approval was Dengvaxia (12 Dec 2018), since withdrawn.");
+  assert.equal(partsText(qdenga), "No other authorized medicine has the same active substance (dengue tetravalent vaccine (live, attenuated)); the first central approval was Dengvaxia (12\u00a0Dec\u00a02018), since withdrawn.");
   assert.deepEqual(qdenga.filter((part) => typeof part !== "string"), [{ text: "dengue tetravalent vaccine (live, attenuated)", link: "substance" }, { text: "Dengvaxia", link: "first" }]);
-  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Expired" })), "2 other authorized medicines have the same active substance (x); the first central approval was Y (1 Jan 2010), since expired.");
+  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Expired" })), "2 other authorized medicines have the same active substance (x); the first central approval was Y (1\u00a0Jan\u00a02010), since expired.");
   // Authorized, or its status unknown: as before.
-  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Authorised" })), "2 other authorized medicines have the same active substance (x); first central approval 1 Jan 2010 (Y).");
+  assert.equal(partsText(copies.same(2, "x", 1, { name: "Y", date: "2010-01-01", status: "Authorised" })), "2 other authorized medicines have the same active substance (x); first central approval 1\u00a0Jan\u00a02010 (Y).");
 });
 
 // Step 3 (#8): salt spellings of one substance on the substance card.
 test("substance card: another spelling of the same substance, with its medicines and first approval", () => {
   const { substance } = labels.UI;
   const line = substance.sibling("dasatinib (anhydrous)", 3, { name: "Sprycel", date: "2006-11-20" });
-  assert.equal(partsText(line), "Also listed as dasatinib (anhydrous): 3 medicines, first central approval 20 Nov 2006 (Sprycel).");
+  assert.equal(partsText(line), "Also listed as dasatinib (anhydrous): 3 medicines, first central approval 20\u00a0Nov\u00a02006 (Sprycel).");
   assert.deepEqual(line.filter((part) => typeof part !== "string"), [{ text: "dasatinib (anhydrous)", link: "sibling" }]);
   assert.equal(partsText(substance.sibling("x", 1, null)), "Also listed as x: 1 medicine.");
   // Step 3 review: with other spellings, the headline and strip count them all, the list this one's.
@@ -1455,15 +1469,15 @@ test("substance card: another spelling of the same substance, with its medicines
 // counted from another company's is unclear. Estimates, never "patent".
 test("protection copy: strip cell, basis note and the other-company reason", () => {
   const { protection, card } = labels.UI;
-  assert.equal(card.estimate, "(est.)");
+  assert.equal(card.estimate, "\u00a0(est.)");
   assert.equal(protection.glance.until(2031, 2032), "Market protection until 2031–2032");
   assert.equal(protection.glance.until(2031, 2031), "Market protection until 2031");
   // The lead's first words (its body-type part) start every own-estimate value.
   for (const value of [protection.glance.until(2031, 2032), protection.glance.ended, protection.glance.unclear]) assert.ok(value.startsWith(`${protection.glance.label} `), value);
   // Owner decision 2026-09-30: "(est.)" unless the Union Register publishes the end.
-  assert.equal(protection.glance.orphan(2033, "computed"), "Orphan exclusivity until 2033 (est.)");
+  assert.equal(protection.glance.orphan(2033, "computed"), "Orphan exclusivity until 2033\u00a0(est.)");
   assert.equal(protection.glance.orphan(2033, "register"), "Orphan exclusivity until 2033");
-  assert.equal(protection.glance.orphan(2033, null), "Orphan exclusivity until 2033 (est.)");
+  assert.equal(protection.glance.orphan(2033, null), "Orphan exclusivity until 2033\u00a0(est.)");
   assert.equal(protection.basisNote, "Estimated from EU central (EMA) approval dates only; earlier national authorizations are not counted.");
   assert.ok(!protection.caveats.includes("Based only on EU central authorization dates."));
   for (const text of [card.estimate, protection.basisNote, protection.otherCompany("x", "Y", "2012-08-23", "2023-04-19"), protection.glance.link]) {
@@ -1490,7 +1504,7 @@ test("protection caveats: pediatric rewards are ignored except a pediatric-use m
     if (/pediatric rewards/i.test(text)) assert.match(text, /pediatric rewards other than a pediatric-use marketing authorization's own protection/i);
   }
   assert.ok(protection.caveats.some((caveat) => caveat.includes("pediatric rewards other than a pediatric-use marketing authorization's own protection")));
-  assert.equal(protection.paediatricUse("2018-02-09"), "A pediatric-use marketing authorization (for children): protection counted from its own approval, 9 Feb 2018");
+  assert.equal(protection.paediatricUse("2018-02-09"), "A pediatric-use marketing authorization (for children): protection counted from its own approval, 9\u00a0Feb\u00a02018");
 });
 
 test("breakdown notes say how many medicines have no value", () => {
@@ -1502,9 +1516,9 @@ test("breakdown notes say how many medicines have no value", () => {
 
 test("document lines leave out a missing update date instead of printing null", () => {
   assert.equal(labels.UI.card.updated(null), null);
-  assert.equal(labels.UI.card.updated("8 Feb 2018"), "updated 8 Feb 2018");
+  assert.equal(labels.UI.card.updated("8\u00a0Feb\u00a02018"), "updated 8\u00a0Feb\u00a02018");
   assert.equal(labels.UI.card.documentMeta(true, null), "PDF");
-  assert.equal(labels.UI.card.documentMeta(true, "8 Feb 2018"), "PDF · updated 8 Feb 2018");
+  assert.equal(labels.UI.card.documentMeta(true, "8\u00a0Feb\u00a02018"), "PDF · updated 8\u00a0Feb\u00a02018");
 });
 
 // Phase 4c: sorting, and the per-year chart's stack category.
@@ -1611,7 +1625,7 @@ test("ATC codes that differ from EMA's published one say how", () => {
 test("a medicine card points to a namesake and to the documents that are the namesake's", () => {
   const { namesake } = labels.UI.card;
   assert.equal(namesake.link("Mylotarg", "EMEA/H/C/004204"), "Another medicine named Mylotarg (EMEA/H/C/004204)");
-  assert.equal(namesake.authorized("2018-04-19"), " has been authorized since 19 Apr 2018.");
+  assert.equal(namesake.authorized("2018-04-19"), " has been authorized since 19\u00a0Apr\u00a02018.");
   assert.equal(namesake.other("Refused"), ": Refused.");
   assert.equal(namesake.other("Authorised"), ": Authorized.");
   assert.equal(namesake.documents(7), "7 later documents EMA lists here belong to ");
@@ -1728,7 +1742,7 @@ test("companies: tree, company page, search and footer copy", () => {
   assert.equal(companies.find, "Find a company");
   // QA 2026-09-29 (#6): the tree's note (a second "note" key, the ownership line, used to replace it).
   assert.equal(companies.note("2026-09-28"),
-    "Grouped by current owner (as of 28 Sep 2026), then company, then EMA holder name. A level that only repeats a name is left out.");
+    "Grouped by current owner (as of 28\u00a0Sep\u00a02026), then company, then EMA holder name. A level that only repeats a name is left out.");
   assert.equal(companies.note(null),
     "Grouped by current owner, then company, then EMA holder name. A level that only repeats a name is left out.");
   assert.equal(companies.expand("Sanofi", false), "Companies in Sanofi");
@@ -1739,7 +1753,7 @@ test("companies: tree, company page, search and footer copy", () => {
   const text = (parts) => parts.map((part) => (typeof part === "string" ? part : part.text)).join("");
   assert.equal(text(companies.headline("Roche", 40, 31)), "Roche: 40 medicines, 31 currently authorized.");
   assert.equal(text(companies.headline("Sanofi Pasteur MSD (joint venture)", 1, 0)), "Sanofi Pasteur MSD (joint venture): 1 medicine, none currently authorized.");
-  assert.equal(companies.asOf("2026-09-28"), "Grouped by current owner as of 28 Sep 2026, not the owner at approval. Each medicine keeps its EMA holder name.");
+  assert.equal(companies.asOf("2026-09-28"), "Grouped by current owner as of 28\u00a0Sep\u00a02026, not the owner at approval. Each medicine keeps its EMA holder name.");
   assert.equal(companies.from(["EMA holder names", "company groups checked by hand"]), "From EMA holder names and company groups checked by hand.");
   assert.equal(lookup.groups.companies, "Companies");
   assert.equal(lookup.companyMeta("Genzyme Europe B.V.", 12), "matches “Genzyme Europe B.V.” · 12 authorized");
@@ -1750,7 +1764,7 @@ test("companies: tree, company page, search and footer copy", () => {
   assert.equal(labels.UI.kicker.company, "Company");
   assert.equal(labels.UI.external.destinations["search.gleif.org"], "GLEIF website");
   // Legal review 2026-09-30: the groups' curation date in About's "Use with care", GLEIF among its sources.
-  assert.ok(about.use("2026-09-28").includes("Company groups show the current owner as curated here (as of 28 Sep 2026), not an official record."));
+  assert.ok(about.use("2026-09-28").includes("Company groups show the current owner as curated here (as of 28\u00a0Sep\u00a02026), not an official record."));
   assert.ok(about.sources().some((parts) => parts[0] === "LEI data: Global Legal Entity Identifier Foundation (GLEIF), CC0. GLEIF does not provide or endorse this site."));
   // F · Spacious, phase 2: the links land on the tab that shows what they count.
   assert.equal(companies.atcHint, "Each opens the overview's Classes and areas tab, filtered to this company and ATC group.");
@@ -1823,7 +1837,7 @@ test("UI.efficacy copy: no significance words, no em-dash, null analysis stays n
   assert.equal(efficacy.moreIndications(1), "and results for 1 more indication");
   assert.equal(efficacy.moreIndications(2), "and results for 2 more indications");
   assert.equal(efficacy.source(12), "Source: product information, p. 12");
-  assert.equal(efficacy.stale("2026-05-04"), "From the product information of 4 May 2026; EMA has updated it since.");
+  assert.equal(efficacy.stale("2026-05-04"), "From the product information of 4\u00a0May\u00a02026; EMA has updated it since.");
   // Task 9: the card's section.
   assert.equal(efficacy.moreResults(3), "More results (3)");
   assert.equal(efficacy.regimen("sotorasib (n\u00a0=\u00a0126)", null), "sotorasib (n\u00a0=\u00a0126), single-arm");

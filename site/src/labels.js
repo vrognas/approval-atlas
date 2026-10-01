@@ -11,11 +11,17 @@ const copyTypeWord = (type) => ({ hybrid: "hybrid", generic: "generic", biosimil
 // Fixed month names: Intl's en-GB "short" month is "Sept" in current ICU.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// "2018-02-08" -> "8 Feb 2018" for display; data, URL and state keep ISO dates.
+// A no-break space (design sweep 2026-10-01, C1: on phones "21 / Mar 2017" and "(est.)" alone
+// started lines): it joins a date's day, month and year, and puts "(est.)" and a date range's dash
+// on the line of what they belong to.
+export const NBSP = "\u00a0";
+const EST = `${NBSP}(est.)`;
+
+// "2018-02-08" -> "8 Feb 2018" (no-break spaces) for display; data, URL and state keep ISO dates.
 export function formatDate(iso) {
   if (!iso) return null;
   const [year, month, day] = iso.split("-").map(Number);
-  return `${day} ${MONTHS[month - 1]} ${year}`;
+  return `${day}${NBSP}${MONTHS[month - 1]}${NBSP}${year}`;
 }
 
 // "10.4%": share of the authorized products, one decimal.
@@ -264,7 +270,7 @@ const CALENDAR_CAVEATS = "Estimated from EU central (EMA) approval dates only; e
 const orphanEstimateOf = (ends = []) => {
   const computed = ends.filter((end) => end.source !== "register").length;
   if (ends.length && !computed) return "";
-  return computed === ends.length ? " (est.)" : " (partly est.)";
+  return computed === ends.length ? EST : `${NBSP}(partly est.)`;
 };
 const orphanEstimate = (orphanEnd) => orphanEstimateOf([orphanEnd]);
 // The per-year chart's how-to, after what it counts (copy review 2026-09-29; adapted: the year slider is
@@ -432,8 +438,8 @@ export const UI = {
           : `None of the ${plural(running, "medicine", "medicines")} with market protection running is estimated to lose it by the end of ${year}.`;
       }
       const lead = running === 1
-        ? `The 1 medicine with market protection running (est.) may lose it by the end of ${year}`
-        : `Of the ${plural(running, "medicine", "medicines")} with market protection running (est.), ${formatCount(ending)} may lose it by the end of ${year}`;
+        ? `The 1 medicine with market protection running${EST} may lose it by the end of ${year}`
+        : `Of the ${plural(running, "medicine", "medicines")} with market protection running${EST}, ${formatCount(ending)} may lose it by the end of ${year}`;
       if (!orphan) return `${lead}.`;
       const exclusivity = `orphan market exclusivity${orphanEstimateOf(orphanEnds)} running later`;
       if (ending === 1) return `${lead}, with ${exclusivity}.`;
@@ -459,7 +465,7 @@ export const UI = {
       none: "No condition of these medicines is ranked.",
     },
     protection: {
-      title: "Market protection ending (est.)",
+      title: `Market protection ending${EST}`,
       caption: "Currently authorized medicines by the year their estimated market protection ends at the earliest.",
       unit: (count) => (count === 1 ? "medicine" : "medicines"),
     },
@@ -1701,8 +1707,9 @@ export const UI = {
     approvedOn: "approved",
     // A substance's Status lead: the "2 authorized" pill, then "first approved 20 Nov 2006" (the first of them).
     firstApproved: "first approved",
-    // After the protection lead of a medicine's own estimate ("Market protection until 2028–2029 (est.)").
-    estimate: "(est.)",
+    // After the protection lead of a medicine's own estimate ("Market protection until 2028–2029 (est.)"),
+    // led by its no-break space, so it never starts a line alone.
+    estimate: EST,
     // Another medicine with the same name (the refused and the authorized Mylotarg): a link to its
     // card, then its status; documents: the namesake's documents EMA lists under this one.
     namesake: {
@@ -1828,7 +1835,7 @@ export const UI = {
   },
 
   protection: {
-    title: "EU regulatory protection (est.)",
+    title: `EU regulatory protection${EST}`,
     status: { protected: "Protected", ended: "Ended", unclear: "Unclear" },
     // QA 2026-09-29 (#1): a copy's chip and protection lead (basis follows_reference or
     // reference_not_found): its status and dates are its reference's, never its own.
@@ -1836,11 +1843,11 @@ export const UI = {
     // Names what the chip covers, so it is not read as covering orphan exclusivity too.
     chip: (status) => `Data/market protection: ${status}`,
     // ended: the date (the range's later end) is before the data date.
-    dataExclusivity: (date, ended) => `Data exclusivity ${ended ? "ended" : "ends"} (est.) ${formatDate(date)}`,
+    dataExclusivity: (date, ended) => `Data exclusivity ${ended ? "ended" : "ends"}${EST} ${formatDate(date)}`,
     // Counted from another company's first approval and from the company's own (owner request
     // 2026-09-28: data_exclusivity_end_max); ended: the later end is before the data date.
-    dataExclusivityRange: (min, max, ended) => `Data exclusivity ${ended ? "ended" : "ends"} (est.) between ${formatDate(min)} and ${formatDate(max)}`,
-    marketProtection: (min, max, ended) => `Market protection ${ended ? "ended" : "ends"} (est.) ${formatDate(min)} – ${formatDate(max)}`,
+    dataExclusivityRange: (min, max, ended) => `Data exclusivity ${ended ? "ended" : "ends"}${EST} between ${formatDate(min)} and ${formatDate(max)}`,
+    marketProtection: (min, max, ended) => `Market protection ${ended ? "ended" : "ends"}${EST} ${formatDate(min)}${NBSP}– ${formatDate(max)}`,
     // Step 2 (#1): earlier national authorizations are not in the data.
     // name: a medicine approved that day (step 3 review: never the reference with another's date),
     // null when none is known.
@@ -1894,13 +1901,13 @@ export const UI = {
       unclear: "Market protection unclear",
       follows: (name) => `Follows ${name}`,
       // An estimate like the lead's "Market protection until …" (owner decision 2026-09-30: computed dates say so).
-      referenceUntil: (name, from, to) => `${name}'s protection until ${from === to ? from : `${from}–${to}`} (est.)`,
+      referenceUntil: (name, from, to) => `${name}'s protection until ${from === to ? from : `${from}–${to}`}${EST}`,
       // source: the end's end_source ("(est.)" unless the register publishes it).
       orphan: (year, source) => `Orphan exclusivity until ${year}${orphanEstimate({ source })}`,
       link: ", see the estimate in More details",
     },
     orphan: (condition, date, source, ended) =>
-      `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)} ${source === "register" ? "(Union Register)" : "(est.)"}`,
+      `Orphan market exclusivity for ${condition}: ${ended ? "ended" : "ends"} ${formatDate(date)}${source === "register" ? `${NBSP}(Union Register)` : EST}`,
     orphanNoEnd: (condition, designationStatus) =>
       `Orphan designation for ${condition}: ${designationStatus.toLowerCase()} (end date not published)`,
     patents: "Patents and supplementary protection certificates: not shown (no open EU-wide source).",
@@ -1918,11 +1925,11 @@ export const UI = {
   // Draft (loss-of-exclusivity calendar, 2026-09-29; protection-calendar.js): the dashboard card
   // "Estimated protection ending" and the company page's list. Estimates only, never "patent".
   protectionCalendar: {
-    title: "Protection ending (est.)",
-    note: `Currently authorized medicines whose EU market protection (est.) still runs, by the earliest year it can end. Select a year to list them. ${CALENDAR_CAVEATS}`,
+    title: `Protection ending${EST}`,
+    note: `Currently authorized medicines whose EU market protection${EST} still runs, by the earliest year it can end. Select a year to list them. ${CALENDAR_CAVEATS}`,
     loading: "Loading estimates…",
     summary: (running, authorized, filtered) =>
-      `${formatCount(running)} of ${formatCount(authorized)} currently authorized medicines${filtered ? " matching the filters" : ""} ${running === 1 ? "has" : "have"} market protection running (est.).`,
+      `${formatCount(running)} of ${formatCount(authorized)} currently authorized medicines${filtered ? " matching the filters" : ""} ${running === 1 ? "has" : "have"} market protection running${EST}.`,
     none: (filtered) => `No currently authorized medicine${filtered ? " matching the filters" : ""} has estimated market protection running.`,
     // The two segments of a year's bar: what they differ in (both end that year at the earliest).
     // orphan(ends): the orphan ends the bars count ({ source }; orphanEstimateOf()).
@@ -1956,8 +1963,8 @@ export const UI = {
     orphanOnlyUntil: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} until ${formatDate(orphanEnd.end)}`,
     listTitle: (label, count) => `Earliest estimated end of market protection in ${label}: ${plural(count, "medicine", "medicines")}`,
     empty: (label, filtered) => `No medicine${filtered ? " matching the filters" : ""} counted here has its earliest estimated end in ${label}.`,
-    range: (min, max) => `Market protection ends (est.) ${formatDate(min)}${max && max !== min ? ` – ${formatDate(max)}` : ""}`,
-    ended: (date) => `Market protection ended (est.) ${formatDate(date)}`,
+    range: (min, max) => `Market protection ends${EST} ${formatDate(min)}${max && max !== min ? `${NBSP}– ${formatDate(max)}` : ""}`,
+    ended: (date) => `Market protection ended${EST} ${formatDate(date)}`,
     // A copy (generic, biosimilar, hybrid) with its own orphan market exclusivity (morning QA 2026-09-29).
     copyNoOwn: "No market protection of its own (a copy)",
     orphan: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} runs later, until ${formatDate(orphanEnd.end)}`,
@@ -1966,8 +1973,8 @@ export const UI = {
     // The company page (?co=): its currently authorized medicines by end year (orphan-only ones by
     // the year their orphan market exclusivity ends); unclear ones as the dashboard's line.
     company: {
-      title: "Protection ending (est.)",
-      note: `Its currently authorized medicines by the earliest year their EU market protection can end (est.); where only orphan market exclusivity still runs, by the year it ends. ${CALENDAR_CAVEATS}`,
+      title: `Protection ending${EST}`,
+      note: `Its currently authorized medicines by the earliest year their EU market protection can end${EST}; where only orphan market exclusivity still runs, by the year it ends. ${CALENDAR_CAVEATS}`,
       none: "None of its currently authorized medicines has estimated market protection or orphan market exclusivity running.",
       orphan: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} until ${orphanEnd.end.slice(0, 4)}`,
       orphanOnly: (orphanEnd) => `orphan market exclusivity${orphanEstimate(orphanEnd)} only`,

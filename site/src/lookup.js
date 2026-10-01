@@ -794,7 +794,8 @@ export function createLookup(panel, {
         el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
           labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
           shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
-        glanceIsEstimate(protectionRow) ? [" ", el("span", { class: "lead-estimate" }, UI.card.estimate)] : null),
+        // Its no-break space keeps it on the line of the years (design sweep 2026-10-01, C1).
+        glanceIsEstimate(protectionRow) ? el("span", { class: "lead-estimate" }, UI.card.estimate) : null),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
       glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,
       glance.orphan ? el("p", { class: "lead-note" }, glance.orphan) : null);
