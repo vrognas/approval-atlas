@@ -85,7 +85,12 @@ test("phones: Limits of the estimate, the documents sublist and List them are 44
   assert.match(declarations(phones, ".doc-list > li > details > summary"), /padding-block: max\(0px, \(44px - 1lh\) \/ 2\);.*margin-block: -4px/);
   // -4px only takes the list items' own margins.
   assert.match(declarations(flat(css), ".doc-list > li"), /margin: 4px 0/);
-  assert.match(declarations(phones, ".pc-orphan-toggle"), /min-height: 44px;.*margin-block: -10px/);
+  // List them: a 44px area over its 24px box (review of L1: a 44px box's focus ring struck through
+  // the line above), so the ring stays on the 24px box.
+  assert.match(declarations(phones, ".pc-orphan-toggle"), /position: relative/);
+  assert.doesNotMatch(declarations(phones, ".pc-orphan-toggle"), /min-height|margin/);
+  assert.match(declarations(phones, ".pc-orphan-toggle::before"), /content: "";.*position: absolute;.*inset: -10px 0/);
+  assert.match(declarations(flat(css), ".pc-orphan-toggle"), /min-height: 24px/);
 });
 
 test("phones: the activity table's company column is narrow, its name under the badge", () => {

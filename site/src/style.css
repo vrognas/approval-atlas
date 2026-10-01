@@ -7169,12 +7169,18 @@ mark {
     margin-block: min(0px, (1lh - 24px) / 2);
   }
 
-  /* "List them" (design sweep 2026-10-01, L1: 24px, beside 44px controls): 44px tall, the negative
-     margin keeping its line, so it reaches only into the line's own text above and the 12px before
-     the list it shows. */
+  /* "List them" (design sweep 2026-10-01, L1: 24px, beside 44px controls): an area 10px above and
+     below its 24px box makes it 44px tall without taking room in the line, reaching only into the
+     line's own text above and the 12px before the list it shows; its focus ring stays on the 24px
+     box (review of L1: a 44px box's ring struck through the line above), as the intro's examples. */
   .pc-orphan-toggle {
-    min-height: 44px;
-    margin-block: -10px;
+    position: relative;
+  }
+
+  .pc-orphan-toggle::before {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
   }
 
   /* The company page's protection list (bug hunt 2026-10-01: its medicine links were 21px tall, a
