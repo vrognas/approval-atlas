@@ -1117,7 +1117,12 @@ button {
     white-space: nowrap;
   }
 
+  /* One line, cut with an ellipsis inside the pill (bug hunt 2026-10-01: "H Systemic Hormonal
+     Preparations, …" ran past the pill, over its x, which then opened the sheet); the button's name
+     keeps the whole value. */
   .chip-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
