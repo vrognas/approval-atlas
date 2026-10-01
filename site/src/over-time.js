@@ -11,6 +11,19 @@ const SERIES = [
 const formatCount = d3.format(",");
 const parseDate = d3.utcParse("%Y-%m-%d");
 
+// A touch or pen press released closer than this (px) to where it started is a tap, not a pan.
+export const TAP_SLOP = 10;
+
+// Pure: whether a press (pointerdown: { id, type, x, y }, or null) and its release (pointerup:
+// { id, x, y }) are a touch or pen tap. A mouse shows a month on hover already.
+export function isTap(down, up, slop = TAP_SLOP) {
+  return down !== null && down.type !== "mouse" && down.id === up.id && Math.hypot(up.x - down.x, up.y - down.y) <= slop;
+}
+
+// Per chart container, the listener that hides its tapped tooltip on a tap elsewhere; replaced on
+// every render.
+const outsideTaps = new WeakMap();
+
 export function renderOverTimeLegend(list) {
   const items = d3.select(list).selectAll("li").data(SERIES).join("li");
   items.append("span").attr("class", "line-key").attr("aria-hidden", "true").style("background", (series) => series.color);
@@ -87,22 +100,52 @@ export function renderOverTime(container, series, { from, to }) {
 
   const crosshair = svg.append("line").attr("class", "crosshair").attr("y1", MARGIN.top).attr("y2", HEIGHT - MARGIN.bottom).attr("display", "none");
   const bisect = d3.bisector((date) => date).center;
-  svg.append("rect")
+  // Touch (bug hunt 2026-10-01: a tap showed nothing, as it fires no pointermove and the pointer
+  // leaves on release): a tap shows the month tapped, as a hover does, and stays until a tap
+  // elsewhere; a pan (the page scrolls) hides it. press: the pointerdown; tapped: a tap shows.
+  let press = null;
+  let tapped = false;
+  function show(event) {
+    const [pointerX] = d3.pointer(event, svg.node());
+    const index = bisect(dates, x.invert(pointerX));
+    const row = series[index];
+    crosshair.attr("x1", x(dates[index])).attr("x2", x(dates[index])).attr("display", null);
+    const items = SERIES.map(({ key, label, color }) => ({ value: row[key], label, color }));
+    showTooltip(container, event, formatDate(row.date), items);
+  }
+  function hide() {
+    tapped = false;
+    crosshair.attr("display", "none");
+    hideTooltip(container);
+  }
+  const overlay = svg.append("rect")
     .attr("class", "hover-overlay")
     .attr("x", MARGIN.left)
     .attr("y", MARGIN.top)
     .attr("width", Math.max(0, width - MARGIN.left - MARGIN.right))
     .attr("height", HEIGHT - MARGIN.top - MARGIN.bottom)
-    .on("pointermove", (event) => {
-      const [pointerX] = d3.pointer(event, svg.node());
-      const index = bisect(dates, x.invert(pointerX));
-      const row = series[index];
-      crosshair.attr("x1", x(dates[index])).attr("x2", x(dates[index])).attr("display", null);
-      const items = SERIES.map(({ key, label, color }) => ({ value: row[key], label, color }));
-      showTooltip(container, event, formatDate(row.date), items);
+    .on("pointerdown", (event) => {
+      press = { id: event.pointerId, type: event.pointerType, x: event.clientX, y: event.clientY };
+      tapped = false;
+    })
+    .on("pointermove", show)
+    .on("pointerup", (event) => {
+      if (isTap(press, { id: event.pointerId, x: event.clientX, y: event.clientY })) {
+        show(event);
+        tapped = true;
+      }
+      press = null;
+    })
+    .on("pointercancel", () => {
+      press = null;
     })
     .on("pointerleave", () => {
-      crosshair.attr("display", "none");
-      hideTooltip(container);
+      if (!tapped) hide();
     });
+  outsideTaps.get(container)?.abort();
+  const outside = new AbortController();
+  outsideTaps.set(container, outside);
+  document.addEventListener("pointerdown", (event) => {
+    if (tapped && event.target !== overlay.node()) hide();
+  }, { capture: true, signal: outside.signal });
 }
