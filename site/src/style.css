@@ -2407,14 +2407,31 @@ input::placeholder {
   list-style: none;
 }
 
+/* Each row reads along its first line (design sweep 2026-10-01, A5: on a wrapped name the bar and
+   count sat on the two lines' centre, 8.5px below the badge and the first line): the items at the
+   row's top, the label padded to the row's 32px (44px on phones, --preview-pad), the bar and count
+   offset to the first 20px line's centre. */
 .preview-row {
+  --preview-pad: 6px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(2rem, 25%) auto;
-  align-items: center;
+  align-items: start;
   gap: 10px;
   min-height: 32px;
   font-size: 0.875rem;
   line-height: 1.25rem;
+}
+
+.preview-label:not(:has(> a)) {
+  padding: var(--preview-pad) 0;
+}
+
+.preview-row > .preview-bar {
+  margin-top: calc(var(--preview-pad) + 6px);
+}
+
+.preview-row > .preview-count {
+  padding-top: var(--preview-pad);
 }
 
 /* A company's badge stays beside its name, which wraps beside it; long words hyphenate. */
@@ -2444,7 +2461,7 @@ input::placeholder {
   display: block;
   flex: 1 1 auto;
   margin: 0;
-  padding: 6px 0;
+  padding: var(--preview-pad) 0;
 }
 
 /* A company row's badge is inside its link (overview-previews.js labelOf(); bug hunt 2026-10-01
@@ -2493,11 +2510,8 @@ input::placeholder {
 
 @media (max-width: 720px) {
   .preview-row {
+    --preview-pad: 12px;
     min-height: 44px;
-  }
-
-  .preview-row .preview-label > a {
-    padding: 12px 0;
   }
 
   .preview-tab-link {
@@ -4795,13 +4809,15 @@ button.area-chip[aria-disabled="true"] {
    each with its own number colour, palette.test.js), empty for none. */
 .activity-scroll {
   position: relative;
-  margin-top: 8px;
+  margin: 8px -4px 0;
+  padding: 0 4px;
   overflow-x: auto;
 }
 
 table.activity {
   width: auto;
   min-width: 0;
+  margin-left: -2px;
   border-collapse: separate;
   border-spacing: 2px;
   font-size: 0.8125rem;
@@ -4823,6 +4839,11 @@ table.activity {
   vertical-align: bottom;
 }
 
+/* "Company" on the card's text edge, above the row headers (A5). */
+.activity thead th:first-child {
+  padding-left: 0;
+}
+
 .activity .activity-col {
   min-width: 40px;
   max-width: 6.5rem;
@@ -4832,11 +4853,13 @@ table.activity {
   overflow-wrap: break-word;
 }
 
+/* Scrolled sideways, the sticky column covers the scroll box's 4px padding too (A5; left is measured
+   from the box's content edge), so no cell shows or takes a tap beside it. */
 .activity th[scope="row"],
 .activity thead th:first-child {
   position: sticky;
   top: auto;
-  left: 0;
+  left: -4px;
   z-index: 1;
   background: var(--surface);
   text-align: left;
@@ -4897,13 +4920,21 @@ table.activity {
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
-/* Row headers: the holder, then its matching medicines. */
+/* Row headers: the holder, then its matching medicines, on one baseline, the line centred in the
+   button (design sweep 2026-10-01, A5: at the button's top it sat 4.5px above the row's heat cells;
+   align-content centres the wrapping container's one line, which never wraps: the name's basis is 0)
+   and starting on the card's text edge (no left padding; the table's 2px border spacing taken back
+   by the table's margin and the scroll box reaching 4px into the card's padding, so the focus ring
+   still shows). */
 .activity th[scope="row"] button {
   display: flex;
+  flex-wrap: wrap;
+  align-content: center;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
+  padding-left: 0;
 }
 
 .activity-total {
@@ -4948,7 +4979,7 @@ table.activity {
 .activity .activity-sorts td:first-child {
   position: sticky;
   z-index: 1;
-  left: 0;
+  left: -4px;
   background: var(--surface);
   text-align: left;
 }

@@ -43,8 +43,13 @@ test("phones: a long filter chip value is cut with an ellipsis inside its pill",
 
 test("the Overview previews' links fill their rows; their tab links are 24px, 44px on touch", () => {
   const all = flat(css);
-  assert.match(declarations(all, ".preview-row .preview-label > a"), /display: block;.*padding: 6px 0/);
-  assert.match(declarations(phones, ".preview-row .preview-label > a"), /padding: 12px 0/);
+  // The row's padding is a token (design sweep A5): the bar and count take the same offset, so a
+  // wrapped name's row reads along its first line.
+  assert.match(declarations(all, ".preview-row .preview-label > a"), /display: block;.*padding: var\(--preview-pad\) 0/);
+  assert.match(declarations(all, ".preview-row"), /--preview-pad: 6px;/);
+  assert.match(declarations(phones, ".preview-row"), /--preview-pad: 12px;.*min-height: 44px/);
+  assert.match(declarations(all, ".preview-row > .preview-bar"), /margin-top: calc\(var\(--preview-pad\) \+ 6px\)/);
+  assert.match(declarations(all, ".preview-row > .preview-count"), /padding-top: var\(--preview-pad\)/);
   assert.match(declarations(all, ".preview-tab-link"), /min-height: 24px/);
   assert.match(flat(blocks("@media (pointer: coarse) {").join(" ")), /\.preview-tab-link \{ min-height: 44px; \}/);
 });
