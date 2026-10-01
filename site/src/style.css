@@ -911,16 +911,20 @@ button {
   }
 
   .dek {
-    font-size: 1.1875rem;
+    font-size: 1.25rem;
     line-height: 1.75rem;
   }
 }
 
+/* One eyebrow style (design sweep 2026-10-01, B11: the kicker was 14px/600 over the blocks' 13px/700
+   titles): the cards' block titles' (.card .block-title), 13px/700, 0.06em, upper case. 700 is for
+   eyebrows only; pressed controls and run-in heads are 600, as the tabs and segmented controls. */
 .kicker {
   margin: 0 0 8px;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.25rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2368,7 +2372,7 @@ input::placeholder {
   border: 0;
   background: none;
   color: var(--ink-secondary);
-  font-size: 0.90625rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
@@ -3571,7 +3575,7 @@ table.conditions-table {
 }
 
 .pc-orphan-toggle[aria-pressed="true"] {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pc-list {
@@ -4327,7 +4331,7 @@ td.approved-cell .register-flag {
   border-radius: 999px;
   background: var(--hue-1);
   color: var(--hue-text);
-  font-size: 0.78125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -5115,7 +5119,7 @@ table.activity {
   background: var(--accent-wash);
   box-shadow: inset 0 -2px var(--accent);
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -5200,7 +5204,7 @@ table.activity {
 
 .activity td button[aria-pressed="true"] {
   box-shadow: inset 0 0 0 2px currentColor;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -5462,7 +5466,7 @@ table.activity {
 .intro-card-title {
   margin: 0;
   font-size: 0.875rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.125rem;
 }
 
@@ -7384,7 +7388,7 @@ footer p {
   margin: 0;
   color: var(--ink);
   font-size: inherit;
-  font-weight: 700;
+  font-weight: 600;
   line-height: inherit;
 }
 
