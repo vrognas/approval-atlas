@@ -433,7 +433,7 @@ h1,
   width: 36px;
   height: 36px;
   padding: 0;
-  border: 1px solid var(--grid);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: var(--input);
   color: var(--ink);
@@ -650,14 +650,19 @@ button {
   font: inherit;
 }
 
-/* Secondary buttons: transparent with a strong border. */
+/* Secondary buttons: transparent with an outline. Every outlined control is 32px (compact: View
+   options) or 36px (default: this, Download CSV, "Up one level", the theme button), 44px on phones,
+   and outlined in --field-border (3:1; --axis is for chart axes), as the segmented controls and the
+   PI, EPAR and condition page links (design sweep 2026-10-01, B6: 32/36/42px in three outline
+   colours). */
 .more {
-  min-height: 40px;
-  padding: 8px 14px;
-  border: 1px solid var(--axis);
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
 }
@@ -781,10 +786,7 @@ button {
   flex: none;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
-  padding: 6px 14px;
   background: var(--input);
-  font-size: 0.875rem;
 }
 
 .download-icon {
@@ -1154,7 +1156,7 @@ button {
     display: none;
   }
 
-  .download {
+  .more {
     min-height: 44px;
   }
 
@@ -2196,7 +2198,7 @@ input::placeholder {
 /* No overflow clip (it would cut the focus ring): the end buttons round their own corners. */
 .segmented {
   display: inline-flex;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
 }
 
@@ -2265,7 +2267,7 @@ input::placeholder {
 
   #chart-stack button,
   #breakdown-by button {
-    border: 1px solid var(--axis);
+    border: 1px solid var(--field-border);
     border-radius: 9px;
   }
 }
@@ -3004,7 +3006,7 @@ td.result-holder .holder-main .company-badge {
 .up-level {
   min-height: 36px;
   padding: 6px 12px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
@@ -3592,6 +3594,11 @@ table.conditions-table {
   margin-top: 6px;
 }
 
+/* "Show {n} more" under a year's list (a text button, design sweep B6; 44px on phones, below). */
+.pc-more {
+  margin-top: 4px;
+}
+
 .pc-company-year {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -3840,7 +3847,7 @@ table.conditions-table {
   margin: 0;
 }
 
-.table-card > .more {
+#table-more {
   margin: 12px var(--card-pad) 0;
 }
 
@@ -4053,7 +4060,7 @@ td .doc-links {
   min-width: 24px;
   min-height: 24px;
   padding: 0 7px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -4091,7 +4098,7 @@ td .doc-links {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
 }
 
@@ -6196,7 +6203,7 @@ table.activity {
   justify-content: center;
   min-height: 52px;
   padding: 8px 14px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   color: var(--ink);
   text-decoration: none;
@@ -6403,8 +6410,51 @@ table.activity {
   transform: rotate(45deg);
 }
 
+/* One disclosure glyph (design sweep 2026-10-01, B6: the browser's triangle here, View options'
+   chevron there): every summary ends with View options' chevron, pointing down while closed and up
+   while open, in the summary's colour (More details' on its title, as its hint is a line of its
+   own). Drawn with two borders, as the trees' and ladders' chevrons. */
 details > summary {
   cursor: pointer;
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::after,
+.more-details > summary .more-title::after {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  vertical-align: 0.25em;
+  transform: rotate(45deg);
+}
+
+details[open] > summary::after,
+.more-details[open] > summary .more-title::after {
+  vertical-align: 0.05em;
+  transform: rotate(225deg);
+}
+
+.more-details > summary::after {
+  content: none;
+}
+
+/* Link-coloured summaries are underlined, as every other link-coloured control. */
+.more-title,
+.indication > summary,
+.efficacy-more > summary,
+.company-note > summary {
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
 }
 
 .indication > summary {
@@ -6984,7 +7034,10 @@ mark {
     padding: 12px 0;
   }
 
-  #conditions-more {
+  /* Every list end ("Show {n} more", a text button since the design sweep's B6) 44px tall. */
+  #conditions-more,
+  #table-more,
+  .pc-more {
     min-height: 44px;
   }
 
@@ -7225,7 +7278,7 @@ mark {
     width: 24px;
     height: 24px;
     padding: 4px;
-    border: 1px solid var(--axis);
+    border: 1px solid var(--field-border);
     border-radius: 6px;
   }
 

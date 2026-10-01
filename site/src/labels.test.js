@@ -954,6 +954,10 @@ test("filter chips, popover and sheet copy", () => {
   assert.equal(labels.UI.sidebar, undefined);
   assert.equal(facets.counts, "Counts: medicines matching the other filters.");
   assert.equal(facets.showMore(20), "Show 20 more");
+  // Design sweep 2026-10-01 (B6): every list end says "Show {n} more"; the table adds its total.
+  assert.equal(labels.UI.table.showMore(100, 1574), "Show 100 more (of 1,574)");
+  assert.equal(labels.UI.protectionCalendar.showMore(14), "Show 14 more");
+  assert.equal(labels.UI.protectionCalendar.showAll, undefined);
   assert.equal(facets.matches(0), "No matches");
   assert.equal(facets.matches(1), "1 match");
   assert.equal(facets.matches(1234), "1,234 matches");

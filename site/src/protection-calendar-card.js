@@ -141,7 +141,8 @@ function listOf(list, titleText, rows, showAll, { onShowAll, medicineLink, compa
       lines(row)));
   }
   if (shown.length < rows.length) {
-    const more = list.appendChild(node("button", "more", COPY.showAll(rows.length)));
+    // A list end as every list end: a text button, "Show {n} more" (design sweep 2026-10-01, B6).
+    const more = list.appendChild(node("button", "text-button pc-more", COPY.showMore(rows.length - shown.length)));
     more.type = "button";
     more.dataset.focusKey = "show-all";
     more.addEventListener("click", () => {

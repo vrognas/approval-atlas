@@ -1083,7 +1083,8 @@ export const UI = {
       const tail = undated ? `; the ${formatCount(undated)} without an approval date last, by status` : "";
       return `${plural(count, "medicine", "medicines")}, newest approval first${tail}`;
     },
-    showMore: (next, total) => `Show next ${formatCount(next)} (of ${formatCount(total)})`,
+    // Every list end says "Show {n} more" (design sweep 2026-10-01, B6); the table adds its total.
+    showMore: (next, total) => `Show ${formatCount(next)} more (of ${formatCount(total)})`,
     // The indication toggle names what it shows: stacked rows (phones) have no visible header.
     show: "Show indication",
     hide: "Hide indication",
@@ -1957,7 +1958,8 @@ export const UI = {
     // A copy (generic, biosimilar, hybrid) with its own orphan market exclusivity (morning QA 2026-09-29).
     copyNoOwn: "No market protection of its own (a copy)",
     orphan: (orphanEnd) => `Orphan market exclusivity${orphanEstimate(orphanEnd)} runs later, until ${formatDate(orphanEnd.end)}`,
-    showAll: (count) => `Show all ${formatCount(count)}`,
+    // The rest of the year's list (design sweep 2026-10-01, B6: "Show {n} more", as every list end).
+    showMore: (count) => `Show ${formatCount(count)} more`,
     // The company page (?co=): its currently authorized medicines by end year (orphan-only ones by
     // the year their orphan market exclusivity ends); unclear ones as the dashboard's line.
     company: {
