@@ -78,7 +78,7 @@ import { tabsKeydown } from "./tabs.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, tipAbove, tipBounds, tipClick, tipFitsAbove, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -575,17 +575,18 @@ function renderTypeTips() {
 
 // The tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides them (and does
 // nothing else, so a popover's Escape waits for the next press) until the pointer reaches another
-// carrier or focus moves; a pointer click on a tip only hides it, as it lies over other controls,
-// and a pointer click on a MeSH explainer's carrier hides it too (step 4 review: it covered the next
+// carrier or focus moves (on touch screens a swipe does too); a pointer click on a tip only hides it,
+// as it lies over other controls, and a pointer click on a MeSH explainer's carrier hides it too
+// (step 4 review: it covered the next
 // rows, so checking one row and moving to the next took two clicks). On mouse hover (owner decision
 // 2026-09-29) a tip opens at the pointer: fixed (.tip-at-pointer, --pointer-tip-x/-y, CSSOM),
 // 12px below and right of where the pointer entered its carrier, or, for a MeSH explainer, where it
 // rests when its pause ends, flipped above or left without room (atPointer()); it stays put, and
 // leaving the carrier toward it holds it, so the pointer can move onto it. Keyboard focus and touch
 // taps anchor it to its carrier: a carrier whose tip is anchored to its row (static: lookup rows, the
-// ATC, area and modality trees in a popover or sheet) puts the tip under its own line (--tip-top); a
-// tip starting at
-// its carrier that would cross the viewport's right edge (a status near the right of a phone) or its
+// ATC, area and modality trees in a popover or sheet) puts the tip under its own line (--tip-top; a
+// tapped tree row's above it where it fits: staticTipTop()); a tip starting at its carrier that
+// would cross the viewport's right edge (a status near the right of a phone) or its
 // scroll box's (the medicines table) moves left (--tip-left), and goes above it where the box has no
 // room below (.tip-above).
 function setupTips() {
@@ -622,9 +623,11 @@ function setupTips() {
     clickedAt = null;
     root.classList.remove("tips-hidden");
   }
-  function hide(at = null) {
+  // under: the carrier the tips stay hidden on while the pointer is there (the one under it; none
+  // after a swipe, so a tap on the carrier shows its tip again).
+  function hide(at = null, under = document.querySelector("[data-tip]:hover")) {
     release();
-    hiddenOn = document.querySelector("[data-tip]:hover");
+    hiddenOn = under;
     clickedAt = at;
     root.classList.add("tips-hidden");
   }
@@ -634,12 +637,27 @@ function setupTips() {
     if (clip) carrier.style.setProperty("--tip-max", `${tipMaxWidth(clip)}px`);
     else carrier.style.removeProperty("--tip-max");
   }
-  // Keyboard focus and touch taps: the tip at its carrier.
-  function anchor(carrier) {
+  // A static carrier's tip (anchored to its row): under its own line, or, for a tree row whose tip a
+  // tap shows (tapped), above the row where it fits in the visible part of its scroll box, over rows
+  // already passed (bug hunt 2026-10-01: under it, A02's covered A03 and A04 in the ATC sheet;
+  // tipFitsAbove()). In px from the containing block's top; style.css adds 4px (top: calc(--tip-top
+  // + 4px)), so a tip above ends 4px over the row.
+  function staticTipTop(carrier, tapped) {
+    const below = carrier.offsetTop + carrier.offsetHeight;
+    if (!tapped || !carrier.matches(".atc-row")) return below;
+    const box = carrier.closest(".sheet-body, .popover-body");
+    const clip = box ? scrollArea(box) : { top: 0 };
+    const measured = parseFloat(getComputedStyle(carrier, "::after").height);
+    const height = Number.isFinite(measured) ? measured
+      : tipHeightEstimate(carrier.dataset.tip.length, carrier.offsetParent?.clientWidth ?? root.clientWidth);
+    return tipFitsAbove(carrier.getBoundingClientRect(), height, clip) ? carrier.offsetTop - height - 8 : below;
+  }
+  // Keyboard focus and touch taps (tapped): the tip at its carrier.
+  function anchor(carrier, tapped = false) {
     carrier.classList.remove("tip-at-pointer");
     if (pointed?.carrier === carrier) pointed = null;
     if (getComputedStyle(carrier).position === "static") {
-      carrier.style.setProperty("--tip-top", `${carrier.offsetTop + carrier.offsetHeight}px`);
+      carrier.style.setProperty("--tip-top", `${staticTipTop(carrier, tapped)}px`);
       return;
     }
     carrier.style.removeProperty("--tip-left");
@@ -782,7 +800,9 @@ function setupTips() {
     if (carrier === hiddenOn) return;
     if (clickedAt && event.clientX === clickedAt.x && event.clientY === clickedAt.y) return;
     reveal();
-    if (touch(event)) anchor(carrier);
+    // A tap or the pointer on it: a quiet tip (focusQuietly()) shows again.
+    carrier.classList.remove("tip-quiet");
+    if (touch(event)) anchor(carrier, true);
     else if (!returning && (fresh || pointed?.carrier !== carrier)) placeAtPointer(carrier, pointAt(event));
   });
   document.addEventListener("pointermove", (event) => {
@@ -800,8 +820,27 @@ function setupTips() {
     reveal();
     const carrier = carrierOf(event.target);
     // Focus a pointer click gives keeps the tip where the pointer opened it.
-    if (carrier && (visible || !carrier.classList.contains("tip-at-pointer"))) anchor(carrier);
+    if (carrier && (visible || !carrier.classList.contains("tip-at-pointer"))) anchor(carrier, !visible && touchScreen.matches);
   });
+  document.addEventListener("focusout", (event) => {
+    const carrier = carrierOf(event.target);
+    if (carrier && !carrier.contains(event.relatedTarget)) carrier.classList.remove("tip-quiet");
+  });
+  // Touch screens: a swipe (the page or a scroll box scrolling under the finger) hides the tips, so
+  // a tapped one never hangs over the rows scrolled to (bug hunt 2026-10-01: an ATC segment's 212px
+  // tip covered the medicines table's next rows); the next tap on a carrier, or focus moving, shows
+  // them again. A tap's own small movement is no swipe (isSwipe()).
+  let touchStart = null;
+  document.addEventListener("touchstart", (event) => {
+    const [first] = event.touches;
+    touchStart = event.touches.length === 1 ? { x: first.clientX, y: first.clientY } : null;
+  }, { capture: true, passive: true });
+  document.addEventListener("touchmove", (event) => {
+    const [first] = event.touches;
+    if (!touchStart || !first || !isSwipe(touchStart, { x: first.clientX, y: first.clientY })) return;
+    touchStart = null;
+    if (!root.classList.contains("tips-hidden") && showing()) hide(null, null);
+  }, { capture: true, passive: true });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || root.classList.contains("tips-hidden") || !showing()) return;
     event.preventDefault();
@@ -845,6 +884,15 @@ function setupTips() {
     target.closest(FOCUSABLE)?.focus({ preventScroll: true, focusVisible: false });
     target.dispatchEvent(new MouseEvent("click", event));
   }, true);
+}
+
+// Focus a script moves after a tap elsewhere (the drilled breakdown's first new bar): on touch
+// screens, where focus alone shows a tip, its tip waits for a tap on it or keyboard focus (.tip-quiet,
+// style.css; setupTips() drops the class when the pointer reaches it or focus leaves it). Bug hunt
+// 2026-10-01: after a drill, L01's tip covered L04 and L03, so L read as having two subclasses.
+function focusQuietly(element) {
+  element?.closest("[data-tip]")?.classList.add("tip-quiet");
+  element?.focus();
 }
 
 // Filled before any data loads, so it shows even when the data files are missing: the top bar's
@@ -1926,8 +1974,9 @@ function startDashboard(meta, [
     // Products without any ATC code, therapeutic area or holder matter at the top level only (the
     // modalities' not classified are a static row).
     showCount("#breakdown-excluded", excluded && !tree.current ? breakdownExcluded(population, by) : 0, excluded);
-    // Drilling down or going up rebuilds the controls: keep focus in the card.
-    if (hadFocus && !card.contains(document.activeElement)) (card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"))?.focus();
+    // Drilling down or going up rebuilds the controls: keep focus in the card, quietly (no tip on a
+    // touch screen: it covered the next bars; keyboard focus still shows it).
+    if (hadFocus && !card.contains(document.activeElement)) focusQuietly(card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"));
   }
 
   // "Who is active where": the top holders of the medicines shown by ATC group (the classes one

@@ -4165,6 +4165,13 @@ a.mesh-tip[data-tip] {
   .mesh-tip:not(.tap-tip):is(a, button, .atc-row)[data-tip]:is(:hover, :focus-within)::after {
     content: none;
   }
+
+  /* Focus a script moved after a tap elsewhere (the drilled breakdown's first new bar; focusQuietly()
+     in main.js): no tip until a tap on the carrier or keyboard focus (bug hunt 2026-10-01: it covered
+     the next bars). */
+  .tip-quiet[data-tip]:not(:focus-visible, :has(:focus-visible))::after {
+    content: none;
+  }
 }
 
 /* --tip-left: moved left when it would cross the viewport's right edge (setupTips()); --tip-max: in a

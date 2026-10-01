@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, tipAbove, tipBounds, tipClick, tipFitsAbove, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -159,4 +159,28 @@ test("tipHeightEstimate: lines of about half an em per character, with padding a
   assert.equal(tipHeightEstimate(260, 352), 6 * 18 + 14);
   assert.equal(tipHeightEstimate(20, 256), 18 + 14);
   assert.equal(tipHeightEstimate(0, 256), 18 + 14);
+});
+
+// Bug hunt 2026-10-01 (dashboard #3): on touch screens a swipe hides the tips, so a tapped one never
+// hangs over the rows scrolled to; a tap's own small movement does not.
+test("isSwipe: a touch that moved more than 10px from where it started", () => {
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 400 }), false);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 104, y: 407 }), false);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 389 }), true);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 89, y: 400 }), true);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 395 }, 4), true);
+});
+
+// Bug hunt 2026-10-01 (dashboard #3): a tapped tree row's tip goes above the row when it fits in the
+// visible part of its scroll box, over rows already passed, not the next ones (under it, the A02
+// row's covered A03 and A04 in the ATC sheet).
+test("tipFitsAbove: the tip and its 4px gap fit between the row's top and the box's", () => {
+  const clip = { top: 110, bottom: 780 };
+  // A02 at 243: 129px of room above, an 86px tip fits.
+  assert.equal(tipFitsAbove({ top: 243, bottom: 291 }, 86, clip), true);
+  // Exactly fits.
+  assert.equal(tipFitsAbove({ top: 200, bottom: 248 }, 86, clip), true);
+  // The first row under the box's top: no room above.
+  assert.equal(tipFitsAbove({ top: 150, bottom: 198 }, 86, clip), false);
+  assert.equal(tipFitsAbove({ top: 199, bottom: 247 }, 86, clip), false);
 });

@@ -41,6 +41,24 @@ export function tipAbove(carrier, height, clip) {
   return height > below && above > below;
 }
 
+// Whether a tapped tree row's tip goes above the row (bug hunt 2026-10-01: under it, a row's tip in
+// the ATC sheet covered the next two rows, those the finger moves to): when it and its gap fit
+// between the row's top and the top of clip (its scroll box's visible area, { top }), it covers rows
+// already passed instead.
+export function tipFitsAbove(row, height, clip) {
+  return row.top - GAP - height >= clip.top;
+}
+
+// The distance (CSS px) a touch may move and still be a tap: beyond it, a swipe that scrolls the page
+// or a scroll box (Chrome's touch slop is about 15px).
+const TAP_SLOP = 10;
+
+// Whether a touch at point, having started at start ({ x, y }), is a swipe (bug hunt 2026-10-01: a
+// swipe hides the tips on touch screens, so a tapped one never hangs over the rows scrolled to).
+export function isSwipe(start, point, slop = TAP_SLOP) {
+  return Math.hypot(point.x - start.x, point.y - start.y) > slop;
+}
+
 // A tip's height before it shows (its size cannot be measured yet): its text in lines of about half
 // an em per character (13px text on 18px lines), within width less the padding and border (22px),
 // plus the padding and border (14px).
