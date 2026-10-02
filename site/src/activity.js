@@ -170,8 +170,10 @@ export function renderActivity(container, { rows, columns, sort, parent = null, 
         .text(text)
         .on("click", () => onFilter(patch));
     });
-  // Focus scrolls a cell clear of the sticky holder column (WCAG 2.4.11), whatever its width.
-  root.style("scroll-padding-inline-start", `${table.select("tbody th").node().offsetWidth + 4}px`);
+  // Focus scrolls a cell 4px clear of the sticky holder column (WCAG 2.4.11), whatever its width: the
+  // padding counts from the box's edge, and the column sticks 4px inside it, past the gutter
+  // (style.css).
+  root.style("scroll-padding-inline-start", `${table.select("tbody th").node().offsetWidth + 8}px`);
   // A click filtered or sorted the table: the same control; a cell that drilled into its class: the
   // class's toggle above the table; else the table's first button (focus stays in the card).
   if (focused === undefined) return;
