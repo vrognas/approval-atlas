@@ -5536,6 +5536,13 @@ table.activity {
   text-align: center;
 }
 
+/* While the search's list is open it covers the line, but not the gutter: a line's last separator
+   there peeked out beside it (design sweep recheck, 2026-10-02: at 390px, 4px right of the list).
+   The line is clipped at its right edge then; nothing else of it lies beyond that edge. */
+body:has(#lookup-input[aria-expanded="true"]) .try {
+  clip-path: inset(-44px 0 -44px -44px);
+}
+
 /* The landing intro (intro.js; user-approved design 2026-09-28; owner decision 2026-09-29: three
    onboarding cards and a quiet line): between the Try line and the headline, on the untouched
    overview. A size container, so its layout follows its own width: the cards side by side from
