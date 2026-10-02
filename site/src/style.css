@@ -4853,8 +4853,8 @@ td.atc .code + .code {
    the badge, 212px, it covered the next rows). The badge draws none; setupTips() (main.js) copies
    the focused badge's tip to its row (data-flow-tip, .tip-flow on the badge) in the next frame, so
    a tap elsewhere lands before the row shrinks back. Its line comes before the areas' and the
-   indication toggle's (order). Mouse hover, keyboard focus on a mouse device and the wide table are
-   unchanged. */
+   indication toggle's (order; main.js flowTipBand() reads it so). Mouse hover, keyboard focus on a
+   mouse device and the wide table are unchanged. */
 @media (hover: none) {
   @container (max-width: 599px) {
     #medicines-table td.atc .code[data-tip]::after {

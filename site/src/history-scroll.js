@@ -32,6 +32,19 @@ export function placeAt(y, viewportHeight, marks, open = []) {
   return { y, anchor: null, offset: y, height: null, open };
 }
 
+// The scroll position as it will be without a band of the page that does not come back with its
+// view (band: { top, height }, document pixels, or null: the medicines table's in-flow ATC tip,
+// main.js flowTipBand()): the band's part above the point kept still is left out, so what was there
+// comes back there. That point is the control just pressed (focus: { top, bottom }, document
+// pixels, or null) when it is in view below the band (a link tapped under the tip), else the middle
+// of the screen, where a place is kept (review of the in-flow tip, 2026-10-02).
+export function scrollWithout(y, viewportHeight, band, focus) {
+  if (!band) return y;
+  const inView = focus !== null && focus.bottom > y && focus.top < y + viewportHeight;
+  const still = inView && focus.top >= band.top + band.height ? focus.top : y + viewportHeight / 2;
+  return y - Math.min(Math.max(still - band.top, 0), band.height);
+}
+
 // A place read back from a history state or session storage, or null when it is not one.
 export function placeFrom(value) {
   if (value === null || typeof value !== "object") return null;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SCROLL_KEY, createHistoryScroll, placeAt, placeFrom, restoreStep } from "./history-scroll.js";
+import { SCROLL_KEY, createHistoryScroll, placeAt, placeFrom, restoreStep, scrollWithout } from "./history-scroll.js";
 
 // A window with a history stack, a location and session storage, as the browser keeps them.
 function fakeWindow(initialState = null, url = "/") {
@@ -104,6 +104,30 @@ test("restoreStep waits for the part and the page's height, unless nothing more 
   assert.deepEqual(restoreStep(place, { result: null, overview: 300 }, { maxScroll: -20, viewportHeight: 600, final: true }), { y: 0 });
   const top = placeAt(0, 600, { result: null, overview: null });
   assert.deepEqual(restoreStep(top, { result: null, overview: null }, { maxScroll: 0, viewportHeight: 600, final: false }), { y: 0 });
+});
+
+test("scrollWithout leaves out a band that will not come back, as far as it lies above the point kept still", () => {
+  // The medicines table's in-flow ATC tip (a phone's): 182px at 1700, under the badge at 1600.
+  const band = { top: 1700, height: 182 };
+  const badge = { top: 1600, bottom: 1624 };
+  // No band: the position itself.
+  assert.equal(scrollWithout(1923, 664, null, badge), 1923);
+  // The band above the middle of the screen (1923 + 332): left out whole, so a row below it, at the
+  // middle, comes back where it was (review of the in-flow tip: Back put Vijoice 182px higher).
+  assert.equal(scrollWithout(1923, 664, band, badge), 1923 - 182);
+  // Below the middle: nothing left out, the rows above it come back where they were.
+  assert.equal(scrollWithout(1000, 664, band, badge), 1000);
+  // Across the middle (1450 + 332 = 1782): only its part above it.
+  assert.equal(scrollWithout(1450, 664, band, badge), 1450 - 82);
+  // A control pressed below it, in view (a condition link of the same row, tapped under the tip):
+  // kept still, the band left out whole, wherever the middle is.
+  assert.equal(scrollWithout(1450, 664, band, { top: 1900, bottom: 1924 }), 1450 - 182);
+  // Out of view (above the screen, or below it): the middle again.
+  assert.equal(scrollWithout(1450, 664, band, { top: 2200, bottom: 2224 }), 1450 - 82);
+  assert.equal(scrollWithout(2600, 664, band, { top: 1900, bottom: 1924 }), 2600 - 182);
+  assert.equal(scrollWithout(1000, 664, band, { top: 1900, bottom: 1924 }), 1000);
+  // No focus: the middle.
+  assert.equal(scrollWithout(1450, 664, band, null), 1450 - 82);
 });
 
 test("placeFrom keeps only a well-formed place", () => {

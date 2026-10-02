@@ -58,7 +58,7 @@ import {
 } from "./facets.js";
 import { STRIP_FADE, fadeEdges, renderFilterChips, renderFilterSummary, revealOnFocus, revealScroll, watchEdgeFade } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
-import { createHistoryScroll, placeAt, restoreStep } from "./history-scroll.js";
+import { createHistoryScroll, placeAt, restoreStep, scrollWithout } from "./history-scroll.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
 import { SOURCES, UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
@@ -302,12 +302,34 @@ function pageMarks() {
     overview: app.hidden ? null : documentTop(app),
   };
 }
+// The band the medicines table's in-flow ATC tip (a phone's tapped badge: setupTips()) adds to its
+// row, in document pixels, else null. It does not come back with its view (no badge has focus then),
+// so a place leaves it out (scrollWithout(); review of the in-flow tip, 2026-10-02: Back put the
+// medicine tapped two rows under it 182px higher). Its line comes right before the areas' and the
+// indication toggle's (style.css), each line a row gap apart.
+function flowTipBand() {
+  const row = document.querySelector("#medicines-table tr[data-flow-tip]");
+  if (!row) return null;
+  const tip = getComputedStyle(row, "::after");
+  const height = parseFloat(tip.height);
+  if (tip.content === "none" || tip.content === "normal" || !Number.isFinite(height)) return null;
+  const style = getComputedStyle(row);
+  const band = height + (parseFloat(style.rowGap) || 0);
+  const after = [...row.querySelectorAll(":scope > :is(td.area, td.indication-cell)")]
+    .map((cell) => cell.getBoundingClientRect()).filter((box) => box.height > 0);
+  const end = after.length > 0 ? Math.min(...after.map((box) => box.top))
+    : row.getBoundingClientRect().bottom - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
+  return { top: end - band + window.scrollY, height: band };
+}
 // While a restore waits, the place it goes to (a second Back, a reload before it).
 function pagePlace() {
   if (pendingScroll !== null) return pendingScroll;
   const result = $("#result");
   const open = result.hidden ? [] : [...result.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key);
-  return placeAt(window.scrollY, window.innerHeight, pageMarks(), open);
+  const band = flowTipBand();
+  const active = band && document.activeElement !== document.body ? document.activeElement?.getBoundingClientRect() : null;
+  const focus = active ? { top: active.top + window.scrollY, bottom: active.bottom + window.scrollY } : null;
+  return placeAt(scrollWithout(window.scrollY, window.innerHeight, band, focus), window.innerHeight, pageMarks(), open);
 }
 const historyScroll = createHistoryScroll(window, pagePlace);
 setHistoryWriter(historyScroll);
