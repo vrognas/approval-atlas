@@ -1,0 +1,46 @@
+Table 8 LIBRETTO-001: Objective response and duration of response
+
+                                                              Efficacy eligible patients
+                                                                   IRC assessment
+ N                                                                         69
+ Objective response (CR + PR)
+ % (95% CI)                                                        82.6 (71.6, 90.7)
+ Complete response n (%)                                                 5 (7.2)
+ Partial response n (%)                                                 52 (75.4)
+ Duration of response (months)*
+ Median, 95% CI                                                   20.23 (15.4, 29.5)
+ Rate (%) of patients with duration of
+ response
+ ≥ 6 months (95% CI)                                               87.5 (75.5, 93.8)
+ ≥ 12 months (95% CI)                                              66.7 (52.4, 77.6)
+CI = Confidence Interval, CR = complete response, PR = partial response
+*Median duration of follow-up was 37.09 months (25th, 75th percentile: 24.0, 45.1)
+Data Cut-off date: 13 January 2023
+
+Previously treated RET fusion-positive NSCLC
+A total of 247 patients had received prior platinum-based chemotherapy in Study LIBRETTO-001.
+The median age was 61 years (range 23 years to 81 years). 56.7% of patients were female. 43.7% of
+patients were White, 47.8% were Asian, 4.9% were Black, and 66.8% were never smokers. Most
+patients (98.8%) had metastatic disease at enrolment and 31.2% had CNS metastasis at baseline as
+assessed by investigator. ECOG performance status was reported as 0-1 (97.1%) or 2 (2.8%). The
+most common fusion partner was KIF5B (61.9%), followed by CCDC6 (21.5%) and then NCOA4
+(2.0%). The median number of prior systemic therapies was 2 (range 1–15) and 43.3% (n = 107/247)
+received 3 or more prior systemic regimens; prior treatments included anti PD1/PD-L1 therapy
+(58.3%), multi-kinase inhibitor (MKI) (31.6%) and taxanes (34.8%); 41.3% had other systemic
+therapy. Efficacy results for previously treated RET fusion-positive NSCLC patients are summarised
+in Table 9.
+
+Table 9 LIBRETTO-001: Objective response and duration of response
+
+                                                              Efficacy eligible patients
+                                                                   IRC assessment
+ N                                                                        247
+ Objective response (CR + PR)
+ % (95% CI)                                                        61.5 (55.2, 67.6)
+ Complete response n (%)                                                20 (8.1)
+ Partial response n (%)                                                132 (53.4)
+ Duration of response (months)*
+ Median (95% CI)                                                   31.6 (20.4, 42.3)
+ Rate (%) of patients with duration of
+ response
+ ≥ 6 months (95% CI)                                               87.0 (80.4, 91.5)

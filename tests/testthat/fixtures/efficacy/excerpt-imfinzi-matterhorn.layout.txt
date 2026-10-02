@@ -1,0 +1,14 @@
+Table 15: Efficacy Results for the MATTERHORN Study
+                                              IMFINZI + FLOT                                Placebo + FLOT
+                                                chemotherapy                                 chemotherapy
+                                                   (N=474)                                      (N=474)
+EFSa
+    Number of events, n (%)                                      167 (35.2%)                     218 (46%)
+                                           b
+    Median EFS (months) (95% CI)                                NR (40.7, NR)                32.8 (27.9, NR)
+                  c
+    HR (95% CI)                                                              0.71 (0.58, 0.86)
+    2-sided p-valued,e                                                            < 0.001
+                                       b
+    EFS at 24 months, % (95% CI)                              67.4 (62.9, 71.6)             58.5 (53.8, 63.0)
+OSf

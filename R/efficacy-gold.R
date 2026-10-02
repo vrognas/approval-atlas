@@ -10,7 +10,12 @@
 # - medicine, trial (folded: "KEYNOTE 024" = "KEYNOTE-024", "ALEX (BO28984)" =
 #   "ALEX", its first word and a following number) and endpoint (an
 #   abbreviation: "Progression-free survival (PFS)" = "PFS") name the group a
-#   row is compared within;
+#   row is compared within; rows whose trial labels name no trial in common
+#   (gold_trial_names_related(): RAINBOW is not REVEL, KEYNOTE-189 not
+#   KEYNOTE-407, MARIPOSA not MARIPOSA-2) never pair;
+# - indication: the extractor's, for the gold's condition (NSCLC): a row whose
+#   indication names another condition, and not NSCLC, is not scored
+#   (gold_condition);
 # - value, ci_low, ci_high are compared as printed (spaces and a percent sign
 #   aside);
 # - effect_type: gold "HR non-inferiority" = extractor hr_noninferiority,
@@ -20,6 +25,9 @@
 #   it is read from the start of their `analysis` text ("primary ...",
 #   "pre-specified ..." = primary, "exploratory ...", "updated ..." = later,
 #   "interim ..." of a primary endpoint = primary) and is unknown otherwise;
+#   rows of two analyses (known roles that differ, or analysis texts dated
+#   with no date in common) pair only when they print the same numbers, so a
+#   true row of another analysis is an extra row, not a numeric error;
 # - population: the extractor's population_match; the gold rows state none,
 #   so it only appears in the key shown for missed and extra rows;
 # - ci_is_range: the extractor's; the gold rows state it in their arm_measure
@@ -46,6 +54,47 @@ gold_endpoint_names <- c(
   "pathological complete response" = "PCR",
   "major pathological response" = "MPR"
 )
+gold_known_endpoints <- unique(unname(gold_endpoint_names))
+
+# The gold's condition (`own`) and the other conditions the pilot's 18
+# medicines are authorised for (`others`), as regular expressions. The gold
+# rows are NSCLC rows, while the extractor answers for every indication of a
+# medicine: a row whose indication names another condition, and not NSCLC, is
+# outside the gold set (Retsevmo's thyroid-cancer LIBRETTO-001 response rate,
+# Cyramza's gastric-cancer RAINBOW). A row whose indication names no
+# condition is scored, so an NSCLC row whose indication lost its condition
+# still counts. "small cell lung" is SCLC only: an indication naming NSCLC is
+# scored whatever else it names. EMA's text has "?" for some hyphens
+# ("non?small cell").
+gold_condition <- list(
+  own = "non.?small.?cell.?lung|\\bnsclc\\b",
+  others = paste(
+    c(
+      "melanoma", "renal.?cell", "urothelial", "bladder", "head.?and.?neck",
+      "hodgkin", "lymphoma", "colorectal", "\\bm?crc\\b", "gastric",
+      "o?esophag", "hepatocellular", "\\bhcc\\b", "biliary", "cholangio",
+      "thyroid", "breast", "cervical", "endometri", "ovarian", "mesothelioma",
+      "nasopharyn", "cutaneous", "cscc", "basal.?cell", "\\b(la|m)?bcc\\b",
+      "merkel", "small.?cell.?lung", "\\bsclc\\b", "solid.?tumou?r", "msi.?h",
+      "mismatch.?repair"
+    ),
+    collapse = "|"
+  )
+)
+
+# Whether each indication is outside the gold's condition (`condition`, as
+# gold_condition; NULL: none is).
+gold_outside_condition <- function(indications, condition) {
+  if (is.null(condition)) {
+    return(rep(FALSE, length(indications)))
+  }
+  naming <- function(pattern) {
+    grepl(pattern, indications, ignore.case = TRUE, perl = TRUE)
+  }
+  !naming(condition$own) & naming(condition$others)
+}
+
+gold_generic_trial_words <- c("study", "phase", "trial")
 
 # NULL, NA and "" are all "".
 gold_text <- function(value) {
@@ -85,19 +134,149 @@ gold_trial_key <- function(trial) {
   paste(tokens[seq_len(keep)], collapse = "-")
 }
 
-# An abbreviation in parentheses after a longer name wins ("Duration of
-# response (DoR)"); other parentheses are dropped ("OS (final analysis)").
+# The trial names of a label, each as its words: lower-case, letters and
+# digits apart, leading zeros dropped ("KEYNOTE-024" and "KEYNOTE 24" are
+# "keynote 24", "IMpower110" is "impower 110"). A name is a run of words, kept
+# together by spaces, hyphens or underscores, that name a trial: a word with a
+# digit or with two capitals or more ("RAINBOW", "IMpower110", "CodeBreaK",
+# "B7461006"), and a word hyphenated to one ("DESTINY-Lung02", "GEOMETRY
+# mono-1"); never a phase ("phase 3", "Phase III") nor a generic word. Any
+# other character ends a name, brackets too: "ALEX (BO28984)" names "alex"
+# and "bo 28984". A description such as "pembrolizumab adjuvant study" names
+# none.
+gold_trial_names <- function(trial) {
+  text <- gsub(
+    "\\bphase[ -]*([0-9]+[a-z]?|[ivx]+)(/([0-9]+|[ivx]+))*\\b", " ",
+    gold_text(trial),
+    ignore.case = TRUE, perl = TRUE
+  )
+  segments <- strsplit(text, "[^A-Za-z0-9 _-]+")[[1]]
+  unique(unlist(purrr::map(segments, gold_segment_trial_names)))
+}
+
+# The trial names of a stretch of a label without brackets or punctuation.
+gold_segment_trial_names <- function(segment) {
+  word_pattern <- gregexpr("[A-Za-z0-9]+", segment)
+  words <- regmatches(segment, word_pattern)[[1]]
+  if (length(words) == 0) {
+    return(character())
+  }
+  separators <- regmatches(segment, word_pattern, invert = TRUE)[[1]]
+  # A hyphen or underscore before a word joins it to the word before.
+  joined <- c(FALSE, grepl("[-_]", separators[seq_along(words)][-1]))
+  generic <- tolower(words) %in% gold_generic_trial_words
+  named <- (grepl("[0-9]", words) | grepl("[A-Z].*[A-Z]", words)) & !generic
+  joined_to_named <- (joined & c(FALSE, named[-length(words)])) |
+    (c(joined[-1], FALSE) & c(named[-1], FALSE))
+  kept <- !generic & (named | joined_to_named)
+  pieces <- purrr::map(tolower(words[kept]), function(word) {
+    parts <- regmatches(word, gregexpr("[a-z]+|[0-9]+", word))[[1]]
+    sub("^0+(?=[0-9])", "", parts, perl = TRUE)
+  })
+  runs <- split(pieces, cumsum(!kept)[kept])
+  unname(purrr::map_chr(runs, \(run) paste(unlist(run), collapse = " ")))
+}
+
+# Whether two trial names can be one trial: the same words, or one the other
+# with words after it that hold no number ("IMpower110 ITT" is IMpower110);
+# never with a number after it ("MARIPOSA" is not "MARIPOSA-2", nor
+# "DESTINY" "DESTINY-Lung02").
+gold_same_trial_name <- function(first, second) {
+  first <- strsplit(first, " ", fixed = TRUE)[[1]]
+  second <- strsplit(second, " ", fixed = TRUE)[[1]]
+  if (length(first) > length(second)) {
+    longer <- first
+    first <- second
+    second <- longer
+  }
+  shared <- seq_along(first)
+  identical(second[shared], first) &&
+    !any(grepl("^[0-9]+$", second[-shared]))
+}
+
+# Whether two labels name a trial in common (gold_same_trial_name()), so a
+# number in brackets only links two labels, never separates them ("ALINA
+# (BO40336)" is "ALINA (NCT03456076)" and "BO40336; ALINA").
+gold_trial_names_shared <- function(first, second) {
+  any(purrr::map_lgl(first, function(name) {
+    any(purrr::map_lgl(second, \(other) gold_same_trial_name(name, other)))
+  }))
+}
+
+# Whether two labels can name the same trial (gold_trial_names() of each): a
+# name in common, or a label naming no trial, which can be any.
+gold_trial_names_related <- function(first, second) {
+  length(first) == 0 || length(second) == 0 ||
+    gold_trial_names_shared(first, second)
+}
+
+# A known endpoint named outside the parentheses wins: the whole name
+# ("Duration of response (months)" is DOR, not "MONTHS"), else the one known
+# endpoint the words outside name (gold_endpoint_mentions(): "Overall
+# survival by tumour PD-L1 Tumour Cell (TC) expression status" is OS, not
+# "TC"); else an abbreviation in parentheses after a longer name ("Time to
+# CNS progression (TTP)"); other parentheses are dropped ("OS (final
+# analysis)").
 gold_endpoint <- function(endpoint) {
   text <- tolower(gold_text(endpoint))
+  outside <- trimws(gsub("\\([^)]*\\)", "", text))
+  name <- gsub("-", " ", outside, fixed = TRUE)
+  if (!is.na(gold_endpoint_names[name])) {
+    return(unname(gold_endpoint_names[name]))
+  }
+  named <- gold_endpoint_mentions(outside)
+  if (length(named) == 1) {
+    return(named)
+  }
   abbreviation <- regmatches(
     text, regexpr("(?<=\\()[a-z]{2,6}(?=\\))", text, perl = TRUE)
   )
   if (length(abbreviation) == 1 && grepl("^[^(]{8,}\\(", text)) {
     return(toupper(abbreviation))
   }
-  text <- trimws(gsub("\\([^)]*\\)", "", text))
-  text <- gsub("-", " ", text, fixed = TRUE)
-  toupper(dplyr::coalesce(unname(gold_endpoint_names[text]), text))
+  toupper(name)
+}
+
+# Phrases (regular expressions over a label's lower-case words) that make a
+# named endpoint another one: progression or response in the CNS ("CNS
+# progression-free survival", "Time to intracranial progression"), a second
+# progression ("Second PFS", "PFS2") and a subsequent therapy ("PFS after
+# first subsequent therapy"). A qualifier of the analysis or the population
+# does not ("PFS at second interim analysis", "PFS in patients with baseline
+# CNS metastases").
+gold_endpoint_qualifiers <- c(
+  paste0(
+    "(cns|intracranial) (progression|response|objective|overall|duration|",
+    "recurrence|pfs|orr|dor|dfs|efs)"
+  ),
+  "second (progression|pfs)",
+  "pfs ?2",
+  "subsequent (therapy|treatment|anticancer|line)"
+)
+
+# The known endpoints a label names as words, by name or abbreviation
+# ("Confirmed objective response rate" and "Confirmed ORR, laBCC" name ORR).
+# A label with a qualifier names none ("CNS progression-free survival",
+# "Second PFS after start of first subsequent therapy"), nor does one of an
+# endpoint the scorer does not know ("Time to worsening of patient-reported
+# NSCLC symptoms").
+gold_endpoint_mentions <- function(endpoint) {
+  words <- paste0(
+    " ", gsub("[^a-z0-9]+", " ", tolower(gold_text(endpoint))), " "
+  )
+  has <- function(phrase) grepl(paste0(" ", phrase, " "), words, fixed = TRUE)
+  qualified <- purrr::map_lgl(gold_endpoint_qualifiers, function(phrase) {
+    grepl(paste0(" ", phrase, " "), words, perl = TRUE)
+  })
+  if (any(qualified)) {
+    return(character())
+  }
+  by_name <- purrr::map_lgl(names(gold_endpoint_names), has)
+  by_abbreviation <- purrr::map_lgl(tolower(gold_known_endpoints), has)
+  unique(c(
+    unname(gold_endpoint_names[by_name]),
+    gold_known_endpoints[by_abbreviation]
+  ))
 }
 
 gold_effect_type <- function(effect_type) {
@@ -193,8 +372,13 @@ gold_row_table <- function(rows) {
     medicine = tolower(text_column("medicine")),
     trial_text = text_column("trial"),
     trial = purrr::map_chr(rows, \(row) gold_trial_key(row$trial)),
+    trial_names = purrr::map(rows, \(row) gold_trial_names(row$trial)),
     endpoint = purrr::map_chr(rows, \(row) gold_endpoint(row$endpoint)),
+    endpoint_mentions = purrr::map(
+      rows, \(row) gold_endpoint_mentions(row$endpoint)
+    ),
     role = purrr::map_chr(rows, gold_role),
+    analysis_dates = purrr::map(rows, \(row) gold_analysis_dates(row$analysis)),
     effect_type = purrr::map_chr(
       rows, \(row) gold_effect_type(row$effect_type)
     ),
@@ -204,6 +388,7 @@ gold_row_table <- function(rows) {
         dplyr::na_if(gold_text(row$indication), ""), gold_text(row$setting)
       )
     }),
+    stated_indication = text_column("indication"),
     value = purrr::map_chr(rows, \(row) gold_number(row$value)),
     ci_low = purrr::map_chr(rows, \(row) gold_number(row$ci_low)),
     ci_high = purrr::map_chr(rows, \(row) gold_number(row$ci_high)),
@@ -211,6 +396,9 @@ gold_row_table <- function(rows) {
     arm_control = arm_column("arm_control"),
     significance = tolower(text_column("significance_stated")),
     ci_is_range = purrr::map_lgl(rows, gold_ci_is_range),
+    # A kept row a human must check before the site shows it (gold rows have
+    # no flags).
+    flagged = purrr::map_lgl(rows, \(row) length(unlist(row$flags)) > 0),
     key = purrr::map_chr(rows, gold_row_key)
   )
   table$group <- paste(table$medicine, table$trial, table$endpoint, sep = "|")
@@ -231,27 +419,115 @@ gold_ci_skipped <- function(is_range, gold_low, gold_high) {
   !nzchar(gold_low) & !nzchar(gold_high) & is_range %in% TRUE
 }
 
+# Whether extracted rows `e` print the confidence interval of gold rows `g`
+# (not compared where gold_ci_skipped()).
+gold_same_interval <- function(extracted, gold, e, g) {
+  gold_ci_skipped(extracted$ci_is_range[e], gold$ci_low[g], gold$ci_high[g]) |
+    (extracted$ci_low[e] == gold$ci_low[g] &
+       extracted$ci_high[e] == gold$ci_high[g])
+}
+
+# Whether extracted rows `e` print the numbers of gold rows `g`: the value and
+# the interval.
+gold_same_numbers <- function(extracted, gold, e, g) {
+  extracted$value[e] == gold$value[g] &
+    gold_same_interval(extracted, gold, e, g)
+}
+
 # How well an extracted row fits a gold row: the trial and endpoint above all
 # (constant within a group), then the value, the confidence interval, the
 # analysis role and the effect type.
 gold_pair_scores <- function(extracted, gold, pairs) {
   e <- pairs$extracted
   g <- pairs$gold
-  same_interval <- gold_ci_skipped(
-    extracted$ci_is_range[e], gold$ci_low[g], gold$ci_high[g]
-  ) | (extracted$ci_low[e] == gold$ci_low[g] &
-         extracted$ci_high[e] == gold$ci_high[g])
   32 * (extracted$trial[e] == gold$trial[g]) +
     16 * (extracted$endpoint[e] == gold$endpoint[g]) +
-    8 * (extracted$value[e] == gold$value[g]) + 4 * same_interval +
+    8 * (extracted$value[e] == gold$value[g]) +
+    4 * gold_same_interval(extracted, gold, e, g) +
     2 * same_known(extracted$role[e], gold$role[g]) +
     same_known(extracted$effect_type[e], gold$effect_type[g])
 }
 
+gold_month_numbers <- c(
+  jan = 1, feb = 2, mar = 3, apr = 4, may = 5, jun = 6, jul = 7, aug = 8,
+  sep = 9, oct = 10, nov = 11, dec = 12
+)
+
+# The dates an analysis text states (a data cut-off: "30-Sep-2020",
+# "01 May 2023", "Jun 14, 2021"), as ISO dates.
+gold_analysis_dates <- function(text) {
+  text <- tolower(gold_text(text))
+  month <- "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?"
+  patterns <- c(
+    day_first = paste0("\\b([0-9]{1,2})[ -]+", month, "[ ,-]+([0-9]{4})\\b"),
+    month_first = paste0("\\b", month, "[ -]+([0-9]{1,2}),?[ -]+([0-9]{4})\\b")
+  )
+  dates <- purrr::imap(patterns, function(pattern, order) {
+    found <- regmatches(text, gregexpr(pattern, text, perl = TRUE))[[1]]
+    purrr::map_chr(found, function(date) {
+      parts <- regmatches(date, regexec(pattern, date, perl = TRUE))[[1]]
+      day <- if (order == "day_first") parts[2] else parts[3]
+      name <- if (order == "day_first") parts[3] else parts[2]
+      sprintf(
+        "%s-%02d-%02d", parts[4], gold_month_numbers[[name]], as.integer(day)
+      )
+    })
+  })
+  unique(unlist(dates, use.names = FALSE)) %||% character()
+}
+
+# Whether extracted rows `e` and gold rows `g` state different analyses of
+# their trial: both analysis roles known and different (an exploratory
+# analysis with longer follow-up is not the primary analysis), or both
+# analysis texts dated with no date in common (the interim analysis of
+# 06-Dec-2019 is not the final one of 30-Sep-2020).
+gold_different_analyses <- function(extracted, gold, e, g) {
+  roles <- !is.na(extracted$role[e]) & !is.na(gold$role[g]) &
+    extracted$role[e] != gold$role[g]
+  dates <- purrr::map2_lgl(
+    extracted$analysis_dates[e], gold$analysis_dates[g],
+    function(first, second) {
+      length(first) > 0 && length(second) > 0 &&
+        length(intersect(first, second)) == 0
+    }
+  )
+  roles | dates
+}
+
+# Which pairs may pair at all: only rows whose trial labels can name the same
+# trial (gold_trial_names_related()), even where they fold to one key
+# (DESTINY-Lung01 is not DESTINY-Lung02), and that state the same analysis
+# unless they print the same numbers (gold_different_analyses(): a true row of
+# another analysis is an extra row, never a numeric error of the gold's). With
+# `linked` (rows of a medicine left over from their own group, so a label the
+# model spelled differently cannot hide a wrong number) also only the same
+# endpoint, or the same trial key where one label names the other's endpoint
+# (gold_endpoint_mentions(): "Confirmed objective response rate" is ORR; OS
+# or "time to worsening of symptoms" is never PFS).
+gold_pairable <- function(extracted, gold, pairs, linked) {
+  e <- pairs$extracted
+  g <- pairs$gold
+  related <- purrr::map2_lgl(
+    extracted$trial_names[e], gold$trial_names[g], gold_trial_names_related
+  ) & (!gold_different_analyses(extracted, gold, e, g) |
+         gold_same_numbers(extracted, gold, e, g))
+  if (!linked) {
+    return(related)
+  }
+  names_endpoint <- function(mentions, endpoints) {
+    purrr::map2_lgl(mentions, endpoints, \(names, endpoint) endpoint %in% names)
+  }
+  same_endpoint <- extracted$endpoint[e] == gold$endpoint[g]
+  one_names_other <-
+    names_endpoint(extracted$endpoint_mentions[e], gold$endpoint[g]) |
+    names_endpoint(gold$endpoint_mentions[g], extracted$endpoint[e])
+  related & (same_endpoint |
+               (extracted$trial[e] == gold$trial[g] & one_names_other))
+}
+
 # Greedy best pairs: the highest score first, then the order in the extracted
-# rows, then in the gold rows. With `linked` only rows of the same trial or
-# the same endpoint can pair. Returns the gold row of each extracted row (NA
-# when none is left for it).
+# rows, then in the gold rows, among the pairs gold_pairable() allows. Returns
+# the gold row of each extracted row (NA when none is left for it).
 match_group_rows <- function(extracted,
                              gold,
                              extracted_rows,
@@ -260,12 +536,7 @@ match_group_rows <- function(extracted,
   pairs <- expand.grid(
     extracted = extracted_rows, gold = gold_rows, KEEP.OUT.ATTRS = FALSE
   )
-  if (linked) {
-    pairs <- pairs[
-      extracted$trial[pairs$extracted] == gold$trial[pairs$gold] |
-        extracted$endpoint[pairs$extracted] == gold$endpoint[pairs$gold],
-    ]
-  }
+  pairs <- pairs[gold_pairable(extracted, gold, pairs, linked), ]
   pairs$score <- gold_pair_scores(extracted, gold, pairs)
   pairs <- pairs[order(-pairs$score, pairs$extracted, pairs$gold), ]
   matched <- stats::setNames(rep(NA_integer_, length(extracted_rows)),
@@ -283,9 +554,10 @@ match_group_rows <- function(extracted,
 }
 
 # For each extracted row the gold row it stands for, or NA. First within
-# (medicine, trial, endpoint); then the rows still unpaired of a medicine pair
-# by trial or endpoint alone, so a label the model spelled differently cannot
-# hide a wrong number as a missed row plus an extra one.
+# (medicine, trial key, endpoint); then the rows still unpaired of a medicine
+# pair across those (gold_pairable()), so a label the model spelled
+# differently cannot hide a wrong number as a missed row plus an extra one.
+# Both passes pair only rows whose trial labels can name the same trial.
 match_gold_rows <- function(extracted, gold) {
   matched <- rep(NA_integer_, nrow(extracted))
   for (group in intersect(extracted$group, gold$group)) {
@@ -366,17 +638,30 @@ claims_significance <- function(text) {
   grepl("significan", text)
 }
 
-# Each of the pilot's four pitfalls: TRUE when the extraction avoids it. The
-# MARIPOSA-2 one needs an OS row to test: without one it passes only where the
-# gold has none either (as the pilot's), and says so in `notes`.
+# Each of the pilot's four pitfalls: TRUE when the extraction avoids it, NA
+# when it could not be tested. The MARIPOSA-2 one needs an OS row to test:
+# without one it passes only where the gold has none either (as the pilot's),
+# and says so in `notes`. The ALEX one tests the ALEX rows found with arm
+# values (the verifier blanks arms it cannot verify, and rejects a row whose
+# comparator label sits with the treatment arm): each must have the gold's
+# arms in the gold's order. Without such a row it is not testable (NA), and
+# `notes` says why: a row without arms is not a swap.
 gold_pitfalls <- function(extracted, gold, matched) {
   alex <- which(gold$trial == "alex")
-  alex_ok <- length(alex) > 0 && all(purrr::map_lgl(alex, function(row) {
-    found <- which(matched == row)
-    length(found) == 1 &&
+  alex_found <- which(matched %in% alex)
+  has_arms <- nzchar(extracted$arm_treatment[alex_found]) |
+    nzchar(extracted$arm_control[alex_found])
+  alex_with_arms <- alex_found[has_arms]
+  alex_without_arms <- alex_found[!has_arms]
+  alex_ok <- if (length(alex_with_arms) == 0) {
+    NA
+  } else {
+    all(purrr::map_lgl(alex_with_arms, function(found) {
+      row <- matched[found]
       extracted$arm_treatment[found] == gold$arm_treatment[row] &&
-      extracted$arm_control[found] == gold$arm_control[row]
-  }))
+        extracted$arm_control[found] == gold$arm_control[row]
+    }))
+  }
   impower110 <- any(
     extracted$medicine == "tecentriq" & extracted$trial == "impower110" &
       extracted$endpoint == "OS" & extracted$value == "0.59" &
@@ -387,16 +672,33 @@ gold_pitfalls <- function(extracted, gold, matched) {
       table$endpoint == "OS"
   }
   mariposa2 <- mariposa2_os(extracted)
-  note <- character()
+  note <- if (length(alex_found) == 0) {
+    paste(
+      "alex_column_order: not testable, no ALEX row was extracted",
+      if (length(alex) > 0) "(the gold expects one)" else "(the gold has none)"
+    )
+  } else if (length(alex_without_arms) > 0) {
+    sprintf(
+      paste(
+        "alex_column_order: %d of the %d ALEX rows found have no arm values",
+        "(none extracted or none verified), so their column order could not",
+        "be tested%s"
+      ),
+      length(alex_without_arms), length(alex_found),
+      if (is.na(alex_ok)) "; not testable" else ""
+    )
+  } else {
+    character()
+  }
   mariposa2_ok <- if (any(mariposa2)) {
     !any(claims_significance(extracted$significance[mariposa2]))
   } else {
-    note <- paste(
+    note <- c(note, paste(
       "mariposa2_significance: no MARIPOSA-2 OS row was extracted, so its",
       "significance statement could not be tested",
       if (any(mariposa2_os(gold))) "(the gold expects the row)" else
         "(the gold has none either)"
-    )
+    ))
     !any(mariposa2_os(gold))
   }
   lumykras <- extracted$medicine == "lumykras" & extracted$endpoint == "DOR"
@@ -416,43 +718,72 @@ gold_pitfalls <- function(extracted, gold, matched) {
 # top of the file). Numeric errors: a matched row whose value, ci_low or
 # ci_high differ from the gold's as printed, once per row. A right value with a
 # wrong CI is an error too (the verifier cannot tell which number is wrong); a
-# range the gold gives no CI for is not compared.
-score_against_gold <- function(extracted, gold) {
+# range the gold gives no CI for is not compared. With `condition` (as
+# gold_condition, for the pilot's gold), a row whose indication names another
+# condition and not the gold's is outside the gold set: never paired, nor
+# looked at by the pitfalls or the lead agreement, counted in outside_rows,
+# not as extra; a row whose indication names no condition is scored. Those of
+# them that name a trial of the gold rows of their medicine are listed in
+# outside_gold_trial_keys, as their indication alone kept them out (a basket
+# trial such as LIBRETTO-001, or an NSCLC row given another indication). A
+# flagged row is scored as any other, but the site hides it until reviewed:
+# flagged_rows counts the scored ones, flagged_found_rows the gold rows found
+# only by one (matching pairs one row with one gold row).
+score_against_gold <- function(extracted, gold, condition = NULL) {
   extracted <- gold_row_table(extracted)
   gold <- gold_row_table(gold)
+  outside <- gold_outside_condition(extracted$stated_indication, condition)
+  others <- extracted[outside, ]
+  extracted <- extracted[!outside, ]
   matched <- match_gold_rows(extracted, gold)
-  paired <- which(!is.na(matched))
+  extra <- is.na(matched)
+  paired <- which(!extra)
   partner <- matched[paired]
-  wrong <- extracted$value[paired] != gold$value[partner] |
-    (!gold_ci_skipped(
-      extracted$ci_is_range[paired], gold$ci_low[partner], gold$ci_high[partner]
-    ) & (extracted$ci_low[paired] != gold$ci_low[partner] |
-           extracted$ci_high[paired] != gold$ci_high[partner]))
+  wrong <- !gold_same_numbers(extracted, gold, paired, partner)
   pitfalls <- gold_pitfalls(extracted, gold, matched)
   list(
     numeric_errors = sum(wrong),
     missed_rows = length(setdiff(seq_len(nrow(gold)), matched)),
-    extra_rows = sum(is.na(matched)),
+    extra_rows = sum(extra),
+    outside_rows = nrow(others),
     gold_rows = nrow(gold),
+    flagged_rows = sum(extracted$flagged),
+    flagged_found_rows = sum(extracted$flagged[paired]),
     lead_agreement = gold_lead_agreement(extracted, gold, matched),
     pitfalls = pitfalls$pitfalls,
     pitfall_notes = pitfalls$notes,
+    flagged_found_keys = gold$key[partner[extracted$flagged[paired]]],
     numeric_error_keys = extracted$key[paired[wrong]],
     missed_keys = gold$key[setdiff(seq_len(nrow(gold)), matched)],
-    extra_keys = extracted$key[is.na(matched)]
+    extra_keys = extracted$key[extra],
+    outside_keys = others$key,
+    outside_gold_trial_keys = others$key[gold_in_trials(others, gold)]
   )
 }
 
+# Whether each row of `rows` names a trial that a gold row of its medicine
+# names (gold_trial_names_shared()).
+gold_in_trials <- function(rows, gold) {
+  purrr::map_lgl(seq_len(nrow(rows)), function(row) {
+    trials <- gold$trial_names[gold$medicine == rows$medicine[row]]
+    any(purrr::map_lgl(trials, function(trial_names) {
+      gold_trial_names_shared(rows$trial_names[[row]], trial_names)
+    }))
+  })
+}
+
 # What keeps a model from being chosen (spec, and rulings R14): a numeric
-# error, lead agreement under 0.95, a failed pitfall, more than 5% of the gold
-# rows missed, a call that did not answer (truncated counts), rows dropped at
-# parsing. Empty when it meets the rule.
+# error, lead agreement under 0.95, a failed pitfall or one that could not be
+# tested (its avoidance is not shown), more than 5% of the gold rows missed, a
+# call that did not answer (truncated counts), rows dropped at parsing. Empty
+# when it meets the rule.
 gold_acceptance_problems <- function(result) {
   score <- result$score
   calls <- result$calls
   unanswered <- calls[calls$status != "ok", ]
   dropped <- calls[calls$rows_dropped > 0, ]
-  failed_pitfalls <- names(score$pitfalls)[!score$pitfalls %in% TRUE]
+  failed_pitfalls <- names(score$pitfalls)[score$pitfalls %in% FALSE]
+  untested_pitfalls <- names(score$pitfalls)[is.na(score$pitfalls)]
   c(
     if (score$numeric_errors > 0) {
       sprintf("%d numeric error(s)", score$numeric_errors)
@@ -462,6 +793,9 @@ gold_acceptance_problems <- function(result) {
     },
     if (length(failed_pitfalls) > 0) {
       paste0("pitfall failed: ", failed_pitfalls)
+    },
+    if (length(untested_pitfalls) > 0) {
+      paste0("pitfall not testable: ", untested_pitfalls)
     },
     if (score$missed_rows > 0.05 * score$gold_rows) {
       sprintf(
@@ -497,12 +831,14 @@ gold_cost <- function(model, input_tokens, output_tokens, batch = TRUE) {
   if (batch) list_price * gold_batch_factor else list_price
 }
 
-# One medicine's batch result as an answer: the verified rows, those that
-# failed verification, those that could not be read, and how the call went.
+# One medicine's batch result as an answer: the rows as the model gave them
+# (`raw_rows`, so a verifier fix needs no new batch), the verified rows, those
+# that failed verification, those that could not be read, and how the call
+# went.
 gold_answer <- function(medicine, result) {
   answer <- list(
     status = "no_result", reason = "no result in the batch",
-    rows = list(), failed = list(), dropped = character(),
+    raw_rows = list(), rows = list(), failed = list(), dropped = character(),
     input_tokens = result$message$usage$input_tokens %||% 0,
     output_tokens = result$message$usage$output_tokens %||% 0
   )
@@ -524,26 +860,61 @@ gold_answer <- function(medicine, result) {
   answer$dropped <- purrr::map_chr(parsed$dropped, function(row) {
     paste0("row ", row$index, ": ", row$reason)
   })
-  checked <- purrr::imap(parsed$rows, function(row, order) {
-    verification <- verify_efficacy_row(row, medicine$section)
-    row <- c(row, list(
-      medicine = medicine$medicine,
-      ema_product_number = medicine$ema_product_number,
-      row_order = order, verification = verification$status
-    ))
-    list(row = row, verification = verification)
+  answer$raw_rows <- purrr::imap(parsed$rows, function(row, order) {
+    list(medicine = medicine$medicine, row_order = order, row = row)
+  })
+  verified <- gold_verified_rows(parsed$rows, medicine)
+  answer$rows <- verified$rows
+  answer$failed <- verified$failed
+  answer
+}
+
+# What gold_verified_rows() adds to a kept row.
+gold_kept_row_fields <- c(
+  "medicine", "ema_product_number", "row_order", "verification", "flags"
+)
+
+# The flags production gives a kept row (efficacy_flags()), its page looked
+# up in the section as one page, so the score can count the rows a human must
+# check before the site shows them.
+gold_row_flags <- function(row, verification, section) {
+  page <- efficacy_row_page(row, list(first_page = 1L, pages = section))
+  efficacy_flags(c(row, list(page = page)), verification)
+}
+
+# A medicine's answered rows (`orders`: their places in the answer) verified
+# against its section: the kept rows, without the arm fields that did not
+# verify and with production's flags (gold_row_flags()), and the failed rows,
+# with their errors and the row as the model gave it (`row`).
+gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
+  checked <- purrr::map2(rows, orders, function(row, order) {
+    list(
+      row = row, order = order,
+      verification = verify_efficacy_row(row, medicine$section)
+    )
   })
   passed <- purrr::map_lgl(
     checked, \(item) item$verification$status != "failed"
   )
-  answer$rows <- purrr::map(checked[passed], "row")
-  answer$failed <- purrr::map(checked[!passed], function(item) {
-    list(
-      medicine = item$row$medicine, trial = item$row$trial,
-      endpoint = item$row$endpoint, errors = item$verification$errors
-    )
-  })
-  answer
+  list(
+    rows = purrr::map(checked[passed], function(item) {
+      verification <- item$verification
+      row <- without_unverified_arms(item$row, verification$blanked)
+      c(row, list(
+        medicine = medicine$medicine,
+        ema_product_number = medicine$ema_product_number,
+        row_order = item$order, verification = verification$status,
+        flags = as.list(gold_row_flags(row, verification, medicine$section))
+      ))
+    }),
+    failed = purrr::map(checked[!passed], function(item) {
+      list(
+        medicine = medicine$medicine, trial = item$row$trial,
+        endpoint = item$row$endpoint, errors = item$verification$errors,
+        row = item$row
+      )
+    })
+  )
 }
 
 gold_read_text <- function(path) {
@@ -607,8 +978,46 @@ check_gold_inputs <- function(paths) {
   }
 }
 
-gold_pending_path <- function(output_directory, model) {
-  file.path(output_directory, paste0("gold-pending-", model, ".json"))
+# A model asked at an effort level: what the evaluation scores, with its own
+# batch and files. The legacy effort keeps the names of the runs made before
+# effort levels (gold-eval-<model>.json), so a batch they left pending is
+# collected, never asked again; another effort adds its name
+# (gold-eval-<model>-<effort>.json).
+gold_variant <- function(model, effort) {
+  list(
+    model = model,
+    effort = effort,
+    name = if (effort == efficacy_legacy_effort) {
+      model
+    } else {
+      paste0(model, "-", effort)
+    },
+    label = paste0(model, " (", effort, ")")
+  )
+}
+
+# Every model at every effort, model by model.
+gold_variants <- function(models, efforts) {
+  pairs <- expand.grid(
+    effort = unique(efforts), model = unique(models),
+    stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE
+  )
+  variants <- purrr::map2(pairs$model, pairs$effort, gold_variant)
+  stats::setNames(variants, purrr::map_chr(variants, "name"))
+}
+
+# APPROVAL_ATLAS_GOLD_EFFORTS: a comma list, "high" when unset.
+gold_efforts_from_env <- function(value =
+                                    Sys.getenv("APPROVAL_ATLAS_GOLD_EFFORTS")) {
+  efficacy_efforts_from_text(value, "APPROVAL_ATLAS_GOLD_EFFORTS")
+}
+
+gold_pending_path <- function(output_directory, variant) {
+  file.path(output_directory, paste0("gold-pending-", variant$name, ".json"))
+}
+
+gold_result_path <- function(output_directory, variant) {
+  file.path(output_directory, paste0("gold-eval-", variant$name, ".json"))
 }
 
 gold_custom_ids <- function(medicines) {
@@ -617,26 +1026,34 @@ gold_custom_ids <- function(medicines) {
   )
 }
 
-# The id of the model's batch: the one a run left pending (its id was saved
+# The id of the variant's batch: the one a run left pending (its id was saved
 # before anything was polled, so a rerun never pays twice), else a new batch of
-# one request per medicine, saved at once.
-gold_submit_batch <- function(model,
+# one request per medicine at the variant's effort, saved at once.
+gold_submit_batch <- function(variant,
                               medicines,
                               output_directory,
                               create_batch) {
-  pending_path <- gold_pending_path(output_directory, model)
+  pending_path <- gold_pending_path(output_directory, variant)
   custom_ids <- gold_custom_ids(medicines)
   if (file.exists(pending_path)) {
     pending <- jsonlite::fromJSON(pending_path, simplifyVector = FALSE)
+    pending_effort <- pending$effort %||% efficacy_legacy_effort
     if (!setequal(unlist(pending$custom_ids), custom_ids)) {
       cli::cli_abort(c(
         "{.path {pending_path}} is a batch of other medicines.",
         i = "Collect or delete it before running this evaluation again."
       ))
     }
+    if (pending_effort != variant$effort) {
+      cli::cli_abort(c(
+        "{.path {pending_path}} is a batch at effort {.val {pending_effort}},
+        not {.val {variant$effort}}.",
+        i = "Collect or delete it before running this evaluation again."
+      ))
+    }
     cli::cli_inform(
-      "Collecting batch {pending$batch_id} ({model}) instead of submitting
-      again."
+      "Collecting batch {pending$batch_id} ({variant$label}) instead of
+      submitting again."
     )
     return(pending$batch_id)
   }
@@ -644,22 +1061,25 @@ gold_submit_batch <- function(model,
     list(
       custom_id = efficacy_custom_id(medicine$ema_product_number),
       params = efficacy_request_params(
-        medicine$medicine, medicine$indication, medicine$section, model,
-        max_tokens = efficacy_batch_max_tokens
+        medicine$medicine, medicine$indication, medicine$section,
+        variant$model,
+        effort = variant$effort, max_tokens = efficacy_batch_max_tokens
       )
     )
   })
   batch_id <- create_batch(requests)
   jsonlite::write_json(
     list(
-      batch_id = batch_id, model = model, custom_ids = as.list(custom_ids),
+      batch_id = batch_id, model = variant$model, effort = variant$effort,
+      custom_ids = as.list(custom_ids),
       created = format(current_time(), "%Y-%m-%dT%H:%M:%S%z")
     ),
     pending_path,
     auto_unbox = TRUE, pretty = TRUE
   )
   cli::cli_inform(
-    "Submitted batch {batch_id} ({model}, {length(requests)} request{?s})."
+    "Submitted batch {batch_id} ({variant$label}, {length(requests)}
+    request{?s})."
   )
   batch_id
 }
@@ -671,7 +1091,7 @@ dropped_lines <- function(medicine, dropped) {
   paste0(medicine, ": ", dropped)
 }
 
-gold_model_result <- function(model, medicines, gold, results) {
+gold_model_result <- function(variant, medicines, gold, results) {
   answers <- purrr::map2(
     medicines, gold_custom_ids(medicines),
     function(medicine, custom_id) {
@@ -680,20 +1100,25 @@ gold_model_result <- function(model, medicines, gold, results) {
   )
   names <- purrr::map_chr(medicines, "medicine")
   rows <- purrr::list_flatten(purrr::map(answers, "rows"))
+  raw_rows <- purrr::list_flatten(purrr::map(answers, "raw_rows"))
   tokens <- function(field) sum(purrr::map_dbl(answers, field))
   usage <- list(
     input_tokens = tokens("input_tokens"),
     output_tokens = tokens("output_tokens")
   )
+  model <- variant$model
   list(
     model = model,
+    effort = variant$effort,
     calls = dplyr::tibble(
       medicine = names,
       status = purrr::map_chr(answers, "status"),
       reason = purrr::map_chr(answers, \(a) a$reason %||% NA_character_),
       rows_kept = purrr::map_int(answers, \(answer) length(answer$rows)),
       rows_failed = purrr::map_int(answers, \(answer) length(answer$failed)),
-      rows_dropped = purrr::map_int(answers, \(answer) length(answer$dropped))
+      rows_dropped = purrr::map_int(answers, \(answer) length(answer$dropped)),
+      input_tokens = purrr::map_dbl(answers, "input_tokens"),
+      output_tokens = purrr::map_dbl(answers, "output_tokens")
     ),
     rows_kept = length(rows),
     rows_failed = sum(purrr::map_int(answers, \(a) length(a$failed))),
@@ -703,17 +1128,21 @@ gold_model_result <- function(model, medicines, gold, results) {
     ) %||% character(),
     usage = usage,
     cost = gold_cost(model, usage$input_tokens, usage$output_tokens),
-    score = score_against_gold(rows, gold),
-    rows = rows
+    score = score_against_gold(rows, gold, condition = gold_condition),
+    rows = rows,
+    raw_rows = raw_rows
   )
+}
+
+# A result without an effort was asked at the legacy effort.
+gold_result_variant <- function(result) {
+  gold_variant(result$model, result$effort %||% efficacy_legacy_effort)
 }
 
 write_gold_result <- function(result, output_directory) {
   # A named logical vector would be written without its names.
   result$score$pitfalls <- as.list(result$score$pitfalls)
-  path <- file.path(
-    output_directory, paste0("gold-eval-", result$model, ".json")
-  )
+  path <- gold_result_path(output_directory, gold_result_variant(result))
   jsonlite::write_json(
     result, path,
     auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null",
@@ -722,22 +1151,175 @@ write_gold_result <- function(result, output_directory) {
   path
 }
 
+# A gold-eval-<model>.json read back in the shape gold_model_result() returns;
+# one written before effort levels was asked at the legacy effort.
+read_gold_result_file <- function(path) {
+  result <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  result$effort <- result$effort %||% efficacy_legacy_effort
+  result$calls <- dplyr::bind_rows(purrr::map(result$calls, function(call) {
+    purrr::map(call, \(value) value %||% NA)
+  }))
+  # A pitfall that could not be tested is written as null.
+  result$score$pitfalls <- purrr::map_lgl(
+    result$score$pitfalls, \(value) as.logical(value %||% NA)
+  )
+  result$dropped_rows <- as.character(unlist(result$dropped_rows))
+  result
+}
+
+# The result scored again by the current scorer, offline: the file keeps every
+# row kept (verified), so a scorer fix needs no new batch, and a report never
+# mixes the scores of two scorers.
+rescore_gold_result <- function(result, gold) {
+  result$score <- score_against_gold(
+    result$rows, gold,
+    condition = gold_condition
+  )
+  result
+}
+
+# A saved gold-eval-<model>.json scored again against the gold rows at
+# `gold_path` (the pilot's nsclc-rows.json), without asking the model. The
+# file stays as it is (it can be a kept copy); write_gold_result() writes the
+# result.
+rescore_saved_gold_result <- function(path, gold_path) {
+  check_gold_inputs(c(path, gold_path))
+  rescore_gold_result(
+    read_gold_result_file(path),
+    jsonlite::fromJSON(gold_path, simplifyVector = FALSE)
+  )
+}
+
+# The result verified again by the current verifier against each medicine's
+# section (`medicines`, as read_gold_medicines()), then scored again, offline:
+# a verifier fix needs no new batch. A result saved with `raw_rows` (the rows
+# as the model gave them) is verified again whole. One saved before keeps
+# its kept rows whole, so those are verified again, but its failed rows only
+# by trial, endpoint and errors: they stay failed as they were, counted in
+# `failed_not_reverified`.
+reverify_gold_result <- function(result, medicines, gold) {
+  sections <- purrr::set_names(medicines, purrr::map_chr(medicines, "medicine"))
+  missing <- setdiff(result$calls$medicine, names(sections))
+  if (length(missing) > 0) {
+    cli::cli_abort("No section 5.1 for {.val {missing}} to verify again.")
+  }
+  has_raw <- !is.null(result$raw_rows)
+  old_failed <- if (has_raw) list() else result$failed
+  verified <- purrr::map(result$calls$medicine, function(name) {
+    medicine <- sections[[name]]
+    of_medicine <- function(items) {
+      Filter(function(item) identical(item$medicine, name), items)
+    }
+    if (has_raw) {
+      raw <- of_medicine(result$raw_rows)
+      rows <- purrr::map(raw, "row")
+      orders <- purrr::map_int(raw, \(item) as.integer(item$row_order))
+    } else {
+      kept <- of_medicine(result$rows)
+      rows <- purrr::map(kept, function(row) {
+        row[setdiff(names(row), gold_kept_row_fields)]
+      })
+      orders <- purrr::map_int(kept, \(row) as.integer(row$row_order))
+    }
+    checked <- gold_verified_rows(rows, medicine, orders)
+    checked$failed <- c(checked$failed, of_medicine(old_failed))
+    checked
+  })
+  result$rows <- purrr::list_flatten(purrr::map(verified, "rows"))
+  result$failed <- purrr::list_flatten(purrr::map(verified, "failed"))
+  result$calls$rows_kept <- purrr::map_int(verified, \(v) length(v$rows))
+  result$calls$rows_failed <- purrr::map_int(verified, \(v) length(v$failed))
+  result$rows_kept <- length(result$rows)
+  result$rows_failed <- length(result$failed)
+  result$failed_not_reverified <- length(old_failed)
+  rescore_gold_result(result, gold)
+}
+
+# A saved gold-eval-<model>.json verified and scored again offline
+# (reverify_gold_result()) against the pilot's texts and gold rows, without
+# asking the model. The file stays as it is (it can be a kept copy);
+# write_gold_result() writes the result.
+reverify_saved_gold_result <- function(path,
+                                       gold_path,
+                                       selection_path,
+                                       text_directory,
+                                       medicines_path) {
+  check_gold_inputs(c(path, gold_path))
+  reverify_gold_result(
+    read_gold_result_file(path),
+    read_gold_medicines(selection_path, text_directory, medicines_path),
+    jsonlite::fromJSON(gold_path, simplifyVector = FALSE)
+  )
+}
+
+# The saved result of a variant (gold_result_path()) when it scored exactly
+# these medicines at the variant's effort and no batch of it is pending,
+# verified and scored again (reverify_gold_result()) and written back, so the
+# file and the report agree; else NULL (the variant runs).
+read_saved_gold_result <- function(variant,
+                                   medicines,
+                                   output_directory,
+                                   gold) {
+  path <- gold_result_path(output_directory, variant)
+  if (!file.exists(path) ||
+        file.exists(gold_pending_path(output_directory, variant))) {
+    return(NULL)
+  }
+  result <- read_gold_result_file(path)
+  if (result$effort != variant$effort || !setequal(
+    result$calls$medicine, purrr::map_chr(medicines, "medicine")
+  )) {
+    return(NULL)
+  }
+  cli::cli_inform(
+    "Using the saved result of {variant$label} ({.path {path}}), verified and
+    scored again and written back; delete it to ask again."
+  )
+  result <- reverify_gold_result(result, medicines, gold)
+  write_gold_result(result, output_directory)
+  result
+}
+
 gold_yes_no <- function(value) {
   ifelse(value, "pass", "FAIL")
+}
+
+gold_pitfall_text <- function(value) {
+  if (is.na(value)) "not testable" else gold_yes_no(value)
 }
 
 gold_cost_text <- function(cost) {
   if (is.na(cost)) "n/a" else sprintf("%.2f", cost)
 }
 
+# Mean output tokens of the calls that answered, as the effort level spends
+# them (a truncated call would only show the limit); "n/a" without such a
+# call, or for a result saved before calls kept their tokens.
+gold_output_tokens_per_answer <- function(result) {
+  calls <- result$calls
+  answered <- calls$status == "ok"
+  if (!"output_tokens" %in% names(calls) || !any(answered)) {
+    return("n/a")
+  }
+  format(round(mean(calls$output_tokens[answered])), big.mark = ",")
+}
+
+# "3 of 5"; "n/a" for a score made before the count was (`count` NULL).
+gold_count_of <- function(count, total) {
+  if (is.null(count)) "n/a" else sprintf("%d of %d", count, total)
+}
+
 gold_report_table <- function(results) {
-  models <- purrr::map_chr(results, "model")
+  labels <- purrr::map_chr(results, \(r) gold_result_variant(r)$label)
   cell <- function(extract) purrr::map_chr(results, extract)
   pitfalls <- names(results[[1]]$score$pitfalls)
   rows <- c(
     list(
       "Calls that answered" = cell(function(r) {
         sprintf("%d of %d", sum(r$calls$status == "ok"), nrow(r$calls))
+      }),
+      "Truncated calls" = cell(function(r) {
+        sprintf("%d of %d", sum(r$calls$status == "truncated"), nrow(r$calls))
       }),
       "Rows kept (verified)" = cell(\(r) as.character(r$rows_kept)),
       "Rows failed verification" = cell(\(r) as.character(r$rows_failed)),
@@ -749,11 +1331,24 @@ gold_report_table <- function(results) {
         sprintf("%d of %d", r$score$missed_rows, r$score$gold_rows)
       }),
       "Extra rows" = cell(\(r) as.character(r$score$extra_rows)),
+      "Rows of other conditions (not scored)" = cell(
+        \(r) as.character(r$score$outside_rows)
+      ),
+      "Scored rows flagged (hidden until reviewed)" = cell(function(r) {
+        score <- r$score
+        scored <- score$extra_rows + score$gold_rows - score$missed_rows
+        gold_count_of(score$flagged_rows, scored)
+      }),
+      "Gold rows found only by a flagged row" = cell(function(r) {
+        score <- r$score
+        found <- score$gold_rows - score$missed_rows
+        gold_count_of(score$flagged_found_rows, found)
+      }),
       "Lead agreement" = cell(\(r) sprintf("%.3f", r$score$lead_agreement))
     ),
     purrr::set_names(
       purrr::map(pitfalls, function(pitfall) {
-        cell(\(r) gold_yes_no(r$score$pitfalls[[pitfall]]))
+        cell(\(r) gold_pitfall_text(r$score$pitfalls[[pitfall]]))
       }),
       paste("Pitfall:", pitfalls)
     ),
@@ -762,6 +1357,7 @@ gold_report_table <- function(results) {
       "Output tokens" = cell(
         \(r) format(r$usage$output_tokens, big.mark = ",")
       ),
+      "Output tokens per answered call" = cell(gold_output_tokens_per_answer),
       "Cost (USD, batch price)" = cell(\(r) gold_cost_text(r$cost)),
       "Meets the acceptance rule" = cell(
         \(r) gold_yes_no(gold_model_passes(r))
@@ -769,8 +1365,8 @@ gold_report_table <- function(results) {
     )
   )
   c(
-    paste0("| | ", paste(models, collapse = " | "), " |"),
-    paste0("|---|", paste(rep("---|", length(models)), collapse = "")),
+    paste0("| | ", paste(labels, collapse = " | "), " |"),
+    paste0("|---|", paste(rep("---|", length(labels)), collapse = "")),
     paste0(
       "| ", names(rows), " | ",
       purrr::map_chr(rows, paste, collapse = " | "), " |"
@@ -793,17 +1389,38 @@ gold_report_details <- function(result) {
     )
   })
   c(
-    paste0("### ", result$model),
+    paste0("### ", gold_result_variant(result)$label),
     "",
     listing("Not accepted because", gold_acceptance_problems(result)),
     listing("Calls that did not answer", paste0(
       calls$medicine, ": ", calls$status, " (", calls$reason, ")"
     )),
     listing("Rows dropped at parsing", result$dropped_rows),
+    if ((result$failed_not_reverified %||% 0) > 0) {
+      sprintf(
+        paste(
+          "- %d failed row(s) were saved without their row (a file written",
+          "before raw rows were kept): listed as they failed, not verified",
+          "again"
+        ),
+        result$failed_not_reverified
+      )
+    },
     listing("Pitfall notes", result$score$pitfall_notes),
     listing("Numeric errors", result$score$numeric_error_keys),
     listing("Missed gold rows", result$score$missed_keys),
+    listing(
+      "Gold rows found only by a flagged row (hidden until reviewed)",
+      unlist(result$score$flagged_found_keys)
+    ),
     listing("Extra rows", result$score$extra_keys),
+    listing(
+      "Rows of other conditions (not scored)", result$score$outside_keys
+    ),
+    listing(
+      "Rows of other conditions in a gold trial (check their indication)",
+      result$score$outside_gold_trial_keys
+    ),
     listing("Failed verification", failed),
     ""
   )
@@ -815,8 +1432,10 @@ write_gold_report <- function(results, output_directory, today) {
     "",
     paste0(
       "Run ", format(today), ". Gold: the pilot's SmPC rows; rows kept are ",
-      "those that pass the verifier. Message Batches API, so costs are at the ",
-      "batch price (half the list price)."
+      "those that pass the verifier; rows whose indication names another ",
+      "condition than the gold's (NSCLC) are not scored. Message Batches API, ",
+      "so costs are at the batch price (half the list price). Each column is ",
+      "a model at an effort level (output_config.effort)."
     ),
     "",
     "Acceptance (spec, rulings R13 and R14): no numeric error among the",
@@ -835,17 +1454,17 @@ write_gold_report <- function(results, output_directory, today) {
   path
 }
 
-# One model's batch: read once it has ended, scored, written, and its pending
-# file removed. NULL (the pending file stays for a rerun) when the batch could
-# not be collected now.
-gold_collect_model <- function(model,
+# One variant's batch: read once it has ended, scored, written, and its
+# pending file removed. NULL (the pending file stays for a rerun) when the
+# batch could not be collected now.
+gold_collect_model <- function(variant,
                                batch_id,
                                medicines,
                                gold,
                                output_directory,
                                batch_api,
                                poll_seconds) {
-  pending_path <- gold_pending_path(output_directory, model)
+  pending_path <- gold_pending_path(output_directory, variant)
   results <- read_efficacy_batch_results(
     batch_id, poll_seconds, batch_api$status, batch_api$results,
     pending_name = basename(pending_path)
@@ -853,25 +1472,28 @@ gold_collect_model <- function(model,
   if (is.null(results)) {
     return(NULL)
   }
-  result <- gold_model_result(model, medicines, gold, results)
+  result <- gold_model_result(variant, medicines, gold, results)
   write_gold_result(result, output_directory)
   unlink(pending_path)
   result
 }
 
-# Asks each model for every pilot medicine's rows with one Message Batch per
-# model (production's path, at half the price; `batch_api` holds the functions
-# that create a batch, read its state and read its results), verifies the rows
-# against the section text, scores the kept rows against the gold SmPC rows and
-# writes gold-eval-<model>.json (as each model's batch is collected) and
-# gold-eval-report.md into `output_directory`. A batch's id is saved in
-# gold-pending-<model>.json when it is created, so a run that is interrupted
-# or gives up waiting collects the same batch when run again, at no new cost.
+# Asks each model at each effort level (a variant, gold_variant()) for every
+# pilot medicine's rows with one Message Batch per variant (production's path,
+# at half the price; `batch_api` holds the functions that create a batch, read
+# its state and read its results), verifies the rows against the section text,
+# scores the kept rows against the gold SmPC rows and writes the variant's
+# gold-eval-*.json (as its batch is collected) and gold-eval-report.md into
+# `output_directory`. A batch's id is saved in the variant's gold-pending-*.json
+# when it is created, so a run that is interrupted or gives up waiting
+# collects the same batch when run again, at no new cost. An effort the API
+# does not know stops the run before anything is read or asked.
 run_gold_evaluation <- function(models,
                                 selection_path,
                                 text_directory,
                                 gold_path,
                                 output_directory,
+                                efforts = efficacy_default_effort,
                                 medicines_path =
                                   "site/public/data/ema_medicines.json",
                                 batch_api = list(
@@ -881,34 +1503,47 @@ run_gold_evaluation <- function(models,
                                 ),
                                 poll_seconds = 60,
                                 today = Sys.Date()) {
+  check_efficacy_efforts(efforts, "`efforts`")
   check_gold_inputs(c(selection_path, gold_path, medicines_path))
   medicines <- read_gold_medicines(
     selection_path, text_directory, medicines_path
   )
   gold <- jsonlite::fromJSON(gold_path, simplifyVector = FALSE)
   dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
-  batch_ids <- purrr::map(models, function(model) {
-    gold_submit_batch(model, medicines, output_directory, batch_api$create)
+  variants <- gold_variants(models, efforts)
+  # A variant already scored on these medicines (and not pending) is read
+  # back, never asked again: a rerun after an interruption must not pay twice.
+  saved <- purrr::map(variants, function(variant) {
+    read_saved_gold_result(variant, medicines, output_directory, gold)
   })
-  results <- purrr::map2(models, batch_ids, function(model, batch_id) {
-    gold_collect_model(
-      model, batch_id, medicines, gold, output_directory, batch_api,
-      poll_seconds
+  batch_ids <- purrr::map(variants, function(variant) {
+    if (!is.null(saved[[variant$name]])) {
+      return(NULL)
+    }
+    gold_submit_batch(variant, medicines, output_directory, batch_api$create)
+  })
+  results <- list()
+  for (variant in variants) {
+    result <- saved[[variant$name]] %||% gold_collect_model(
+      variant, batch_ids[[variant$name]], medicines, gold, output_directory,
+      batch_api, poll_seconds
     )
-  })
-  names(results) <- models
-  results <- purrr::compact(results)
-  unfinished <- setdiff(models, names(results))
+    if (is.null(result)) next
+    results[[variant$name]] <- result
+    # The report so far, so a variant still waiting (a batch can take hours)
+    # does not hold back the others' results.
+    report <- write_gold_report(results, output_directory, today)
+    cli::cli_inform(paste0("Report: ", report))
+  }
+  unfinished <- purrr::map_chr(variants, "label")[
+    !names(variants) %in% names(results)
+  ]
   if (length(unfinished) > 0) {
     cli::cli_inform(c(
       "Not collected yet: {.val {unfinished}}.",
       i = "Run the evaluation again: it collects the saved batch, without
       submitting a new one."
     ))
-  }
-  if (length(results) > 0) {
-    report <- write_gold_report(results, output_directory, today)
-    cli::cli_inform(paste0("Report: ", report))
   }
   invisible(results)
 }

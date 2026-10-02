@@ -3,9 +3,13 @@
 # against the text they came from. Submitting and collecting the batch is in
 # efficacy-batch-run.R.
 
-# Ruling R8: long sections with many rows would be truncated at 16000; a
-# batch has no HTTP timeout to fear.
-efficacy_batch_max_tokens <- 32000L
+# Ruling R8: the whole output the models allow (claude-sonnet-5-5 and
+# claude-opus-5-5: 128000 tokens, thinking included), as a batch has no HTTP
+# timeout to fear. At 32000 the gold evaluation of 2026-10-01 cut off 5 of 18
+# answers (Keytruda, Opdivo, Tecentriq, Imfinzi, Tevimbra); its token use puts
+# Keytruda's section 5.1 at about 150000, so the longest sections may still
+# be cut off (.remember/efficacy/fix-truncation-scorer.md).
+efficacy_batch_max_tokens <- 128000L
 
 efficacy_custom_id <- function(product_number) {
   gsub("/", "-", product_number, fixed = TRUE)
@@ -89,7 +93,8 @@ efficacy_extraction_record <- function(plan_row,
                                        reason = NA_character_,
                                        rows_kept = 0L,
                                        rows_failed = 0L,
-                                       model = NA_character_) {
+                                       model = NA_character_,
+                                       effort = NA_character_) {
   typed_table(list(list(
     ema_product_number = plan_row$ema_product_number,
     document_url = plan_row$document_url,
@@ -99,6 +104,7 @@ efficacy_extraction_record <- function(plan_row,
     rows_kept = rows_kept,
     rows_failed = rows_failed,
     extractor_model = model,
+    extractor_effort = effort,
     extracted_at = today
   )), efficacy_extraction_types)
 }
@@ -123,7 +129,7 @@ failed_efficacy_row <- function(product_number, row, errors) {
 
 # Fetches and slices every planned product until EMA says stop: products
 # without section 5.1 or a PDF are recorded at once, the others get a request.
-prepare_efficacy_requests <- function(plan, model, today) {
+prepare_efficacy_requests <- function(plan, model, effort, today) {
   records <- list()
   submissions <- list()
   for (index in seq_len(nrow(plan))) {
@@ -156,6 +162,7 @@ prepare_efficacy_requests <- function(plan, model, today) {
       dplyr::coalesce(plan_row$therapeutic_indication, ""),
       section$text,
       model,
+      effort = effort,
       max_tokens = efficacy_batch_max_tokens
     )
     submissions <- c(submissions, list(list(
@@ -175,7 +182,8 @@ efficacy_row_page <- function(row, section) {
   section$first_page + efficacy_quote_page(longest, section$pages) - 1L
 }
 
-# One answered row: verified against the section, or listed as failed.
+# One answered row: verified against the section (without the arm fields
+# that did not verify), or listed as failed.
 check_answer_row <- function(row, order, submission, model, today) {
   plan_row <- submission$plan_row
   verification <- verify_efficacy_row(
@@ -186,6 +194,7 @@ check_answer_row <- function(row, order, submission, model, today) {
       plan_row$ema_product_number, row, verification$errors
     )))
   }
+  row <- without_unverified_arms(row, verification$blanked)
   record <- c(row, list(
     ema_product_number = plan_row$ema_product_number,
     row_order = order,
@@ -201,12 +210,12 @@ check_answer_row <- function(row, order, submission, model, today) {
   list(record = record)
 }
 
-efficacy_outcome <- function(submission, result, model, today) {
+efficacy_outcome <- function(submission, result, model, effort, today) {
   plan_row <- submission$plan_row
   failed <- function(reason) {
     list(extraction = efficacy_extraction_record(
       plan_row, "failed", today,
-      reason = reason, model = model
+      reason = reason, model = model, effort = effort
     ))
   }
   if (is.null(result)) {
@@ -246,7 +255,7 @@ efficacy_outcome <- function(submission, result, model, today) {
     extraction = efficacy_extraction_record(
       plan_row, status, today,
       reason = reason, rows_kept = nrow(rows),
-      rows_failed = nrow(failed_rows), model = model
+      rows_failed = nrow(failed_rows), model = model, effort = effort
     ),
     rows = rows,
     failed_rows = failed_rows

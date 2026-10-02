@@ -8,8 +8,12 @@
 # (text and numbers, which are strings as printed) or "not_stated" (enums), and
 # parse_efficacy_response() turns those back into NULL / NA.
 
-text_field <- function() {
-  list(type = "string")
+# `description` tells the model what the field holds (the schema it fills).
+text_field <- function(description = NULL) {
+  if (is.null(description)) {
+    return(list(type = "string"))
+  }
+  list(type = "string", description = description)
 }
 
 string_enum <- function(...) {
@@ -24,22 +28,46 @@ efficacy_text_fields <- c(
   "arm_measure"
 )
 
+# What "" means for the comparator and its column label, worded the same in
+# the schema and the system prompt: a single-arm result is one with no
+# comparator to copy, so the effect type, not "", says it is single-arm.
+efficacy_empty_comparator <-
+  '"" when no single span states it, as for a single-arm result'
+efficacy_empty_label <- paste(
+  '"" when the row gives no arm values or no table with a column per arm',
+  "holds them"
+)
+
 efficacy_row_properties <- function() {
   list(
     indication = text_field(),
     trial = text_field(),
-    population = text_field(),
+    population = text_field(
+      "Who the result is for, as section 5.1 prints it."
+    ),
     population_match = string_enum(
       "whole_trial_matches", "subgroup_matches", "whole_trial_broader",
       "other", "not_stated"
     ),
-    regimen = text_field(),
-    comparator = text_field(),
-    comparator_column_label = text_field(),
+    regimen = text_field("The treatment arm, as section 5.1 prints it."),
+    comparator = text_field(paste0(
+      "The control arm, as section 5.1 prints it; ",
+      efficacy_empty_comparator, "."
+    )),
+    comparator_column_label = text_field(paste0(
+      "The header of the comparator's column in the table holding this ",
+      "row's arm values (arm_treatment, arm_control, n_treatment, ",
+      "n_control), as printed; ", efficacy_empty_label, "."
+    )),
     n_treatment = text_field(),
     n_control = text_field(),
-    endpoint = text_field(),
-    assessment = text_field(),
+    endpoint = text_field(paste(
+      'The endpoint as printed, e.g. "PFS" or "Overall survival", without',
+      "its population, assessment or analysis."
+    )),
+    assessment = text_field(
+      'Who assessed it, as printed, e.g. "investigator" or "BICR".'
+    ),
     is_primary = string_enum("yes", "no", "not_stated"),
     analysis_role = string_enum(
       "primary", "later", "exploratory", "not_stated"
@@ -114,20 +142,64 @@ efficacy_system_prompt <- function() {
     "numbers are a range, not a confidence interval. Copy significance_stated",
     "only from the text's own words; a confidence interval excluding 1 is not",
     "a statement of significance.",
-    "In tables, check which column is the medicine and which the comparator",
-    "from the column headers; copy the comparator's header into",
-    "comparator_column_label. comparator_column_label and the arm values",
-    "(arm_treatment, arm_control) must appear inside a quote, the label in",
-    "the same quote as arm_control.",
-    "Each row needs 1 to 3 verbatim quotes of at most 50 words that together",
-    "contain every number you give, the arm sizes (n_treatment, n_control)",
-    "included, the value with its confidence interval in one quote.",
-    "Copy population, regimen and comparator verbatim from the text, as",
-    "printed; never summarise or reword them.",
+    "Copy text, never write it: population, regimen, comparator, endpoint",
+    "and assessment are each the shortest span of section 5.1 that states",
+    "it, exactly as printed. Do not paraphrase, expand or abbreviate, and",
+    "do not join words printed apart (a name with its abbreviation, an",
+    'endpoint with its population or assessment); "" when no single span',
+    paste0("states it. comparator: ", efficacy_empty_comparator, "."),
+    "The arm values are arm_treatment, arm_control, n_treatment and",
+    "n_control. In a table, tell the arms apart by the column headers and",
+    "copy the comparator's header into comparator_column_label exactly as",
+    "printed (its first line when it wraps);",
+    paste0(efficacy_empty_label, " (a sentence prints no column header)."),
+    "Give each row one verbatim quote of at most 50 words that holds the",
+    "value with its confidence interval. Add a quote (at most three in all)",
+    "only for what that one does not hold: the arm sizes (n_treatment,",
+    "n_control); the other arm values (arm_treatment, arm_control); the",
+    "p-value. Give comparator_column_label in the same quote as each",
+    "control-arm value (arm_control, n_control): quote the header with the",
+    "number printed under it. Together the quotes contain every number you",
+    "give.",
     "indication: the EU indication the row supports, copied exactly from the",
     'indications given, never paraphrased; "" when no given indication',
     "applies. Give no rows when section 5.1 reports no efficacy trial."
   )
+}
+
+# The API's effort levels (output_config.effort).
+efficacy_effort_levels <- c("low", "medium", "high", "xhigh", "max")
+
+efficacy_default_effort <- "high"
+
+# The effort of every request made before the effort was a setting (this
+# file's default then): a pending batch, saved result or extraction record
+# that names none was asked at it.
+efficacy_legacy_effort <- "high"
+
+# Stops, before any request, on an effort the API does not know; `setting`
+# names where it came from.
+check_efficacy_efforts <- function(efforts, setting) {
+  unknown <- unique(efforts[!efforts %in% efficacy_effort_levels])
+  levels <- c(i = "The API's effort levels: {.val {efficacy_effort_levels}}.")
+  if (length(efforts) == 0) {
+    cli::cli_abort(c("{setting} names no effort level.", levels))
+  }
+  if (length(unknown) > 0) {
+    cli::cli_abort(c("{setting}: unknown effort {.val {unknown}}.", levels))
+  }
+  invisible(efforts)
+}
+
+# The effort levels of a comma list (an environment variable), the default
+# when it names none.
+efficacy_efforts_from_text <- function(value, setting) {
+  efforts <- trimws(strsplit(value, ",", fixed = TRUE)[[1]])
+  efforts <- unique(efforts[nzchar(efforts)])
+  if (length(efforts) == 0) {
+    return(efficacy_default_effort)
+  }
+  check_efficacy_efforts(efforts, setting)
 }
 
 # The system prompt is below the minimum prefix the API caches, so it carries
@@ -136,7 +208,7 @@ efficacy_request_params <- function(medicine_name,
                                     indication_text,
                                     section_text,
                                     model,
-                                    effort = "high",
+                                    effort = efficacy_default_effort,
                                     max_tokens = 16000L) {
   content <- paste0(
     "Medicine: ", medicine_name, "\n\n",

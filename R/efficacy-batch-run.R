@@ -16,7 +16,11 @@ current_time <- function() {
 
 # Written beside the file and renamed over it, so a failed write never leaves
 # a half file that later runs cannot read.
-write_pending_batch <- function(path, batch_id, model, plan) {
+write_pending_batch <- function(path,
+                                batch_id,
+                                model,
+                                plan,
+                                effort = efficacy_default_effort) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   partial <- paste0(path, ".tmp")
   on.exit(unlink(partial), add = TRUE)
@@ -24,6 +28,7 @@ write_pending_batch <- function(path, batch_id, model, plan) {
     list(
       batch_id = batch_id,
       model = model,
+      effort = effort,
       created = format(current_time(), "%Y-%m-%dT%H:%M:%S%z"),
       plan = plan
     ),
@@ -39,8 +44,10 @@ write_pending_batch <- function(path, batch_id, model, plan) {
   invisible(path)
 }
 
+# A batch saved before the effort was saved was asked at the legacy effort.
 read_pending_batch <- function(path) {
   pending <- jsonlite::fromJSON(path)
+  pending$effort <- pending$effort %||% efficacy_legacy_effort
   pending$plan <- dplyr::as_tibble(pending$plan) |>
     dplyr::mutate(
       therapeutic_indication = as.character(.data$therapeutic_indication),
@@ -69,7 +76,7 @@ batch_submission_warning <- function(error, count) {
   ))
 }
 
-submit_efficacy_batch <- function(submissions, model, pending_path) {
+submit_efficacy_batch <- function(submissions, model, effort, pending_path) {
   requests <- purrr::map(submissions, "request")
   batch_id <- tryCatch(
     create_claude_batch(requests),
@@ -87,7 +94,7 @@ submit_efficacy_batch <- function(submissions, model, pending_path) {
   )
   plan <- dplyr::bind_rows(purrr::map(submissions, "plan_row"))
   tryCatch(
-    write_pending_batch(pending_path, batch_id, model, plan),
+    write_pending_batch(pending_path, batch_id, model, plan, effort),
     error = function(error) {
       cli::cli_warn(c(
         "Could not save batch {batch_id} in {.path {pending_path}}:
@@ -193,6 +200,7 @@ read_efficacy_batch_results <- function(batch_id,
 collect_efficacy_batch <- function(batch_id,
                                    submissions,
                                    model,
+                                   effort,
                                    poll_seconds,
                                    today) {
   results <- read_efficacy_batch_results(batch_id, poll_seconds)
@@ -200,7 +208,9 @@ collect_efficacy_batch <- function(batch_id,
     return(list(outcomes = list(), pending = TRUE))
   }
   outcomes <- purrr::map(submissions, function(submission) {
-    efficacy_outcome(submission, results[[submission$custom_id]], model, today)
+    efficacy_outcome(
+      submission, results[[submission$custom_id]], model, effort, today
+    )
   })
   list(outcomes = outcomes, pending = FALSE)
 }
@@ -229,22 +239,25 @@ extract_efficacy_batch <- function(plan,
                                    model,
                                    poll_seconds = 60,
                                    today = Sys.Date(),
-                                   pending_path = efficacy_pending_path) {
+                                   pending_path = efficacy_pending_path,
+                                   effort = efficacy_default_effort) {
   nothing <- list(outcomes = list(), pending = FALSE)
   if (nrow(plan) == 0) {
     return(combine_efficacy_run(list(), nothing))
   }
   # Before the slow fetching, not after it.
   claude_api_key()
-  prepared <- prepare_efficacy_requests(plan, model, today)
+  prepared <- prepare_efficacy_requests(plan, model, effort, today)
   submissions <- prepared$submissions
   batch_id <- if (length(submissions) > 0) {
-    submit_efficacy_batch(submissions, model, pending_path)
+    submit_efficacy_batch(submissions, model, effort, pending_path)
   }
   collected <- if (is.null(batch_id)) {
     nothing
   } else {
-    collect_efficacy_batch(batch_id, submissions, model, poll_seconds, today)
+    collect_efficacy_batch(
+      batch_id, submissions, model, effort, poll_seconds, today
+    )
   }
   combine_efficacy_run(prepared$records, collected)
 }
@@ -284,12 +297,14 @@ pending_submissions <- function(pending) {
 resume_efficacy_batch <- function(pending, poll_seconds, today = Sys.Date()) {
   claude_api_key()
   cli::cli_inform(
-    "Collecting batch {pending$batch_id} ({pending$model}, created
-    {pending$created}) before planning anything new."
+    "Collecting batch {pending$batch_id} ({pending$model} at effort
+    {pending$effort}, created {pending$created}) before planning anything
+    new."
   )
   submissions <- pending_submissions(pending)
   collected <- collect_efficacy_batch(
-    pending$batch_id, submissions, pending$model, poll_seconds, today
+    pending$batch_id, submissions, pending$model, pending$effort,
+    poll_seconds, today
   )
   combine_efficacy_run(list(), collected)
 }

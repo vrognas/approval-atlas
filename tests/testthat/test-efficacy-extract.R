@@ -116,6 +116,40 @@ test_that("a lasting failure waits for a new PI, another model or ONLY", {
   }
 })
 
+test_that("a lasting failure is planned again at another effort", {
+  plan_at <- function(extractions, effort) {
+    plan_efficacy_extractions(
+      medicines_sample(), documents_sample(), extractions, 10,
+      only = NULL, effort = effort
+    )$ema_product_number
+  }
+  both <- c("EMEA/H/C/004164", "EMEA/H/C/005522")
+  # Recorded before the effort was a setting: every request was at high.
+  failed <- alecensa_extraction("failed", "max_tokens")
+  expect_equal(plan_at(failed, "high"), "EMEA/H/C/005522")
+  expect_equal(plan_at(failed, "medium"), both)
+  failed$extractor_effort <- "medium"
+  expect_equal(plan_at(failed, "medium"), "EMEA/H/C/005522")
+  expect_equal(plan_at(failed, "high"), both)
+  # As for the model: a product extracted without failing is not redone,
+  # nor one that failed before any request.
+  expect_equal(plan_at(alecensa_extraction("ok"), "low"), "EMEA/H/C/005522")
+  no_text <- alecensa_extraction(
+    "failed", "no text read from the PDF",
+    model = NA_character_
+  )
+  expect_equal(plan_at(no_text, "low"), "EMEA/H/C/005522")
+})
+
+test_that("the effort comes from APPROVAL_ATLAS_EFFICACY_EFFORT", {
+  expect_equal(efficacy_effort_from_env(""), "high")
+  expect_equal(efficacy_effort_from_env(" medium "), "medium")
+  expect_error(efficacy_effort_from_env("turbo"), "turbo")
+  expect_error(efficacy_effort_from_env("medium,high"), "one effort")
+  withr::local_envvar(APPROVAL_ATLAS_EFFICACY_EFFORT = "xhigh")
+  expect_equal(efficacy_effort_from_env(), "xhigh")
+})
+
 test_that("the newest product information of a product is planned", {
   documents <- dplyr::bind_rows(
     documents_sample(),
@@ -166,7 +200,7 @@ test_that("flags name every reason a row needs a human", {
     population_match = "whole_trial_broader", ci_is_range = FALSE,
     value = "0.63", arm_treatment = "NR (44.4, NR)", arm_control = "20.8",
     comparator = "chemotherapy", comparator_column_label = NULL,
-    effect_type = "hr"
+    effect_type = "hr", endpoint = "OS"
   )
   flags <- efficacy_flags(row, list(status = "reassembled", warnings = "x"))
   expect_setequal(flags, c(
@@ -175,18 +209,126 @@ test_that("flags name every reason a row needs a human", {
   ))
 })
 
-test_that("a clean row has no flags; single-arm HRs and ranges are flagged", {
+test_that("arm values and arm sizes need the comparator's column label", {
+  exact <- list(status = "exact", warnings = character())
+  # KEYNOTE-024 (Keytruda): the HR alone, from a table or a sentence.
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "0.50", comparator = "chemotherapy",
+    comparator_column_label = NULL, effect_type = "hr", endpoint = "PFS"
+  )
+  expect_equal(efficacy_flags(row, exact), character())
+  # REGARD (Cyramza): medians from a sentence, which prints no column label.
+  with_arms <- c(row, list(arm_treatment = "5.2", arm_control = "3.8"))
+  expect_equal(efficacy_flags(with_arms, exact), "comparator_label_missing")
+  only_control <- c(row, list(arm_control = "3.8"))
+  expect_equal(efficacy_flags(only_control, exact), "comparator_label_missing")
+  # Any label clears this flag, the arm's name in a sentence too: the
+  # verifier only checks it is quoted with the control's values
+  # (comparator_label_check()).
+  with_arms$comparator_column_label <- "placebo"
+  expect_equal(efficacy_flags(with_arms, exact), character())
+  # LAURA (Tagrisso): the arm sizes say which arm is which, as arm values do
+  # (here swapped, with the label left empty).
+  sizes <- c(row, list(n_treatment = 73L, n_control = 143L))
+  expect_equal(efficacy_flags(sizes, exact), "comparator_label_missing")
+  expect_equal(
+    efficacy_flags(c(row, list(n_treatment = 143L)), exact),
+    "comparator_label_missing"
+  )
+  sizes$comparator_column_label <- "Placebo"
+  expect_equal(efficacy_flags(sizes, exact), character())
+  # A single-arm trial's size names its one arm.
+  single <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "45.0", effect_type = "single_arm_rate",
+    endpoint = "ORR", n_treatment = 89L
+  )
+  expect_equal(efficacy_flags(single, exact), character())
+  # Arms blanked as not verified: arms_not_verified alone hides the row.
+  blanked <- without_unverified_arms(
+    c(row, list(arm_treatment = "5.2", arm_control = "3.8")),
+    c("arm_treatment", "arm_control")
+  )
+  expect_equal(
+    efficacy_flags(blanked, list(flags = "arms_not_verified")),
+    "arms_not_verified"
+  )
+})
+
+# Review of the prompt change (2026-10-01): a two-arm rate difference whose
+# comparator was left "" and its arms swapped was shown as single-arm.
+test_that("a control arm's values need the label, a comparator or none", {
+  exact <- list(status = "exact", warnings = character())
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "15", effect_type = "rate_difference",
+    endpoint = "ORR", arm_treatment = "30", arm_control = "45"
+  )
+  expect_setequal(
+    efficacy_flags(row, exact),
+    c("comparator_missing", "comparator_label_missing")
+  )
+  # The effect called single-arm, the control's value given all the same.
+  single <- c(
+    row[setdiff(names(row), c("effect_type", "arm_treatment"))],
+    list(effect_type = "single_arm_median", n_control = 98L)
+  )
+  expect_equal(efficacy_flags(single, exact), "comparator_label_missing")
+})
+
+test_that("a two-arm effect without a comparator is flagged", {
+  exact <- list(status = "exact", warnings = character())
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "0.60", endpoint = "PFS"
+  )
+  for (effect in c("hr", "hr_noninferiority", "rate_difference")) {
+    expect_equal(
+      efficacy_flags(c(row, list(effect_type = effect)), exact),
+      "comparator_missing",
+      info = effect
+    )
+    named <- c(row, list(effect_type = effect, comparator = "placebo"))
+    expect_equal(efficacy_flags(named, exact), character(), info = effect)
+  }
+  for (effect in c("single_arm_rate", "single_arm_median")) {
+    expect_equal(
+      efficacy_flags(c(row, list(effect_type = effect)), exact),
+      character(),
+      info = effect
+    )
+  }
+})
+
+test_that("a row without an endpoint is flagged", {
+  exact <- list(status = "exact", warnings = character())
+  row <- list(
+    ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
+    ci_is_range = FALSE, value = "0.16", comparator = "Placebo",
+    effect_type = "hr", endpoint = "Progression-Free Survival"
+  )
+  expect_equal(efficacy_flags(row, exact), character())
+  row$endpoint <- NULL
+  expect_equal(efficacy_flags(row, exact), "endpoint_missing")
+})
+
+test_that("a clean row has no flags; a missing comparator and ranges are", {
   row <- list(
     ci_level = 95, is_primary = TRUE, population_match = "whole_trial_matches",
     ci_is_range = FALSE, value = "0.47", arm_treatment = "34.8",
     arm_control = "10.9", comparator = "crizotinib",
-    comparator_column_label = "Crizotinib", effect_type = "hr"
+    comparator_column_label = "Crizotinib", effect_type = "hr",
+    endpoint = "PFS"
   )
   exact <- list(status = "exact", warnings = character())
   expect_equal(efficacy_flags(row, exact), character())
   row$comparator <- NULL
   row$ci_is_range <- TRUE
-  expect_equal(efficacy_flags(row, exact), c("ci_is_range", "single_arm_hr"))
+  expect_equal(
+    efficacy_flags(row, exact),
+    c("ci_is_range", "comparator_missing")
+  )
   row$page <- NA_integer_
   expect_true("page_unknown" %in% efficacy_flags(row, exact))
   row$page <- 12L
@@ -444,11 +586,19 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_equal(run$extractions$rows_kept, 2L)
   expect_equal(run$extractions$rows_failed, 1L)
   expect_equal(run$extractions$extractor_model, "claude-sonnet-5-5")
+  expect_equal(run$extractions$extractor_effort, "high")
   expect_equal(run$rows$row_order, c(1L, 3L))
   expect_equal(run$rows$page, c(3L, 3L))
   expect_equal(run$rows$verification, c("exact", "exact"))
-  expect_equal(run$rows$flags, list(character(), "not_reached"))
-  expect_equal(run$rows$n_treatment, c(152L, 152L))
+  # The sizes are printed in a sentence, where no column places them, so they
+  # are blanked with the label, which leaves the third row's arm value
+  # unlabelled (owner decision 2026-10-01).
+  expect_equal(
+    run$rows$flags,
+    list(character(), c("not_reached", "comparator_label_missing"))
+  )
+  expect_equal(run$rows$n_treatment, c(NA_integer_, NA_integer_))
+  expect_equal(run$rows$comparator_column_label, c(NA_character_, NA))
   expect_equal(run$rows$ci_level, c(95, 95))
   expect_equal(
     run$rows$source_url,
@@ -460,6 +610,343 @@ test_that("verified rows keep page, key, flags; failing ones are listed", {
   expect_match(run$rows$row_key, "^[0-9a-f]{40}$")
   expect_equal(run$failed_rows$endpoint, "OS")
   expect_match(run$failed_rows$errors[[1]][1], "0.67")
+})
+
+test_that("a row whose arms do not verify is kept without them, flagged", {
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(
+    alex_row(
+      arm_treatment = "34.8", arm_control = "10.9",
+      arm_measure = "median months"
+    )
+  )))
+  run <- extract_first()
+  expect_equal(run$extractions$rows_kept, 1L)
+  expect_equal(run$extractions$rows_failed, 0L)
+  expect_equal(run$rows$value, "0.47")
+  expect_true(is.na(run$rows$arm_treatment))
+  expect_true(is.na(run$rows$arm_control))
+  expect_true(is.na(run$rows$arm_measure))
+  expect_true(is.na(run$rows$comparator_column_label))
+  expect_true("arms_not_verified" %in% run$rows$flags[[1]])
+})
+
+# A verbatim excerpt of a pilot section (tests/testthat/fixtures/efficacy)
+# as the page texts of a product information: section 5.1, then 5.2.
+read_fixture_text <- function(name) {
+  path <- testthat::test_path("fixtures", "efficacy", name)
+  paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+}
+
+excerpt_pages <- function(name) {
+  text <- read_fixture_text(paste0("excerpt-", name, ".layout.txt"))
+  c(
+    paste("5.1 Pharmacodynamic properties", text, sep = "\n"),
+    "5.2 Pharmacokinetic properties"
+  )
+}
+
+# One answered row checked as production checks it (check_answer_row()), then
+# taken to the site file: the failed row, or the record with its merged row
+# (`rows`, its review) and the rows the site file shows of it (`site`).
+row_to_site <- function(pages, ...) {
+  row <- normalise_efficacy_row(answer_row(...))$row
+  plan_row <- list(
+    ema_product_number = "EMEA/H/C/005919",
+    therapeutic_indication = NA_character_,
+    document_url = "https://www.ema.europa.eu/pi.pdf",
+    document_last_updated_date = as.Date("2026-09-01")
+  )
+  submission <- list(plan_row = plan_row, section = slice_smpc_efficacy(pages))
+  checked <- check_answer_row(
+    row, 1L, submission, "claude-sonnet-5-5", as.Date("2026-10-01")
+  )
+  if (!is.null(checked$failed)) {
+    return(checked)
+  }
+  rows <- merge_efficacy_reviews(
+    efficacy_row_table(list(checked$record)), empty_efficacy_rows()
+  )
+  medicines <- dplyr::tibble(ema_product_number = plan_row$ema_product_number)
+  c(checked, list(rows = rows, site = build_efficacy_table(rows, medicines)))
+}
+
+# Review of the verifier tolerance (2026-10-01): whole rows that borrowed a
+# number, an interval, an arm size or a label from elsewhere in a table.
+test_that("a row that borrows from another line or column never ships", {
+  tevimbra_307 <- excerpt_pages("tevimbra-307")
+  # T+PC's 0.45 with T+nPC's interval, the next column of the row.
+  borrowed_ci <- row_to_site(
+    tevimbra_307,
+    trial = "BGB-A317-307", endpoint = "PFS", comparator = "paclitaxel",
+    comparator_column_label = "Paclitaxel", n_treatment = "120",
+    n_control = "121", value = "0.45", ci_low = "0.31", ci_high = "0.60",
+    ci_level = "95", quotes = list(paste(
+      "Stratified hazard ratioa (95% CI) 0.45 (0.33, 0.62)",
+      "0.43 (0.31, 0.60) -"
+    ))
+  )
+  expect_match(
+    borrowed_ci$failed$errors[[1]], "value and CI not in one quote",
+    all = FALSE
+  )
+  tevimbra_305 <- excerpt_pages("tevimbra-305")
+  # The events count "n 189" as the arm size (the arm is n = 274).
+  events <- row_to_site(
+    tevimbra_305,
+    trial = "BGB-A317-305", endpoint = "PFS", n_treatment = "189",
+    n_control = "272", value = "0.68", ci_low = "0.56", ci_high = "0.83",
+    ci_level = "95", quotes = list(
+      "Hazard ratioc (95% CI) 0.68 (0.56, 0.83)",
+      "Disease progression or death, n 189 (69.0) 216 (79.4) (%)"
+    )
+  )
+  # Blanked, never shown (owner decision 2026-10-01: the row is kept).
+  expect_null(events$failed)
+  expect_null(events$record$n_treatment)
+  expect_false(189L %in% events$site$n_treatment)
+  # A sign from the line below.
+  sign <- row_to_site(
+    tevimbra_305,
+    trial = "BGB-A317-305", endpoint = "OS", value = "0.71",
+    ci_low = "-0.58", ci_high = "0.86", ci_level = "95",
+    quotes = list("Hazard ratioc (95% CI) 0.71 (-0.58, 0.86)")
+  )
+  expect_false(is.null(sign$failed))
+  # LAURA's PFS hazard ratio labelled with the "Overall Survival" below it.
+  laura <- row_to_site(
+    excerpt_pages("tagrisso-laura"),
+    trial = "LAURA", endpoint = "Overall Survival", n_treatment = "143",
+    n_control = "73", value = "0.16", ci_low = "0.10", ci_high = "0.24",
+    ci_level = "95", quotes = list(
+      "Overall Survival HR (95% CI); P-value 0.16 (0.10, 0.24); P<0.001",
+      "TAGRISSO Placebo (N=143) (N=73)"
+    )
+  )
+  expect_match(laura$failed$errors[[1]], "quote not in the text", all = FALSE)
+  # BGB-A317-307's median OS label above its hazard ratio row's numbers: kept,
+  # but hidden until a human has looked.
+  median_os <- row_to_site(
+    tevimbra_307,
+    trial = "BGB-A317-307", endpoint = "Median OS", n_treatment = "120",
+    n_control = "121", value = "0.68", ci_low = "0.45", ci_high = "1.01",
+    ci_level = "95",
+    quotes = list("Median OS (months) (95% CI) 0.68 (0.45, 1.01)")
+  )
+  expect_true("quote_across_lines" %in% median_os$record$flags)
+  expect_equal(median_os$rows$review, "flagged")
+  expect_equal(nrow(median_os$site), 0L)
+})
+
+# Review of the prompt change (2026-10-01): whole rows that reached the site
+# with arm sizes, a label, a comparator or an endpoint nothing verified.
+laura_hr_quote <- "HR (95% CI); P-value 0.16 (0.10, 0.24); P<0.001"
+
+laura_row_to_site <- function(...) {
+  row <- list(
+    trial = "LAURA", endpoint = "Progression-Free Survival",
+    regimen = "TAGRISSO", comparator = "Placebo", value = "0.16",
+    ci_low = "0.10", ci_high = "0.24", ci_level = "95",
+    quotes = list(laura_hr_quote)
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  do.call(row_to_site, c(list(excerpt_pages("tagrisso-laura")), row))
+}
+
+# Owner decision 2026-10-01: sizes the section's layout does not place under
+# their arms' column headers are blanked and the row shown without them, as
+# its value and CI verify; never hidden for them, never shown with them.
+test_that("arm sizes ship only under their arms' column headers", {
+  # The label printed but left empty, the arm sizes swapped.
+  swapped <- laura_row_to_site(
+    n_treatment = "73", n_control = "143",
+    quotes = list(laura_hr_quote, "(N=143) (N=73)")
+  )
+  expect_equal(swapped$record$flags, character())
+  expect_null(swapped$record$n_treatment)
+  expect_null(swapped$record$n_control)
+  expect_equal(nrow(swapped$site), 1L)
+  expect_true(is.na(swapped$site$n_treatment))
+  expect_true(is.na(swapped$site$n_control))
+  expect_equal(swapped$site$value, "0.16")
+  # The label given, quoted apart from the sizes: LAURA's table prints
+  # "Placebo" over "(N=73)" and "TAGRISSO" over "(N=143)", so they ship.
+  apart <- laura_row_to_site(
+    comparator_column_label = "Placebo", n_treatment = "143",
+    n_control = "73", quotes = list(laura_hr_quote, "(N=143) (N=73)")
+  )
+  expect_equal(apart$record$flags, character())
+  expect_equal(apart$site$n_treatment, 143L)
+  expect_equal(apart$site$n_control, 73L)
+  expect_equal(apart$site$comparator_column_label, "Placebo")
+  # Review of the size fix-up (2026-10-01): the sizes swapped in a quote of
+  # the header, which holds both columns, shipped. Now blanked with the label,
+  # which then ties nothing; the row ships without them.
+  header <- "TAGRISSO Placebo Efficacy Parameter (N=143) (N=73)"
+  in_header <- laura_row_to_site(
+    comparator_column_label = "Placebo", n_treatment = "73",
+    n_control = "143", quotes = list(laura_hr_quote, header)
+  )
+  expect_equal(in_header$record$flags, character())
+  expect_equal(nrow(in_header$site), 1L)
+  expect_true(is.na(in_header$site$n_treatment))
+  expect_true(is.na(in_header$site$n_control))
+  expect_true(is.na(in_header$site$comparator_column_label))
+  # Sizes the section prints in no n notation ("103/212" in a forest plot,
+  # PACIFIC): blanked, the row shipped (owner decision 2026-10-01).
+  unprinted <- laura_row_to_site(
+    n_treatment = "212", n_control = "91",
+    quotes = list(laura_hr_quote, "(N=143) (N=73)")
+  )
+  expect_null(unprinted$failed)
+  expect_equal(nrow(unprinted$site), 1L)
+  expect_true(is.na(unprinted$site$n_treatment))
+  expect_true(is.na(unprinted$site$n_control))
+  # Arm values without a label stay hidden, their sizes kept for the human.
+  medians <- "Median PFS, months (95% CI) 39.1 (31.5, NC) 5.6 (3.7, 7.4)"
+  unlabelled <- laura_row_to_site(
+    n_treatment = "143", n_control = "73", arm_treatment = "39.1",
+    arm_control = "5.6",
+    quotes = list(laura_hr_quote, medians, "(N=143) (N=73)")
+  )
+  expect_equal(unlabelled$record$flags, "comparator_label_missing")
+  expect_equal(unlabelled$record$n_control, 73L)
+  expect_equal(nrow(unlabelled$site), 0L)
+  # The column headers quoted with the sizes below them.
+  headed <- laura_row_to_site(
+    comparator_column_label = "Placebo", n_treatment = "143",
+    n_control = "73", quotes = list(
+      laura_hr_quote, "TAGRISSO Placebo Efficacy Parameter (N=143) (N=73)"
+    )
+  )
+  expect_equal(headed$record$flags, character())
+  expect_equal(headed$site$n_control, 73L)
+  expect_equal(headed$site$comparator_column_label, "Placebo")
+})
+
+# Review of the size fix-up (2026-10-01): blanking the sizes of a single-arm
+# effect deleted the only sign of its second arm, so placebo's median shipped
+# as the medicine's ("TAGRISSO vs Placebo", or "TAGRISSO, single-arm").
+test_that("a single-arm effect from a trial of two arms never ships", {
+  medians <- "Median PFS, months (95% CI) 39.1 (31.5, NC) 5.6 (3.7, 7.4)"
+  sizes <- "(N=143) (N=73)"
+  placebo_median <- function(...) {
+    laura_row_to_site(
+      effect_type = "single_arm_median", value = "5.6", ci_low = "3.7",
+      ci_high = "7.4", ...
+    )
+  }
+  cases <- list(
+    named = placebo_median(
+      n_treatment = "143", n_control = "73", quotes = list(medians, sizes)
+    ),
+    unnamed = placebo_median(
+      comparator = "", n_treatment = "143", n_control = "73",
+      quotes = list(medians, sizes)
+    ),
+    # Found without sizes before the fix-up too.
+    bare = placebo_median(quotes = list(medians))
+  )
+  for (name in names(cases)) {
+    case <- cases[[name]]
+    expect_null(case$failed, info = name)
+    expect_true(
+      "single_arm_with_control" %in% case$record$flags, info = name
+    )
+    expect_equal(case$rows$review, "flagged", info = name)
+    expect_equal(nrow(case$site), 0L, info = name)
+  }
+  # The sizes stay for the human.
+  expect_equal(cases$named$record$n_control, 73L)
+  # A single-arm rate given two sizes and no comparator.
+  rate <- laura_row_to_site(
+    effect_type = "single_arm_rate", comparator = "", n_treatment = "143",
+    n_control = "73", quotes = list(laura_hr_quote, sizes)
+  )
+  expect_true("single_arm_with_control" %in% rate$record$flags)
+  expect_equal(nrow(rate$site), 0L)
+})
+
+test_that("a label with nothing to tie never ships", {
+  # The treatment's header given as the comparator's, no arm values.
+  wrong <- laura_row_to_site(comparator_column_label = "TAGRISSO")
+  expect_equal(wrong$record$flags, character())
+  expect_null(wrong$record$comparator_column_label)
+  expect_equal(nrow(wrong$site), 1L)
+  expect_true(is.na(wrong$site$comparator_column_label))
+})
+
+test_that("a row without its endpoint or its comparator never ships", {
+  no_endpoint <- laura_row_to_site(endpoint = "")
+  expect_true("endpoint_missing" %in% no_endpoint$record$flags)
+  expect_equal(nrow(no_endpoint$site), 0L)
+  pages <- c(paste(
+    "5.1 Pharmacodynamic properties",
+    "Table 2 Efficacy results from TRIAL-9",
+    "                     Drugamab          Placebo",
+    "                     (N=100)           (N=98)",
+    "ORR, %               45                30",
+    "Difference in ORR 15 (95% CI: 2, 28)",
+    sep = "\n"
+  ), "5.2 Pharmacokinetic properties")
+  rate_row <- function(...) {
+    row_to_site(
+      pages,
+      trial = "TRIAL-9", endpoint = "ORR", regimen = "Drugamab",
+      effect_type = "rate_difference", value = "15", ci_low = "2",
+      ci_high = "28", ci_level = "95", n_treatment = "100", n_control = "98",
+      ...
+    )
+  }
+  # A rate difference with comparator "", its arms swapped: it would read
+  # "single-arm" beside "30 vs 45".
+  swapped <- rate_row(
+    arm_treatment = "30", arm_control = "45", arm_measure = "ORR, %",
+    quotes = list(
+      "Difference in ORR 15 (95% CI: 2, 28)", "ORR, % 45 30", "(N=100) (N=98)"
+    )
+  )
+  expect_true(all(
+    c("comparator_missing", "comparator_label_missing") %in%
+      swapped$record$flags
+  ))
+  expect_equal(nrow(swapped$site), 0L)
+  # The same without arm values.
+  bare <- rate_row(
+    quotes = list("Difference in ORR 15 (95% CI: 2, 28)", "(N=100) (N=98)")
+  )
+  expect_true("comparator_missing" %in% bare$record$flags)
+  expect_equal(nrow(bare$site), 0L)
+})
+
+test_that("a row quoted in reading order gets its page, flagged for review", {
+  text <- read_fixture_text("tecentriq-pi-5.1.layout.txt")
+  pages <- strsplit(text, "\f", fixed = TRUE)[[1]]
+  # IMpower130 OS as the 2026-10-01 evaluation answered it: its hazard ratio
+  # row with the footnote mark printed on the line above, and the arm sizes.
+  impower130 <- row_to_site(
+    pages,
+    trial = "IMpower130", endpoint = "OS", n_treatment = "451",
+    n_control = "228", value = "0.79", ci_low = "0.64", ci_high = "0.98",
+    ci_level = "95", quotes = list(
+      "Stratified hazard ratio‡ (95% CI) 0.79 (0.64, 0.98)",
+      "Co-primary endpoints OS n=451 n=228"
+    )
+  )
+  expected_page <- grep("hazard ratio \\(95% CI\\) +0\\.79", pages)
+  expect_length(expected_page, 1)
+  expect_equal(impower130$record$page, expected_page)
+  expect_false("page_unknown" %in% impower130$record$flags)
+  expect_true("quote_across_lines" %in% impower130$record$flags)
+  expect_equal(nrow(impower130$site), 0L)
+  # Once a human has looked, it is shown with its page.
+  reviewed <- impower130$rows
+  reviewed$review <- "reviewed_ok"
+  site <- build_efficacy_table(
+    reviewed, dplyr::tibble(ema_product_number = "EMEA/H/C/005919")
+  )
+  expect_equal(nrow(site), 1L)
+  expect_equal(site$page, expected_page)
 })
 
 test_that("an indication not in the medicine's section 4.1 is flagged", {
@@ -510,6 +997,7 @@ test_that("no section 5.1 and a missing PDF are recorded without a request", {
   run <- extract_efficacy_batch(plan_sample(), "claude-sonnet-5-5", 0)
   expect_equal(run$extractions$status, c("no_section", "not_found"))
   expect_equal(run$extractions$extractor_model, c(NA_character_, NA))
+  expect_equal(run$extractions$extractor_effort, c(NA_character_, NA))
 })
 
 test_that("a fetch stop keeps what was fetched and leaves the rest", {
@@ -610,7 +1098,9 @@ test_that("the batch is polled until it ends; the request holds the section", {
   run <- suppressMessages(extract_first())
   expect_equal(polls, 3L)
   expect_equal(sent[[1]]$custom_id, "EMEA-H-C-004164")
-  expect_equal(sent[[1]]$params$max_tokens, 32000L)
+  # The models' output limit: a batch has no HTTP timeout (Keytruda and
+  # Opdivo were cut off at 32000 in the gold evaluation of 2026-10-01).
+  expect_equal(sent[[1]]$params$max_tokens, 128000L)
   expect_match(
     sent[[1]]$params$messages[[1]]$content,
     "Hazard ratio 0.47",
@@ -966,7 +1456,7 @@ test_that("the batch id is shown before it is saved; a failed save warns", {
   pending_path <- withr::local_tempfile(fileext = ".json")
   local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
   local_mocked_bindings(
-    write_pending_batch = function(path, batch_id, model, plan) {
+    write_pending_batch = function(path, batch_id, model, plan, effort) {
       stop("disk full")
     }
   )
@@ -1029,4 +1519,103 @@ test_that("a batch still pending after a run keeps its file", {
   )
   expect_equal(nrow(run$extracted), 0)
   expect_true(file.exists(file.path(directory, "pending-batch.json")))
+})
+
+test_that("the effort goes into the request, the record and the pending file", {
+  pending_path <- withr::local_tempfile(fileext = ".json")
+  sent <- NULL
+  saved <- NULL
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-004164", list(alex_row())))
+  local_mocked_bindings(
+    create_claude_batch = function(requests) {
+      sent <<- requests
+      "msgbatch_1"
+    },
+    claude_batch_status = function(batch_id) {
+      saved <<- read_pending_batch(pending_path)
+      list(status = "ended", results_url = "https://x/results")
+    }
+  )
+  run <- suppressMessages(extract_efficacy_batch(
+    plan_sample(budget = 1), "claude-sonnet-5-5",
+    poll_seconds = 0, today = as.Date("2026-09-30"),
+    pending_path = pending_path, effort = "medium"
+  ))
+  expect_equal(sent[[1]]$params$output_config$effort, "medium")
+  expect_equal(saved$effort, "medium")
+  expect_equal(run$extractions$extractor_model, "claude-sonnet-5-5")
+  expect_equal(run$extractions$extractor_effort, "medium")
+})
+
+test_that("a run at another effort extracts a lasting failure again", {
+  directory <- withr::local_tempdir()
+  write_run_inputs(directory)
+  withr::local_envvar(APPROVAL_ATLAS_EFFICACY_ONLY = "")
+  local_batch(alex_pages(), batch_answer(
+    "EMEA-H-C-003933",
+    list(alex_row(value = "0.99"))
+  ))
+  suppressMessages(run_in(directory))
+  expect_message(run_in(directory), "No product to extract")
+  local_batch(alex_pages(), batch_answer("EMEA-H-C-003933", list()))
+  expect_message(
+    run <- run_in(directory, effort = "max"),
+    "at effort \"max\""
+  )
+  expect_equal(run$extracted$status, "no_rows")
+  expect_equal(run$extracted$extractor_effort, "max")
+  extractions <- read_efficacy_extractions(
+    file.path(directory, "extractions.json")
+  )
+  expect_equal(
+    extractions$extractor_effort[
+      extractions$ema_product_number == "EMEA/H/C/003933"
+    ],
+    "max"
+  )
+})
+
+test_that("an unknown effort stops the extractor before anything", {
+  directory <- withr::local_tempdir()
+  write_run_inputs(directory)
+  local_mocked_bindings(
+    fetch_efficacy_pages = function(plan_row) stop("no fetch expected"),
+    create_claude_batch = function(requests) stop("no batch expected")
+  )
+  expect_error(run_in(directory, effort = "turbo"), "turbo")
+  expect_error(run_in(directory, effort = c("low", "high")), "one effort")
+  expect_false(file.exists(file.path(directory, "pending-batch.json")))
+})
+
+test_that("a resumed batch keeps its effort; one saved without it is high", {
+  for (effort in c("low", NA)) {
+    directory <- pending_run_directory()
+    pending_path <- file.path(directory, "pending-batch.json")
+    pending <- read_pending_batch(pending_path)
+    write_pending_batch(
+      pending_path, pending$batch_id, pending$model, pending$plan[1, ],
+      effort = dplyr::coalesce(effort, "low")
+    )
+    if (is.na(effort)) {
+      # As written before the effort was saved.
+      lines <- readLines(pending_path)
+      writeLines(lines[!grepl("\"effort\"", lines)], pending_path)
+      expect_equal(read_pending_batch(pending_path)$effort, "high")
+    }
+    local_batch(
+      alex_pages(),
+      batch_answer("EMEA-H-C-003933", list(alex_row()))
+    )
+    local_mocked_bindings(
+      create_claude_batch = function(requests) stop("no new batch expected"),
+      fetch_efficacy_pages = function(plan_row) stop("no fetch expected"),
+      cached_efficacy_pages = function(plan_row) alex_pages()
+    )
+    run <- suppressMessages(run_in(directory, effort = "medium"))
+    expect_equal(run$extracted$extractor_model, "claude-opus-5-5")
+    expect_equal(
+      run$extracted$extractor_effort,
+      dplyr::coalesce(effort, "high")
+    )
+  }
 })

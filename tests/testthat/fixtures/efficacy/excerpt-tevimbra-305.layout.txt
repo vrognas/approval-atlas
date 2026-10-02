@@ -1,0 +1,19 @@
+Table 9                        Efficacy results in BGB-A317-305 patients with PD-L1 TAP score ≥ 5% (final
+analysis)
+
+                                                         Tislelizumab + chemotherapy         Placebo + chemotherapy
+                                                                   (n = 274)                         (n = 272)
+                                                                          Patients with PD-L1 score ≥ 5%
+Median study follow-up (months)a                                      32.5                              32.2
+OS
+   Death, n (%)                                    192 (70.1)                          219 (80.5)
+   Medianb (months) (95% CI)                    16.4 (13.6, 19.1)                   12.8 (12.0, 14.5)
+   Hazard ratioc (95% CI)                                         0.71 (0.58, 0.86)
+   p-valuec,d                                                          0.0003 e
+PFS
+   Disease progression or death, n
+                                                   189 (69.0)                          216 (79.4)
+   (%)
+   Medianb (months) (95% CI)                      7.2 (5.8, 8.4)                     5.9 (5.6, 7.0)
+   Hazard ratioc (95% CI)                                         0.68 (0.56, 0.83)
+ORR (%) (95% CI)                                51.5 (45.4, 57.5)                   42.6 (36.7, 48.8)

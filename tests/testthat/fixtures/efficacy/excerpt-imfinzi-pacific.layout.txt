@@ -1,0 +1,14 @@
+
+
+                             Figure 6. Forest plot of OS by PD-L1 expression
+                                                                                                                                                                              Events/N (%)
+                                                                                                                                                                        IMFINZI         Placebo
+
+
+                              All Patients                                                                                                                              264/476 (55.5%) 155/237 (65.4%)
+
+
+                              PD-L1 TC ≥ 1%                                                                                                                             103/212 (48.6%)                     56/91 (61.5%)
+
+
+                              PD-L1 TC ≥ 25%                                                                                                                            51/115 (44.3%)                   27/44 (61.4%)
