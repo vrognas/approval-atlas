@@ -446,8 +446,11 @@ export function keepShownList(shown, next, { loadingNote, quietNote }) {
 // search box's). A group one longer than the limit is shown whole ("Show 1 more" would take the same
 // row); "did you mean", the indication-text search and the recently viewed list are never collapsed.
 // An expanded group keeps that order, so the options it adds follow those shown. groups: the search
-// box's; query: the one the labels are compared with.
+// box's; query: the one the labels are compared with. Desktop (owner decision 2026-10-01, design
+// sweep L8, Choice Overload: "ins" listed 29 options, Companies and the text search below the 438px
+// box) collapses likewise at DESKTOP_GROUP_LIMIT.
 export const PHONE_GROUP_LIMIT = 3;
+export const DESKTOP_GROUP_LIMIT = 5;
 const COLLAPSIBLE = new Set(["medicines", "substances", "conditions", "classes", "companies"]);
 export function collapseGroups(groups, query, { limit = PHONE_GROUP_LIMIT, expanded = new Set() } = {}) {
   const folded = foldSearchText(query);

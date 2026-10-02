@@ -2,13 +2,14 @@
 // selection). DOM focus stays on the input (aria-activedescendant). Text is set via textContent only.
 // Markup is static in index.html: input[role=combobox], [role=listbox], a polite status element.
 import { UI } from "./labels.js";
-import { collapseGroups, keepShownList, submitChoice } from "./search.js";
+import { collapseGroups, DESKTOP_GROUP_LIMIT, keepShownList, PHONE_GROUP_LIMIT, submitChoice } from "./search.js";
 
 const DEBOUNCE_MS = 120;
 const COPY = UI.lookup;
 const NOTES = { loadingNote: COPY.loading, quietNote: COPY.noMatches };
 // Laws of UX, second pass (2026-09-30): on phones (as style.css's 44px options) each group shows a
-// few options and a "Show 5 more" option expanding it in place (collapseGroups()); desktop unchanged.
+// few options and a "Show 5 more" option expanding it in place (collapseGroups()); on desktop too,
+// 5 per group (owner decision 2026-10-01, design sweep L8).
 const PHONE = window.matchMedia("(max-width: 720px)");
 
 // suggestionsFor(query) -> { groups: [{ key, label, name, options: [{ label, meta, value, pick }] }],
@@ -39,7 +40,7 @@ export function createSearchBox(input, listbox, status, {
   let submits = 0;
   // An Enter waiting for data: { serial, text, view } (submit()).
   let waiting = null;
-  // The groups a "Show … more" expanded (phones), until the text changes.
+  // The groups a "Show … more" expanded, until the text changes.
   let expanded = new Set();
   // Suggestions were asked for (typing, arrow keys) and not dismissed since: data arriving later
   // may fill a list that had no matches yet (e.g. an ATC code typed before the classes loaded).
@@ -77,11 +78,12 @@ export function createSearchBox(input, listbox, status, {
     const layout = keepShownList(shown, { groups: result.groups, note: result.note ?? null, loading: Boolean(result.loading) }, NOTES);
     let { groups } = layout;
     listed = recentGroup ? null : { query, groups, note: layout.note };
-    // Phones: a few options per group, then "Show 5 more …" (an action option expanding it in place;
-    // it names what it adds, as more can match than a group holds: MAX_SUGGESTIONS).
+    // A few options per group (3 on phones, 5 on desktop), then "Show 5 more …" (an action option
+    // expanding it in place; it names what it adds, as more can match than a group holds:
+    // MAX_SUGGESTIONS).
     let hidden = 0;
-    if (PHONE.matches && !recentGroup) {
-      groups = collapseGroups(groups, query, { expanded }).map((group) => {
+    if (!recentGroup) {
+      groups = collapseGroups(groups, query, { expanded, limit: PHONE.matches ? PHONE_GROUP_LIMIT : DESKTOP_GROUP_LIMIT }).map((group) => {
         hidden += group.hidden;
         if (!group.hidden) return group;
         return { ...group, options: [...group.options, { label: COPY.showMore(group.hidden, group.key), value: group.key, added: group.hidden, action: "expand" }] };
@@ -115,7 +117,7 @@ export function createSearchBox(input, listbox, status, {
         item.setAttribute("role", "option");
         item.setAttribute("aria-selected", "false");
         // An action (Clear) is named in full ("Clear recently viewed") and looks like one; "Show … more"
-        // (phones) reads as a link at the end of its group.
+        // reads as a link at the end of its group.
         if (option.name) item.setAttribute("aria-label", option.name);
         if (option.action) item.className = option.action === "expand" ? "option-expand" : `option-action option-${option.action}`;
         item.appendChild(document.createElement("span")).textContent = option.label;
@@ -132,7 +134,7 @@ export function createSearchBox(input, listbox, status, {
     const open = options.length > 0 || note !== null || end !== null;
     listbox.hidden = !open;
     input.setAttribute("aria-expanded", String(open));
-    // Those a "Show … more" holds count too: the same number as on desktop.
+    // Those a "Show … more" holds count too: every suggestion, collapsed or not.
     const count = options.filter((option) => option.counted).length + hidden;
     // As a new list reads (its note), "Loading…" while nothing is found yet.
     const spoken = result.note ?? (result.loading && !count ? COPY.loading : null);
@@ -148,7 +150,7 @@ export function createSearchBox(input, listbox, status, {
     document.getElementById(`lookup-opt-${active}`).scrollIntoView({ block: "nearest" });
   }
 
-  // "Show 5 more" (phones): its group shown whole in place, the list open, focus kept in the field,
+  // "Show 5 more": its group shown whole in place, the list open, focus kept in the field,
   // the first option it added active (aria-activedescendant) and what it added announced.
   function expand(option) {
     const inGroup = (other) => other.listGroup === option.value && !other.action;

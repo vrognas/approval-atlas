@@ -5855,8 +5855,8 @@ table.activity {
   color: var(--link);
 }
 
-/* Laws of UX, second pass (2026-09-30): on phones a group's last option can be "Show all n …",
-   expanding it in place; it reads as a link. */
+/* Laws of UX, second pass (2026-09-30): a group's last option can be "Show 5 more …" (phones; on
+   desktop too since owner decision 2026-10-01), expanding it in place; it reads as a link. */
 .lookup [role="option"].option-expand {
   color: var(--link);
   font-size: var(--font-size-14);

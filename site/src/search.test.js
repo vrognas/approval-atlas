@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
+  DESKTOP_GROUP_LIMIT,
   PHONE_GROUP_LIMIT,
   SPELLING_VARIANTS,
   buildConditions,
@@ -804,4 +805,18 @@ test("collapseGroups: at most 3 per group on phones, the named match first, expa
   assert.equal(hidden("medicines", expanded), 2);
   // Nothing is lost: shown plus hidden is every option.
   for (const group of collapsed) assert.equal(group.options.length + group.hidden, groups.find((other) => other.key === group.key).options.length);
+});
+
+// Owner decision 2026-10-01 (design sweep L8): desktop listed up to 8 per group ("ins": 29 options).
+test("collapseGroups: at most 5 per group on desktop, a group of 6 shown whole", () => {
+  assert.equal(DESKTOP_GROUP_LIMIT, 5);
+  const option = (label) => ({ label, value: label });
+  const groups = [
+    { key: "medicines", options: ["Instanyl", "Insulatard", "Insulin aspart Sanofi", "Insulin lispro Sanofi", "Insuman", "Insulin Aspart Injection", "Insulin Human 30/70 Mix Marvel", "Insulin Human Long Marvel"].map(option) },
+    { key: "substances", options: ["a", "b", "c", "d", "e", "f"].map(option) },
+    { key: "companies", options: ["Instituto Grifols S.A.", "Insmed Netherlands B.V."].map(option) },
+  ];
+  const collapsed = collapseGroups(groups, "ins", { limit: DESKTOP_GROUP_LIMIT });
+  assert.deepEqual(collapsed.map((group) => [group.key, group.options.length, group.hidden]), [["medicines", 5, 3], ["substances", 6, 0], ["companies", 2, 0]]);
+  assert.deepEqual(collapsed[0].options.map((entry) => entry.label), ["Instanyl", "Insulatard", "Insulin aspart Sanofi", "Insulin lispro Sanofi", "Insuman"]);
 });
