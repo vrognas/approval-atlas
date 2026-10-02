@@ -1054,8 +1054,10 @@ function suggestionGroups(result, classes, companies, medicines, substanceCount)
     {
       key: "conditions",
       label: copy.groups.conditions,
+      // A condition found only by a 3-letter start of its first word (owner decision 2026-10-01, L8)
+      // is a guess, weak as a derived monogram: Enter never opens it as the only suggestion.
       options: result.conditions.map((condition) => ({
-        label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui, named: condition.exact,
+        label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui, named: condition.exact, weak: condition.prefix,
       })),
     },
     {

@@ -390,8 +390,20 @@ test("conditions: a one-word 3-letter query matches a term's first word by its s
   // From 4 letters any word's start matches, as before.
   assert.deepEqual(found("psor").map(([ui]) => ui).sort(), ["C1", "C2"]);
   assert.deepEqual(found("eryt").map(([ui]) => ui), ["C5"]);
-  // A 3-letter start names no condition (exact): Enter opens one by it only as the only suggestion.
+  // A 3-letter start names no condition (exact), and a match by it is a guess: weak, as a derived
+  // monogram, so Enter never opens it, not even as the only suggestion (fix-up of L8: "kah" opened
+  // Multiple Myeloma through "kahler disease", "fai" Renal Insufficiency through "failures, renal";
+  // Enter ran the indication-text search for them before, and does again).
   assert.equal(suggest(own, ownConditions, "pso").conditions.some((c) => c.exact), false);
+  // The condition options as main.js suggestionGroups() makes them.
+  const groupsFor = (query) => [{ key: "conditions", options: suggest(own, ownConditions, query).conditions.map((c) => ({ label: c.name, value: c.ui, named: c.exact, weak: c.prefix })) }];
+  assert.deepEqual(found("lup"), [["C5", null, true]]);
+  assert.equal(submitChoice(groupsFor("lup"), "lup"), null);
+  assert.deepEqual(groupsFor("flu")[0].options.map((option) => [option.value, option.weak]), [["C3", false], ["C4", true]]);
+  // From 4 letters the only suggestion opens, as before.
+  assert.deepEqual(submitChoice(groupsFor("lupu"), "lupu"), { group: "conditions", value: "C5" });
+  const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(main, /value: condition\.ui, named: condition\.exact, weak: condition\.prefix,/);
 });
 
 test("conditions rank exact folded match > descriptor-name match > authorized count", () => {
