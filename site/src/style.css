@@ -3119,16 +3119,40 @@ td.result-holder .holder-main .company-badge {
 }
 
 /* The company page's headline monogram (design sweep 2026-10-01, A2: an h2 rule since lookup titles
-   became h1, so the 20px badge hung 6-9px below the headline's cap height): sized with the headline
-   (0.8 of its em: 29px at 36px, 21px at 26px; its text 0.42 of it) and raised so its centre sits on
-   the cap height's (within 1px at 1440, 390 and 320; Geist Mono's text baseline in the box). */
+   became h1, so the 20px badge hung 6-9px below the headline's cap height): sized with the headline,
+   in whole pixels from the type scale (recheck 2026-10-02: in em it added 15.1, 12.6 and 10.9px
+   text and a 4.99px radius): 24px tall with 13px text under the 30px headline (phones), 28px with
+   15px under the 36px one (from 721px), the list badge's 20px and 11px under the 26px one (below
+   360px); raised so its centre sits on the cap height's (within 1px; Geist Mono's text baseline in
+   the box). */
 .company-page h1 .company-badge {
-  min-width: 1.9em;
-  height: 1.9em;
-  padding: 0 0.36em;
-  border-radius: 0.33em;
-  font-size: 0.42em;
-  vertical-align: 0.52em;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: var(--font-size-13);
+  vertical-align: 7px;
+}
+
+@media (min-width: 721px) {
+  .company-page h1 .company-badge {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: var(--font-size-15);
+    vertical-align: 8px;
+  }
+}
+
+@media (max-width: 359px) {
+  .company-page h1 .company-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: 5px;
+    font-size: var(--font-size-11);
+    vertical-align: 6px;
+  }
 }
 
 /* The company page's Sources: its Ownership part (the curated notes and the medicines moved to
