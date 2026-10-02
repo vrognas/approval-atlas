@@ -1,7 +1,7 @@
 // Pure data helpers: no DOM, no D3, so they run under node:test.
 import { buildAreaTree } from "./areas.js";
-import { atcCode, atcPrefixes } from "./atc.js";
-import { NOT_STATED, holderName } from "./labels.js";
+import { atcCode, atcExplanation, atcPrefixes } from "./atc.js";
+import { NOT_STATED, UI, holderName } from "./labels.js";
 
 export const MEDICINE_TYPES = ["Advanced therapy", "Biosimilar", "Generic", "Other"];
 
@@ -196,6 +196,18 @@ const BREAKDOWN_VALUES = {
 // Products with no value for the breakdown, so the page can say they are not shown.
 export function breakdownExcluded(products, by) {
   return products.filter((product) => BREAKDOWN_VALUES[by](product).length === 0).length;
+}
+
+// The explanation of the class the breakdown is drilled into (current; by: its mode), shown under
+// its path (owner decision 2026-10-01: on a touch screen a tap drills, and the first new bar shows
+// no tip, so no bar explained the class tapped): an ATC class's at levels 1-4 (explanations:
+// atc.js buildAtcExplanations()), a modality's or group's explainer, else null (areas: their MeSH
+// notes are long and their condition page has them; companies have none).
+export function breakdownExplanation(by, current, explanations) {
+  if (current === null || current === undefined) return null;
+  if (by === "atc") return atcExplanation(current, explanations);
+  if (by === "mod") return UI.modalityTips[current] ?? null;
+  return null;
 }
 
 // Breakdown rows (areas.js areaBreakdownRows() or companies.js companyBreakdownRows() output, or

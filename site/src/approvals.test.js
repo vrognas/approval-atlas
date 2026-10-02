@@ -7,6 +7,7 @@ import {
   authorizedSeries,
   byStatusOrder,
   breakdownExcluded,
+  breakdownExplanation,
   buildProducts,
   buildSubstanceIndex,
   countTiles,
@@ -18,6 +19,7 @@ import {
   sortBreakdownRows,
   statusDate,
 } from "./approvals.js";
+import { UI } from "./labels.js";
 import { NOT_CLASSIFIED, buildModalityTree } from "./modalities.js";
 
 const medicines = [
@@ -330,6 +332,27 @@ test("breakdownExcluded counts the products a breakdown cannot show", () => {
   assert.equal(breakdownExcluded(smpc, "atc"), 1);
   // Companies part 2: the company breakdown shows company groups; a medicine without a holder has none.
   assert.equal(breakdownExcluded(products, "mah"), 1);
+});
+
+// Owner decision 2026-10-01 (phone follow-up): a tap drills the breakdown and the first new bar
+// shows no tip, so the drilled class's explanation is shown under the path instead.
+test("breakdownExplanation: the drilled ATC class's or modality's explanation, else null", () => {
+  const explanations = new Map([["L04AC", "Block interleukins."], ["L", "Treat cancer."]]);
+  assert.equal(breakdownExplanation("atc", "L04AC", explanations), "Block interleukins.");
+  assert.equal(breakdownExplanation("atc", "L", explanations), "Treat cancer.");
+  // Level 5 has none (its substance's name says what it is), nor a class without one, nor the top.
+  assert.equal(breakdownExplanation("atc", "L04AC05", new Map([["L04AC05", "x"]])), null);
+  assert.equal(breakdownExplanation("atc", "L04AB", explanations), null);
+  assert.equal(breakdownExplanation("atc", null, explanations), null);
+  assert.equal(breakdownExplanation("atc", "L04AC"), null);
+  // Modalities: their explainer (UI.modalityTips), a group's and a modality's alike.
+  assert.equal(breakdownExplanation("mod", "antibody", explanations), UI.modalityTips.antibody);
+  assert.equal(breakdownExplanation("mod", "bispecific_antibody", explanations), UI.modalityTips.bispecific_antibody);
+  assert.equal(breakdownExplanation("mod", "no_such_modality", explanations), null);
+  assert.equal(breakdownExplanation("mod", null, explanations), null);
+  // Areas and companies: none (the area bars' MeSH notes are long; companies have no explainer).
+  assert.equal(breakdownExplanation("area", "C04", explanations), null);
+  assert.equal(breakdownExplanation("mah", "g.roche", explanations), null);
 });
 
 // Phase 4c: the breakdown's Sort control (UI state).

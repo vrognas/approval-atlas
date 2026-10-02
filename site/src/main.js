@@ -3,6 +3,7 @@ import {
   MEDICINE_TYPES,
   authorizedSeries,
   breakdownExcluded,
+  breakdownExplanation,
   buildProducts,
   buildSubstanceIndex,
   byStatusOrder,
@@ -1992,6 +1993,14 @@ function startDashboard(meta, [
     else if (by === "mah") renderCompanyPath(path, { companies, current, onSelect: openCompany });
     else if (by === "mod") renderModalityPath(path, { tree: modalityTree, current, onSelect: openModality });
     else renderAtcPath(path, { current, names: atcNames, onSelect: openAtc, label: UI.atc.path });
+    // The drilled class's explanation under the path (owner decision 2026-10-01: after a tap drills,
+    // the first new bar shows no tip, so on a touch screen nothing explained it), describing the
+    // path's current item too.
+    const explanation = breakdownExplanation(by, current, atcExplanations);
+    if (explanation) {
+      d3.select(container).append("p").attr("id", "breakdown-explanation").attr("class", "breakdown-explanation").text(explanation);
+      path.querySelector("[aria-current]")?.setAttribute("aria-describedby", "breakdown-explanation");
+    }
     if (focused !== undefined) container.querySelector(`[data-focus-key="${CSS.escape(focused)}"]`)?.focus();
   }
 

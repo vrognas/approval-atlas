@@ -3163,6 +3163,17 @@ td.result-holder .holder-main .company-badge {
   background: var(--wash);
 }
 
+/* The drilled class's explanation, on a line of its own under the path (owner decision 2026-10-01:
+   a tap drills, and the first new bar shows no tip; main.js renderBreakdownPath()). Its measure
+   capped at 70ch by a right padding: a max-width would let it share the path's line. */
+.breakdown-explanation {
+  flex: 1 0 100%;
+  margin: 0;
+  padding-right: max(0px, 100% - 70ch);
+  color: var(--ink-secondary);
+  font-size: var(--font-size-14);
+}
+
 /* The class headline's levels with their counts. */
 .class-path {
   margin-top: 12px;
