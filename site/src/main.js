@@ -898,20 +898,22 @@ function setupTips() {
   }
   // Touch screens: the medicines table's focused ATC badge (a tapped segment) shows its tip in flow,
   // a line of its stacked row's own under the badge's line, which makes the row taller (owner
-  // decision 2026-10-01: drawn under the badge it covered the next rows): the badge (.tip-flow)
-  // lends its tip to its row (data-flow-tip, drawn by style.css). Only a stacked row (a phone's:
-  // display flex); the wide table keeps the tip anchored. Set in the next frame like the strips, so
-  // a tap elsewhere lands before the row shrinks back.
+  // decision 2026-10-01: drawn under the badge it covered the next rows): the badge lends its tip to
+  // its row (data-flow-tip, drawn by style.css). Only a stacked row (a phone's: display flex); the
+  // wide table keeps the tip anchored. Set in the next frame like the strips, so a tap elsewhere
+  // lands before the row shrinks back.
   const FLOW_CARRIERS = "#medicines-table td.atc .code[data-tip]";
+  // The row a badge's tip is in flow in, read from the layout now (review of the in-flow tip: a
+  // rotation since makes the table wide, the tip anchored over the rows again), else null.
+  const flowRow = (carrier) => {
+    const row = touchScreen.matches && carrier.matches(FLOW_CARRIERS) ? carrier.closest("tr") : null;
+    return row && getComputedStyle(row).display === "flex" ? row : null;
+  };
   function updateFlow() {
-    const focused = touchScreen.matches ? document.querySelector(`${FLOW_CARRIERS}:focus-within`) : null;
-    const row = focused?.closest("tr");
-    const flowing = row && getComputedStyle(row).display === "flex" ? focused : null;
-    for (const carrier of document.querySelectorAll(`${FLOW_CARRIERS}.tip-flow`)) if (carrier !== flowing) carrier.classList.remove("tip-flow");
-    for (const other of document.querySelectorAll("#medicines-table tr[data-flow-tip]")) if (!flowing || other !== row) delete other.dataset.flowTip;
-    if (!flowing) return;
-    flowing.classList.add("tip-flow");
-    row.dataset.flowTip = flowing.dataset.tip;
+    const focused = document.querySelector(`${FLOW_CARRIERS}:focus-within`);
+    const row = focused ? flowRow(focused) : null;
+    for (const other of document.querySelectorAll("#medicines-table tr[data-flow-tip]")) if (other !== row) delete other.dataset.flowTip;
+    if (row) row.dataset.flowTip = focused.dataset.tip;
   }
   document.addEventListener("close", scheduleStrips, true);
   // Touch screens: a swipe (the page or a scroll box scrolling under the finger) hides the tips, so
@@ -928,7 +930,7 @@ function setupTips() {
     const [first] = event.touches;
     if (!touchStart || !first || !isSwipe(touchStart, { x: first.clientX, y: first.clientY })) return;
     touchStart = null;
-    const covers = (carrier) => tipCovers({ inStrip: inStrip(carrier), inFlow: carrier.classList.contains("tip-flow") });
+    const covers = (carrier) => tipCovers({ inStrip: inStrip(carrier), inFlow: flowRow(carrier) !== null });
     if (!root.classList.contains("tips-hidden") && showing(covers)) hide(null, null);
   }, { capture: true, passive: true });
   document.addEventListener("keydown", (event) => {
