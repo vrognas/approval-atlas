@@ -5129,10 +5129,13 @@ button.area-chip[aria-disabled="true"] {
 /* Who is active where (activity.js): the table scrolls sideways inside the card when it is wider
    (the page never does), with the holder column sticky; cells in five accent shades (--heat-1..5,
    each with its own number colour, palette.test.js), empty for none. */
+/* Its left edge is the card's text edge (design sweep recheck 2026-10-02: it reached 4px into the
+   card's padding, for the first column's focus rings, which are inset instead, below); on the right
+   it still reaches 4px into the padding, so the last column's rings show. */
 .activity-scroll {
   position: relative;
-  margin: 8px -4px 0;
-  padding: 0 4px;
+  margin: 8px -4px 0 0;
+  padding: 0 4px 0 0;
   overflow-x: auto;
 }
 
@@ -5175,13 +5178,14 @@ table.activity {
   overflow-wrap: break-word;
 }
 
-/* Scrolled sideways, the sticky column covers the scroll box's 4px padding too (A5; left is measured
-   from the box's content edge), so no cell shows or takes a tap beside it. */
+/* Scrolled sideways, the sticky column starts at the scroll box's edge (left is measured from the
+   box's content edge, which is its edge: no padding on that side), so no cell shows or takes a tap
+   beside it. */
 .activity th[scope="row"],
 .activity thead th:first-child {
   position: sticky;
   top: auto;
-  left: -4px;
+  left: 0;
   z-index: 1;
   background: var(--surface);
   text-align: left;
@@ -5301,7 +5305,7 @@ table.activity {
 .activity .activity-sorts td:first-child {
   position: sticky;
   z-index: 1;
-  left: -4px;
+  left: 0;
   background: var(--surface);
   text-align: left;
 }
@@ -5436,6 +5440,14 @@ table.activity {
 .activity button:focus-visible {
   outline-color: var(--ink);
   outline-offset: 1px;
+}
+
+/* The first column's controls (row headers, the Name and Total sorts) start on the scroll box's
+   edge, which clips anything left of it: their ring is drawn inside (design sweep recheck
+   2026-10-02; scrolled sideways on a phone the sticky column sat on that edge and its outer ring
+   lost 3px before). */
+.activity :is(th[scope="row"], .activity-sorts td:first-child) button:focus-visible {
+  outline-offset: -2px;
 }
 
 .heat-1 { background: var(--heat-1); color: var(--heat-1-text); }
@@ -7908,6 +7920,14 @@ code {
 
   :is(.activity button, .conditions-table .sort-button)[aria-pressed="true"]:focus-visible {
     outline-offset: 2px;
+  }
+
+  /* The activity table's first column draws its ring inside (its scroll box clips the left): a
+     pressed one's focus is a double line there, told apart from the pressed outline. */
+  .activity :is(th[scope="row"], .activity-sorts td:first-child) button[aria-pressed="true"]:focus-visible {
+    outline-style: double;
+    outline-width: 4px;
+    outline-offset: -4px;
   }
 
   /* The conditions card's bars (review 2026-09-29: both parts vanished): the authorized part filled,
