@@ -61,6 +61,13 @@ export function isSwipe(start, point, slop = TAP_SLOP) {
   return Math.hypot(point.x - start.x, point.y - start.y) > slop;
 }
 
+// Whether a shown tip lies over the page, so a swipe hides it: not one drawn in a sheet's or
+// popover's strip (inStrip), nor one in flow (inFlow: the medicines table's ATC badge tip on a
+// phone, a line of its row's own, owner decision 2026-10-01), which take room instead of covering.
+export function tipCovers({ inStrip, inFlow }) {
+  return !inStrip && !inFlow;
+}
+
 // A tip's height before it shows (its size cannot be measured yet): its text in lines of about half
 // an em per character (13px text on 18px lines), within width less the padding and border (22px),
 // plus the padding and border (14px).

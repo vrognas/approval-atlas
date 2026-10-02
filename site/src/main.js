@@ -82,7 +82,7 @@ import { tabsKeydown } from "./tabs.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipCovers, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
@@ -872,13 +872,31 @@ function setupTips() {
       stripCarriers.set(strip, carrier);
       body.scrollTop += revealBy(carrier.getBoundingClientRect(), scrollArea(body));
     }
+    updateFlow();
+  }
+  // Touch screens: the medicines table's focused ATC badge (a tapped segment) shows its tip in flow,
+  // a line of its stacked row's own under the badge's line, which makes the row taller (owner
+  // decision 2026-10-01: drawn under the badge it covered the next rows): the badge (.tip-flow)
+  // lends its tip to its row (data-flow-tip, drawn by style.css). Only a stacked row (a phone's:
+  // display flex); the wide table keeps the tip anchored. Set in the next frame like the strips, so
+  // a tap elsewhere lands before the row shrinks back.
+  const FLOW_CARRIERS = "#medicines-table td.atc .code[data-tip]";
+  function updateFlow() {
+    const focused = touchScreen.matches ? document.querySelector(`${FLOW_CARRIERS}:focus-within`) : null;
+    const row = focused?.closest("tr");
+    const flowing = row && getComputedStyle(row).display === "flex" ? focused : null;
+    for (const carrier of document.querySelectorAll(`${FLOW_CARRIERS}.tip-flow`)) if (carrier !== flowing) carrier.classList.remove("tip-flow");
+    for (const other of document.querySelectorAll("#medicines-table tr[data-flow-tip]")) if (!flowing || other !== row) delete other.dataset.flowTip;
+    if (!flowing) return;
+    flowing.classList.add("tip-flow");
+    row.dataset.flowTip = flowing.dataset.tip;
   }
   document.addEventListener("close", scheduleStrips, true);
   // Touch screens: a swipe (the page or a scroll box scrolling under the finger) hides the tips, so
   // a tapped one never hangs over the rows scrolled to (bug hunt 2026-10-01: an ATC segment's 212px
   // tip covered the medicines table's next rows); the next tap on a carrier, or focus moving, shows
-  // them again. A tap's own small movement is no swipe (isSwipe()). A tip in a strip covers nothing:
-  // a swipe in its sheet leaves it.
+  // them again. A tap's own small movement is no swipe (isSwipe()). A tip in a strip or in flow (the
+  // medicines table's ATC badge on a phone) covers nothing: a swipe leaves it (tipCovers()).
   let touchStart = null;
   document.addEventListener("touchstart", (event) => {
     const [first] = event.touches;
@@ -888,7 +906,8 @@ function setupTips() {
     const [first] = event.touches;
     if (!touchStart || !first || !isSwipe(touchStart, { x: first.clientX, y: first.clientY })) return;
     touchStart = null;
-    if (!root.classList.contains("tips-hidden") && showing((carrier) => !inStrip(carrier))) hide(null, null);
+    const covers = (carrier) => tipCovers({ inStrip: inStrip(carrier), inFlow: carrier.classList.contains("tip-flow") });
+    if (!root.classList.contains("tips-hidden") && showing(covers)) hide(null, null);
   }, { capture: true, passive: true });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || root.classList.contains("tips-hidden") || !showing()) return;

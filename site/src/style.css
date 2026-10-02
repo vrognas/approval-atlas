@@ -4814,6 +4814,44 @@ td.atc .code + .code {
   margin-top: 6px;
 }
 
+/* Touch screens, the stacked (phone) table (owner decision 2026-10-01): the ATC badge's tip a tap
+   shows is in flow, a line of the row's own under the badge's line, across the row, which grows
+   taller, as with "Show indication", so it covers no other row (bug hunt 2026-10-01: drawn under
+   the badge, 212px, it covered the next rows). The badge draws none; setupTips() (main.js) copies
+   the focused badge's tip to its row (data-flow-tip, .tip-flow on the badge) in the next frame, so
+   a tap elsewhere lands before the row shrinks back. Its line comes before the areas' and the
+   indication toggle's (order). Mouse hover, keyboard focus on a mouse device and the wide table are
+   unchanged. */
+@media (hover: none) {
+  @container (max-width: 599px) {
+    #medicines-table td.atc .code[data-tip]::after {
+      display: none;
+    }
+
+    #medicines-table tr[data-flow-tip] > :is(td.area, td.indication-cell) {
+      order: 1;
+    }
+
+    #medicines-table tr[data-flow-tip]::after {
+      content: attr(data-flow-tip);
+      content: attr(data-flow-tip) / "";
+      flex: 1 0 100%;
+      box-sizing: border-box;
+      padding: 6px 10px;
+      border: 1px solid var(--grid);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      font: 400 var(--font-size-13)/1.125rem var(--font);
+      white-space: pre-line;
+    }
+
+    .tips-hidden #medicines-table tr[data-flow-tip]::after {
+      content: none;
+    }
+  }
+}
+
 .flag {
   padding: 1px 8px;
   border-radius: 999px;

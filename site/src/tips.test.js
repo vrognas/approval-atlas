@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipCovers, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -169,6 +169,15 @@ test("isSwipe: a touch that moved more than 10px from where it started", () => {
   assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 389 }), true);
   assert.equal(isSwipe({ x: 100, y: 400 }, { x: 89, y: 400 }), true);
   assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 395 }, 4), true);
+});
+
+// Owner decision 2026-10-01: on a phone the medicines table's ATC badge tip a tap shows is in flow,
+// a line of its row's own, so like a tip in a sheet's strip it covers nothing, and a swipe leaves
+// it (hiding it would shrink the row under the finger).
+test("tipCovers: a shown tip lies over the page unless it is in a strip or in flow", () => {
+  assert.equal(tipCovers({ inStrip: false, inFlow: false }), true);
+  assert.equal(tipCovers({ inStrip: true, inFlow: false }), false);
+  assert.equal(tipCovers({ inStrip: false, inFlow: true }), false);
 });
 
 // Bug hunt 2026-10-01 (dashboard #3), fix-up: on touch screens a tip a tap shows in a sheet or
