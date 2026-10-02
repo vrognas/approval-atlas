@@ -103,6 +103,20 @@ test("phones: a not-authorized medicine's protection lead keeps its 44px area ov
   assert.match(declarations(phones, "a.lead-link"), /min-height: 44px;.*margin: -10px 0/);
 });
 
+test("phones: the plain-language overview under the document buttons is a 44px text link", () => {
+  // Owner decision 2026-10-01 (design sweep L8): a third 52px button pushed the Protection lead below
+  // a 390x664 screen. One 20px line, 12px under the button above (the 8px gap and 4px), an area 12px
+  // above and below it (20 + 2 x 12 = 44px) reaching no button; the block's padding under it 10px.
+  const lookup = readFileSync(new URL("./lookup.js", import.meta.url), "utf8");
+  assert.match(lookup, /class: key === "overview" \? "doc-button doc-overview" : "doc-button"/);
+  const link = declarations(phones, ".block-documents .doc-button + .doc-button.doc-overview");
+  assert.match(link, /position: relative;.*display: block;.*min-height: 0;.*margin-top: 4px;.*padding: 0;.*border: 0;.*line-height: 1\.25rem/);
+  assert.match(declarations(phones, ".block-documents .doc-button + .doc-button.doc-overview::before"), /content: "";.*position: absolute;.*inset: -12px 0/);
+  assert.match(declarations(flat(css), ".doc-buttons"), /gap: 8px/);
+  assert.match(declarations(phones, ".doc-button + .doc-overview .doc-button-meta"), /display: none/);
+  assert.match(declarations(phones, ".card-block.block-documents:has(.doc-button + .doc-overview)"), /padding-bottom: 10px/);
+});
+
 test("the protection lead's (est.) stays on the line of its years", () => {
   // Review of C3b: after the link, an inline block on phones, a line could break before the no-break
   // space of "(est.)", which then began the next line (44 of the 46 leads with one at 320; Wegovy's

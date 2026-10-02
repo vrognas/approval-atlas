@@ -6283,6 +6283,50 @@ table.activity {
     line-height: 1.3;
   }
 
+  /* Owner decision 2026-10-01 (design sweep L8, Pareto): under the buttons the plain-language
+     overview is a text link (it was a third 52px button), so the Protection lead comes 30px higher.
+     One 20px line 12px under the buttons, without its "PDF · updated" line; an area 12px above and
+     below it makes it 44px tall without taking room (over the gap above it, the block's padding
+     below, 10px here, and its border); its focus ring stays on the line. */
+  .block-documents .doc-button + .doc-button.doc-overview {
+    position: relative;
+    display: block;
+    justify-self: start;
+    min-height: 0;
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: var(--link);
+    font-size: var(--font-size-14);
+    line-height: 1.25rem;
+    text-decoration: underline;
+    text-decoration-color: var(--link-underline);
+  }
+
+  .block-documents .doc-button + .doc-button.doc-overview:hover {
+    background: none;
+    color: var(--link-hover);
+  }
+
+  .block-documents .doc-button + .doc-button.doc-overview::before {
+    content: "";
+    position: absolute;
+    inset: -12px 0;
+  }
+
+  .doc-button + .doc-overview .doc-button-title {
+    font-weight: 400;
+  }
+
+  .doc-button + .doc-overview .doc-button-meta {
+    display: none;
+  }
+
+  .card-block.block-documents:has(.doc-button + .doc-overview) {
+    padding-bottom: 10px;
+  }
+
   /* The Status block's company in one line (Laws of UX, second pass, 2026-09-30: on a phone with
      Safari's bars, 320x568, the EPAR button ended below the first screen for nearly every medicine):
      its label beside the group, and the holder name EMA publishes (or the Union Register's and a

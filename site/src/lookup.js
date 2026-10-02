@@ -181,11 +181,12 @@ function flagMarker(flag) {
 }
 
 // SmPC / EPAR / overview as a full-width secondary button: document name (with the external-link
-// icon), then "PDF · updated {date}".
+// icon), then "PDF · updated {date}". On phones the overview under another button is a text link
+// (style.css .doc-overview; owner decision 2026-10-01).
 function documentButton({ key, row }) {
   if (!row.url?.startsWith("https://")) return null;
   const heading = el("span", { class: "doc-button-title" }, UI.card.buttons[key] ?? UI.documents[key]);
-  return markExternal(el("a", { class: "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
+  return markExternal(el("a", { class: key === "overview" ? "doc-button doc-overview" : "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
     heading,
     el("span", { class: "doc-button-meta" }, UI.card.documentMeta(PDF_URL.test(row.url), formatDate(row.last_updated_date)))), heading);
 }
