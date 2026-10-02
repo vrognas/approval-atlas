@@ -15,9 +15,12 @@
 // owner decision 2026-09-30) a chip is a link to its branch's condition page instead (link option):
 // a tag-like chip that filtered the overview swapped the card for it. Neither pressed nor disabled
 // there; the toolbar stays (its first link the one tab stop, the arrow keys to the others and "+n",
-// whose tooltip needs that keyboard path), as the dashboard's chips.
+// whose tooltip needs that keyboard path), as the dashboard's chips. It looks like a link (owner
+// decision 2026-10-01, B9: it looked like the dashboard's toggles): outlined, unfilled, with the page
+// glyph of the condition page links (links.js openIcon(); style.css).
 import { branchChips, branchIncludedIn, branchSelected } from "./areas.js";
 import { UI } from "./labels.js";
+import { openIcon } from "./links.js";
 
 const CHIP = "button.area-chip";
 
@@ -54,12 +57,13 @@ export function areaChips(term, branches, selected, { link = null } = {}) {
 }
 
 // A card's chip: a link to its branch's condition page (named "Open condition page: C10 Nervous
-// System Diseases", the branch's name its tooltip), else, without a page, a plain label the arrow
-// keys and a tap still reach for its tooltip.
+// System Diseases", the branch's name its tooltip; the page glyph after its code), else, without a
+// page, a plain label the arrow keys and a tap still reach for its tooltip.
 function linkChip(code, name, link) {
   const fill = node("span", "area-chip-fill", code);
   const chip = link(code, name, fill);
   if (chip) {
+    fill.append(openIcon());
     chip.classList.add("area-chip");
     chip.setAttribute("aria-label", UI.areas.chipLink(code, name));
   } else {

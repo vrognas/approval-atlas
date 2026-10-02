@@ -276,40 +276,109 @@ function suggestSubstances(index, folded, words, query) {
   return found.slice(0, MAX_SUGGESTIONS);
 }
 
+// Owner decision 2026-10-01 (design sweep L8, Flow): conditions came only from the 4th letter, as
+// their short words match whole. A one-word query of 3 letters ("pso", "dia", "can") also matches a
+// term whose first word starts with it; such matches rank after the whole-word ones (the group
+// itself comes after medicines and substances). Multi-word queries keep the rule ("car t").
+const PREFIX_LETTERS = 3;
+const prefixWord = (words) => (words.length === 1 && words[0].length === 1 && words[0][0].length === PREFIX_LETTERS && /^\p{L}+$/u.test(words[0][0]) ? words[0][0] : null);
+const startsFirstWord = (tokens, prefix) => prefix !== null && Boolean(tokens[0]?.startsWith(prefix));
+
 function suggestConditions(index, conditions, words) {
+  const prefix = prefixWord(words);
   const matches = new Map();
   for (const entry of index.entryTerms) {
-    if (!matchesWords(entry.tokens, words, true) || !conditions.descriptors.has(entry.ui)) continue;
+    if (!conditions.descriptors.has(entry.ui)) continue;
+    const whole = matchesWords(entry.tokens, words, true);
+    if (!whole && !startsFirstWord(entry.tokens, prefix)) continue;
     const exact = sameWordSet(entry.tokens, words.flat());
     const best = matches.get(entry.ui);
-    if (!best || (exact && !best.exact) || (exact === best.exact && entry.term.length < best.term.length)) matches.set(entry.ui, { term: entry.term, exact });
+    const better = !best || (exact && !best.exact) || (exact === best.exact && ((whole && !best.whole) || (whole === best.whole && entry.term.length < best.term.length)));
+    if (better) matches.set(entry.ui, { term: entry.term, exact, whole });
   }
   return [...matches]
     .map(([ui, best]) => {
       const descriptor = conditions.descriptors.get(ui);
-      const nameMatch = matchesWords(descriptor.nameTokens, words, true);
+      const nameWhole = matchesWords(descriptor.nameTokens, words, true);
+      const nameMatch = nameWhole || startsFirstWord(descriptor.nameTokens, prefix);
       return {
         ui,
         name: descriptor.name,
         synonym: nameMatch ? null : best.term,
         exact: best.exact || sameWordSet(descriptor.nameTokens, words.flat()),
         nameMatch,
+        prefix: !best.whole && !nameWhole,
         authorized: descriptor.authorized,
       };
     })
-    .sort((a, b) => b.exact - a.exact || b.nameMatch - a.nameMatch || b.authorized - a.authorized || byName(a.name, b.name))
+    .sort((a, b) => b.exact - a.exact || a.prefix - b.prefix || b.nameMatch - a.nameMatch || b.authorized - a.authorized || byName(a.name, b.name))
     .slice(0, MAX_SUGGESTIONS);
 }
 
+// Design sweep 2026-10-01 (C7): a medicine's numbers as typed, "EU/1/21/1608" and "EMEA/H/C/005422"
+// found nothing. Its EMA product number ("EMEA/H/C/005422", or its six digits alone) or the EU
+// number on its pack ("EU/1/21/1608", a pack's own "EU/1/21/1608/001"), any case, spaces around the
+// slashes allowed: { kind: "ema" | "eu", number } in the data's form, or null.
+const EMA_NUMBER = /^(?:EMEA\s*\/\s*H\s*\/\s*C\s*\/\s*)?(\d{6})$/i;
+const EU_NUMBER = /^EU\s*\/\s*([12])\s*\/\s*(\d{2})\s*\/\s*(\d{3,4})(?:\s*\/\s*\d{1,4})?$/i;
+export function medicineNumber(query) {
+  const text = query.trim();
+  const ema = EMA_NUMBER.exec(text);
+  if (ema) return { kind: "ema", number: `EMEA/H/C/${ema[1]}` };
+  const eu = EU_NUMBER.exec(text);
+  return eu ? { kind: "eu", number: `EU/${eu[1]}/${eu[2]}/${eu[3]}` } : null;
+}
+
+// An EU number being typed ("EU/", "eu / 1/21"): the search asks for the register's EU numbers
+// then, so they are in by the last digit (main.js).
+export function euNumberStarted(query) {
+  return /^\s*eu\s*\//i.test(query);
+}
+
+// EU number -> EMA product number, from the lookup's register dataset (product number -> its
+// ema_medicine_register_status.json row); built once per dataset.
+const euNumberMaps = new WeakMap();
+export function euNumberIndex(register) {
+  if (!euNumberMaps.has(register)) {
+    euNumberMaps.set(register, new Map([...register.values()].filter((row) => row.eu_number).map((row) => [row.eu_number, row.ema_product_number])));
+  }
+  return euNumberMaps.get(register);
+}
+
+// What a typed number tells: null for a query that is no number (medicineNumber()), else { kind,
+// number, row, state }. state "found": row is its medicine; "notFound": none (an EMA product number
+// not in the search index, which lists every medicine; or an EU number not among the Union
+// Register's, which misses some medicines here, e.g. Glivec, so the copy for it claims no absence);
+// for an EU number, "loading" while the register's numbers load (euNumbers undefined) and
+// "unavailable" when they failed to load (null): nothing can be said about it then (C7 review).
+// euNumbers: euNumberIndex() of the register, undefined or null as above.
+export function numberAnswer(index, query, euNumbers) {
+  const found = medicineNumber(query);
+  if (!found) return null;
+  if (found.kind === "eu" && !euNumbers) return { ...found, row: null, state: euNumbers === undefined ? "loading" : "unavailable" };
+  const row = index.byNumber.get(found.kind === "ema" ? found.number : euNumbers.get(found.number)) ?? null;
+  return { ...found, row, state: row ? "found" : "notFound" };
+}
+
+// The medicine a typed number names: { row (its search-index row), kind, number } or null.
+// euNumbers as numberAnswer()'s (an EU number finds none without them).
+export function medicineByNumber(index, query, euNumbers = null) {
+  const answer = numberAnswer(index, query, euNumbers);
+  return answer?.row ? { row: answer.row, kind: answer.kind, number: answer.number } : null;
+}
+
 // Grouped suggestions; conditions stay empty until their background data (conditions) has loaded.
-export function suggest(index, conditions, query) {
+// numbered: the medicine a typed number names (medicineByNumber(); euNumbers as numberAnswer()'s), or null.
+export function suggest(index, conditions, query, { euNumbers = null } = {}) {
   const folded = foldSearchText(query);
   const words = queryWords(query);
-  if (folded.length < MIN_QUERY || words.length === 0) return { medicines: [], substances: [], conditions: [] };
+  const numbered = medicineByNumber(index, query, euNumbers);
+  if (folded.length < MIN_QUERY || words.length === 0) return { medicines: [], substances: [], conditions: [], numbered };
   return {
-    medicines: suggestMedicines(index, folded, words),
+    medicines: suggestMedicines(index, folded, words).filter((row) => row !== numbered?.row),
     substances: suggestSubstances(index, folded, words, query),
     conditions: conditions ? suggestConditions(index, conditions, words) : [],
+    numbered,
   };
 }
 
@@ -321,13 +390,53 @@ const CLICK_ONLY = new Set(["fuzzy", "text"]);
 // code, or an option marked named: a company group's curated monogram or other name, a condition's
 // exact entry term, a substance's other name), first in group order, else the only suggestion
 // unless it is weak (found only through a derived monogram), else null (a text search). groups:
-// the search box's [{ key, options: [{ label, value, named, weak }] }].
-export function submitChoice(groups, query) {
+// the search box's [{ key, options: [{ label, value, named, weak }] }]. onlyNamed (bug hunt
+// 2026-10-01, lookup.md #2: data still loading): the suggestion the query names only, as more can come.
+export function submitChoice(groups, query, { onlyNamed = false } = {}) {
   const folded = foldSearchText(query);
   const options = groups.filter((group) => !CLICK_ONLY.has(group.key)).flatMap((group) => group.options.map((option) => ({ group: group.key, option })));
-  const named = options.find(({ group, option }) => option.named || foldSearchText(option.label) === folded || (group === "classes" && foldSearchText(option.value) === folded));
-  const choice = named ?? (options.length === 1 && !options[0].option.weak ? options[0] : null);
+  const named = options.find(({ group, option }) => namesQuery(group, option, folded));
+  const only = !onlyNamed && options.length === 1 && !options[0].option.weak ? options[0] : null;
+  const choice = named ?? only;
   return choice ? { group: choice.group, value: choice.option.value } : null;
+}
+
+// Whether a suggestion is the one the folded query names: marked named, its label, or a class's code.
+function namesQuery(groupKey, option, folded) {
+  return Boolean(option.named) || foldSearchText(option.label) === folded || (groupKey === "classes" && foldSearchText(option.value) === folded);
+}
+
+// Bug hunt 2026-10-01 (lookup.md #2) and its review: background data arriving under an open list
+// rebuilt it with new groups above the options shown ("Roche", the company, above Bondenza, 70px
+// down; "msd": a tap aimed at Vorinostat MSD opened Sanofi's company page) and without the
+// "Loading…" note above them (the text search 32px up), so a tap aimed at an option then hit
+// another. The list's layout: next: { groups, note, loading } as the search gives them now;
+// shown: { groups, note } as the open list shows them (groups before collapseGroups()), null for a
+// new list (a keystroke). Returns { groups, note, end }: note above the groups, end under them.
+// A new list: as given, end "Loading…" (loadingNote) while data loads, as what comes then comes
+// there. An open list keeps what it shows in place until the next keystroke sorts it as usual: its
+// groups in their order, each with the options it shows (as they read now: a negative opinion in
+// a medicine's meta; one gone now kept as shown; one new to the group left out), a group gone now
+// kept as shown (did you mean, once something matches); new groups under them, where "Loading…"
+// was, even one the query names (Enter still opens it: submitChoice()); its note kept as it reads
+// now, and a note it did not show under the groups ("Paracetamol (ATC N02BE01): …"), but "No
+// matches" (quietNote), which the status says and a "Did you mean" heading shows.
+export function keepShownList(shown, next, { loadingNote, quietNote }) {
+  const groups = next.groups.filter((group) => group.options.length > 0);
+  const end = next.loading ? loadingNote : null;
+  if (!shown) return { groups, note: next.note ?? null, end };
+  const optionKey = (option) => `${option.pick ?? ""}\u0000${option.value}`;
+  const nextByKey = new Map(groups.map((group) => [group.key, group]));
+  const kept = shown.groups.map((group) => {
+    const now = nextByKey.get(group.key);
+    const current = new Map((now?.options ?? []).map((option) => [optionKey(option), option]));
+    return { ...group, ...now, options: group.options.map((option) => current.get(optionKey(option)) ?? option) };
+  });
+  const shownKeys = new Set(shown.groups.map((group) => group.key));
+  const added = groups.filter((group) => !shownKeys.has(group.key));
+  const note = shown.note ? next.note ?? shown.note : null;
+  const unshown = !shown.note && next.note && next.note !== quietNote ? next.note : null;
+  return { groups: [...kept, ...added], note, end: end ?? unshown };
 }
 
 // Laws of UX, second pass (owner decision 2026-09-30; Hick's Law, Choice Overload): on a phone, with
@@ -337,14 +446,17 @@ export function submitChoice(groups, query) {
 // search box's). A group one longer than the limit is shown whole ("Show 1 more" would take the same
 // row); "did you mean", the indication-text search and the recently viewed list are never collapsed.
 // An expanded group keeps that order, so the options it adds follow those shown. groups: the search
-// box's; query: the one the labels are compared with.
+// box's; query: the one the labels are compared with. Desktop (owner decision 2026-10-01, design
+// sweep L8, Choice Overload: "ins" listed 29 options, Companies and the text search below the 438px
+// box) collapses likewise at DESKTOP_GROUP_LIMIT.
 export const PHONE_GROUP_LIMIT = 3;
+export const DESKTOP_GROUP_LIMIT = 5;
 const COLLAPSIBLE = new Set(["medicines", "substances", "conditions", "classes", "companies"]);
 export function collapseGroups(groups, query, { limit = PHONE_GROUP_LIMIT, expanded = new Set() } = {}) {
   const folded = foldSearchText(query);
   return groups.map((group) => {
     if (!COLLAPSIBLE.has(group.key)) return { ...group, hidden: 0 };
-    const named = (option) => option.named || foldSearchText(option.label) === folded || (group.key === "classes" && foldSearchText(option.value) === folded);
+    const named = (option) => namesQuery(group.key, option, folded);
     const options = [...group.options.filter(named), ...group.options.filter((option) => !named(option))];
     if (expanded.has(group.key) || options.length <= limit + 1) return { ...group, options, hidden: 0 };
     return { ...group, options: options.slice(0, limit), hidden: options.length - limit };

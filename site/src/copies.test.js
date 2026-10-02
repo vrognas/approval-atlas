@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { copiesLinePlan, copiesSummary, countedFromName, curatedTypeDiffers, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceEquivalents, substanceGroup, substanceSetCount } from "./copies.js";
+import { existsSync, readFileSync } from "node:fs";
+import { copiesLinePlan, copiesSummary, countedFromName, curatedTypeDiffers, equivalentSetKey, firstApprovalShown, followsReference, setGroups, siblingSubstances, substanceAuthorizedCount, substanceEquivalents, substanceGroup, substanceSetCount } from "./copies.js";
+import { buildLookupIndex } from "./search.js";
 
 // ema_substance_equivalents.json rows (hand-checked pairs; both directions in the file).
 const pair = (substance_key, equivalent_key) => ({
@@ -376,6 +378,38 @@ test("substanceGroup: the substance's medicines with its other spellings', their
   assert.equal(own.rows.length, 2);
   assert.equal(substanceGroup([SPRYCEL], [{ substance: { products: [SPRYCEL] } }]).rows.length, 1);
   assert.equal(substanceGroup([FYZOCLAD], []).first, null);
+});
+
+// Bug hunt 2026-10-01, review (lookup.md #8): the search's "dasatinib" and "dasatinib (anhydrous)"
+// suggestions each said "1 authorized" while either card says 2: they count as the card does.
+test("substanceAuthorizedCount: the card's authorized count, every spelling of the substance joined", () => {
+  const substances = new Map([
+    ["dasatinib", { key: "dasatinib", name: "dasatinib", products: [DASATINIB_ACCORD_HEALTHCARE] }],
+    ["dasatinib (anhydrous)", { key: "dasatinib (anhydrous)", name: "dasatinib (anhydrous)", products: [SPRYCEL, DASATINIB_ACCORD] }],
+  ]);
+  const equivalents = substanceEquivalents(EQUIVALENT_ROWS);
+  assert.equal(substanceAuthorizedCount("dasatinib", substances, equivalents), 2);
+  assert.equal(substanceAuthorizedCount("dasatinib (anhydrous)", substances, equivalents), 2);
+  // Before the equivalents have loaded (or without the file): the spelling's own.
+  assert.equal(substanceAuthorizedCount("dasatinib", substances, new Map()), 1);
+  assert.equal(substanceAuthorizedCount("dasatinib (anhydrous)", substances, new Map()), 1);
+  assert.equal(substanceAuthorizedCount("metformin", substances, equivalents), 0);
+});
+
+const dataFile = (name) => new URL(`../public/data/${name}`, import.meta.url);
+const indexFile = dataFile("ema_search_index.json");
+const equivalentsFile = dataFile("ema_substance_equivalents.json");
+test("substanceAuthorizedCount on the real data: each spelling of dasatinib counts both, as its card", {
+  skip: existsSync(indexFile) && existsSync(equivalentsFile) ? false : "site/public/data not found: run the pipeline first",
+}, () => {
+  const read = (file) => JSON.parse(readFileSync(file, "utf8"));
+  const { substances } = buildLookupIndex(read(indexFile), []);
+  const equivalents = substanceEquivalents(read(equivalentsFile));
+  const authorized = (key) => [key, ...(equivalents.get(key) ?? [])].flatMap((other) => substances.get(other)?.products ?? []).filter((row) => row.medicine_status === "Authorised");
+  for (const key of ["dasatinib", "dasatinib (anhydrous)"]) {
+    assert.equal(substanceAuthorizedCount(key, substances, equivalents), new Set(authorized(key)).size);
+    assert.ok(substanceAuthorizedCount(key, substances, equivalents) > substanceAuthorizedCount(key, substances, new Map()));
+  }
 });
 
 test("siblingSubstances: the other keys of the same substance with their medicines and first approval", () => {

@@ -11,7 +11,7 @@ import { UI } from "./labels.js";
 import { ORPHAN_ONLY, barShares, orphanEndsOf } from "./protection-calendar.js";
 
 const COPY = UI.protectionCalendar;
-// The selected year lists its first medicines; "Show all" the rest.
+// The selected year lists its first medicines; "Show {n} more" the rest.
 const LIST_LIMIT = 20;
 
 function node(tag, className, ...children) {
@@ -22,8 +22,8 @@ function node(tag, className, ...children) {
 }
 
 // view: { status: "loading" | "failed" | "ready", and when ready: buckets, unclear, unclearLatest,
-// orphanOnly (protectionEnding()'s), running, authorized, filtered (any filter active), selected
-// (a bucket key, ORPHAN_ONLY or null), showAll }.
+// orphanOnly (protectionEnding()'s), running, filtered (any filter active), selected (a bucket
+// key, ORPHAN_ONLY or null), showAll }.
 // actions: onSelect(key) (toggles the year or the orphan-only list), onShowAll(),
 // medicineLink(product), companyOf(product) (nodes, or null), substancesOf(product) (text).
 export function renderProtectionCalendar(container, view, actions = {}) {
@@ -34,8 +34,9 @@ export function renderProtectionCalendar(container, view, actions = {}) {
     container.append(node("p", "muted", view.status === "failed" ? UI.lookup.notAvailable : COPY.loading));
     return;
   }
-  const { buckets, unclear, unclearLatest, orphanOnly, running, authorized, filtered, selected, showAll } = view;
-  container.append(node("p", "pc-summary", running ? COPY.summary(running, authorized, filtered) : COPY.none(filtered)));
+  const { buckets, unclear, unclearLatest, orphanOnly, running, filtered, selected, showAll } = view;
+  // How many have it running is in the (i) panel (main.js; design sweep 2026-10-01, C2: a sentence
+  // here repeated the takeaway's count); with none, the card says so here.
   if (running) {
     container.append(
       node("ul", "legend pc-legend",
@@ -43,6 +44,8 @@ export function renderProtectionCalendar(container, view, actions = {}) {
         node("li", null, node("span", "swatch pc-swatch pc-orphan"), COPY.legend.orphan(buckets.flatMap((bucket) => bucket.orphanEnds)))),
       ...bars(buckets, selected, actions).filter(Boolean),
     );
+  } else {
+    container.append(node("p", "pc-summary", COPY.none(filtered)));
   }
   if (unclear) container.append(node("p", "muted pc-unclear", COPY.unclear(unclear, unclearLatest)));
   if (orphanOnly.length) container.append(orphanOnlyLine(orphanOnly, selected === ORPHAN_ONLY, actions));
@@ -119,7 +122,7 @@ function orphanOnlyList(list, orphanOnly, showAll, actions) {
   ]);
 }
 
-// A titled list of medicines (the first LIST_LIMIT, then "Show all"): name, company, substances,
+// A titled list of medicines (the first LIST_LIMIT, then "Show {n} more"): name, company, substances,
 // then lines(row). Links carry focus keys, so a re-render keeps a focused one.
 function listOf(list, titleText, rows, showAll, { onShowAll, medicineLink, companyOf, substancesOf }, lines) {
   const title = list.appendChild(node("h3", "pc-list-title", titleText));
@@ -141,7 +144,8 @@ function listOf(list, titleText, rows, showAll, { onShowAll, medicineLink, compa
       lines(row)));
   }
   if (shown.length < rows.length) {
-    const more = list.appendChild(node("button", "more", COPY.showAll(rows.length)));
+    // A list end as every list end: a text button, "Show {n} more" (design sweep 2026-10-01, B6).
+    const more = list.appendChild(node("button", "text-button pc-more", COPY.showMore(rows.length - shown.length)));
     more.type = "button";
     more.dataset.focusKey = "show-all";
     more.addEventListener("click", () => {

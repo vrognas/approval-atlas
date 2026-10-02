@@ -118,20 +118,20 @@ test("Who is active where: the company with the most medicines, and how many in 
   assert.equal(activityTakeaway(many, columns), "20 companies have the most medicines (2 each).");
 });
 
-test("Protection: how many may lose market protection (est.) within two years, and orphan exclusivity after; never a patent", () => {
+test("Protection: how many may lose market protection\u00a0(est.) within two years, and orphan exclusivity after; never a patent", () => {
   const row = (min, orphanEnd = null) => ({ min, orphanEnd });
   const orphan = { end: "2033-01-01", source: "computed" };
   const rows = [row("2026-11-01"), row("2027-03-01", orphan), row("2028-12-31"), row("2029-01-01", orphan), row("2031-05-01")];
-  assert.equal(protectionTakeaway(rows, 2026), "Of the 5 medicines with market protection running (est.), 3 may lose it by the end of 2028, 1 of them with orphan market exclusivity (est.) running later.");
-  assert.equal(protectionTakeaway([row("2026-11-01"), row("2027-01-01")], 2026), "Of the 2 medicines with market protection running (est.), 2 may lose it by the end of 2028.");
-  assert.equal(protectionTakeaway([row("2026-11-01")], 2026), "The 1 medicine with market protection running (est.) may lose it by the end of 2028.");
-  assert.equal(protectionTakeaway([row("2026-11-01", orphan)], 2026), "The 1 medicine with market protection running (est.) may lose it by the end of 2028, with orphan market exclusivity (est.) running later.");
-  assert.equal(protectionTakeaway([row("2026-11-01", orphan), row("2027-01-01", orphan)], 2026), "Of the 2 medicines with market protection running (est.), 2 may lose it by the end of 2028, all of them with orphan market exclusivity (est.) running later.");
+  assert.equal(protectionTakeaway(rows, 2026), "Of the 5 medicines with market protection running\u00a0(est.), 3 may lose it by the end of 2028, 1 of them with orphan market exclusivity\u00a0(est.) running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01"), row("2027-01-01")], 2026), "Of the 2 medicines with market protection running\u00a0(est.), 2 may lose it by the end of 2028.");
+  assert.equal(protectionTakeaway([row("2026-11-01")], 2026), "The 1 medicine with market protection running\u00a0(est.) may lose it by the end of 2028.");
+  assert.equal(protectionTakeaway([row("2026-11-01", orphan)], 2026), "The 1 medicine with market protection running\u00a0(est.) may lose it by the end of 2028, with orphan market exclusivity\u00a0(est.) running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01", orphan), row("2027-01-01", orphan)], 2026), "Of the 2 medicines with market protection running\u00a0(est.), 2 may lose it by the end of 2028, all of them with orphan market exclusivity\u00a0(est.) running later.");
   // Owner decision 2026-09-30: orphan ends the Union Register publishes are exact, no "(est.)"; mixed ones "(partly est.)".
   const exact = { end: "2031-01-01", source: "register" };
-  assert.equal(protectionTakeaway([row("2026-11-01", exact)], 2026), "The 1 medicine with market protection running (est.) may lose it by the end of 2028, with orphan market exclusivity running later.");
-  assert.equal(protectionTakeaway([row("2026-11-01", exact), row("2027-01-01", orphan)], 2026), "Of the 2 medicines with market protection running (est.), 2 may lose it by the end of 2028, all of them with orphan market exclusivity (partly est.) running later.");
-  assert.equal(protectionTakeaway([row("2026-11-01"), row("2031-05-01")], 2026), "Of the 2 medicines with market protection running (est.), 1 may lose it by the end of 2028.");
+  assert.equal(protectionTakeaway([row("2026-11-01", exact)], 2026), "The 1 medicine with market protection running\u00a0(est.) may lose it by the end of 2028, with orphan market exclusivity running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01", exact), row("2027-01-01", orphan)], 2026), "Of the 2 medicines with market protection running\u00a0(est.), 2 may lose it by the end of 2028, all of them with orphan market exclusivity\u00a0(partly est.) running later.");
+  assert.equal(protectionTakeaway([row("2026-11-01"), row("2031-05-01")], 2026), "Of the 2 medicines with market protection running\u00a0(est.), 1 may lose it by the end of 2028.");
   assert.equal(protectionTakeaway([row("2031-05-01")], 2026), "The 1 medicine with market protection running is not estimated to lose it by the end of 2028.");
   assert.equal(protectionTakeaway([row("2031-05-01"), row("2032-01-01")], 2026), "None of the 2 medicines with market protection running is estimated to lose it by the end of 2028.");
   assert.equal(protectionTakeaway([], 2026), null);

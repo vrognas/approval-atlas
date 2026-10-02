@@ -86,3 +86,28 @@ test("tabs: index.html has the tablist, its tabs and their panels wired both way
   }
   assert.ok(!html.includes('aria-current="page"'));
 });
+
+// Design sweep 2026-10-01, L3 (Doherty Threshold): a tap shows the tab selected and its panel before
+// the tab's cards render (after that paint), so the tap is answered at once on a phone's CPU too.
+test("tabs: a tap selects the tab and shows its panel at once, its render after the paint", () => {
+  const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(main, /renderTabs\(tab\);\s*quickTab = true;\s*setState\(\{ tab \}, true, true\);/);
+  assert.match(main, /if \(afterPaint\) \{\s*setTimeout\(/);
+  // A panel drawn for another view is busy until its cards are drawn again.
+  assert.match(main, /panel\.dataset\.drawnFor !== panelView\(\)\) panel\.setAttribute\("aria-busy", "true"\)/);
+  assert.match(main, /panel\.dataset\.drawnFor = panelView\(\);\s*panel\.removeAttribute\("aria-busy"\);/);
+  // Dimmed only once that takes 150 ms (an animation: a hidden panel has no style to transition from).
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(css, /\.tab-panel\[aria-busy="true"\] \{\s*animation: tab-busy 1ms linear 150ms forwards;/);
+});
+
+// Owner decision 2026-10-01 (design sweep B2) and its fix-up: on the Medicines tab the page header's
+// Download CSV is unseen but keeps its box (hidden, it let the lead beside it widen and rewrap, and
+// the tab strip moved 22-46px under the pointer at 721-834px).
+test("tabs: the page header's Download CSV keeps its box on the Medicines tab", () => {
+  const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(main, /pageDownload\.classList\.toggle\("tab-off", tab === "medicines"\);/);
+  assert.doesNotMatch(main, /pageDownload\.hidden/);
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(css, /\.page-head \.download\.tab-off \{\s*visibility: hidden;\s*\}/);
+});

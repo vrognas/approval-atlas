@@ -22,6 +22,9 @@ import {
   normalizeYearRange,
   patchFilterParams,
   patchIsSet,
+  scheduleUrlWrite,
+  setHistoryWriter,
+  showsEveryStatus,
   togglePatch,
   withoutLookup,
 } from "./url.js";
@@ -222,6 +225,22 @@ test("companies: older holder links still load, keys load as the tree selects th
   assert.equal(encodeState(load("mah=c.roche").state).toString(), "mah=g.roche");
 });
 
+// Design sweep C8 review: a link from before the fix, filtering by Primavax's holder as EMA's file
+// spells it ("Pasteur Mà¨rieux MSD"), was ignored once the site showed the name fixed.
+test("companies: an older link with a holder name EMA spells with a broken encoding selects the fixed row", () => {
+  const companies = {
+    ...domain,
+    mahs: new Set([...domain.mahs, "g.pasteur-merieux-msd", "Pasteur Mérieux MSD"]),
+    mahCanonical: (value) => (value === "Pasteur Mérieux MSD" ? ["g.pasteur-merieux-msd"] : [value]),
+  };
+  const load = (search) => decodeState(new URLSearchParams(search), companies);
+  for (const search of ["mah=Pasteur%20M%C3%A0%C2%A8rieux%20MSD", "mah=Pasteur+M%C3%A9rieux+MSD"]) {
+    assert.deepEqual(load(search), { state: { ...structuredClone(DEFAULT_STATE), mah: ["g.pasteur-merieux-msd"] }, dropped: [] }, search);
+  }
+  // A value not in the data is reported as the link spells it.
+  assert.deepEqual(load("mah=Nobody%20M%C3%A0%C2%A8rieux").dropped, [{ key: "mah", value: "Nobody Mà¨rieux" }]);
+});
+
 // Modality (M2 phase 2): group and modality keys in one list, combined with OR; a modality under a
 // selected group is dropped (as toggleModality()); unknown values are dropped and reported.
 test("modalities: repeated keys, a modality under a selected group dropped, unknown values reported", () => {
@@ -314,17 +333,78 @@ const lookupOf = (search) => decodeLookup(new URLSearchParams(search));
 
 test("lookup keys decode trimmed, with empty values as absent", () => {
   assert.deepEqual(lookupOf(""), DEFAULT_LOOKUP);
-  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943", co: null });
+  assert.deepEqual(lookupOf("q=+breast+cancer+&cond=D001943&med=&sub=%20"), { q: "breast cancer", med: null, sub: null, cond: "D001943", co: null, show: null });
   assert.equal(lookupOf("co=+g.roche+").co, "g.roche");
   assert.equal(lookupOf(`q=${"x".repeat(LOOKUP_QUERY_MAX + 20)}`).q.length, LOOKUP_QUERY_MAX);
 });
 
 test("lookup keys come first in the URL, then the filters; values round-trip", () => {
-  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924", co: "g.roche" };
+  const lookup = { q: "type 2 diabetes", med: "EMEA/H/C/003820", sub: "tenofovir disoproxil", cond: "D003924", co: "g.roche", show: null };
   const query = encodeUrl({ ...structuredClone(DEFAULT_STATE), ...lookup, mah: ["A & B, C"] }).toString();
   assert.equal(query, "q=type+2+diabetes&med=EMEA%2FH%2FC%2F003820&sub=tenofovir+disoproxil&cond=D003924&co=g.roche&mah=A+%26+B%2C+C");
   assert.deepEqual(lookupOf(query), lookup);
   assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP }).toString(), "");
+});
+
+// Navigation fixes (lookup.md #7): "Show all statuses" on a condition, text-search or company page
+// is in the URL (show=all), so a reload and a shared link keep it; no other view has the choice.
+test("show=all: every status on a condition, text-search or company page, nowhere else", () => {
+  for (const search of ["cond=D011565", "q=psoriasis", "co=g.roche"]) {
+    assert.equal(lookupOf(`${search}&show=all`).show, STATUS_ALL, search);
+    assert.equal(lookupOf(search).show, null, search);
+    const state = { ...structuredClone(DEFAULT_STATE), ...lookupOf(`${search}&show=all`) };
+    assert.equal(showsEveryStatus(state), true, search);
+    assert.equal(encodeUrl(state).toString(), `${search}&show=all`);
+  }
+  // A medicine card, a substance card or the overview has no such choice: dropped.
+  for (const search of ["med=M1&show=all", "sub=adalimumab&show=all", "show=all", "cond=D1&med=M1&show=all"]) {
+    assert.equal(lookupOf(search).show, null, search);
+    assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...lookupOf(search) }).toString().includes("show"), false, search);
+  }
+  assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, med: "M1", show: STATUS_ALL }).toString(), "med=M1");
+  // Other values are no choice; the key comes after the lookup keys, before the filters; it is not
+  // a filter (the overview's status filter is status=…).
+  assert.equal(lookupOf("cond=D1&show=yes").show, null);
+  assert.equal(encodeUrl({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, cond: "D1", show: STATUS_ALL, type: ["Generic"] }).toString(), "cond=D1&show=all&type=Generic");
+  assert.equal(withoutLookup(new URLSearchParams("cond=D1&show=all&type=Generic")).toString(), "type=Generic");
+  assert.deepEqual(decode("cond=D1&show=all"), { state: structuredClone(DEFAULT_STATE), dropped: [] });
+  // Opening another view starts at the authorized medicines.
+  assert.equal(DEFAULT_LOOKUP.show, null);
+});
+
+// Navigation fixes (dashboard.md #1): a push is written at once, before the new view's render
+// scrolls to its heading, so the entry left keeps where it was; replaces wait for the frame.
+test("scheduleUrlWrite pushes at once and replaces once per frame", (t) => {
+  const frames = [];
+  const writes = [];
+  const location = { pathname: "/", search: "", hash: "" };
+  globalThis.requestAnimationFrame = (callback) => frames.push(callback);
+  globalThis.window = { location };
+  t.after(() => {
+    delete globalThis.requestAnimationFrame;
+    delete globalThis.window;
+    setHistoryWriter(null);
+  });
+  setHistoryWriter({
+    push: (url) => { writes.push(["push", url]); location.search = url.slice(1); },
+    replace: (url) => { writes.push(["replace", url]); location.search = url.slice(1); },
+  });
+  const state = (patch) => ({ ...structuredClone(DEFAULT_STATE), ...DEFAULT_LOOKUP, ...patch });
+  scheduleUrlWrite(state({ type: ["Generic"] }));
+  assert.deepEqual(writes, []);
+  // A push in the same frame: written at once, with the latest state; the pending replace is dropped.
+  scheduleUrlWrite(state({ type: ["Generic"], med: "M1" }), true);
+  assert.deepEqual(writes, [["push", "/?med=M1&type=Generic"]]);
+  for (const frame of frames.splice(0)) frame();
+  assert.deepEqual(writes.length, 1);
+  // Replaces: at most one per frame, the latest state.
+  scheduleUrlWrite(state({ med: "M1", type: ["Biosimilar"] }));
+  scheduleUrlWrite(state({ med: "M1", type: ["Orphan"] }));
+  for (const frame of frames.splice(0)) frame();
+  assert.deepEqual(writes.slice(1), [["replace", "/?med=M1&type=Orphan"]]);
+  // The URL already shown is not written again.
+  scheduleUrlWrite(state({ med: "M1", type: ["Orphan"] }), true);
+  assert.equal(writes.length, 2);
 });
 
 test("before the filter domain is known, the URL's filter part is passed through verbatim", () => {

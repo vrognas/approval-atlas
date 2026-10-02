@@ -2,7 +2,7 @@
 // a kicker, an answer headline and (medicine, substance) its blocks (F · Spacious, phase 4).
 // Data beyond the first-load search index is loaded on demand and the panel re-renders when it
 // arrives ("Loading…" until then). All text goes in via text nodes: EMA text contains "<" and ">".
-import { authorizedFirst, isAuthorizedNow, statusDate } from "./approvals.js";
+import { authorizedFirst, isListedAuthorizedNow, statusDate } from "./approvals.js";
 import { areaChips, fillTerm } from "./area-chips.js";
 import { termBranches } from "./areas.js";
 import { atcBadgeTip, atcCode, atcLadder, atcLevelNames, atcOrigin, atcPrefixCounts, atcPrefixes, atcRowIncomplete, buildAtcExplanations, mainAtcCode } from "./atc.js";
@@ -24,6 +24,7 @@ import {
   atcOriginFlag,
   atcOriginText,
   formatDate,
+  holderName,
   indicationLead,
   statusDateLine,
   statusKind,
@@ -38,10 +39,13 @@ import { addMeshTip, buildMeshNotes } from "./mesh-notes.js";
 import { buildModalityTree, modalityLines, modalitySource } from "./modalities.js";
 import { espacenetUrl, glanceIsEstimate, protectionGlance, protectionSummary } from "./protection.js";
 import { endingByYear, protectionEnding } from "./protection-calendar.js";
-import { buildConditions, conditionPhrases, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, textMatches, textPhrases } from "./search.js";
+import {
+  buildConditions, conditionPhrases, didYouMean, euNumberIndex, foldSearchText, knownSubstance, medicineNumber, numberAnswer, searchWithFallback, suggest,
+  textMatches, textPhrases,
+} from "./search.js";
 import { renderTimeline } from "./timeline.js";
 import { toolbarKeydown } from "./toolbar.js";
-import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState } from "./url.js";
+import { DEFAULT_LOOKUP, DEFAULT_STATE, classState, encodeUrl, lookupView, modalityState, showsEveryStatus } from "./url.js";
 
 const formatNumber = new Intl.NumberFormat("en-US").format;
 // The medicine card's therapeutic areas shown in its Status block before "and n more" (areaNames()).
@@ -177,11 +181,12 @@ function flagMarker(flag) {
 }
 
 // SmPC / EPAR / overview as a full-width secondary button: document name (with the external-link
-// icon), then "PDF · updated {date}".
+// icon), then "PDF · updated {date}". On phones the overview under another button is a text link
+// (style.css .doc-overview; owner decision 2026-10-01).
 function documentButton({ key, row }) {
   if (!row.url?.startsWith("https://")) return null;
   const heading = el("span", { class: "doc-button-title" }, UI.card.buttons[key] ?? UI.documents[key]);
-  return markExternal(el("a", { class: "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
+  return markExternal(el("a", { class: key === "overview" ? "doc-button doc-overview" : "doc-button", href: row.url, target: "_blank", rel: "noopener noreferrer" },
     heading,
     el("span", { class: "doc-button-meta" }, UI.card.documentMeta(PDF_URL.test(row.url), formatDate(row.last_updated_date)))), heading);
 }
@@ -195,11 +200,15 @@ const byDate = (direction) => (a, b) => {
 };
 const familyOf = (row) => (row.substance_keys?.length ? [...new Set(row.substance_keys)].sort().join("|") : null);
 
+// The datasets the search's conditions, drug classes and companies come from (searchLoading()).
+const SEARCH_DATASETS = ["conditions", "atc", "atcCounts", "companies"];
+
 // meshVersion: the MeSH version in meta.json ("MeSH 2026"), credited under a condition's definition.
 // decision: the days from a positive opinion to the EU decision, { median, p90 } (meta.json
 // opinion_to_decision; step 4, #12; p90 null when unknown), null in older data.
+// onShowAll(checked): the "Show all statuses" choice changed (main.js writes it into the URL).
 export function createLookup(panel, {
-  index, loadFile, navigate, snapshotDate, meshVersion = null, decision = null,
+  index, loadFile, navigate, onShowAll, snapshotDate, meshVersion = null, decision = null,
 }) {
   const DATASETS = {
     medicines: [["ema_medicines.json"], (rows) => new Map(rows.map((row) => [row.ema_product_number, row]))],
@@ -213,9 +222,11 @@ export function createLookup(panel, {
       explanations: buildAtcExplanations(explanationRows),
     })],
     // Medicines currently authorized per ATC prefix, no filters: ladder counts, drug-class suggestions.
-    atcCounts: [["ema_medicines.json", "ema_medicine_atc_codes.json"], (medicines, rows) => {
+    // From the search index, not ema_medicines.json (bug hunt 2026-10-01: that 515 KB file came last
+    // on slow Wi-Fi, about 3 s after the classes' names, and the suggestions waited for it).
+    atcCounts: [["ema_medicine_atc_codes.json"], (rows) => {
       const byProduct = groupBy(rows, "ema_product_number");
-      return atcPrefixCounts(medicines.filter(isAuthorizedNow).map((medicine) => ({ atc: byProduct.get(medicine.ema_product_number) ?? [] })));
+      return atcPrefixCounts([...index.byNumber.values()].filter(isListedAuthorizedNow).map((row) => ({ atc: byProduct.get(row.ema_product_number) ?? [] })));
     }],
     areas: [["ema_medicine_therapeutic_areas.json"], (rows) => groupBy(rows, "ema_product_number")],
     // With the terms' MeSH branches, for their chips (areas.js termBranches()).
@@ -260,8 +271,9 @@ export function createLookup(panel, {
   const listeners = [];
   let lastState = null;
   let renderedKey = null;
+  // "Show all statuses" on a condition, text-search or company page: the URL's show=all (url.js
+  // showsEveryStatus()), as last rendered.
   let showAll = false;
-  let showAllKey = null; // the lookup view the "Show all statuses" choice belongs to
   let focusNext = false;
   let timeline = null;
   const resizeObserver = new ResizeObserver(() => {
@@ -275,7 +287,18 @@ export function createLookup(panel, {
     for (const listener of listeners) listener(name);
     if (lastState) render(lastState, true);
   });
-  const { need } = datasets;
+  // The datasets the view shown asked for (render(), and its own controls since), so main.js can
+  // wait for them before restoring a place in it (loading()); asking: those of the render running.
+  let asked = new Set();
+  let asking = null;
+  const need = (name) => {
+    (asking ?? asked).add(name);
+    return datasets.need(name);
+  };
+  // The disclosure keys the render running opens (details[data-key]), and those Back, Forward or a
+  // reload reopen in the view shown that are not in it yet (render()).
+  let opening = new Set();
+  let reopening = new Set();
   const ready = (value) => value !== undefined && value !== FAILED;
 
   // Document rows by product for the buttons and the PI / EPAR links: the primary-documents file,
@@ -290,7 +313,12 @@ export function createLookup(panel, {
   // Branch chips (area-chips.js): links to their branch's condition page here (termLinks()); the
   // arrow keys move within a condition's chips and "+n".
   panel.addEventListener("keydown", (event) => toolbarKeydown(event, ".area-chip, .area-more"));
-  const pending = (value) => el("p", { class: "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
+  // A failure in the ink, waiting muted (design sweep 2026-10-01, B11: they looked alike).
+  const pending = (value) => el("p", { class: value === FAILED ? "muted state-error" : "muted" }, value === FAILED ? UI.lookup.notAvailable : UI.lookup.loading);
+
+  // EU number -> EMA product number (search.js euNumberIndex()) of the register dataset as need()
+  // gives it: undefined while it loads, null when it failed (search.js numberAnswer(); C7 review).
+  const euNumbersOf = (register) => (register === undefined ? undefined : ready(register) ? euNumberIndex(register) : null);
 
   // The substance equivalents (step 3): none when the file is missing (older data), undefined while
   // it loads. setsOf(): the search index's medicines by substance set, kept for one equivalents value.
@@ -341,7 +369,7 @@ export function createLookup(panel, {
     const companies = need("companies");
     const entry = ready(companies) ? companies.entry(number) : null;
     if (entry) return holderDisplay(entry, { link: companyLink });
-    return ready(medicines) ? medicines.get(number)?.marketing_authorisation_developer_applicant_holder ?? NOT_STATED : null;
+    return ready(medicines) ? holderName(medicines.get(number)?.marketing_authorisation_developer_applicant_holder) ?? NOT_STATED : null;
   }
 
   // A provenance line: the note, then a link to its evidence and, for a sponsor renamed since
@@ -612,9 +640,10 @@ export function createLookup(panel, {
     const facts = areas ? el("dl", { class: "block-facts" }, blockFact(UI.card.areas, areas)) : null;
     if (!ready(medicines)) return cardBlock("indication", pending(medicines), teaser, facts);
     if (!text && !facts && !teaser) return null;
-    const { lead, more } = text ? indicationLead(text) : {};
+    // A text that only refers to the product information is said in the site's voice, muted (C6).
+    const { lead, more, referral } = text ? indicationLead(text) : {};
     return cardBlock("indication",
-      text ? el("p", { class: "indication-lead" }, lead) : null,
+      text ? el("p", { class: referral ? "indication-lead muted" : "indication-lead" }, lead) : null,
       more ? el("details", { class: "indication", "data-key": "indication" }, el("summary", null, UI.card.fullIndication), el("p", null, text)) : null,
       teaser,
       facts);
@@ -754,7 +783,8 @@ export function createLookup(panel, {
   // The Protection and copies block's lead (F · Spacious, phase 4; the answer strip's "Protection
   // (est.)" cell before, step 3, #7): the estimate's short form, "(est.)" after "Market protection until …" (glanceIsEstimate()),
   // as a link to the estimate in More details, then, muted, a copy's reference's years and orphan
-  // exclusivity still running. Medicines never approved have no estimate (null).
+  // exclusivity still running; for a medicine not authorized now, in the body type with its status
+  // (C3b). Medicines never approved have no estimate (null).
   function protectionLead(row) {
     if (!row.marketing_authorisation_date) return null;
     const protection = need("protection");
@@ -769,13 +799,22 @@ export function createLookup(panel, {
     const { label } = UI.protection.glance;
     const labelled = glance.value.startsWith(`${label} `);
     const shown = labelled ? glance.value.slice(label.length + 1) : glance.value;
+    // A medicine not authorized now (owner decision 2026-10-01, C3b): the whole lead in the body type
+    // (it is no answer to "is it protected?" for a medicine that cannot be sold), then its status:
+    // "Market protection until 2031–2032 (est.); Skysona is withdrawn."
+    const authorizedNow = statusKind(row.medicine_status) === "authorized";
+    const link = el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
+      labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
+      shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link));
+    const estimate = glanceIsEstimate(protectionRow) ? el("span", { class: "lead-estimate" }, UI.card.estimate) : null;
     return el("div", { class: "protection-lead" },
-      el("p", { class: "answer-value" },
+      el("p", { class: authorizedNow ? "answer-value" : "lead-plain" },
         labelled ? [el("span", { class: "lead-label", "aria-hidden": "true" }, label), " "] : null,
-        el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
-          labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
-          shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
-        glanceIsEstimate(protectionRow) ? [" ", el("span", { class: "lead-estimate" }, UI.card.estimate)] : null),
+        // "(est.)" on the line of the years (design sweep 2026-10-01, C1), in one span with the link
+        // that does not wrap: after the link, an inline block on phones, a line could break before
+        // its no-break space (review of C3b: 44 of the 46 leads with one at 320).
+        estimate ? el("span", { class: "lead-keep" }, link, estimate) : link,
+        authorizedNow ? null : UI.protection.glance.notAuthorized(row.name_of_medicine, row.medicine_status)),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
       glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,
       glance.orphan ? el("p", { class: "lead-note" }, glance.orphan) : null);
@@ -831,7 +870,7 @@ export function createLookup(panel, {
         ? partNodes(UI.copies.line(summary.copies.map((entry) => ({
           ...entry, first: { name: entry.first.name_of_medicine, date: entry.first.marketing_authorisation_date },
         })), first ? substanceLabel : null), (position) => ({ med: summary.copies[position].first.ema_product_number }))
-        : UI.copies.none);
+        : UI.copies.none(statusKind(row.medicine_status) === "authorized"));
     }
     if (same) {
       // A first approval no longer authorized says so (Qdenga: Dengvaxia, since withdrawn).
@@ -877,10 +916,11 @@ export function createLookup(panel, {
     // The buttons come from the primary-documents file (quickDocumentRows()); the documents list
     // needs the full index (need("documents")): at once where that file cannot give the buttons (a
     // later namesake's documents to leave out) or gives none (the list is the Documents block),
-    // else when More details opens or the page is idle (main.js). Once loaded, all comes from it.
+    // else when More details opens (this render reopening it too) or the page is idle (main.js).
+    // Once loaded, all comes from it.
     const quick = later ? null : quickDocumentRows();
     const quickPrimary = quick && ready(quick) ? primaryDocuments(groupDocuments(quick.get(number) ?? []), row.medicine_status).primary : null;
-    const documents = quick !== undefined && !quickPrimary?.length ? need("documents") : datasets.peek("documents");
+    const documents = (quick !== undefined && !quickPrimary?.length) || opening.has("more-details") ? need("documents") : datasets.peek("documents");
     const split = ready(documents) ? splitNamesakeDocuments(documents.get(number) ?? [], later?.marketing_authorisation_date ?? null) : null;
     const groups = split ? groupDocuments(split.own) : [];
     const full = primaryDocuments(groups, row.medicine_status);
@@ -1020,14 +1060,18 @@ export function createLookup(panel, {
   }
 
   // A condition page's MeSH definition: NLM's full scope note, its tree numbers and the credit NLM
-  // asks for (with the MeSH version); nothing without a note (or while the notes load).
+  // asks for (with the MeSH version), in a closed disclosure (owner decision 2026-10-01, L2: as a
+  // paragraph it put Psoriasis's first medicine below a 390x664 screen); nothing without a note (or
+  // while the notes load). Kept open across re-renders and history (data-key), its summary focused
+  // again after a re-render (data-focus-key).
   function meshDefinition(ui) {
     const notes = need("meshNotes");
     const note = ready(notes) ? notes.byUi.get(ui) : null;
     if (!note?.scope_note) return null;
-    return el("p", { class: "mesh-definition" },
-      el("span", { class: "mesh-definition-label" }, UI.mesh.definition), note.scope_note, " ",
-      el("span", { class: "muted" }, note.tree_numbers?.length ? `${UI.mesh.treeNumbers(note.tree_numbers)} ` : null, UI.mesh.source(meshVersion)));
+    return el("details", { class: "mesh-definition", "data-key": "mesh-definition" },
+      el("summary", { "data-focus-key": "mesh-definition" }, UI.mesh.definition),
+      el("p", null, note.scope_note, " ",
+        el("span", { class: "muted" }, note.tree_numbers?.length ? `${UI.mesh.treeNumbers(note.tree_numbers)} ` : null, UI.mesh.source(meshVersion))));
   }
 
   // entries: search-index rows (+ snippet, + terms: the narrower conditions a row is tagged with, +
@@ -1073,7 +1117,9 @@ export function createLookup(panel, {
             el("p", { class: "snippet" }, snippet.before, el("mark", null, snippet.match), snippet.after)))
           : null);
     });
-    return el("div", { class: areas ? "result-table with-areas" : "result-table" }, el("table", { role: "table", "aria-labelledby": labelledBy },
+    // ATC badges in the neutral slate, as in the medicines table: the code names the class (design
+    // sweep 2026-10-01, B1; style.css .neutral-badges).
+    return el("div", { class: areas ? "result-table with-areas neutral-badges" : "result-table neutral-badges" }, el("table", { role: "table", "aria-labelledby": labelledBy },
       el("thead", { role: "rowgroup" }, el("tr", { role: "row" }, headers.map((header) => el("th", { scope: "col", role: "columnheader" }, header)))),
       bodies));
   }
@@ -1081,11 +1127,12 @@ export function createLookup(panel, {
   // Fewer dated medicines than this: no timeline (a month axis with a dot or two says nothing).
   const TIMELINE_MIN = 3;
 
-  // A surface block holding the timeline and its caption; none with fewer than TIMELINE_MIN dated
-  // rows. mentioned: product numbers found only in indication texts (hollow dots; a legend then
-  // names the dots of each kind present: tagged by EMA, filled; mentioned, hollow). caveat: a
-  // sentence after the caption (condition and indication-text pages: the dots are first approvals;
-  // step 4, #17).
+  // A surface block holding the timeline under its heading and caption; none with fewer than
+  // TIMELINE_MIN dated rows. mentioned: product numbers found only in indication texts (hollow dots;
+  // a legend then names the dots of each kind present: tagged by EMA, filled; mentioned, hollow).
+  // caveat: a sentence after the caption (condition and indication-text pages: the dots are first
+  // approvals; step 4, #17). A heading of its own (design sweep 2026-10-01, L2): on condition, text
+  // and substance pages it follows the lists, and would otherwise read as part of the last one.
   function timelineBlock(rows, medicines, mentioned = new Set(), caveat = null) {
     if (rows.filter((row) => row.marketing_authorisation_date).length < TIMELINE_MIN) return null;
     const container = el("div", { class: "timeline chart" });
@@ -1094,7 +1141,7 @@ export function createLookup(panel, {
     const holderText = (number) => {
       const entry = ready(companies) ? companies.entry(number) : null;
       if (entry?.group) return UI.companies.tipHolder(entry.group.name, entry.holder);
-      return ready(medicines) ? medicines.get(number)?.marketing_authorisation_developer_applicant_holder ?? null : null;
+      return ready(medicines) ? holderName(medicines.get(number)?.marketing_authorisation_developer_applicant_holder) ?? null : null;
     };
     const items = rows.map((row) => ({
       id: row.ema_product_number,
@@ -1114,6 +1161,7 @@ export function createLookup(panel, {
         el("li", null, el("span", { class: "dot-key hollow", "aria-hidden": "true" }), UI.timeline.legend.mentioned))
       : null;
     return el("div", { class: "card-section" },
+      el("h2", null, UI.timeline.title),
       el("p", { class: "muted timeline-caption" }, UI.timeline.caption, caveat ? [" ", caveat] : null),
       legend,
       container);
@@ -1179,13 +1227,15 @@ export function createLookup(panel, {
         el("dl", { class: "block-facts" },
           blockFact(UI.card.company, holders ?? pending(companies)),
           blockFact(UI.modality.label, substanceModality(rows, key)))))),
-      timelineBlock(rows, medicines),
       el("h2", { id: "results-substance" }, siblings.length ? UI.substance.productsListed(rows.length, substance.name) : UI.substance.products(rows.length)),
       // What each medicine is for (its therapeutic areas); the substance line only where it differs.
       resultTable(rows.map((row) => ({ row })), medicines, "results-substance", {
         areas: true,
         sameSubstance: (row) => row.substance_keys?.length === 1 && row.substance_keys[0] === key,
       }),
+      // The list first, then its timeline (design sweep 2026-10-01, L2: adalimumab's first row was
+      // at 932px on a 390px phone, under the 282px timeline).
+      timelineBlock(rows, medicines),
       substanceAtc(rows, atc, atcCounts));
   }
 
@@ -1209,6 +1259,12 @@ export function createLookup(panel, {
   // authorized now, that class), then, when no name matched, what can be searched, what cannot yet
   // and what is not in the data. hidden: matches of another status.
   function emptyState(query, hidden) {
+    // A typed EU or EMA product number (design sweep 2026-10-01, C7; here through a link or the text
+    // search option): the medicine it names, or that none was found (search.js numberAnswer()). An
+    // EU number waits for the register's numbers ("Loading…", not "Nothing … matches": C7 review),
+    // and reads as any query when they failed to load.
+    const number = numberAnswer(index, query, medicineNumber(query)?.kind === "eu" ? euNumbersOf(need("register")) : null);
+    if (number?.state === "loading") return pending(undefined);
     const [atc, atcCounts, conditions] = [need("atc"), need("atcCounts"), need("conditions")];
     const copy = UI.lookup.empty;
     const known = knownSubstance(index, query, ready(atc) ? atc.classes : []);
@@ -1228,21 +1284,28 @@ export function createLookup(panel, {
       patch: entry.kind === "medicine" ? { med: entry.value } : entry.kind === "substance" ? { sub: entry.value } : { q: entry.value },
     }));
     const links = (items) => items.map((item, position) => [position ? ", " : "", internalLink(item.label, item.patch)]);
-    const lead = hidden ? copy.otherStatuses(hidden)
+    const numbered = number?.state === "found" ? number : null;
+    const numberLead = numbered
+      ? [copy.numberOf(number.kind, number.number), internalLink(numbered.row.name_of_medicine, { med: numbered.row.ema_product_number }), "."]
+      : number?.state === "notFound" ? copy.noNumber(number.kind, number.number) : null;
+    const lead = numberLead ?? (hidden ? copy.otherStatuses(hidden)
       : names.length ? copy.noText(query)
         : known ? copy.known(atcName(known.name), known.code)
-          : copy.nothing(query);
+          : copy.nothing(query));
     return el("div", { class: "empty-state" },
       el("p", { class: "empty-lead" }, lead),
+      // Why an EU number found none need not mean there is none (C7 review).
+      number?.state === "notFound" && number.kind === "eu" ? el("p", null, copy.euNumberSource) : null,
       known && classCount
         ? el("p", null, copy.sameClass, internalLink(atcClassLabel(level4, atc.names.get(level4) ?? null), classState(level4)), ` (${UI.lookup.classMeta(classCount)})`)
         : null,
       names.length ? el("p", null, copy.names, links(names)) : null,
       fuzzy.length ? el("p", null, copy.didYouMean, links(fuzzy)) : null,
-      hidden || names.length ? null : el("ul", { class: "empty-list" },
+      hidden || names.length || numbered ? null : el("ul", { class: "empty-list" },
         el("li", null, copy.searchable),
         el("li", null, copy.notYet),
-        el("li", null, copy.notInData, externalLink(copy.registers, NATIONAL_REGISTERS_URL), copy.registersAfter)));
+        // The pack's EU number as a way in, unless the query was a number itself.
+        el("li", null, copy.notInData, externalLink(copy.registers, NATIONAL_REGISTERS_URL), copy.registersAfter, number ? null : copy.packNumber)));
   }
 
   function conditionResults(ui, query) {
@@ -1288,10 +1351,7 @@ export function createLookup(panel, {
     // A text search with nothing to show says why (step 2, #2), once its related conditions are known.
     const empty = !descriptor && mentioned?.length === 0 && related.length === 0 && conditions !== undefined;
     const toggle = el("label", { class: "toggle-all" },
-      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
-        showAll = event.currentTarget.checked;
-        render(lastState, true);
-      } }),
+      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => onShowAll(event.currentTarget.checked) }),
       " ", UI.condition.showAll);
     const mentionedRows = (mentioned ?? []).map((entry) => entry.row);
     // Step 4 (#10): the tagged medicines' distinct active substances (equivalent spellings joined),
@@ -1306,12 +1366,13 @@ export function createLookup(panel, {
       variant ? el("p", { class: "dek" }, UI.condition.alsoSearched(variant)) : null,
       // Both counts of the lists below (phase 4f): tagged by EMA, and only mentioned in the indication.
       descriptor ? el("p", { class: "dek" }, UI.condition.counts(taggedShown.length, mentioned?.length ?? null, showAll, substances)) : null,
+      // Underlined text links joined by "; ", as condition links everywhere else (design sweep
+      // 2026-10-01, B11: outlined pills here).
       related.length ? el("p", { class: "related" }, `${UI.condition.relatedConditions}: `,
-        related.map((condition) => [conditionLink(condition.name, condition.ui), " "])) : null,
+        related.map((condition, position) => [position ? "; " : "", conditionLink(condition.name, condition.ui)])) : null,
       // What the condition is: NLM's scope note (owner request 2026-09-28).
       descriptor ? meshDefinition(ui) : null,
       toggle,
-      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined, UI.timeline.firstApproval),
       descriptor
         ? [el("h2", { id: "results-tagged" }, UI.condition.taggedOwn(descriptor.name, own.length)), resultTable(own.map((row) => ({ row })), medicines, "results-tagged")]
         : null,
@@ -1321,7 +1382,10 @@ export function createLookup(panel, {
       el("h2", { id: "results-mentioned" }, mentioned
         ? `${descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned} (${mentioned.length})`
         : descriptor ? UI.condition.alsoMentioned : UI.condition.mentioned),
-      mentioned ? (empty ? emptyState(query, matches.length) : resultTable(mentioned, medicines, "results-mentioned")) : pending(medicines));
+      mentioned ? (empty ? emptyState(query, matches.length) : resultTable(mentioned, medicines, "results-mentioned")) : pending(medicines),
+      // The lists first, then their timeline (design sweep 2026-10-01, L2: Psoriasis's first medicine
+      // was at 1,202px on a 390px phone, under the 409px timeline).
+      timelineBlock([...taggedShown, ...mentionedRows], medicines, descriptor ? new Set(mentionedRows.map((row) => row.ema_product_number)) : undefined, UI.timeline.firstApproval));
   }
 
   // "a, b and c" of nodes (or node lists).
@@ -1421,7 +1485,8 @@ export function createLookup(panel, {
       atcMix = rows.length ? el("section", { class: "card-section" },
         el("h2", null, UI.companies.atc),
         el("p", { class: "muted" }, UI.companies.atcHint),
-        el("ol", { class: "condition-list company-mix" }, rows.map(([code, count]) => mixRow(
+        // Slate letters, as the breakdown's and the Companies tab's (B1).
+        el("ol", { class: "condition-list company-mix neutral-badges" }, rows.map(([code, count]) => mixRow(
           internalLink([el("span", { class: `letter-badge hue-${atcHue(code)}` }, code), " ", el("span", null, atcName(atc.names.get(code)))],
             filtered(companies.canonical(key), { atc: [code], tab: "classes" }), "mix-link", UI.companies.mixLink(atcClassLabel(code, atc.names.get(code)), count)),
           count, rows[0][1])))) : null;
@@ -1445,7 +1510,7 @@ export function createLookup(panel, {
     // runs on by the year it ends; unclear estimates only counted.
     const protection = need("protection");
     const endingCopy = UI.protectionCalendar;
-    let protectionEndingPart = el("p", { class: "muted" }, protection === FAILED ? UI.lookup.notAvailable : endingCopy.loading);
+    let protectionEndingPart = el("p", { class: protection === FAILED ? "muted state-error" : "muted" }, protection === FAILED ? UI.lookup.notAvailable : endingCopy.loading);
     if (ready(protection)) {
       const { rows: ending, orphanOnly, unclear, unclearLatest } = protectionEnding(anyAuthorized ? authorizedFirst(all, false).shown : [], protection, snapshotDate);
       const orphanNote = (item) => (item.orphanOnly ? endingCopy.company.orphanOnly(item.orphanEnd) : item.orphanEnd ? endingCopy.company.orphan(item.orphanEnd) : null);
@@ -1468,10 +1533,7 @@ export function createLookup(panel, {
       protectionEndingPart);
 
     const toggle = anyAuthorized ? el("label", { class: "toggle-all" },
-      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => {
-        showAll = event.currentTarget.checked;
-        render(lastState, true);
-      } }),
+      el("input", { type: "checkbox", checked: showAll, "data-focus-key": "show-all", onchange: (event) => onShowAll(event.currentTarget.checked) }),
       " ", UI.condition.showAll) : null;
     const gleifUrl = row.lei ? `https://search.gleif.org/#/record/${encodeURIComponent(row.lei)}` : null;
     // Ownership (provenance; none in older data files): the curated notes on its members
@@ -1517,36 +1579,41 @@ export function createLookup(panel, {
       sources);
   }
 
-  // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle changed.
-  function render(state, force = false) {
+  // Re-renders only when the lookup view changed, a dataset arrived (force) or the status toggle
+  // changed (the URL's show=all: a new search, condition or company page starts at Authorized only;
+  // Back from a medicine card opened from it keeps the choice). reopen: the disclosure keys
+  // (details[data-key]) a view made anew opens, as Back, Forward or a reload left them (main.js,
+  // history-scroll.js: the card is as tall as when its place was kept).
+  function render(state, force = false, reopen = null) {
     lastState = state;
     const view = lookupView(state);
     const key = JSON.stringify(view);
     const sameView = key === renderedKey;
-    if (!force && sameView) return;
+    const everyStatus = showsEveryStatus(state);
+    if (!force && sameView && everyStatus === showAll) return;
     renderedKey = key;
+    showAll = everyStatus;
     // A new view retries data that failed to load, and, once, an optional file that was missing,
     // each when a card or list next needs it (not forced re-renders: that would loop).
-    if (!force) datasets.retry();
-    // A new search, substance or condition starts at Authorized only; opening a medicine card
-    // and coming back keeps the choice.
-    if (view.kind !== null && view.kind !== "medicine" && key !== showAllKey) {
-      showAll = false;
-      showAllKey = key;
-    }
-    // Same view re-rendered: keep open disclosures and the focused control.
-    const open = new Set(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []);
+    if (!force && !sameView) datasets.retry();
+    // Same view re-rendered: keep open disclosures and the focused control. Another: those to reopen,
+    // each once it is in the card (a reload's card can get it only once its data has loaded).
+    if (!sameView) reopening = new Set(reopen ?? []);
+    const open = new Set([...(sameView ? [...panel.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key) : []), ...reopening]);
     const focusKey = sameView && panel.contains(document.activeElement) ? document.activeElement.dataset.focusKey : undefined;
     if (!sameView) pendingJump = null;
     timeline = null;
     resizeObserver.disconnect();
     panel.hidden = view.kind === null;
+    asked = new Set();
     if (view.kind === null) {
       panel.replaceChildren();
       return;
     }
     // Data the card cannot handle is logged and the card says so, instead of staying on "Loading…".
     let content;
+    asking = new Set();
+    opening = open;
     try {
       content = view.kind === "medicine" ? medicineCard(view.value)
         : view.kind === "substance" ? substanceCard(view.value)
@@ -1555,10 +1622,17 @@ export function createLookup(panel, {
     } catch (error) {
       console.error(error);
       timeline = null;
-      content = el("article", { class: "card" }, kicker(view.kind), el("p", { class: "muted" }, UI.lookup.notAvailable));
+      content = el("article", { class: "card" }, kicker(view.kind), el("p", { class: "muted state-error" }, UI.lookup.notAvailable));
     }
+    asked = asking;
+    asking = null;
+    opening = new Set();
     panel.replaceChildren(content);
-    for (const details of panel.querySelectorAll("details[data-key]")) if (open.has(details.dataset.key)) details.open = true;
+    for (const details of panel.querySelectorAll("details[data-key]")) {
+      if (!open.has(details.dataset.key)) continue;
+      details.open = true;
+      reopening.delete(details.dataset.key);
+    }
     if (timeline) {
       drawTimeline();
       resizeObserver.observe(timeline.container);
@@ -1586,7 +1660,11 @@ export function createLookup(panel, {
 
   return {
     render,
-    need,
+    // The page's own loads (main.js: the dashboard's, when idle) are not the view's (loading()).
+    need: datasets.need,
+    // Whether a dataset the view shown asked for is still loading (main.js waits before restoring a
+    // place in it).
+    loading: () => [...asked].some((name) => datasets.peek(name) === undefined),
     title: viewTitle,
     conditions: () => (ready(datasets.peek("conditions")) ? datasets.peek("conditions") : null),
     // Company groups (the "Companies" suggestions): null until need("companies") has loaded them.
@@ -1607,6 +1685,15 @@ export function createLookup(panel, {
     // Draft (loss-of-exclusivity calendar): the protection dataset as need() gives it (undefined
     // while loading or not asked for yet, FAILED), without starting a load.
     protection: () => datasets.peek("protection"),
+    // The datasets the search suggests from besides the index (conditions, drug classes, companies;
+    // bug hunt 2026-10-01): whether one is still loading (asking for any not loaded, or failed before
+    // a new view), and a Promise settled once none is (main.js: "Loading…", and Enter waits). extra:
+    // datasets a query needs besides them (a typed EU number: the register; design sweep C7).
+    searchLoading: (extra = []) => [...SEARCH_DATASETS, ...extra].filter((name) => datasets.need(name) === undefined).length > 0,
+    searchSettled: (extra = []) => datasets.settled([...SEARCH_DATASETS, ...extra]),
+    // EU number -> EMA product number (search.js euNumberIndex()), asking for the register;
+    // undefined while it loads, null when it failed (euNumbersOf()).
+    euNumbers: () => euNumbersOf(datasets.need("register")),
     // Drug-class suggestions need the class names and the current counts: null until both have loaded.
     atcClasses: () => {
       const [atc, counts] = [datasets.peek("atc"), datasets.peek("atcCounts")];

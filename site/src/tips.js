@@ -41,6 +41,33 @@ export function tipAbove(carrier, height, clip) {
   return height > below && above > below;
 }
 
+// How far (px) a scroll box scrolls down so that row ({ top, bottom }) ends EDGE inside clip (its
+// visible area, { top, bottom }), never so far that the row starts above it; 0 when it shows (bug
+// hunt 2026-10-01, fix-up: a sheet's tip strip takes its height from the body, which can leave the
+// tapped row under the body's visible bottom).
+export function revealBy(row, clip) {
+  const below = row.bottom - (clip.bottom - EDGE);
+  const above = row.top - (clip.top + EDGE);
+  return Math.max(0, Math.min(below, above));
+}
+
+// The distance (CSS px) a touch may move and still be a tap: beyond it, a swipe that scrolls the page
+// or a scroll box (Chrome's touch slop is about 15px).
+const TAP_SLOP = 10;
+
+// Whether a touch at point, having started at start ({ x, y }), is a swipe (bug hunt 2026-10-01: a
+// swipe hides the tips on touch screens, so a tapped one never hangs over the rows scrolled to).
+export function isSwipe(start, point, slop = TAP_SLOP) {
+  return Math.hypot(point.x - start.x, point.y - start.y) > slop;
+}
+
+// Whether a shown tip lies over the page, so a swipe hides it: not one drawn in a sheet's or
+// popover's strip (inStrip), nor one in flow (inFlow: the medicines table's ATC badge tip on a
+// phone, a line of its row's own, owner decision 2026-10-01), which take room instead of covering.
+export function tipCovers({ inStrip, inFlow }) {
+  return !inStrip && !inFlow;
+}
+
 // A tip's height before it shows (its size cannot be measured yet): its text in lines of about half
 // an em per character (13px text on 18px lines), within width less the padding and border (22px),
 // plus the padding and border (14px).
