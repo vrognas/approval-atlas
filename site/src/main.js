@@ -1449,6 +1449,12 @@ function startDashboard(meta, [
       panel.hidden = panel.dataset.tabPanel !== tab;
       if (!panel.hidden && panel.dataset.drawnFor !== panelView()) panel.setAttribute("aria-busy", "true");
     }
+    // One Download CSV on the Medicines tab, the table card's (owner decision 2026-10-01, design
+    // sweep B2: the page header's stood on the same screen); the page header's on the other tabs.
+    // Focus on it (Back or Forward onto the tab) goes to the table's.
+    const pageDownload = $("#page-download");
+    if (tab === "medicines" && document.activeElement === pageDownload) $("#table-download").focus({ preventScroll: true });
+    pageDownload.hidden = tab === "medicines";
     const current = tabButtons.find((button) => button.dataset.tab === tab);
     if (tabShown !== tab) {
       tabShown = tab;
