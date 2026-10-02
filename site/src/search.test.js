@@ -349,10 +349,48 @@ test("substances suggested are counted by their authorized medicines, as conditi
 });
 
 test("conditions: every word must start a word of one entry term; words under 4 characters match whole", () => {
-  assert.deepEqual(suggest(index, conditions, "hiv").conditions.map((c) => c.ui), ["D5"]);
+  // A one-word 3-letter query also matches a first word's start (owner decision 2026-10-01, below):
+  // "hivx" (D6), after the whole word.
+  assert.deepEqual(suggest(index, conditions, "hiv").conditions.map((c) => c.ui), ["D5", "D6"]);
+  assert.deepEqual(suggest(index, conditions, "hiv inf").conditions, []);
   assert.deepEqual(suggest(index, conditions, "rheum arth").conditions.map((c) => c.ui), ["D4"]);
   assert.deepEqual(suggest(index, conditions, "depressive disorders").conditions, []);
   assert.deepEqual(suggest(index, conditions, "hiv").medicines, []);
+});
+
+// Owner decision 2026-10-01 (design sweep L8): no condition was suggested before the 4th letter.
+test("conditions: a one-word 3-letter query matches a term's first word by its start, ranked after whole words", () => {
+  const terms = [
+    { entry_term: "psoriasis", mesh_descriptor_ui: "C1" },
+    { entry_term: "arthritis, psoriatic", mesh_descriptor_ui: "C2" },
+    { entry_term: "psoriatic arthritis", mesh_descriptor_ui: "C2" },
+    { entry_term: "influenza, human", mesh_descriptor_ui: "C3" },
+    { entry_term: "human flu", mesh_descriptor_ui: "C3" },
+    { entry_term: "fluorosis, dental", mesh_descriptor_ui: "C4" },
+    { entry_term: "lupus erythematosus, cutaneous", mesh_descriptor_ui: "C5" },
+  ];
+  const named = [["C1", "Psoriasis"], ["C2", "Arthritis, Psoriatic"], ["C3", "Influenza, Human"], ["C4", "Fluorosis, Dental"], ["C5", "Lupus Erythematosus, Cutaneous"]];
+  const own = buildLookupIndex(searchRows, terms);
+  const ownConditions = buildConditions(own, {
+    descriptorAreaRows: named.map(([ui, name]) => ({ mesh_descriptor_ui: ui, mesh_descriptor_name: name, therapeutic_area_mesh: name })),
+    // Fluorosis has more authorized medicines than influenza: the whole word still ranks first.
+    areaRows: [["P1", "Psoriasis"], ["P2", "Arthritis, Psoriatic"], ["P4", "Fluorosis, Dental"], ["P5", "Fluorosis, Dental"]].map(([number, term]) => ({ ema_product_number: number, therapeutic_area_mesh: term })),
+    branchRows: [],
+  });
+  const found = (query) => suggest(own, ownConditions, query).conditions.map((c) => [c.ui, c.synonym, c.prefix]);
+  // The name's first word, else an entry term's (named in the meta line).
+  assert.deepEqual(found("pso"), [["C1", null, true], ["C2", "psoriatic arthritis", true]]);
+  assert.deepEqual(found("PSO"), found("pso"));
+  assert.deepEqual(found("flu"), [["C3", "human flu", false], ["C4", null, true]]);
+  // Only a first word: "ery" starts the second word of C5's term.
+  assert.deepEqual(found("ery"), []);
+  // Two letters, several words, a digit: the rule as before (short words whole).
+  for (const query of ["ps", "pso art", "art pso", "h1n", "fl1"]) assert.deepEqual(found(query), [], query);
+  // From 4 letters any word's start matches, as before.
+  assert.deepEqual(found("psor").map(([ui]) => ui).sort(), ["C1", "C2"]);
+  assert.deepEqual(found("eryt").map(([ui]) => ui), ["C5"]);
+  // A 3-letter start names no condition (exact): Enter opens one by it only as the only suggestion.
+  assert.equal(suggest(own, ownConditions, "pso").conditions.some((c) => c.exact), false);
 });
 
 test("conditions rank exact folded match > descriptor-name match > authorized count", () => {

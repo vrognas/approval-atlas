@@ -276,28 +276,42 @@ function suggestSubstances(index, folded, words, query) {
   return found.slice(0, MAX_SUGGESTIONS);
 }
 
+// Owner decision 2026-10-01 (design sweep L8, Flow): conditions came only from the 4th letter, as
+// their short words match whole. A one-word query of 3 letters ("pso", "dia", "can") also matches a
+// term whose first word starts with it; such matches rank after the whole-word ones (the group
+// itself comes after medicines and substances). Multi-word queries keep the rule ("car t").
+const PREFIX_LETTERS = 3;
+const prefixWord = (words) => (words.length === 1 && words[0].length === 1 && words[0][0].length === PREFIX_LETTERS && /^\p{L}+$/u.test(words[0][0]) ? words[0][0] : null);
+const startsFirstWord = (tokens, prefix) => prefix !== null && Boolean(tokens[0]?.startsWith(prefix));
+
 function suggestConditions(index, conditions, words) {
+  const prefix = prefixWord(words);
   const matches = new Map();
   for (const entry of index.entryTerms) {
-    if (!matchesWords(entry.tokens, words, true) || !conditions.descriptors.has(entry.ui)) continue;
+    if (!conditions.descriptors.has(entry.ui)) continue;
+    const whole = matchesWords(entry.tokens, words, true);
+    if (!whole && !startsFirstWord(entry.tokens, prefix)) continue;
     const exact = sameWordSet(entry.tokens, words.flat());
     const best = matches.get(entry.ui);
-    if (!best || (exact && !best.exact) || (exact === best.exact && entry.term.length < best.term.length)) matches.set(entry.ui, { term: entry.term, exact });
+    const better = !best || (exact && !best.exact) || (exact === best.exact && ((whole && !best.whole) || (whole === best.whole && entry.term.length < best.term.length)));
+    if (better) matches.set(entry.ui, { term: entry.term, exact, whole });
   }
   return [...matches]
     .map(([ui, best]) => {
       const descriptor = conditions.descriptors.get(ui);
-      const nameMatch = matchesWords(descriptor.nameTokens, words, true);
+      const nameWhole = matchesWords(descriptor.nameTokens, words, true);
+      const nameMatch = nameWhole || startsFirstWord(descriptor.nameTokens, prefix);
       return {
         ui,
         name: descriptor.name,
         synonym: nameMatch ? null : best.term,
         exact: best.exact || sameWordSet(descriptor.nameTokens, words.flat()),
         nameMatch,
+        prefix: !best.whole && !nameWhole,
         authorized: descriptor.authorized,
       };
     })
-    .sort((a, b) => b.exact - a.exact || b.nameMatch - a.nameMatch || b.authorized - a.authorized || byName(a.name, b.name))
+    .sort((a, b) => b.exact - a.exact || a.prefix - b.prefix || b.nameMatch - a.nameMatch || b.authorized - a.authorized || byName(a.name, b.name))
     .slice(0, MAX_SUGGESTIONS);
 }
 
