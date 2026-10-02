@@ -2872,9 +2872,18 @@ input::placeholder {
 
 /* Prose at most about 70 characters wide (design sweep 2026-10-01, A3: the (i) panels' notes ran
    175-185 characters a line at 1440; the takeaways, captions, notes, About and the footer too). */
-.card-info p,
-#register-note {
+.card-info p {
   max-width: 70ch;
+}
+
+/* A one-sentence note and the footer's lines (a credits list, the intended use, the licences;
+   footer > p): 80ch, balanced (design sweep recheck 2026-10-02: at 70ch the Union Register note left
+   "Union Register." alone on its second line, and the footer took three lines more than before the
+   cap). The note fits one line at 1440 and 1024; a note or line that wraps never ends on a lone word
+   or two. */
+#register-note {
+  max-width: 80ch;
+  text-wrap: balance;
 }
 
 /* The per-year legend's heading, stacked by status (owner call 2026-09-30: "Status today"). */
@@ -7733,6 +7742,12 @@ footer::before {
 footer p {
   max-width: 70ch;
   margin: 4px 0;
+}
+
+/* The footer's own three lines (not About's prose): 80ch, balanced, as #register-note. */
+footer > p {
+  max-width: 80ch;
+  text-wrap: balance;
 }
 
 .about {
