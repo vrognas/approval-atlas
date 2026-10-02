@@ -1619,3 +1619,306 @@ test_that("a resumed batch keeps its effort; one saved without it is high", {
     )
   }
 })
+
+# Gold analysis of 2026-10-02 (.remember/efficacy/gold-analysis-20261002.md):
+# the verifier's fixes that keep "never guess", whole rows through
+# check_answer_row() to the site file.
+fixture_pages <- function(name) {
+  strsplit(read_fixture_text(name), "\f", fixed = TRUE)[[1]]
+}
+
+alex_irc_row <- function(...) {
+  row <- list(
+    trial = "BO28984 (ALEX)", endpoint = "PFS (IRC)", regimen = "Alecensa",
+    comparator = "crizotinib", comparator_column_label = "Crizotinib",
+    is_primary = "no", value = "0.50", ci_low = "0.36", ci_high = "0.70",
+    ci_level = "95", arm_treatment = "25.7", arm_control = "10.4",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]", "Median (months) 10.4 25.7"
+    )
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  pages <- fixture_pages("alecensa-pi-5.1.layout.txt")
+  do.call(row_to_site, c(list(pages), row))
+}
+
+test_that("arm values a table places under their columns ship", {
+  # Opus high hid 91 rows as arms_not_verified: the label in the header's
+  # quote, the medians in their own.
+  irc <- alex_irc_row()
+  expect_null(irc$failed)
+  expect_equal(irc$record$flags, character())
+  expect_equal(irc$record$arm_control, "10.4")
+  expect_equal(nrow(irc$site), 1L)
+  expect_equal(irc$site$arm_treatment, "25.7")
+  expect_equal(irc$site$arm_control, "10.4")
+  expect_equal(irc$site$comparator_column_label, "Crizotinib")
+  # Swapped, the row never ships: the table puts 10.4 under Crizotinib.
+  swapped <- alex_irc_row(arm_treatment = "10.4", arm_control = "25.7")
+  expect_match(swapped$failed$errors[[1]], "arms swapped", all = FALSE)
+})
+
+test_that("a stitched header quote is dropped with every arm field", {
+  # IMpower150 OS, Opus high: the value, CI and p-value verified, the header
+  # quote stitched to a row lines below failed the row.
+  impower150 <- row_to_site(
+    fixture_pages("tecentriq-pi-5.1.layout.txt"),
+    trial = "IMpower150", endpoint = "OS", regimen = "Arm B",
+    comparator = "Arm C", comparator_column_label = "Arm C",
+    n_treatment = "400", n_control = "400", is_primary = "no",
+    value = "0.76", ci_low = "0.63", ci_high = "0.93", ci_level = "95",
+    p_value = "0.006", arm_treatment = "19.8", arm_control = "14.9",
+    arm_measure = "Median time to events (months)",
+    quotes = list(
+      "Stratified hazard ratio‡^ (95% CI) 0.85 (0.71, 1.03) 0.76 (0.63, 0.93)",
+      "Arm B Arm C OS interim analysis* n = 402 n = 400 n = 400",
+      "p-value 0.0983 0.006"
+    )
+  )
+  expect_null(impower150$failed)
+  expect_true("quote_dropped" %in% impower150$record$flags)
+  for (field in efficacy_arm_fields) {
+    expect_null(impower150$record[[field]], info = field)
+  }
+  expect_false(any(grepl("Arm B Arm C", unlist(impower150$record$quotes))))
+  expect_equal(impower150$rows$review, "flagged")
+  expect_equal(nrow(impower150$site), 0L)
+})
+
+test_that("a word broken at a line-end hyphen is found, and its text", {
+  # CA20977T, Opus high: "platinum-based" printed "platinum-" / "based".
+  page <- paste(
+    "5.1 Pharmacodynamic properties",
+    "Randomised trial (CA20977T)",
+    paste(
+      "A total of 461 patients were randomised to receive either nivolumab",
+      "in combination with platinum-"
+    ),
+    paste(
+      "based chemotherapy followed by nivolumab monotherapy (n = 229) or",
+      "platinum-based chemotherapy"
+    ),
+    "followed by placebo (n = 232). EFS: HR = 0.58 (97.36% CI: 0.42, 0.81).",
+    sep = "\n"
+  )
+  ca20977t <- row_to_site(
+    c(page, "5.2 Pharmacokinetic properties"),
+    trial = "CA20977T", endpoint = "EFS",
+    regimen = "nivolumab in combination with platinum-based chemotherapy",
+    comparator = "platinum-based chemotherapy", value = "0.58",
+    ci_low = "0.42", ci_high = "0.81", ci_level = "95",
+    quotes = list(
+      "EFS: HR = 0.58 (97.36% CI: 0.42, 0.81)",
+      paste(
+        "nivolumab in combination with platinum-based chemotherapy followed",
+        "by nivolumab monotherapy (n = 229)"
+      )
+    )
+  )
+  expect_null(ca20977t$failed)
+  expect_false("quote_dropped" %in% ca20977t$record$flags)
+  expect_false("text_not_in_source" %in% ca20977t$record$flags)
+})
+
+test_that("a comparator wrapped over a table header is no paraphrase", {
+  keytruda <- row_to_site(
+    fixture_pages("keytruda-pi-5.1.layout.txt"),
+    trial = "KEYNOTE-189", endpoint = "OS",
+    comparator = "Placebo + Pemetrexed + Platinum Chemotherapy",
+    value = "0.56", ci_low = "0.46", ci_high = "0.69", ci_level = "95",
+    quotes = list("Hazard ratio† (95% CI) 0.56 (0.46, 0.69)")
+  )
+  expect_null(keytruda$failed)
+  expect_equal(keytruda$record$flags, character())
+  expect_equal(nrow(keytruda$site), 1L)
+})
+
+test_that("a CI printed under its value ships unflagged, another's never", {
+  pages <- fixture_pages("alecensa-pi-5.1.layout.txt")
+  dor <- function(value, ci_low, ci_high) {
+    row_to_site(
+      pages,
+      trial = "NP28673", endpoint = "DOR (IRC)", is_primary = "no",
+      effect_type = "single_arm_median", value = value, ci_low = ci_low,
+      ci_high = ci_high, ci_level = "95", quotes = list(
+        "Median (months) 15.2 14.9 [95 % CI] [11.2, 24.9] [6.9, NE]"
+      )
+    )
+  }
+  kept <- dor("15.2", "11.2", "24.9")
+  expect_equal(kept$record$flags, character())
+  expect_equal(nrow(kept$site), 1L)
+  expect_false(is.null(dor("15.2", "6.9", "NE")$failed))
+})
+
+test_that("a rate with its count before the CI ships", {
+  aura <- row_to_site(
+    excerpt_pages("tagrisso-aura"),
+    trial = "AURAex and AURA2", endpoint = "CNS ORR",
+    effect_type = "single_arm_rate", is_primary = "no", value = "54%",
+    ci_low = "39.3", ci_high = "68.2", ci_level = "95",
+    quotes = list("A CNS ORR of 54% (27/50 patients; 95% CI: 39.3, 68.2)")
+  )
+  expect_null(aura$failed)
+  expect_equal(nrow(aura$site), 1L)
+  miscounted <- row_to_site(
+    c(
+      paste(
+        "5.1 Pharmacodynamic properties",
+        "CNS ORR of 54% (26/50; 95% CI: 39.3, 68.2)",
+        sep = "\n"
+      ),
+      "5.2 Pharmacokinetic properties"
+    ),
+    effect_type = "single_arm_rate", value = "54%", ci_low = "39.3",
+    ci_high = "68.2", quotes = list("54% (26/50; 95% CI: 39.3, 68.2)")
+  )
+  expect_match(
+    miscounted$failed$errors[[1]], "value and CI not in one quote",
+    all = FALSE
+  )
+})
+
+# Review of the gold analysis's fixes (2026-10-02): the column tie took arm
+# values from any line under the label, another endpoint's, another table's
+# or another trial's, and shipped them. Each is hidden again, as at 3482af1.
+keynote_024_pfs_row <- function(...) {
+  row <- list(
+    trial = "KEYNOTE-024", endpoint = "PFS", regimen = "Pembrolizumab",
+    comparator = "Chemotherapy", comparator_column_label = "Chemotherapy",
+    value = "0.50", ci_low = "0.37", ci_high = "0.68", ci_level = "95",
+    arm_measure = "Median in months", arm_treatment = "10.3",
+    arm_control = "6.0",
+    quotes = list(
+      "Hazard ratio* (95% CI) 0.50 (0.37, 0.68)",
+      "Median in months (95% CI) 10.3 (6.7, NA) 6.0 (4.2, 6.2)"
+    )
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  pages <- fixture_pages("keytruda-pi-5.1.layout.txt")
+  do.call(row_to_site, c(list(pages), row))
+}
+
+expect_arms_hidden <- function(checked, info = NULL) {
+  expect_null(checked$failed, info = info)
+  expect_true("arms_not_verified" %in% checked$record$flags, info = info)
+  for (field in efficacy_arm_fields) {
+    expect_null(checked$record[[field]], info = paste(info, field))
+  }
+  expect_equal(checked$rows$review, "flagged", info = info)
+  expect_equal(nrow(checked$site), 0L, info = info)
+}
+
+test_that("arm values of another endpoint, table or trial never tie", {
+  # Its own medians, in its own block of Table 14, ship.
+  own <- keynote_024_pfs_row()
+  expect_equal(own$record$flags, character())
+  expect_equal(own$site$arm_treatment, "10.3")
+  expect_equal(own$site$arm_control, "6.0")
+  # Its own OS medians, the block below.
+  expect_arms_hidden(keynote_024_pfs_row(
+    arm_treatment = "30.0", arm_control = "14.2",
+    quotes = list(
+      "Hazard ratio* (95% CI) 0.50 (0.37, 0.68)",
+      "Median in months (95% CI) 30.0 14.2"
+    )
+  ), "KEYNOTE-024 OS medians")
+  # KEYNOTE-042's PFS medians, another trial's table under the same label.
+  expect_arms_hidden(keynote_024_pfs_row(
+    arm_treatment = "6.5", arm_control = "6.4",
+    quotes = list(
+      "Hazard ratio* (95% CI) 0.50 (0.37, 0.68)",
+      "Median in months (95% CI) 6.5 (5.9, 8.5) 6.4 (6.2, 7.2)"
+    )
+  ), "KEYNOTE-042 PFS medians")
+  # ALEX's PFS (IRC) hazard ratio with the ORR responders of Table 5.
+  expect_arms_hidden(alex_irc_row(
+    arm_treatment = "126 (82.9 %)", arm_control = "114 (75.5 %)",
+    arm_measure = "Median (months)",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]",
+      "Responders n (%) 114 (75.5 %) 126 (82.9 %)"
+    )
+  ), "ALEX ORR responders")
+  # ALEX's OS hazard ratio with the duration of response medians below it,
+  # under their own heading with their own sizes.
+  expect_arms_hidden(alex_irc_row(
+    endpoint = "Overall survival", is_primary = "no", value = "0.78",
+    ci_low = "0.56", ci_high = "1.08", arm_treatment = "42.3",
+    arm_control = "11.1",
+    quotes = list(
+      "HR 0.78 [95 % CI] [0.56; 1.08]", "Median (months) 11.1 42.3"
+    )
+  ), "ALEX DOR medians")
+})
+
+# Review of the gold analysis's fixes: the tie trusted the model's label, so
+# the treatment's header given as the comparator's, with arms and sizes read
+# by column position, shipped every value on the wrong arm.
+test_that("a label that does not name the comparator ties nothing", {
+  header <- "Crizotinib Alecensa n = 151 n = 152"
+  mislabelled <- alex_irc_row(
+    comparator_column_label = "Alecensa", arm_treatment = "10.4",
+    arm_control = "25.7", n_treatment = "151", n_control = "152",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]", header, "Median (months) 10.4 25.7"
+    )
+  )
+  expect_arms_hidden(mislabelled, "the treatment's header")
+  # Labelled right, the same quotes ship arms and sizes on their arms.
+  right <- alex_irc_row(
+    n_treatment = "152", n_control = "151",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]", header, "Median (months) 10.4 25.7"
+    )
+  )
+  expect_equal(right$record$flags, character())
+  expect_equal(right$site$arm_treatment, "25.7")
+  expect_equal(right$site$n_treatment, 152L)
+  expect_equal(right$site$n_control, 151L)
+  # Sizes alone under a mislabel: the row ships without them.
+  sizes <- alex_irc_row(
+    comparator_column_label = "Alecensa", arm_treatment = "",
+    arm_control = "", n_treatment = "151", n_control = "152",
+    quotes = list("HR 0.50 [95 % CI] [0.36; 0.70]", header)
+  )
+  expect_equal(sizes$record$flags, character())
+  expect_equal(nrow(sizes$site), 1L)
+  expect_true(is.na(sizes$site$n_treatment))
+  expect_true(is.na(sizes$site$n_control))
+  expect_true(is.na(sizes$site$comparator_column_label))
+})
+
+# Review of the gold analysis's fixes: a CI the layout prints in the cell of
+# another value was paired with the value above it.
+test_that("an interval in another value's cell is not the value's CI", {
+  pages <- fixture_pages("keytruda-pi-5.1.layout.txt")
+  keynote_001 <- function(...) {
+    row_to_site(
+      pages,
+      trial = "KEYNOTE-001", regimen = "Pembrolizumab", ci_level = "95",
+      ...
+    )
+  }
+  borrowed <- keynote_001(
+    endpoint = "% ongoing at 24 months", effect_type = "single_arm_rate",
+    value = "75", ci_low = "2.8", ci_high = "8.3",
+    quotes = list(paste(
+      "% ongoing at 24 months¶ 75% 71% PFS Median in months (95% CI) 4.9",
+      "(2.8, 8.3)"
+    ))
+  )
+  expect_match(
+    borrowed$failed$errors[[1]], "value and CI not in one quote",
+    all = FALSE
+  )
+  own <- keynote_001(
+    endpoint = "PFS", effect_type = "single_arm_median", value = "4.9",
+    ci_low = "2.8", ci_high = "8.3",
+    quotes = list("Median in months (95% CI) 4.9 (2.8, 8.3)")
+  )
+  expect_null(own$failed)
+  expect_equal(nrow(own$site), 1L)
+})

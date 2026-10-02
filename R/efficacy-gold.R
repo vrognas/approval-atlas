@@ -28,8 +28,15 @@
 #   rows of two analyses (known roles that differ, or analysis texts dated
 #   with no date in common) pair only when they print the same numbers, so a
 #   true row of another analysis is an extra row, not a numeric error;
-# - population: the extractor's population_match; the gold rows state none,
-#   so it only appears in the key shown for missed and extra rows;
+# - labels of the row (gold analysis of 2026-10-02): rows of another
+#   assessment (investigator or independent, gold_assessment_class()), of a
+#   sensitivity or subgroup analysis the other is not (gold_analysis_kind())
+#   or of another population (the whole trial or a subgroup,
+#   gold_population_class()) pair only when they print the same numbers too;
+#   an extra row beside a missed gold row of its trial and endpoint is listed
+#   for a check (near_missed_keys);
+# - population: the extractor's population_match (its class, above), and in
+#   the key shown for missed and extra rows;
 # - ci_is_range: the extractor's; the gold rows state it in their arm_measure
 #   ("median months (range)") or notes.
 # Only the gold rows whose source_doc is "SmPC" are scored.
@@ -43,16 +50,26 @@ gold_prices <- list(
 )
 gold_batch_factor <- 0.5
 
+# Also as the SmPCs print them, which the verbatim prompt has the model copy
+# (gold analysis of 2026-10-02: LIBRETTO-001's "Objective response" and
+# Alimta's "Survival Time" were kept with the gold's numbers, never paired).
 gold_endpoint_names <- c(
   "progression free survival" = "PFS",
   "overall survival" = "OS",
+  "survival time" = "OS",
   "disease free survival" = "DFS",
   "event free survival" = "EFS",
   "objective response rate" = "ORR",
+  "objective response" = "ORR",
   "overall response rate" = "ORR",
+  "overall response" = "ORR",
   "duration of response" = "DOR",
+  "duration of objective response" = "DOR",
+  "duration of overall response" = "DOR",
   "pathological complete response" = "PCR",
-  "major pathological response" = "MPR"
+  "pathologic complete response" = "PCR",
+  "major pathological response" = "MPR",
+  "major pathologic response" = "MPR"
 )
 gold_known_endpoints <- unique(unname(gold_endpoint_names))
 
@@ -65,18 +82,20 @@ gold_known_endpoints <- unique(unname(gold_endpoint_names))
 # condition is scored, so an NSCLC row whose indication lost its condition
 # still counts. "small cell lung" is SCLC only: an indication naming NSCLC is
 # scored whatever else it names. EMA's text has "?" for some hyphens
-# ("non?small cell").
+# ("non?small cell"). Some indications name the condition by abbreviation
+# only (gold analysis of 2026-10-02: Tecentriq's "TNBC", Tevimbra's "OSCC"
+# and "NPC").
 gold_condition <- list(
   own = "non.?small.?cell.?lung|\\bnsclc\\b",
   others = paste(
     c(
       "melanoma", "renal.?cell", "urothelial", "bladder", "head.?and.?neck",
       "hodgkin", "lymphoma", "colorectal", "\\bm?crc\\b", "gastric",
-      "o?esophag", "hepatocellular", "\\bhcc\\b", "biliary", "cholangio",
-      "thyroid", "breast", "cervical", "endometri", "ovarian", "mesothelioma",
-      "nasopharyn", "cutaneous", "cscc", "basal.?cell", "\\b(la|m)?bcc\\b",
-      "merkel", "small.?cell.?lung", "\\bsclc\\b", "solid.?tumou?r", "msi.?h",
-      "mismatch.?repair"
+      "o?esophag", "\\b[oe]scc\\b", "hepatocellular", "\\bhcc\\b", "biliary",
+      "cholangio", "thyroid", "breast", "\\btnbc\\b", "cervical", "endometri",
+      "ovarian", "mesothelioma", "nasopharyn", "\\bnpc\\b", "cutaneous",
+      "cscc", "basal.?cell", "\\b(la|m)?bcc\\b", "merkel", "small.?cell.?lung",
+      "\\bsclc\\b", "solid.?tumou?r", "msi.?h", "mismatch.?repair"
     ),
     collapse = "|"
   )
@@ -240,10 +259,11 @@ gold_endpoint <- function(endpoint) {
 # Phrases (regular expressions over a label's lower-case words) that make a
 # named endpoint another one: progression or response in the CNS ("CNS
 # progression-free survival", "Time to intracranial progression"), a second
-# progression ("Second PFS", "PFS2") and a subsequent therapy ("PFS after
-# first subsequent therapy"). A qualifier of the analysis or the population
-# does not ("PFS at second interim analysis", "PFS in patients with baseline
-# CNS metastases").
+# progression ("Second PFS", "PFS2"), a subsequent therapy ("PFS after first
+# subsequent therapy") and a time to an event ("Time to objective response"
+# is not ORR; review of the gold analysis's fixes, 2026-10-02). A qualifier of
+# the analysis or the population does not ("PFS at second interim analysis",
+# "PFS in patients with baseline CNS metastases").
 gold_endpoint_qualifiers <- c(
   paste0(
     "(cns|intracranial) (progression|response|objective|overall|duration|",
@@ -251,7 +271,8 @@ gold_endpoint_qualifiers <- c(
   ),
   "second (progression|pfs)",
   "pfs ?2",
-  "subsequent (therapy|treatment|anticancer|line)"
+  "subsequent (therapy|treatment|anticancer|line)",
+  "time to"
 )
 
 # The known endpoints a label names as words, by name or abbreviation
@@ -259,11 +280,13 @@ gold_endpoint_qualifiers <- c(
 # A label with a qualifier names none ("CNS progression-free survival",
 # "Second PFS after start of first subsequent therapy"), nor does one of an
 # endpoint the scorer does not know ("Time to worsening of patient-reported
-# NSCLC symptoms").
+# NSCLC symptoms"). Where two names share words, the one starting first is
+# read, the longer one at the same word ("Duration of objective response" is
+# DOR, not ORR; "Progression-free survival time" is PFS, not the "survival
+# time" of OS: review of the gold analysis's fixes, 2026-10-02).
 gold_endpoint_mentions <- function(endpoint) {
-  words <- paste0(
-    " ", gsub("[^a-z0-9]+", " ", tolower(gold_text(endpoint))), " "
-  )
+  text <- gsub("[^a-z0-9]+", " ", tolower(gold_text(endpoint)))
+  words <- paste0(" ", text, " ")
   has <- function(phrase) grepl(paste0(" ", phrase, " "), words, fixed = TRUE)
   qualified <- purrr::map_lgl(gold_endpoint_qualifiers, function(phrase) {
     grepl(paste0(" ", phrase, " "), words, perl = TRUE)
@@ -271,12 +294,38 @@ gold_endpoint_mentions <- function(endpoint) {
   if (any(qualified)) {
     return(character())
   }
-  by_name <- purrr::map_lgl(names(gold_endpoint_names), has)
+  spans <- gold_name_spans(
+    names(gold_endpoint_names), strsplit(trimws(text), " ", fixed = TRUE)[[1]]
+  )
+  overlapped <- purrr::map_lgl(seq_len(nrow(spans)), function(index) {
+    first <- spans$first[index]
+    last <- spans$last[index]
+    any(spans$first <= last & spans$last >= first &
+          (spans$first < first | (spans$first == first & spans$last > last)))
+  })
   by_abbreviation <- purrr::map_lgl(tolower(gold_known_endpoints), has)
   unique(c(
-    unname(gold_endpoint_names[by_name]),
+    unname(gold_endpoint_names[spans$name[!overlapped]]),
     gold_known_endpoints[by_abbreviation]
   ))
+}
+
+# Where each name (its words one space apart) stands among `words`: a row per
+# place, with the name and its first and last word, in the names' order.
+gold_name_spans <- function(names, words) {
+  purrr::map(names, function(name) {
+    parts <- strsplit(name, " ", fixed = TRUE)[[1]]
+    size <- length(parts)
+    starts <- seq_len(max(0L, length(words) - size + 1L))
+    starts <- starts[purrr::map_lgl(starts, function(start) {
+      identical(words[seq(start, start + size - 1L)], parts)
+    })]
+    dplyr::tibble(
+      name = rep(name, length(starts)), first = starts,
+      last = starts + size - 1L
+    )
+  }) |>
+    purrr::list_rbind()
 }
 
 gold_effect_type <- function(effect_type) {
@@ -329,6 +378,85 @@ gold_ci_is_range <- function(row) {
     grepl("range, not a ci", tolower(gold_text(row$notes)), fixed = TRUE)
 }
 
+# The assessment a label names: "investigator" (investigator-assessed, INV),
+# "independent" (a blinded or independent central review: BICR, IRC, ICR,
+# BIRC, BIPR, IRF), else NA (gold_different_analyses(): AURA3's BICR
+# sensitivity analysis is not its investigator-assessed primary analysis).
+gold_assessment_class <- function(text) {
+  text <- tolower(gold_text(text))
+  independent <- paste0(
+    "\\b(bicr|irc|icr|birc|bipr|irf)\\b|independent|central|blinded"
+  )
+  if (grepl("investigator|\\binv\\b", text, perl = TRUE)) {
+    "investigator"
+  } else if (grepl(independent, text, perl = TRUE)) {
+    "independent"
+  } else {
+    NA_character_
+  }
+}
+
+# A sensitivity or subgroup analysis an analysis text names, else NA.
+gold_analysis_kind <- function(text) {
+  text <- tolower(gold_text(text))
+  if (grepl("sensitivity", text, fixed = TRUE)) {
+    "sensitivity"
+  } else if (grepl("subgroup", text, fixed = TRUE)) {
+    "subgroup"
+  } else {
+    NA_character_
+  }
+}
+
+# How a population text starts when it is the whole trial's (or a whole
+# cohort's), and the words that name a part of one (a stage, a PD-L1 or TPS
+# level, a prior treatment, "patients who ...").
+gold_whole_population <- paste0(
+  "^(itt|mitt|all randomi[sz]ed|overall|efficacy|independently reviewed|",
+  "primary analysis population|responders|cohort)"
+)
+gold_subgroup_population <- paste0(
+  "subgroup|\\bstage\\b|pd.?l1|\\btps\\b|>=|≥|patients who|\\bprior\\b"
+)
+
+# Whether a row's population is the whole trial's ("whole") or a subgroup's
+# ("subgroup"), else NA (gold_different_analyses(): ADAURA's stage IB-IIIA row
+# is not the gold's stage II-IIIA row). The extractor's population_match says
+# so (subgroup_matches and other: a subgroup); the gold rows state none, so
+# their population text is read: the whole trial's as it starts, a subgroup's
+# as it names one, else unknown ("BICR-measurable population", "T+PC arm vs
+# PC arm"), which pairs as before.
+gold_population_class <- function(row) {
+  match <- gold_text(row$population_match)
+  if (match %in% c("subgroup_matches", "other")) {
+    return("subgroup")
+  }
+  if (match %in% c("whole_trial_matches", "whole_trial_broader")) {
+    return("whole")
+  }
+  if (match == "not_stated") {
+    return(NA_character_)
+  }
+  text <- tolower(gold_text(row$population))
+  if (grepl(gold_whole_population, text, perl = TRUE)) {
+    "whole"
+  } else if (grepl(gold_subgroup_population, text, perl = TRUE)) {
+    "subgroup"
+  } else {
+    NA_character_
+  }
+}
+
+# The number an arm value starts with ("NE [17.7; NE]" is NE, "11.1 [9.1;
+# 13.1]" 11.1), "" when it starts with none.
+gold_leading_number <- function(text) {
+  text <- trimws(gold_text(text))
+  found <- regmatches(
+    text, regexpr("^(NR|NE|NC|NA|[0-9]+(\\.[0-9]+)?)", text, perl = TRUE)
+  )
+  if (length(found) == 0) "" else found
+}
+
 gold_first_word <- function(text) {
   sub("^([^[:space:]]*).*$", "\\1", tolower(gold_text(text)))
 }
@@ -379,6 +507,14 @@ gold_row_table <- function(rows) {
     ),
     role = purrr::map_chr(rows, gold_role),
     analysis_dates = purrr::map(rows, \(row) gold_analysis_dates(row$analysis)),
+    analysis_kind = purrr::map_chr(
+      rows, \(row) gold_analysis_kind(row$analysis)
+    ),
+    assessment_class = purrr::map_chr(
+      rows, \(row) gold_assessment_class(row$assessment)
+    ),
+    population_class = purrr::map_chr(rows, gold_population_class),
+    population_match = dplyr::na_if(text_column("population_match"), ""),
     effect_type = purrr::map_chr(
       rows, \(row) gold_effect_type(row$effect_type)
     ),
@@ -480,10 +616,17 @@ gold_analysis_dates <- function(text) {
 # their trial: both analysis roles known and different (an exploratory
 # analysis with longer follow-up is not the primary analysis), or both
 # analysis texts dated with no date in common (the interim analysis of
-# 06-Dec-2019 is not the final one of 30-Sep-2020).
+# 06-Dec-2019 is not the final one of 30-Sep-2020). Or, by their labels (gold
+# analysis of 2026-10-02), different rows of the trial: a sensitivity or
+# subgroup analysis the other is not (gold_analysis_kind()), or both
+# assessments or both populations known and different
+# (gold_assessment_class(), gold_population_class()).
 gold_different_analyses <- function(extracted, gold, e, g) {
-  roles <- !is.na(extracted$role[e]) & !is.na(gold$role[g]) &
-    extracted$role[e] != gold$role[g]
+  known_and_different <- function(column) {
+    first <- extracted[[column]][e]
+    second <- gold[[column]][g]
+    !is.na(first) & !is.na(second) & first != second
+  }
   dates <- purrr::map2_lgl(
     extracted$analysis_dates[e], gold$analysis_dates[g],
     function(first, second) {
@@ -491,7 +634,11 @@ gold_different_analyses <- function(extracted, gold, e, g) {
         length(intersect(first, second)) == 0
     }
   )
-  roles | dates
+  kinds <- dplyr::coalesce(extracted$analysis_kind[e], "") !=
+    dplyr::coalesce(gold$analysis_kind[g], "")
+  known_and_different("role") | dates | kinds |
+    known_and_different("assessment_class") |
+    known_and_different("population_class")
 }
 
 # Which pairs may pair at all: only rows whose trial labels can name the same
@@ -578,31 +725,49 @@ match_gold_rows <- function(extracted, gold) {
   matched
 }
 
-# Whether each row of a table is its (medicine, indication)'s lead row, as the
-# site file would show it (choose_lead_rows(), every row shown).
-gold_lead_flags <- function(table) {
+# Whether each row of a table is its (medicine, indication)'s lead row
+# (choose_lead_rows()): by default every row shown and the population match
+# not ranked; with `production`, ranked as the site file ranks it; with
+# `shown_only`, only rows without flags lead, as the site shows only those.
+gold_lead_flags <- function(table, production = FALSE, shown_only = FALSE) {
   if (nrow(table) == 0) {
     return(logical())
   }
+  rows <- nrow(table)
   choose_lead_rows(dplyr::tibble(
     ema_product_number = table$medicine,
-    row_key = as.character(seq_len(nrow(table))),
+    row_key = as.character(seq_len(rows)),
     row_order = table$order,
     indication = table$indication,
     trial = table$trial_text,
     is_primary = table$is_primary,
     analysis_role = table$role,
-    population_match = rep(NA_character_, nrow(table)),
-    review = rep("auto_ok", nrow(table))
+    population_match = if (production) {
+      table$population_match
+    } else {
+      rep(NA_character_, rows)
+    },
+    review = if (shown_only) {
+      dplyr::if_else(table$flagged, "flagged", "auto_ok")
+    } else {
+      rep("auto_ok", rows)
+    }
   ))$lead
 }
 
 # The share of the gold's lead rows (one per medicine and setting) whose
 # matched extracted row is a lead row of the extraction as well. A gold lead
 # nothing matches is a disagreement, so dropping a medicine or a setting costs.
-gold_lead_agreement <- function(extracted, gold, matched) {
+# `production` and `shown_only` choose the extraction's leads as
+# gold_lead_flags() says (reported beside the rule's measure, gold analysis of
+# 2026-10-02).
+gold_lead_agreement <- function(extracted,
+                                gold,
+                                matched,
+                                production = FALSE,
+                                shown_only = FALSE) {
   gold_leads <- which(gold_lead_flags(gold))
-  extracted_leads <- gold_lead_flags(extracted)
+  extracted_leads <- gold_lead_flags(extracted, production, shown_only)
   if (length(gold_leads) == 0) {
     return(0)
   }
@@ -644,8 +809,10 @@ claims_significance <- function(text) {
 # and says so in `notes`. The ALEX one tests the ALEX rows found with arm
 # values (the verifier blanks arms it cannot verify, and rejects a row whose
 # comparator label sits with the treatment arm): each must have the gold's
-# arms in the gold's order. Without such a row it is not testable (NA), and
-# `notes` says why: a row without arms is not a swap.
+# arms in the gold's order, compared by the number each starts with
+# (gold_leading_number(): the gold prints "NE [17.7; NE]", a model "NE"), and
+# `notes` says when they are swapped. Without such a row it is not testable
+# (NA), and `notes` says why: a row without arms is not a swap.
 gold_pitfalls <- function(extracted, gold, matched) {
   alex <- which(gold$trial == "alex")
   alex_found <- which(matched %in% alex)
@@ -653,15 +820,24 @@ gold_pitfalls <- function(extracted, gold, matched) {
     nzchar(extracted$arm_control[alex_found])
   alex_with_arms <- alex_found[has_arms]
   alex_without_arms <- alex_found[!has_arms]
-  alex_ok <- if (length(alex_with_arms) == 0) {
-    NA
-  } else {
-    all(purrr::map_lgl(alex_with_arms, function(found) {
-      row <- matched[found]
-      extracted$arm_treatment[found] == gold$arm_treatment[row] &&
-        extracted$arm_control[found] == gold$arm_control[row]
-    }))
+  arms_of <- function(table, index) {
+    c(
+      gold_leading_number(table$arm_treatment[index]),
+      gold_leading_number(table$arm_control[index])
+    )
   }
+  alex_orders <- purrr::map_chr(alex_with_arms, function(found) {
+    given <- arms_of(extracted, found)
+    expected <- arms_of(gold, matched[found])
+    if (identical(given, expected)) {
+      "gold"
+    } else if (identical(given, rev(expected))) {
+      "swapped"
+    } else {
+      "other"
+    }
+  })
+  alex_ok <- if (length(alex_with_arms) == 0) NA else all(alex_orders == "gold")
   impower110 <- any(
     extracted$medicine == "tecentriq" & extracted$trial == "impower110" &
       extracted$endpoint == "OS" & extracted$value == "0.59" &
@@ -689,6 +865,18 @@ gold_pitfalls <- function(extracted, gold, matched) {
     )
   } else {
     character()
+  }
+  if (any(alex_orders == "swapped")) {
+    note <- c(note, sprintf(
+      "alex_column_order: %d ALEX row(s) with the arms swapped",
+      sum(alex_orders == "swapped")
+    ))
+  }
+  if (any(alex_orders == "other")) {
+    note <- c(note, sprintf(
+      "alex_column_order: %d ALEX row(s) with other arm values than the gold's",
+      sum(alex_orders == "other")
+    ))
   }
   mariposa2_ok <- if (any(mariposa2)) {
     !any(claims_significance(extracted$significance[mariposa2]))
@@ -728,7 +916,15 @@ gold_pitfalls <- function(extracted, gold, matched) {
 # trial such as LIBRETTO-001, or an NSCLC row given another indication). A
 # flagged row is scored as any other, but the site hides it until reviewed:
 # flagged_rows counts the scored ones, flagged_found_rows the gold rows found
-# only by one (matching pairs one row with one gold row).
+# only by one (matching pairs one row with one gold row). Lead agreement is
+# measured by the acceptance rule's measure (lead_agreement) and, reported
+# only, by production's rule (lead_agreement_production) and over the rows the
+# site would show (lead_agreement_shown, gold_lead_flags()). An extra row
+# beside a missed gold row of its trial and endpoint (near_missed_keys, the
+# rows counted in near_missed_rows) may be that row with a wrong number its
+# labels kept apart (gold_different_analyses(); the labels are the model's
+# own, nothing verifies them), so it is listed for a check and counts
+# against acceptance until checked (gold_acceptance_problems()).
 score_against_gold <- function(extracted, gold, condition = NULL) {
   extracted <- gold_row_table(extracted)
   gold <- gold_row_table(gold)
@@ -739,25 +935,58 @@ score_against_gold <- function(extracted, gold, condition = NULL) {
   extra <- is.na(matched)
   paired <- which(!extra)
   partner <- matched[paired]
+  missed <- setdiff(seq_len(nrow(gold)), matched)
   wrong <- !gold_same_numbers(extracted, gold, paired, partner)
   pitfalls <- gold_pitfalls(extracted, gold, matched)
+  lead <- function(...) gold_lead_agreement(extracted, gold, matched, ...)
+  near <- gold_near_missed(extracted, gold, which(extra), missed)
   list(
     numeric_errors = sum(wrong),
-    missed_rows = length(setdiff(seq_len(nrow(gold)), matched)),
+    near_missed_rows = length(unique(near$extracted)),
+    missed_rows = length(missed),
     extra_rows = sum(extra),
     outside_rows = nrow(others),
     gold_rows = nrow(gold),
     flagged_rows = sum(extracted$flagged),
     flagged_found_rows = sum(extracted$flagged[paired]),
-    lead_agreement = gold_lead_agreement(extracted, gold, matched),
+    lead_agreement = lead(),
+    lead_agreement_production = lead(production = TRUE),
+    lead_agreement_shown = lead(production = TRUE, shown_only = TRUE),
     pitfalls = pitfalls$pitfalls,
     pitfall_notes = pitfalls$notes,
     flagged_found_keys = gold$key[partner[extracted$flagged[paired]]],
     numeric_error_keys = extracted$key[paired[wrong]],
-    missed_keys = gold$key[setdiff(seq_len(nrow(gold)), matched)],
+    missed_keys = gold$key[missed],
     extra_keys = extracted$key[extra],
+    near_missed_keys = gold_near_missed_keys(extracted, gold, near),
     outside_keys = others$key,
     outside_gold_trial_keys = others$key[gold_in_trials(others, gold)]
+  )
+}
+
+# Each extra row (`extra`) beside a missed gold row (`missed`) of its
+# medicine, endpoint and trial (gold_trial_names_related()): the pairs, as
+# indices of `extracted` and `gold`.
+gold_near_missed <- function(extracted, gold, extra, missed) {
+  pairs <- expand.grid(
+    extracted = extra, gold = missed, KEEP.OUT.ATTRS = FALSE
+  )
+  e <- pairs$extracted
+  g <- pairs$gold
+  near <- extracted$medicine[e] == gold$medicine[g] &
+    extracted$endpoint[e] == gold$endpoint[g] &
+    purrr::map2_lgl(
+      extracted$trial_names[e], gold$trial_names[g], gold_trial_names_related
+    )
+  list(extracted = e[near], gold = g[near])
+}
+
+# The pairs of gold_near_missed() as "<its key> beside gold <the gold row's
+# key>".
+gold_near_missed_keys <- function(extracted, gold, near) {
+  paste0(
+    extracted$key[near$extracted], " beside gold ", gold$key[near$gold],
+    recycle0 = TRUE
   )
 }
 
@@ -773,10 +1002,13 @@ gold_in_trials <- function(rows, gold) {
 }
 
 # What keeps a model from being chosen (spec, and rulings R14): a numeric
-# error, lead agreement under 0.95, a failed pitfall or one that could not be
-# tested (its avoidance is not shown), more than 5% of the gold rows missed, a
-# call that did not answer (truncated counts), rows dropped at parsing. Empty
-# when it meets the rule.
+# error, or an extra row beside a missed gold row (near_missed_rows: it may be
+# that row with a wrong number its own labels kept apart, so it counts
+# against the zero-error bar until checked by hand; review of the gold
+# analysis's fixes, 2026-10-02), lead agreement under 0.95, a failed pitfall
+# or one that could not be tested (its avoidance is not shown), more than 5%
+# of the gold rows missed, a call that did not answer (truncated counts),
+# rows dropped at parsing. Empty when it meets the rule.
 gold_acceptance_problems <- function(result) {
   score <- result$score
   calls <- result$calls
@@ -784,9 +1016,19 @@ gold_acceptance_problems <- function(result) {
   dropped <- calls[calls$rows_dropped > 0, ]
   failed_pitfalls <- names(score$pitfalls)[score$pitfalls %in% FALSE]
   untested_pitfalls <- names(score$pitfalls)[is.na(score$pitfalls)]
+  near_missed <- score$near_missed_rows %||% 0L
   c(
     if (score$numeric_errors > 0) {
       sprintf("%d numeric error(s)", score$numeric_errors)
+    },
+    if (near_missed > 0) {
+      sprintf(
+        paste(
+          "%d extra row(s) beside a missed gold row, not checked by hand",
+          "(each may be the gold row with a wrong number)"
+        ),
+        near_missed
+      )
     },
     if (score$lead_agreement < 0.95) {
       sprintf("lead agreement %.3f is below 0.95", score$lead_agreement)
@@ -883,14 +1125,19 @@ gold_row_flags <- function(row, verification, section) {
 }
 
 # A medicine's answered rows (`orders`: their places in the answer) verified
-# against its section: the kept rows, without the arm fields that did not
-# verify and with production's flags (gold_row_flags()), and the failed rows,
-# with their errors and the row as the model gave it (`row`).
+# against its section and, as production does, its indication text (the
+# indication_not_in_source flag): the kept rows as the verifier keeps them
+# (verified_efficacy_row(): without the arm fields that did not verify and
+# the quotes it dropped) and with production's flags (gold_row_flags()), and
+# the failed rows, with their errors and the row as the model gave it
+# (`row`).
 gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
   checked <- purrr::map2(rows, orders, function(row, order) {
     list(
       row = row, order = order,
-      verification = verify_efficacy_row(row, medicine$section)
+      verification = verify_efficacy_row(
+        row, medicine$section, medicine$indication
+      )
     )
   })
   passed <- purrr::map_lgl(
@@ -899,7 +1146,7 @@ gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
   list(
     rows = purrr::map(checked[passed], function(item) {
       verification <- item$verification
-      row <- without_unverified_arms(item$row, verification$blanked)
+      row <- verified_efficacy_row(item$row, verification)
       c(row, list(
         medicine = medicine$medicine,
         ema_product_number = medicine$ema_product_number,
@@ -1309,6 +1556,11 @@ gold_count_of <- function(count, total) {
   if (is.null(count)) "n/a" else sprintf("%d of %d", count, total)
 }
 
+# "0.700"; "n/a" for a score made before the share was (`share` NULL).
+gold_share_text <- function(share) {
+  if (is.null(share)) "n/a" else sprintf("%.3f", share)
+}
+
 gold_report_table <- function(results) {
   labels <- purrr::map_chr(results, \(r) gold_result_variant(r)$label)
   cell <- function(extract) purrr::map_chr(results, extract)
@@ -1327,6 +1579,12 @@ gold_report_table <- function(results) {
         \(r) as.character(sum(r$calls$rows_dropped))
       ),
       "Numeric errors" = cell(\(r) as.character(r$score$numeric_errors)),
+      "Extra rows beside a missed gold row (errors until checked)" = cell(
+        function(r) {
+          rows <- r$score$near_missed_rows
+          if (is.null(rows)) "n/a" else as.character(rows)
+        }
+      ),
       "Missed gold rows" = cell(function(r) {
         sprintf("%d of %d", r$score$missed_rows, r$score$gold_rows)
       }),
@@ -1344,7 +1602,13 @@ gold_report_table <- function(results) {
         found <- score$gold_rows - score$missed_rows
         gold_count_of(score$flagged_found_rows, found)
       }),
-      "Lead agreement" = cell(\(r) sprintf("%.3f", r$score$lead_agreement))
+      "Lead agreement" = cell(\(r) sprintf("%.3f", r$score$lead_agreement)),
+      "Lead agreement, production's rule (reported)" = cell(
+        \(r) gold_share_text(r$score$lead_agreement_production)
+      ),
+      "Lead agreement, shown rows only (reported)" = cell(
+        \(r) gold_share_text(r$score$lead_agreement_shown)
+      )
     ),
     purrr::set_names(
       purrr::map(pitfalls, function(pitfall) {
@@ -1393,7 +1657,8 @@ gold_report_details <- function(result) {
     "",
     listing("Not accepted because", gold_acceptance_problems(result)),
     listing("Calls that did not answer", paste0(
-      calls$medicine, ": ", calls$status, " (", calls$reason, ")"
+      calls$medicine, ": ", calls$status, " (", calls$reason, ")",
+      recycle0 = TRUE
     )),
     listing("Rows dropped at parsing", result$dropped_rows),
     if ((result$failed_not_reverified %||% 0) > 0) {
@@ -1414,6 +1679,14 @@ gold_report_details <- function(result) {
       unlist(result$score$flagged_found_keys)
     ),
     listing("Extra rows", result$score$extra_keys),
+    listing(
+      paste(
+        "Extra rows beside a missed gold row of their trial and endpoint",
+        "(another population, assessment or analysis by their labels: check",
+        "they are not the gold row with a wrong number)"
+      ),
+      unlist(result$score$near_missed_keys)
+    ),
     listing(
       "Rows of other conditions (not scored)", result$score$outside_keys
     ),
