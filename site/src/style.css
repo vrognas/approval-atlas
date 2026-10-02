@@ -4877,6 +4877,13 @@ td.area {
   margin-left: -3px;
 }
 
+/* After a card's outlined link chip (B9) the ";" stands 3px further off (B9 review: 1px after the
+   outline, it read as part of the chip, "C08 ▤);"); the dashboard's filled toggles and "+n" keep
+   it close. */
+.area-chips:has(> a.area-chip:last-child) + .term-sep {
+  margin-left: 0;
+}
+
 /* The toolbar holds the chips and "+n" (so its arrow keys reach it; chips review 2026-09-29). */
 .area-chips {
   display: inline-flex;
@@ -7398,6 +7405,11 @@ mark {
   /* The ";" next to the last chip's fill, over its rim (after "+n": as on desktop). */
   .area-chips:not(:has(> .area-more)) + .term-sep {
     margin-left: -9px;
+  }
+
+  /* After a card's outlined link chip, 3px further off, as on desktop (B9 review). */
+  .area-chips:has(> a.area-chip:last-child) + .term-sep {
+    margin-left: -6px;
   }
 
   .area-chip-fill,
