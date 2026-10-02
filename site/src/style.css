@@ -6126,11 +6126,14 @@ table.activity {
   white-space: normal;
 }
 
-/* A company monogram in a card block (the medicine and substance cards' Status blocks): the neutral
-   slate, so the status pill stays the block's one colour (Von Restorff; owner decision 2026-09-30,
-   Laws of UX second pass); its brand or hashed colour everywhere else (tables, charts, company
-   pages, previews). slate-text on slate-1 is a checked pair (palette.test.js). */
-.card-block .company-badge {
+/* A company monogram in a card block (the medicine and substance cards' Status blocks) and anywhere
+   else in the medicine card (More details' Company fact; owner decision 2026-10-01, B3: one colour
+   per card, it was slate in the block and brand-coloured below): the neutral slate, so the status
+   pill stays the card's one colour (Von Restorff; owner decision 2026-09-30, Laws of UX second
+   pass); its brand or hashed colour everywhere else (tables, charts, company pages, previews).
+   slate-text on slate-1 is a checked pair (palette.test.js). */
+.card-block .company-badge,
+.medicine-card .company-badge {
   --hue-1: var(--slate-1);
   --hue-mid: var(--slate-mid);
   --hue-text: var(--slate-text);
