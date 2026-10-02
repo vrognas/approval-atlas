@@ -1081,9 +1081,11 @@ gold_row_flags <- function(row, verification, section) {
 
 # A medicine's answered rows (`orders`: their places in the answer) verified
 # against its section and, as production does, its indication text (the
-# indication_not_in_source flag): the kept rows, without the arm fields that
-# did not verify and with production's flags (gold_row_flags()), and the
-# failed rows, with their errors and the row as the model gave it (`row`).
+# indication_not_in_source flag): the kept rows as the verifier keeps them
+# (verified_efficacy_row(): without the arm fields that did not verify and
+# the quotes it dropped) and with production's flags (gold_row_flags()), and
+# the failed rows, with their errors and the row as the model gave it
+# (`row`).
 gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
   checked <- purrr::map2(rows, orders, function(row, order) {
     list(
@@ -1099,7 +1101,7 @@ gold_verified_rows <- function(rows, medicine, orders = seq_along(rows)) {
   list(
     rows = purrr::map(checked[passed], function(item) {
       verification <- item$verification
-      row <- without_unverified_arms(item$row, verification$blanked)
+      row <- verified_efficacy_row(item$row, verification)
       c(row, list(
         medicine = medicine$medicine,
         ema_product_number = medicine$ema_product_number,

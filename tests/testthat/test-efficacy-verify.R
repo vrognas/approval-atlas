@@ -100,10 +100,16 @@ test_that("a row without a usable quote fails", {
 })
 test_that("a quote that is not in the text fails", {
   row <- gold_rows("Alecensa")[[1]]
-  row$quotes <- c(row$quotes, "Stratified HR 0.99 (0.10, 0.11)")
+  row$quotes <- c(row$quotes, "Stratified HR 0.24 (0.10, 0.11)")
   result <- verify_efficacy_row(row, read_efficacy_section("Alecensa"))
   expect_equal(result$status, "failed")
   expect_match(paste(result$errors, collapse = " "), "quote not in the text")
+  # One holding none of the row's numbers is dropped, the row hidden until
+  # reviewed (gold analysis of 2026-10-02).
+  row$quotes[length(row$quotes)] <- "Stratified HR 0.99 (0.10, 0.11)"
+  result <- verify_efficacy_row(row, read_efficacy_section("Alecensa"))
+  expect_false(result$status == "failed")
+  expect_true("quote_dropped" %in% result$flags)
 })
 
 test_that("one quote holding every number of the row is enough", {
@@ -1160,4 +1166,348 @@ test_that("an arm value reassembled from cells is no warning once blanked", {
   expect_equal(result$status, "exact")
   expect_equal(result$warnings, character())
   expect_setequal(result$blanked, c("arm_treatment", "arm_control"))
+})
+
+# Gold analysis of 2026-10-02 (.remember/efficacy/gold-analysis-20261002.md):
+# 91 of Opus high's scored rows were hidden as arms_not_verified, the label
+# quoted with the header and the medians in a quote of their own, as the
+# reader of layout lines demands. A table places the arm values as it places
+# the arm sizes: the control's under the label's column on the row's line.
+medians_line <- "Median (95% CI) 7.7 (6.7, 10.4) 5.5 (4.2, 5.6)"
+
+test_that("arm values a table places under their columns verify", {
+  table <- two_arm_table()
+  row <- table_row(
+    arm_treatment = "7.7", arm_control = "5.5",
+    arm_measure = "median months",
+    quotes = c(table_row()$quotes, medians_line)
+  )
+  result <- verify_efficacy_row(row, table)
+  expect_equal(result$status, "exact")
+  expect_equal(result$blanked, character())
+  expect_false("arms_not_verified" %in% result$flags)
+  # Swapped: the table puts 5.5 under the label, so the row is rejected.
+  swapped <- table_row(
+    arm_treatment = "5.5", arm_control = "7.7",
+    quotes = c(table_row()$quotes, medians_line)
+  )
+  result <- verify_efficacy_row(swapped, table)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "arms swapped", all = FALSE)
+  # A third arm leaves the treatment arm's column unknown (BGB-A317-307,
+  # IMpower150): unverified, as before.
+  three <- two_arm_table(c("Drugamab +", "Placebo +", "Drugamab 2 +"))
+  result <- verify_efficacy_row(row, three)
+  expect_equal(result$status, "exact")
+  expect_true("arms_not_verified" %in% result$flags)
+  # Quoted where the table's line is not the quote's: a sentence that holds
+  # another number too.
+  sentence <- "At 12 months, median PFS was 7.7 versus 5.5 months."
+  prose <- table_row(
+    arm_treatment = "7.7", arm_control = "5.5",
+    quotes = c(table_row()$quotes, sentence)
+  )
+  result <- verify_efficacy_row(prose, paste(table, sentence, sep = "\n"))
+  expect_true("arms_not_verified" %in% result$flags)
+  # A value the label's column does not print: unverified.
+  other <- table_row(
+    arm_treatment = "7.7", arm_control = "6.7",
+    quotes = c(table_row()$quotes, medians_line)
+  )
+  expect_true(
+    "arms_not_verified" %in% verify_efficacy_row(other, table)$flags
+  )
+})
+
+test_that("ALEX's arms tie to their columns, and a swap of them fails", {
+  alecensa <- read_efficacy_section("Alecensa")
+  row <- list(
+    trial = "BO28984 (ALEX)", effect_type = "hr", value = "0.50",
+    ci_low = "0.36", ci_high = "0.70", comparator = "crizotinib",
+    comparator_column_label = "Crizotinib", arm_treatment = "25.7",
+    arm_control = "10.4", quotes = c(
+      "HR 0.50 [95 % CI] [0.36; 0.70]", "Median (months) 10.4 25.7"
+    )
+  )
+  result <- verify_efficacy_row(row, alecensa)
+  expect_equal(result$status, "exact")
+  expect_false("arms_not_verified" %in% result$flags)
+  row[c("arm_treatment", "arm_control")] <- list("10.4", "25.7")
+  result <- verify_efficacy_row(row, alecensa)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "arms swapped", all = FALSE)
+  # Opus high on 2026-10-02: a quote of the header with the medians row passed
+  # the label tie either way round; the columns now tell the swap.
+  header <- paste(
+    "Crizotinib Alecensa n = 151 n = 152 23.3 Median duration of follow-up",
+    "(months) ‡ 53.5(range 0.5 – 126.8) (range 0.3 – 123.5) Primary efficacy",
+    "parameter PFS (INV) † Number of patients with event n (%) 102 (68 %)",
+    "62 (41 %) Median (months) 11.1 NE"
+  )
+  primary <- list(
+    trial = "BO28984 (ALEX)", effect_type = "hr", value = "0.47",
+    ci_low = "0.34", ci_high = "0.65", comparator = "crizotinib",
+    comparator_column_label = "Crizotinib", arm_treatment = "NE",
+    arm_control = "11.1",
+    quotes = c("HR 0.47 [95 % CI] [0.34, 0.65]", header)
+  )
+  expect_equal(verify_efficacy_row(primary, alecensa)$status, "exact")
+  primary[c("arm_treatment", "arm_control")] <- list("11.1", "NE")
+  result <- verify_efficacy_row(primary, alecensa)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "arms swapped", all = FALSE)
+})
+
+test_that("a table's cells and leading values are read off its lines", {
+  cells <- layout_cells("  Median (months)      11.1     NE [17.7; NE]")
+  expect_equal(cells$text, c("Median (months)", "11.1", "NE [17.7; NE]"))
+  expect_equal(cells$first, c(3L, 24L, 33L))
+  expect_equal(cells$last, c(17L, 27L, 45L))
+  expect_equal(leading_value("11.1 (9.1, 13.1)"), "11.1")
+  expect_equal(leading_value("NE [17.7; NE]"), "NE")
+  expect_equal(leading_value("62 (50.8 %)"), "62")
+  expect_equal(leading_value("Median (months)"), "")
+  expect_equal(leading_value("95% CI"), "")
+  expect_equal(leading_value("not reached"), "")
+})
+
+# Gold analysis of 2026-10-02: a header quote stitched to a row lines below
+# (IMpower150's "Arm B Arm C OS interim analysis* n = 402 …") failed rows
+# whose value and CI verified.
+test_that("a quote not in the text holding none of the row's numbers drops", {
+  section <- paste(
+    "In TRIAL-9, PFS: HR 0.60 (0.45, 0.80), p = 0.002;",
+    "median 7.7 versus 5.5 months."
+  )
+  header <- "Drugamab Placebo n = 100 n = 98"
+  row <- list(
+    trial = "TRIAL-9", effect_type = "hr", value = "0.60", ci_low = "0.45",
+    ci_high = "0.80", p_value = "0.002", comparator = "placebo",
+    comparator_column_label = "Placebo", arm_treatment = "7.7",
+    arm_control = "5.5", arm_measure = "median months", n_treatment = 100L,
+    n_control = 98L,
+    quotes = c("HR 0.60 (0.45, 0.80), p = 0.002", header)
+  )
+  result <- verify_efficacy_row(row, section)
+  expect_equal(result$status, "exact")
+  expect_true("quote_dropped" %in% result$flags)
+  # Every arm field goes with it, whatever else holds them.
+  expect_setequal(result$blanked, efficacy_arm_fields)
+  expect_equal(result$dropped_quotes, header)
+  kept <- verified_efficacy_row(row, result)
+  expect_equal(unlist(kept$quotes), "HR 0.60 (0.45, 0.80), p = 0.002")
+  for (field in efficacy_arm_fields) {
+    expect_null(kept[[field]], info = field)
+  }
+  expect_equal(kept$value, "0.60")
+  # A quote not in the text holding the value, a CI bound or the p-value
+  # still fails the row.
+  for (bad in c("HR 0.60 n = 100", "CI 0.45 n = 100", "p = 0.002 n = 98")) {
+    failing <- row
+    failing$quotes <- c("HR 0.60 (0.45, 0.80), p = 0.002", bad)
+    result <- verify_efficacy_row(failing, section)
+    expect_equal(result$status, "failed", info = bad)
+    expect_match(result$errors, "quote not in the text", all = FALSE)
+  }
+  # No quote found at all: nothing is dropped.
+  lost <- row
+  lost$quotes <- header
+  expect_equal(verify_efficacy_row(lost, section)$status, "failed")
+  # Found quotes: nothing dropped, no flag.
+  found <- row
+  found$quotes <- c("HR 0.60 (0.45, 0.80), p = 0.002", "7.7 versus 5.5")
+  result <- verify_efficacy_row(found, section)
+  expect_false("quote_dropped" %in% result$flags)
+  expect_equal(result$dropped_quotes, character())
+})
+
+# Gold analysis of 2026-10-02: pdftotext prints a word broken at a line-end
+# hyphen as "platinum-" and "based" (layout) or "platinumbased" (flow), and
+# some hyphens as non-breaking ones ("PD‑L1"), so the quote "platinum-based"
+# was not found (CA20977T) and RELAY's "non-small" was text not in source.
+test_that("hyphens between letters are compared away, line breaks too", {
+  expect_equal(fold_letter_hyphens("platinum-based"), "platinumbased")
+  expect_equal(fold_letter_hyphens("PD‑L1 and PD-L1"), "PDL1 and PDL1")
+  expect_equal(fold_letter_hyphens("non-\nsmall cell"), "nonsmall cell")
+  expect_equal(fold_letter_hyphens("non-  \n  small"), "nonsmall")
+  # Numbers keep their signs and ranges.
+  signs <- "HR -0.5; 0.5-0.7; p-0.01"
+  expect_equal(fold_letter_hyphens(signs), signs)
+  section <- paste(
+    "Patients received nivolumab in combination with platinum-",
+    "based chemotherapy (n = 229) or placebo. EFS: HR = 0.58 (0.42, 0.81).",
+    sep = "\n"
+  )
+  row <- list(
+    value = "0.58", ci_low = "0.42", ci_high = "0.81",
+    quotes = c(
+      "HR = 0.58 (0.42, 0.81)",
+      "nivolumab in combination with platinum-based chemotherapy (n = 229)"
+    ),
+    regimen = "nivolumab in combination with platinumbased chemotherapy"
+  )
+  result <- verify_efficacy_row(row, section)
+  expect_equal(result$status, "exact")
+  expect_equal(result$flags, character())
+  # Another word is still another word: not found, the quote is dropped.
+  row$quotes[2] <- "nivolumab in combination with platinum-free chemotherapy"
+  result <- verify_efficacy_row(row, section)
+  expect_true("quote_dropped" %in% result$flags)
+  expect_equal(result$dropped_quotes, row$quotes[2])
+})
+
+test_that("text in a table cell wrapped over lines is in the source", {
+  # KEYNOTE-189's comparator over four header lines.
+  keytruda <- read_efficacy_section("Keytruda")[1]
+  lines <- efficacy_layout_lines(keytruda)
+  expect_true(wrapped_text_found(
+    "Placebo + Pemetrexed + Platinum Chemotherapy", lines
+  ))
+  expect_true(wrapped_text_found(
+    "Pembrolizumab + Pemetrexed + Platinum Chemotherapy", lines
+  ))
+  # Words of two columns are not one cell.
+  expect_false(wrapped_text_found(
+    "Pembrolizumab + Pemetrexed + Placebo", lines
+  ))
+  # Alecensa: the end of one cell, then the start of the cell below.
+  alecensa <- efficacy_layout_lines(read_efficacy_section("Alecensa")[1])
+  expect_true(wrapped_text_found(
+    "patients pre-treated with chemotherapy", alecensa
+  ))
+  expect_false(wrapped_text_found(
+    "patients pre-treated with crizotinib", alecensa
+  ))
+  row <- list(
+    trial = "KEYNOTE-189", value = "0.56", ci_low = "0.46", ci_high = "0.69",
+    quotes = "Hazard ratio† (95% CI) 0.56 (0.46, 0.69)",
+    comparator = "Placebo + Pemetrexed + Platinum Chemotherapy"
+  )
+  result <- verify_efficacy_row(row, keytruda)
+  expect_equal(result$status, "exact")
+  expect_false("text_not_in_source" %in% result$flags)
+  row$comparator <- "Placebo + Pemetrexed + Carboplatin"
+  expect_true(
+    "text_not_in_source" %in% verify_efficacy_row(row, keytruda)$flags
+  )
+})
+
+# Gold analysis of 2026-10-02: 16 rows of Opus high were hidden as
+# ci_paired_by_column (Alecensa NP28673 and ALINA, Lorviqua, Libtayo), the
+# pairing read off the quote's order alone. The layout prints each interval
+# under its value.
+test_that("an interval printed under its value pairs without a flag", {
+  alecensa <- read_efficacy_section("Alecensa")[1]
+  dor <- "Median (months) 15.2 14.9 [95 % CI] [11.2, 24.9] [6.9, NE]"
+  row <- function(value, ci_low, ci_high, quote = dor) {
+    list(
+      trial = "NP28673", value = value, ci_low = ci_low, ci_high = ci_high,
+      quotes = quote
+    )
+  }
+  for (case in list(
+    c("15.2", "11.2", "24.9"), c("14.9", "6.9", "NE")
+  )) {
+    result <- verify_efficacy_row(row(case[1], case[2], case[3]), alecensa)
+    expect_equal(result$status, "exact", info = case[1])
+    expect_false("ci_paired_by_column" %in% result$flags, info = case[1])
+  }
+  # Another column's interval still fails.
+  expect_equal(
+    verify_efficacy_row(row("15.2", "6.9", "NE"), alecensa)$status, "failed"
+  )
+  # ALINA: the same value in both columns, each over its own interval.
+  alina <- paste(
+    "Stratified HR 0.24 0.24 (95 % CI)* (0.13, 0.45) (0.13, 0.43)"
+  )
+  for (ci_high in c("0.45", "0.43")) {
+    result <- verify_efficacy_row(
+      list(value = "0.24", ci_low = "0.13", ci_high = ci_high, quotes = alina),
+      alecensa
+    )
+    expect_false("ci_paired_by_column" %in% result$flags, info = ci_high)
+  }
+  # A count and its percentage: the interval is the percentage's.
+  responders <- paste(
+    "Responders n (%) 62 (50.8 %) 35 (52.2 %) [95 % CI] [41.6 %, 60.0 %]",
+    "[39.7 %, 64.6 %]"
+  )
+  result <- verify_efficacy_row(
+    row("50.8", "41.6", "60.0", responders), alecensa
+  )
+  expect_false("ci_paired_by_column" %in% result$flags)
+  lines <- efficacy_layout_lines(alecensa)
+  expect_true(value_over_interval("50.8", "41.6", "60.0", lines))
+  expect_false(value_over_interval("62", "41.6", "60.0", lines))
+  # Not aligned in the layout: still paired by order, flagged.
+  section <- paste(
+    "Study 1540 Group 2 ORR 50.8% 44.9% 46.4% 95% CI for ORR",
+    "(37.5, 64.1) (33.6, 56.6) (33.0, 60.3)"
+  )
+  libtayo <- list(
+    trial = "Study 1540", value = "44.9", ci_low = "33.6", ci_high = "56.6",
+    quotes = paste(
+      "ORR 50.8% 44.9% 46.4% 95% CI for ORR (37.5, 64.1) (33.6, 56.6)",
+      "(33.0, 60.3)"
+    )
+  )
+  expect_true(
+    "ci_paired_by_column" %in% verify_efficacy_row(libtayo, section)$flags
+  )
+})
+
+test_that("two percentages are not read as a count and its percentage", {
+  # Lorviqua, Opus high: "42.4% 39.6%" with one interval of the two.
+  binding <- function(quote, value, ci_low, ci_high) {
+    value_ci_binding(
+      list(value = value, ci_low = ci_low, ci_high = ci_high), quote
+    )
+  }
+  lorviqua <- "Objective response rate 42.4% 39.6% (95% CI) (30.5, 49.4)"
+  expect_equal(binding(lorviqua, "42.4%", "30.5", "49.4"), "none")
+  expect_equal(
+    binding(
+      "Responders n (%) 62 (50.8 %) 35 (52.2 %) [95 % CI] [41.6 %, 60.0 %]",
+      "50.8", "41.6", "60.0"
+    ),
+    "none"
+  )
+  expect_equal(
+    binding(
+      paste(
+        "Responders n (%) 62 (50.8 %) 35 (52.2 %) [95 % CI] [41.6 %, 60.0 %]",
+        "[39.7 %, 64.6 %]"
+      ),
+      "50.8", "41.6", "60.0"
+    ),
+    "column"
+  )
+})
+
+# Gold analysis of 2026-10-02: AURA's and LIBRETTO-001's CNS response rates
+# print the responders over the patients between the rate and its CI.
+test_that("a count that reproduces the rate may stand before its CI", {
+  aura <- read_excerpt("tagrisso-aura")
+  row <- list(
+    trial = "AURAex and AURA2", effect_type = "single_arm_rate",
+    value = "54%", ci_low = "39.3", ci_high = "68.2",
+    quotes = "A CNS ORR of 54% (27/50 patients; 95% CI: 39.3, 68.2)"
+  )
+  expect_equal(verify_efficacy_row(row, aura)$status, "exact")
+  binding <- function(quote, value) {
+    value_ci_binding(
+      list(value = value, ci_low = "65.1", ci_high = "95.6"), quote
+    )
+  }
+  expect_equal(
+    binding("84.6% (22/26; 95% CI: 65.1, 95.6)", "84.6"), "adjacent"
+  )
+  # A count that gives another rate is another number.
+  expect_equal(
+    binding("84.6% (21/26; 95% CI: 65.1, 95.6)", "84.6"), "none"
+  )
+  expect_equal(binding("84.6% (22/26; 95% CI: 65.1, 95.6)", "85"), "none")
+  expect_equal(
+    binding("84.6% (22/26 and 3/4; 95% CI: 65.1, 95.6)", "84.6"), "none"
+  )
 })

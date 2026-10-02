@@ -24,7 +24,8 @@ symbol_font_renderings <- function(section_text) {
 }
 
 # A section as the checks read it: its renderings (`texts`, the Symbol "="
-# both ways), each normalised (`sections`), all joined (`joined`), and its
+# both ways), each normalised (`sections`) and so without hyphens between
+# letters (`folded`, fold_letter_hyphens()), all joined (`joined`), and its
 # layout lines (`lines`, section_lines()).
 efficacy_section_texts <- function(section_text) {
   texts <- symbol_font_renderings(section_text)
@@ -32,9 +33,26 @@ efficacy_section_texts <- function(section_text) {
   list(
     texts = texts,
     sections = sections,
+    folded = purrr::map_chr(texts, function(text) {
+      normalise_efficacy_text(fold_letter_hyphens(text))
+    }),
     joined = paste(sections, collapse = " "),
     lines = section_lines(texts)
   )
+}
+
+# Hyphens between two letters, and a word broken at a line-end hyphen, which
+# pdftotext prints inconsistently: "platinum-based" broken at a line end as
+# "platinum-" and "based" (layout) or "platinumbased" (flow), some hyphens as
+# non-breaking ones ("PD‑L1", U+2011). Text and quotes are also compared
+# without them (gold analysis of 2026-10-02: CA20977T's "platinum-based",
+# RELAY's "non-small"); never a hyphen beside a digit or a sign.
+fold_letter_hyphens <- function(text) {
+  text <- gsub(
+    "(?<=\\p{L})[-\u2010\u2011][ \t]*\n[ \t]*(?=\\p{L})", "", text,
+    perl = TRUE
+  )
+  gsub("(?<=\\p{L})[-\u2010\u2011\u00ad](?=\\p{L})", "", text, perl = TRUE)
 }
 
 # For a field's own text, whose "12" on a line of its own is the value, not a
@@ -113,12 +131,16 @@ check_number_field <- function(field, value, quotes_text) {
 # borrow the interval of another row, or of another column of its row
 # ("0.45 (0.33, 0.62) 0.43 (0.31, 0.60)" is not 0.45 (0.31, 0.60)):
 # "adjacent", with no other number between them but a CI level
-# ("0.82 (95% CI: 0.67, 1.01)"; also when the row has no CI); "column", a
+# ("0.82 (95% CI: 0.67, 1.01)"; also when the row has no CI), or but a count
+# that reproduces the rate (value_count_ci()); "aligned", a quote holding
+# both where the section's layout prints the interval under the value's cell
+# (value_over_interval(), `lines`: efficacy_layout_lines()); "column", a
 # table printing its values, then their intervals in the same column order
-# (value_ci_in_columns()); else "none". An interval in a run of intervals
+# (value_ci_in_columns()), which the quote's order alone says (flagged
+# ci_paired_by_column); else "none". An interval in a run of intervals
 # pairs by column only: in "52% 40% 63% 45% (40.6, 62.9) (28.0, 52.9) ...",
 # 45 stands right before the first interval, which is 52's.
-value_ci_binding <- function(row, quotes) {
+value_ci_binding <- function(row, quotes, lines = NULL) {
   value <- row[["value"]]
   ci_low <- row[["ci_low"]]
   ci_high <- row[["ci_high"]]
@@ -129,14 +151,31 @@ value_ci_binding <- function(row, quotes) {
     quotes, quote_value_ci_binding,
     value = value, ci_low = ci_low, ci_high = ci_high
   )
-  c(intersect(c("adjacent", "column"), bindings), "none")[1]
+  if ("adjacent" %in% bindings) {
+    return("adjacent")
+  }
+  holding <- purrr::map_lgl(quotes, function(quote) {
+    all(purrr::map_lgl(c(value, ci_low, ci_high), quote_holds_number,
+                       quote = quote))
+  })
+  if (!is.null(lines) && any(holding) &&
+        value_over_interval(value, ci_low, ci_high, lines)) {
+    return("aligned")
+  }
+  if ("column" %in% bindings) "column" else "none"
 }
 
+# A CI level ("95% CI", "95 % confidence"), the one number allowed between a
+# value and its CI.
+efficacy_ci_level <- "[0-9]{2}(?:\\.[0-9]+)?\\s?%[\\s-]?(?i:ci\\b|confidence)"
+
+efficacy_value_ci_gap <- paste0(
+  "(?:[^0-9]|(?<![0-9.])", efficacy_ci_level, "){0,40}?"
+)
+
 quote_value_ci_binding <- function(quote, value, ci_low, ci_high) {
-  ci_level <- "[0-9]{2}(?:\\.[0-9]+)?\\s?%[\\s-]?(?i:ci\\b|confidence)"
-  gap <- paste0("(?:[^0-9]|(?<![0-9.])", ci_level, "){0,40}?")
   pattern <- paste0(
-    bounded_number(escape_regex(value)), gap,
+    bounded_number(escape_regex(value)), efficacy_value_ci_gap,
     bounded_number(escape_regex(ci_low)), "[^0-9]{1,6}",
     bounded_number(escape_regex(ci_high))
   )
@@ -147,10 +186,36 @@ quote_value_ci_binding <- function(quote, value, ci_low, ci_high) {
     identical(table$tokens[bounds], ci) &&
       sum(table$runs == table$runs[index]) > 1
   })
-  if (!any(in_run) && grepl(pattern, quote, perl = TRUE)) {
+  adjacent <- grepl(pattern, quote, perl = TRUE) ||
+    value_count_ci(quote, value, ci_low, ci_high)
+  if (!any(in_run) && adjacent) {
     return("adjacent")
   }
   if (value_ci_in_columns(table, value, ci)) "column" else "none"
+}
+
+# A rate and its CI with the count it comes from between them, which must
+# reproduce the rate as printed (gold analysis of 2026-10-02: AURA's "54%
+# (27/50 patients; 95% CI: 39.3, 68.2)", LIBRETTO-001's "84.6% (22/26; 95%
+# CI: 65.1, 95.6)"): one count n/N, n of N giving the rate in percent to the
+# rate's decimals, and nothing else numeric but a CI level.
+value_count_ci <- function(quote, value, ci_low, ci_high) {
+  pattern <- paste0(
+    bounded_number(escape_regex(value)), "[^0-9]{0,20}?",
+    "(?<![0-9.])([0-9]+)\\s*/\\s*([0-9]+)(?![0-9]|\\.[0-9])",
+    efficacy_value_ci_gap, bounded_number(escape_regex(ci_low)),
+    "[^0-9]{1,6}", bounded_number(escape_regex(ci_high))
+  )
+  found <- regmatches(quote, regexec(pattern, quote, perl = TRUE))[[1]]
+  rate <- suppressWarnings(as.numeric(number_tokens(value)))
+  if (length(found) < 3 || length(rate) != 1 || is.na(rate)) {
+    return(FALSE)
+  }
+  count <- as.numeric(found[2])
+  total <- as.numeric(found[3])
+  decimals <- nchar(sub("^[0-9]+\\.?", "", number_tokens(value)))
+  total > 0 && count <= total &&
+    isTRUE(all.equal(round(100 * count / total, decimals), rate))
 }
 
 # A quote's tokens (layout_tokens()), its values (quote_value_positions()),
@@ -229,8 +294,10 @@ column_values_before <- function(tokens, values, intervals, run_start) {
 # j-th of the intervals in a run right after the cells (Libtayo's "ORR 50.8%
 # 44.9% 46.4% 95% CI for ORR (37.5, 64.1) (33.6, 56.6) (33.0, 60.3)", 44.9
 # with (33.6, 56.6)): as many cells as intervals, each cell one value or two
-# (a count and its percentage, "62 (50.8 %)"), and no interval among them.
-# `table`: quote_table_parts(); `ci`: the CI's two value tokens.
+# (a count and its percentage in brackets, "62 (50.8 %)"; gold analysis of
+# 2026-10-02: Lorviqua's "42.4% 39.6%" over one of their two intervals is
+# two cells, not one), and no interval among them. `table`:
+# quote_table_parts(); `ci`: the CI's two value tokens.
 value_ci_in_columns <- function(table, value, ci) {
   value_token <- number_tokens(value)
   if (length(value_token) != 1 || length(ci) != 2) {
@@ -246,6 +313,8 @@ value_ci_in_columns <- function(table, value, ci) {
     )
     per_cell <- length(cells) / length(run)
     if (!per_cell %in% c(1, 2)) next
+    bracketed <- tokens[cells[c(FALSE, TRUE)] - 1L] %in% c("(", "[")
+    if (per_cell == 2 && !all(bracketed)) next
     places <- which(tokens[cells] == value_token)
     if (any(ceiling(places / per_cell) == match(index, run))) {
       return(TRUE)
@@ -338,8 +407,14 @@ trial_parts_missing <- function(trial, section) {
   parts[!purrr::map_lgl(parts, contains_word, text = section)]
 }
 
-quote_in_a_section <- function(quote, sections) {
-  any(purrr::map_lgl(sections, \(section) grepl(quote, section, fixed = TRUE)))
+# Intact in a section, or, without hyphens between letters, in a section so
+# folded (`folded`, fold_letter_hyphens()).
+quote_in_a_section <- function(quote, sections, folded = NULL) {
+  within <- function(quote, texts) {
+    any(purrr::map_lgl(texts, \(text) grepl(quote, text, fixed = TRUE)))
+  }
+  within(quote, sections) ||
+    (!is.null(folded) && within(fold_letter_hyphens(quote), folded))
 }
 
 # Words (letters and digits together: "ratioa", "Gastric02"), numbers and
@@ -368,7 +443,9 @@ section_line_tokens <- function(section_text) {
 # line).
 quote_value_positions <- function(tokens) {
   values <- grepl("^([0-9]+(\\.[0-9]+)?|NR|NE|NA|NC)$", tokens)
-  after <- function(offset) c(tokens[-seq_len(offset)], rep("", offset))
+  after <- function(offset) {
+    c(tokens[-seq_len(offset)], rep("", min(offset, length(tokens))))
+  }
   ci_level <- after(1) == "%" &
     grepl("^(ci|confidence)", tolower(after(2)))
   values & !ci_level
@@ -517,12 +594,19 @@ efficacy_arm_pairs <- list(
 )
 
 # The comparator's column label and a control arm's value (`pair`) in one of
-# the quotes holding the label (`with_label`).
-label_tie <- function(row, pair, label, with_label) {
+# the quotes holding the label (`with_label`), or in the label's column of a
+# table (`columns`, arm_value_columns(): "tied", "swapped" or NA).
+label_tie <- function(row, pair, label, with_label, columns = NA) {
   control <- row[[pair$control]]
   treatment <- row[[pair$treatment]]
   if (is_absent(control)) {
     return(list())
+  }
+  if (columns %in% "swapped") {
+    return(list(swap = sprintf(
+      "comparator_column_label '%s' heads the column of %s '%s' (arms swapped)",
+      label, pair$treatment, treatment
+    )))
   }
   holds <- function(value) {
     purrr::map_lgl(with_label, \(quote) pair$holds(value, quote))
@@ -539,6 +623,9 @@ label_tie <- function(row, pair, label, with_label) {
       "%s but with %s '%s' (arms swapped)", apart, pair$treatment, treatment
     )))
   }
+  if (columns %in% "tied") {
+    return(list())
+  }
   list(unverified = apart)
 }
 
@@ -549,20 +636,172 @@ label_tie <- function(row, pair, label, with_label) {
 # rejects the row), for the arm values as for the sizes; a label in no quote
 # with the control's value is only unverified (`unverified`). A quote holding
 # both columns passes either way, so this ties no size to its arm: the sizes
-# need their columns (unverified_sizes()).
-comparator_label_check <- function(row, quotes) {
+# need their columns (unverified_sizes()). The arm values are also read off
+# the section's table (`lines`: efficacy_layout_lines(); gold analysis of
+# 2026-10-02): the control's under the label's column ties them, wherever
+# the label is quoted, and the treatment's there is a swap, even in a quote
+# holding both columns (arm_value_columns()).
+comparator_label_check <- function(row, quotes, lines = NULL) {
   label <- row[["comparator_column_label"]]
   if (is_absent(label)) {
     return(list())
   }
   with_label <- quotes[purrr::map_lgl(quotes, contains_folded, text = label)]
-  checks <- purrr::map(efficacy_arm_pairs, function(pair) {
-    label_tie(row, pair, label, with_label)
+  columns <- if (is.null(lines)) {
+    NA_character_
+  } else {
+    arm_value_columns(row, label, quotes, lines)
+  }
+  checks <- purrr::imap(efficacy_arm_pairs, function(pair, name) {
+    label_tie(
+      row, pair, label, with_label,
+      if (name == "values") columns else NA_character_
+    )
   })
   list(
     swap = unlist(purrr::map(checks, "swap")),
     unverified = checks$values$unverified
   )
+}
+
+# A layout line's cells: runs of text two spaces or more apart (as a table's
+# cells stand apart), each with its columns.
+layout_cells <- function(line) {
+  found <- gregexpr("\\S+(?: \\S+)*", line, perl = TRUE)[[1]]
+  if (found[1] == -1) {
+    return(list(first = integer(), last = integer(), text = character()))
+  }
+  first <- as.integer(found)
+  list(
+    first = first,
+    last = first + attr(found, "match.length") - 1L,
+    text = regmatches(line, list(found))[[1]]
+  )
+}
+
+# The value each text starts with (a number, NR, NE, NA or NC standing as a
+# token of its own, as layout_tokens() reads it, not a CI level such as "95%
+# CI"), "" when it starts with a word or a mark.
+leading_values <- function(texts) {
+  texts <- as.character(texts)
+  found <- regexpr(
+    "^(?:[0-9]+(?:\\.[0-9]+)?|NR|NE|NA|NC)(?![\\p{L}\\p{N}]|\\.[0-9])", texts,
+    perl = TRUE
+  )
+  leads <- rep("", length(texts))
+  leads[found > 0] <- regmatches(texts, found)
+  ci_level <- grepl(paste0("^", efficacy_ci_level), texts, perl = TRUE)
+  leads[ci_level] <- ""
+  leads
+}
+
+# The value a cell or an arm value starts with (leading_values()).
+leading_value <- function(text) {
+  if (is_absent(text)) {
+    return("")
+  }
+  leading_values(normalise_spacing(as.character(text)))
+}
+
+# A size cell in n notation ("n = 152", "(N=143)").
+size_cell <- function(text) {
+  grepl("(?<![A-Za-z0-9])[nN]\\s*=\\s*[0-9]", text, perl = TRUE)
+}
+
+efficacy_table_end <- "^\\s*(Table|Figure)\\s+[0-9]"
+
+# The lines of a table under a place of the label (label_places()) with two
+# value cells, one of them under the label's columns: each line's index and
+# the leading values (leading_values()) under the label (`under`) and in the
+# other cell (`other`). Up to 40 lines below the label, before the next
+# table or figure, and before a line of three cells of values or sizes (a
+# third arm leaves the treatment's column unknown: IMpower150,
+# BGB-A317-307).
+label_column_lines <- function(place, lines) {
+  last <- min(length(lines), place$bottom + 40L)
+  found <- list(index = integer(), under = character(), other = character())
+  for (index in seq_len(max(0L, last - place$bottom)) + place$bottom) {
+    if (grepl(efficacy_table_end, lines[index], perl = TRUE)) break
+    cells <- layout_cells(lines[index])
+    leads <- leading_values(cells$text)
+    values <- nzchar(leads)
+    if (sum(values | size_cell(cells$text)) >= 3) break
+    if (sum(values) != 2) next
+    in_column <- values & cells$first <= place$last & cells$last >= place$first
+    if (sum(in_column) != 1) next
+    found$index <- c(found$index, index)
+    found$under <- c(found$under, leads[in_column])
+    found$other <- c(found$other, leads[values & !in_column])
+  }
+  found
+}
+
+# Whether a quote is the table line's text, or holds values the line holds
+# in its order (a row the model read in reading order,
+# quote_in_layout_lines()).
+quote_reads_line <- function(quote, line) {
+  if (grepl(normalise_spacing(line), quote, fixed = TRUE)) {
+    return(TRUE)
+  }
+  tokens <- layout_tokens(quote)[[1]]
+  values <- tokens[quote_value_positions(tokens)]
+  length(values) > 0 &&
+    holds_in_order(layout_tokens(normalise_spacing(line))[[1]], values)
+}
+
+# Where a table of the section puts the arm values (gold analysis of
+# 2026-10-02: 91 of Opus high's scored rows were hidden as
+# arms_not_verified, every one with the label quoted with the header and the
+# medians in a quote of their own; ALEX's header and medians quoted together
+# passed a swap). "tied": a line the arm values' quotes read
+# (quote_reads_line()) puts the control's leading value under the label's
+# column and the treatment's in the other cell (label_column_lines()), and
+# no line puts them the other way round; "swapped": the other way round
+# only; else NA (no such line, or both: equal values, the label over both
+# columns). By leading values ("NE [17.7; NE]" is NE); the whole arm values
+# must still be in the quotes.
+arm_value_columns <- function(row, label, quotes, lines) {
+  control <- leading_value(row[["arm_control"]])
+  treatment <- leading_value(row[["arm_treatment"]])
+  if (!nzchar(control)) {
+    return(NA_character_)
+  }
+  found <- purrr::map(
+    label_places(label, lines), label_column_lines,
+    lines = lines
+  )
+  columns <- purrr::map(
+    c(index = "index", under = "under", other = "other"),
+    \(field) unlist(purrr::map(found, field))
+  )
+  tied_lines <- function(control, treatment) {
+    unique(columns$index[columns$under == control &
+                           (!nzchar(treatment) | columns$other == treatment)])
+  }
+  arm_values <- purrr::discard(
+    list(row[["arm_control"]], row[["arm_treatment"]]), is_absent
+  )
+  quoting <- quotes[purrr::map_lgl(quotes, function(quote) {
+    any(purrr::map_lgl(arm_values, quote_holds_number, quote = quote))
+  })]
+  read <- function(indices) {
+    any(purrr::map_lgl(indices, function(index) {
+      any(purrr::map_lgl(quoting, quote_reads_line, line = lines[index]))
+    }))
+  }
+  given <- tied_lines(control, treatment)
+  swapped <- if (nzchar(treatment) && treatment != control) {
+    tied_lines(treatment, control)
+  } else {
+    integer()
+  }
+  if (read(given) && length(swapped) == 0) {
+    "tied"
+  } else if (read(swapped) && length(given) == 0) {
+    "swapped"
+  } else {
+    NA_character_
+  }
 }
 
 # A section's lines as printed, their spacing kept so a cell's columns can be
@@ -816,12 +1055,13 @@ untied_label <- function(row) {
 
 # The arm values in the quotes and the comparator's label with the control's
 # values: `swap` (an error), `unverified` (what did not verify) and
-# `warnings` (values reassembled from split table cells).
-check_arms <- function(row, quotes, quotes_text) {
+# `warnings` (values reassembled from split table cells). `lines`: the
+# section's layout lines, for the label's column (comparator_label_check()).
+check_arms <- function(row, quotes, quotes_text, lines = NULL) {
   checks <- purrr::map(efficacy_arm_number_fields, function(field) {
     check_number_field(field, row[[field]], quotes_text)
   })
-  label <- comparator_label_check(row, quotes)
+  label <- comparator_label_check(row, quotes, lines)
   list(
     swap = label$swap,
     unverified = c(unlist(purrr::map(checks, "error")), label$unverified),
@@ -837,6 +1077,19 @@ without_unverified_arms <- function(row, blanked) {
   row
 }
 
+# The row as verify_efficacy_row() keeps it (`verification`): without the
+# fields it blanked (without_unverified_arms()) and the quotes it dropped
+# (`dropped_quotes`), so no quote the section does not hold is kept.
+verified_efficacy_row <- function(row, verification) {
+  row <- without_unverified_arms(row, verification$blanked)
+  dropped <- verification$dropped_quotes %||% character()
+  if (length(dropped) > 0) {
+    quotes <- row[["quotes"]]
+    row[["quotes"]] <- quotes[!as.character(unlist(quotes)) %in% dropped]
+  }
+  row
+}
+
 # Displayed text the section does not hold (case and spacing aside): the
 # pilot's rows paraphrase, so a human decides.
 efficacy_text_fields_checked <- c(
@@ -844,14 +1097,91 @@ efficacy_text_fields_checked <- c(
   "endpoint", "assessment"
 )
 
-text_not_in_source <- function(row, sections) {
+# `section`: efficacy_section_texts(); `lines`: its layout lines
+# (efficacy_layout_lines()). A text the section holds, also without hyphens
+# between letters (fold_letter_hyphens()) or wrapped over a table cell
+# (wrapped_text_found(); gold analysis of 2026-10-02: 11 of 11
+# text_not_in_source rows of Opus high were wrapped table headers or
+# line-break hyphens, as KEYNOTE-189's comparator "Placebo + Pemetrexed +
+# Platinum Chemotherapy" over four lines).
+text_not_in_source <- function(row, section, lines = NULL) {
   texts <- purrr::keep(
     purrr::map(efficacy_text_fields_checked, \(field) row[[field]]),
     \(text) !is_absent(text)
   )
-  any(purrr::map_lgl(texts, function(text) {
-    !any(purrr::map_lgl(sections, \(section) contains_folded(text, section)))
-  }))
+  any(purrr::map_lgl(texts, \(text) !text_in_source(text, section, lines)))
+}
+
+text_in_source <- function(text, section, lines) {
+  in_any <- function(text, texts) {
+    any(purrr::map_lgl(texts, \(within) contains_folded(text, within)))
+  }
+  in_any(text, section$sections) ||
+    in_any(fold_letter_hyphens(text), section$folded) ||
+    (!is.null(lines) && wrapped_text_found(text, lines))
+}
+
+# The words of a text as the wrapped-cell reader compares them: lower-case,
+# without hyphens between letters, one space apart.
+cell_words <- function(text) {
+  text <- tolower(fold_letter_hyphens(normalise_spacing(text)))
+  strsplit(text, " ", fixed = TRUE)[[1]]
+}
+
+# Whether `text` stands in a table cell its words wrap over two to four
+# layout lines (`lines`: efficacy_layout_lines()), read down the column: the
+# last words of a cell, then whole cells each under the part above, then the
+# first words of a cell (KEYNOTE-189's "Placebo +" / "Pemetrexed +" /
+# "Platinum" / "Chemotherapy"; Alecensa's "ORR (IRC) in patients pre-treated
+# with" / "chemotherapy"). Case and hyphens between letters aside.
+wrapped_text_found <- function(text, lines) {
+  words <- cell_words(text)
+  if (length(words) < 2) {
+    return(FALSE)
+  }
+  folded <- fold_letter_hyphens(tolower(lines))
+  for (index in which(grepl(words[1], folded, fixed = TRUE))) {
+    cells <- layout_cells(lines[index])
+    for (cell in seq_along(cells$text)) {
+      within <- cell_words(cells$text[cell])
+      for (taken in seq_len(min(length(words) - 1L, length(within)))) {
+        tail <- within[seq(length(within) - taken + 1L, length(within))]
+        if (!identical(tail, words[seq_len(taken)])) next
+        span <- c(cells$first[cell], cells$last[cell])
+        if (wrapped_text_below(words, taken, lines, index + 1L, span,
+                               index + 3L)) {
+          return(TRUE)
+        }
+      }
+    }
+  }
+  FALSE
+}
+
+# The rest of `words` after the first `taken`, read down from line `index`
+# (at most to line `last`): a cell overlapping the columns `span` of the part
+# above that starts with the rest, or is a whole run of it and the rest
+# follows below.
+wrapped_text_below <- function(words, taken, lines, index, span, last) {
+  if (index > min(last, length(lines))) {
+    return(FALSE)
+  }
+  rest <- words[seq(taken + 1L, length(words))]
+  cells <- layout_cells(lines[index])
+  for (cell in which(cells$first <= span[2] & cells$last >= span[1])) {
+    within <- cell_words(cells$text[cell])
+    shared <- seq_len(min(length(within), length(rest)))
+    if (!identical(within[shared], rest[shared])) next
+    if (length(rest) <= length(within)) {
+      return(TRUE)
+    }
+    below <- c(cells$first[cell], cells$last[cell])
+    if (wrapped_text_below(words, taken + length(within), lines, index + 1L,
+                           below, last)) {
+      return(TRUE)
+    }
+  }
+  FALSE
 }
 
 indication_not_in_source <- function(indication, indication_text) {
@@ -871,10 +1201,16 @@ ci_level_not_in_source <- function(ci_level, texts) {
 }
 
 # Reasons to show the row to a human first (efficacy_flags() adds them).
-verification_flags <- function(row, quotes, sections, indication_text) {
+# `section`: efficacy_section_texts(); `lines`: its layout lines.
+verification_flags <- function(row,
+                               quotes,
+                               section,
+                               indication_text,
+                               lines = NULL) {
+  sections <- section$sections
   quotes_text <- paste(quotes, collapse = " || ")
   checks <- c(
-    text_not_in_source = text_not_in_source(row, sections),
+    text_not_in_source = text_not_in_source(row, section, lines),
     indication_not_in_source = indication_not_in_source(
       row[["indication"]], indication_text
     ),
@@ -886,18 +1222,36 @@ verification_flags <- function(row, quotes, sections, indication_text) {
   names(checks)[checks]
 }
 
-# Where each quote was found: "verbatim" (intact in a section text),
+# Where each quote was found: "verbatim" (intact in a section text, also
+# without hyphens between letters in `folded`, quote_in_a_section()),
 # "layout" (read off at most three of its layout lines,
-# quote_in_layout_lines()) or NA (not found).
-quote_sources <- function(quotes, sections, section_text) {
-  verbatim <- purrr::map_lgl(quotes, quote_in_a_section, sections = sections)
+# quote_in_layout_lines(); with those hyphens folded on both sides when the
+# quote has one) or NA (not found).
+quote_sources <- function(quotes, sections, section_text, folded = NULL) {
+  verbatim <- purrr::map_lgl(
+    quotes, quote_in_a_section,
+    sections = sections, folded = folded
+  )
   sources <- dplyr::if_else(verbatim, "verbatim", NA_character_)
   if (all(verbatim)) {
     return(sources)
   }
   line_tokens <- purrr::map(section_text, section_line_tokens)
-  in_layout <- purrr::map_lgl(quotes[!verbatim], function(quote) {
-    any(purrr::map_lgl(line_tokens, quote_in_layout_lines, quote = quote))
+  in_lines <- function(quote, tokens) {
+    any(purrr::map_lgl(tokens, quote_in_layout_lines, quote = quote))
+  }
+  hyphenless <- purrr::map_chr(quotes, fold_letter_hyphens)
+  hyphenated <- !verbatim & hyphenless != quotes & !is.null(folded)
+  folded_tokens <- if (any(hyphenated)) {
+    purrr::map(section_text, function(text) {
+      layout_tokens(fold_letter_hyphens(section_lines(text)))
+    })
+  } else {
+    list()
+  }
+  in_layout <- purrr::map_lgl(which(!verbatim), function(index) {
+    in_lines(quotes[index], line_tokens) ||
+      (hyphenated[index] && in_lines(hyphenless[index], folded_tokens))
   })
   sources[!verbatim][in_layout] <- "layout"
   sources
@@ -922,17 +1276,42 @@ quote_sources <- function(quotes, sections, section_text) {
 # unflagged. A single-arm effect on a row of two arms (a comparator or a
 # control arm's value, as the model gave them) is flagged
 # single_arm_with_control: the card would show one arm's result as the
-# medicine's.
+# medicine's. A quote not in the text that holds none of the row's value, CI
+# and p-value, beside a quote that is, is dropped (gold analysis of
+# 2026-10-02: a table header stitched to a row lines below, IMpower150's
+# "Arm B Arm C OS interim analysis* n = 402 …", failed rows whose value and
+# CI verified): `dropped_quotes` names it (verified_efficacy_row() drops it),
+# every arm field the row gives is blanked, as nothing a dropped quote
+# carried is shown, and the row, checked without them, is flagged
+# quote_dropped. The arm values are also tied to their table's columns
+# (comparator_label_check()), text fields are also read through wrapped
+# table cells and line-break hyphens (text_not_in_source()), and a CI is
+# also paired by the layout's columns (value_ci_binding()).
 verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   section <- efficacy_section_texts(section_text)
   sections <- section$sections
   all_sections <- section$joined
+  lines <- efficacy_layout_lines(section$texts)
   row <- normalise_number_fields(row)
   second_arm <- single_arm_effect(row) && two_arm_row(row)
-  quotes <- purrr::map_chr(row[["quotes"]], normalise_efficacy_text)
+  given_quotes <- as.character(unlist(row[["quotes"]]))
+  quotes <- purrr::map_chr(given_quotes, normalise_efficacy_text)
+  given_quotes <- given_quotes[nzchar(quotes)]
   quotes <- quotes[nzchar(quotes)]
-  sources <- quote_sources(quotes, sections, section$texts)
+  sources <- quote_sources(quotes, sections, section$texts, section$folded)
   found <- !is.na(sources)
+  droppable <- !found & any(found) &
+    !purrr::map_lgl(quotes, quote_holds_row_numbers, row = row)
+  dropped_quotes <- given_quotes[droppable]
+  quotes <- quotes[!droppable]
+  sources <- sources[!droppable]
+  found <- found[!droppable]
+  dropped_arms <- if (any(droppable)) {
+    given_fields(row, efficacy_arm_fields)
+  } else {
+    character()
+  }
+  row <- without_unverified_arms(row, dropped_arms)
   errors <- sprintf("quote not in the text: %s", substr(quotes[!found], 1, 80))
   if (length(quotes) == 0) {
     errors <- "no quote: every row needs at least one verbatim quote"
@@ -947,14 +1326,14 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     errors <- c(errors, check$error)
     warnings <- c(warnings, check$warning)
   }
-  binding <- value_ci_binding(row, quotes)
+  binding <- value_ci_binding(row, quotes, lines)
   if (binding == "none") {
     errors <- c(errors, sprintf(
       "value and CI not in one quote: %s (%s, %s)",
       row[["value"]], row[["ci_low"]], row[["ci_high"]]
     ))
   }
-  arms <- check_arms(row, quotes, quotes_text)
+  arms <- check_arms(row, quotes, quotes_text, lines)
   errors <- c(errors, arms$swap)
   missing_parts <- trial_parts_missing(row[["trial"]], all_sections)
   if (length(missing_parts) > 0) {
@@ -965,9 +1344,7 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
   }
   blanked <- character()
   if (length(arms$unverified) > 0 && length(errors) == 0) {
-    blanked <- efficacy_arm_fields[!purrr::map_lgl(
-      efficacy_arm_fields, \(field) is_absent(row[[field]])
-    )]
+    blanked <- given_fields(row, efficacy_arm_fields)
     row <- without_unverified_arms(row, blanked)
   } else {
     errors <- c(errors, arms$unverified)
@@ -989,10 +1366,11 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     .default = "exact"
   )
   flags <- c(
-    verification_flags(row, quotes, sections, indication_text),
+    verification_flags(row, quotes, section, indication_text, lines),
     if (any(sources %in% "layout")) "quote_across_lines",
     if (binding == "column") "ci_paired_by_column",
     if (length(blanked) > 0) "arms_not_verified",
+    if (length(dropped_quotes) > 0) "quote_dropped",
     if (second_arm) "single_arm_with_control"
   )
   list(
@@ -1000,20 +1378,104 @@ verify_efficacy_row <- function(row, section_text, indication_text = NULL) {
     errors = errors,
     warnings = warnings,
     flags = flags,
-    blanked = c(blanked, dropped)
+    blanked = c(dropped_arms, blanked, dropped),
+    dropped_quotes = dropped_quotes
   )
+}
+
+# The fields of `fields` the row gives.
+given_fields <- function(row, fields) {
+  fields[!purrr::map_lgl(fields, \(field) is_absent(row[[field]]))]
+}
+
+# Whether a quote holds any of the row's value, CI bounds and p-value
+# (quote_holds_number()): a quote that does is evidence for them.
+quote_holds_row_numbers <- function(quote, row) {
+  numbers <- purrr::discard(
+    list(row[["value"]], row[["ci_low"]], row[["ci_high"]], row[["p_value"]]),
+    is_absent
+  )
+  any(purrr::map_lgl(numbers, quote_holds_number, quote = quote))
 }
 
 # The page of `page_texts` a quote starts on, also across a page break; a
 # table row quoted in reading order by its layout lines (quote_layout_page());
-# the Symbol font's "=" read both ways (symbol_font_renderings()).
+# the Symbol font's "=" read both ways (symbol_font_renderings()); else with
+# hyphens between letters folded on both sides (fold_letter_hyphens()), as the
+# quote may be found so.
 efficacy_quote_page <- function(quote, page_texts) {
   page <- quote_page_in(quote, page_texts)
   decoded <- gsub("\uf03d", "=", page_texts, fixed = TRUE)
   if (is.na(page) && !identical(decoded, page_texts)) {
     page <- quote_page_in(quote, decoded)
   }
+  if (is.na(page)) {
+    page <- quote_page_in(
+      fold_letter_hyphens(quote), fold_letter_hyphens(decoded)
+    )
+  }
   page
+}
+
+# Whether the section's layout prints the interval (ci_low, ci_high) under
+# the value's cell (`lines`: efficacy_layout_lines()): on the nearest line
+# above the interval (at most three up) with a cell over the interval's
+# columns, that cell is the only one there, holds the value (alone, or as
+# the percentage of a count, "62 (50.8 %)") and has the interval's cell as
+# the only cell under it (gold analysis of 2026-10-02: Alecensa's NP28673
+# and ALINA, Lorviqua's and Libtayo's tables, flagged ci_paired_by_column on
+# the quote's order alone).
+value_over_interval <- function(value, ci_low, ci_high, lines) {
+  token <- number_tokens(value)
+  if (length(token) != 1) {
+    return(FALSE)
+  }
+  pattern <- paste0(
+    "[\\(\\[]\\s*", bounded_number(escape_regex(ci_low)),
+    "\\s*%?\\s*(?:,|;|-|\u2013|to)\\s*", bounded_number(escape_regex(ci_high)),
+    "\\s*%?\\s*[\\)\\]]"
+  )
+  for (index in which(grepl(pattern, lines, perl = TRUE))) {
+    found <- gregexpr(pattern, lines[index], perl = TRUE)[[1]]
+    ends <- as.integer(found) + attr(found, "match.length") - 1L
+    for (interval in seq_along(found)) {
+      span <- c(as.integer(found[interval]), ends[interval])
+      if (interval_under_value(token, span, lines, index)) {
+        return(TRUE)
+      }
+    }
+  }
+  FALSE
+}
+
+interval_under_value <- function(token, span, lines, index) {
+  intervals <- layout_cells(lines[index])
+  for (above in rev(seq_len(index - 1L))[seq_len(min(3L, index - 1L))]) {
+    cells <- layout_cells(lines[above])
+    over <- which(cells$first <= span[2] & cells$last >= span[1])
+    if (length(over) == 0) next
+    if (length(over) > 1 || !cell_holds_value(cells$text[over], token)) {
+      return(FALSE)
+    }
+    under <- which(
+      intervals$first <= cells$last[over] & intervals$last >= cells$first[over]
+    )
+    return(length(under) == 1 && intervals$first[under] <= span[1] &&
+             intervals$last[under] >= span[2])
+  }
+  FALSE
+}
+
+# Whether a cell's value is `token`: its one value, or the second of a count
+# and its bracketed percentage ("62 (50.8 %)" is 50.8).
+cell_holds_value <- function(text, token) {
+  tokens <- layout_tokens(normalise_spacing(text))[[1]]
+  places <- which(quote_value_positions(tokens))
+  if (length(places) == 1) {
+    return(tokens[places] == token)
+  }
+  length(places) == 2 && tokens[places[2] - 1L] %in% c("(", "[") &&
+    tokens[places[2]] == token
 }
 
 quote_page_in <- function(quote, page_texts) {
