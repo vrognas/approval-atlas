@@ -47,7 +47,9 @@ export const closeIcon = () => icon("close-icon", ["M4 4l8 8M12 4l-8 8"]);
 export function markExternal(anchor, iconParent = anchor) {
   const { name, host } = destinationOf(anchor.href);
   const newTab = UI.external.newTab(name);
-  iconParent.append(externalIcon());
+  // A word joiner (U+2060) before the icon, so a line never starts with it (recheck 2026-10-02:
+  // the footer's balanced lines put the WHOCC link's icon at a line start).
+  iconParent.append("⁠", externalIcon());
   const label = anchor.getAttribute("aria-label");
   if (label) {
     anchor.setAttribute("aria-label", `${label} ${newTab}`);

@@ -3348,6 +3348,16 @@ table.conditions-table {
   position: relative;
 }
 
+/* The condition links at least 24px tall (axe target-size, recheck 2026-10-02: 18px with a filter
+   set), the negative margin keeping the row; 44px on phones (below). */
+.conditions-table .cond-name a {
+  display: inline-block;
+  padding-block: 3px;
+  margin-block: -3px;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: min(0px, (1lh - 24px) / 2);
+}
+
 .cond-value {
   font-variant-numeric: tabular-nums;
 }
