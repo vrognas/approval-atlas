@@ -2177,7 +2177,101 @@ test_that("the report lists extra rows beside a missed gold row", {
     )
   )
   details <- gold_report_details(result)
-  heading <- grep("beside a missed gold row", details, fixed = TRUE)
+  heading <- grep(
+    "Extra rows beside a missed gold row of their trial", details,
+    fixed = TRUE
+  )
   expect_length(heading, 1)
   expect_match(details[heading + 1], "alecensa\\|alina\\|DFS")
+  # And among the reasons it is not accepted, until checked.
+  expect_true(any(grepl(
+    "1 extra row(s) beside a missed gold row, not checked", details,
+    fixed = TRUE
+  )))
+})
+
+# Review of the gold analysis's fixes (2026-10-02): the labels that keep a
+# true row of another population or analysis apart are the model's own, so
+# a wrong number labelled so left the zero-error bar. Each such row is listed
+# beside the gold row it may stand for and counts against acceptance until
+# checked by hand.
+test_that("a wrong number under another row's labels still fails acceptance", {
+  rows <- gold()
+  alina <- gold_index(rows, "Alecensa", "ALINA")[1]
+  one <- rows
+  one[[alina]] <- modifyList(one[[alina]], list(
+    value = "0.99", analysis = "subgroup analysis"
+  ))
+  score <- score_against_gold(one, rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$near_missed_rows, 1L)
+  result <- list(
+    score = score,
+    calls = dplyr::tibble(medicine = "A", status = "ok", rows_dropped = 0L)
+  )
+  problems <- gold_acceptance_problems(result)
+  expect_match(problems, "beside a missed gold row", all = FALSE)
+  expect_false(gold_model_passes(result))
+  # Gold against itself: none.
+  expect_equal(score_against_gold(rows, rows)$near_missed_rows, 0L)
+})
+
+# The analysis's probe, with the labels a model may state wrongly: every gold
+# row given a wrong value is a numeric error or an extra row listed beside it.
+test_that("a wrong value is caught whatever labels the model states", {
+  rows <- gold()
+  wrong <- purrr::map(rows, function(row) {
+    modifyList(row, list(value = paste0(row$value, "9")))
+  })
+  stated <- function(extra) {
+    purrr::map(wrong, function(row) {
+      modifyList(as_extracted(row, role = NA_character_), extra)
+    })
+  }
+  labels <- c(
+    purrr::map(
+      c("whole_trial_matches", "whole_trial_broader", "subgroup_matches",
+        "other", "not_stated"),
+      \(match) list(population_match = match)
+    ),
+    list(
+      list(analysis = "sensitivity analysis"),
+      list(analysis = "subgroup analysis"),
+      list(assessment = "investigator"),
+      list(assessment = "IRC"),
+      list(
+        population_match = "subgroup_matches", analysis = "subgroup analysis",
+        assessment = "BICR"
+      )
+    )
+  )
+  for (extra in labels) {
+    info <- paste(names(extra), unlist(extra), collapse = ", ")
+    score <- score_against_gold(stated(extra), rows)
+    expect_equal(
+      score$numeric_errors + score$near_missed_rows, length(rows),
+      info = info
+    )
+    result <- list(
+      score = score,
+      calls = dplyr::tibble(medicine = "A", status = "ok", rows_dropped = 0L)
+    )
+    expect_false(gold_model_passes(result), info = info)
+  }
+})
+
+test_that("a time to an endpoint and a longer name are read as printed", {
+  expect_equal(
+    gold_endpoint("Time to objective response"), "TIME TO OBJECTIVE RESPONSE"
+  )
+  expect_equal(gold_endpoint("Time to response"), "TIME TO RESPONSE")
+  expect_equal(gold_endpoint("Progression-free survival time"), "PFS")
+  expect_equal(gold_endpoint("Overall survival time"), "OS")
+  expect_equal(gold_endpoint("Survival Time"), "OS")
+  expect_equal(gold_endpoint("Duration of objective response"), "DOR")
+  expect_equal(
+    gold_endpoint_mentions("Objective response rate and duration of response"),
+    c("ORR", "DOR")
+  )
 })

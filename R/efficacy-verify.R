@@ -629,22 +629,71 @@ label_tie <- function(row, pair, label, with_label, columns = NA) {
   list(unverified = apart)
 }
 
+# The words of an arm's name or column header as compared: lower-case, with
+# hyphens between letters folded away and as breaks between words (a header's
+# first line "Control (platinum-" names "platinum-based"), without the words
+# that name no arm.
+efficacy_arm_filler_words <- c(
+  "arm", "arms", "group", "groups", "and", "or", "plus", "with", "the", "of"
+)
+
+arm_name_words <- function(text) {
+  if (is_absent(text)) {
+    return(character())
+  }
+  text <- tolower(normalise_spacing(as.character(text)))
+  words <- function(text) {
+    regmatches(
+      text, gregexpr("\\p{L}[\\p{L}\\p{N}]*", text, perl = TRUE)
+    )[[1]]
+  }
+  found <- c(words(fold_letter_hyphens(text)), words(text))
+  setdiff(unique(found), efficacy_arm_filler_words)
+}
+
+# Whether the comparator's column label names the comparator, not the
+# treatment arm (review of the gold analysis's fixes, 2026-10-02: ALEX's
+# treatment header "Alecensa" given as the comparator's, with the arm values
+# and sizes read by column position, tied every one of them to the wrong
+# arm): a word of the comparator, and no word of the regimen the comparator
+# lacks ("Tislelizumab + Paclitaxel + Carboplatin" does not head "Paclitaxel
+# + Carboplatin"'s column). Without a comparator nothing tells the label's
+# arm.
+label_names_comparator <- function(row) {
+  label <- arm_name_words(row[["comparator_column_label"]])
+  comparator <- arm_name_words(row[["comparator"]])
+  regimen <- arm_name_words(row[["regimen"]])
+  length(intersect(label, comparator)) > 0 &&
+    length(intersect(setdiff(label, comparator), regimen)) == 0
+}
+
 # The comparator's column label and each value of the control arm (its value,
 # its size) stand in one quote, so arms read from the wrong column cannot
-# pass (ALEX prints the comparator first). A label in a quote with the
-# treatment arm's value and not the control's is a swap (`swap`, which
-# rejects the row), for the arm values as for the sizes; a label in no quote
-# with the control's value is only unverified (`unverified`). A quote holding
-# both columns passes either way, so this ties no size to its arm: the sizes
-# need their columns (unverified_sizes()). The arm values are also read off
-# the section's table (`lines`: efficacy_layout_lines(); gold analysis of
-# 2026-10-02): the control's under the label's column ties them, wherever
-# the label is quoted, and the treatment's there is a swap, even in a quote
-# holding both columns (arm_value_columns()).
+# pass (ALEX prints the comparator first). A label that does not name the
+# comparator (label_names_comparator()) ties nothing: arm values with it are
+# unverified, and no size is placed by it (sizes_in_label_columns()). A
+# label in a quote with the treatment arm's value and not the control's is a
+# swap (`swap`, which rejects the row), for the arm values as for the sizes;
+# a label in no quote with the control's value is only unverified
+# (`unverified`). A quote holding both columns passes either way, so this
+# ties no size to its arm: the sizes need their columns (unverified_sizes()).
+# The arm values are also read off the section's table (`lines`:
+# efficacy_layout_lines(); gold analysis of 2026-10-02): the control's under
+# the label's column in the row's own block ties them, wherever the label is
+# quoted, and the treatment's there is a swap, even in a quote holding both
+# columns (arm_value_columns()).
 comparator_label_check <- function(row, quotes, lines = NULL) {
   label <- row[["comparator_column_label"]]
   if (is_absent(label)) {
     return(list())
+  }
+  if (!label_names_comparator(row)) {
+    return(list(unverified = if (!is_absent(row[["arm_control"]])) {
+      sprintf(
+        "comparator_column_label '%s' does not name the comparator '%s'",
+        label, if (is_absent(row[["comparator"]])) "" else row[["comparator"]]
+      )
+    }))
   }
   with_label <- quotes[purrr::map_lgl(quotes, contains_folded, text = label)]
   columns <- if (is.null(lines)) {
@@ -753,17 +802,25 @@ quote_reads_line <- function(quote, line) {
 # 2026-10-02: 91 of Opus high's scored rows were hidden as
 # arms_not_verified, every one with the label quoted with the header and the
 # medians in a quote of their own; ALEX's header and medians quoted together
-# passed a swap). "tied": a line the arm values' quotes read
-# (quote_reads_line()) puts the control's leading value under the label's
-# column and the treatment's in the other cell (label_column_lines()), and
-# no line puts them the other way round; "swapped": the other way round
-# only; else NA (no such line, or both: equal values, the label over both
-# columns). By leading values ("NE [17.7; NE]" is NE); the whole arm values
-# must still be in the quotes.
+# passed a swap). "tied": a line of the row's own block (row_block_lines():
+# the lines around the one printing the row's value with its CI, up to the
+# endpoint's heading; review of the fixes, 2026-10-02: any line under the
+# label had tied, another endpoint's, table's or trial's) that the arm
+# values' quotes read (quote_reads_line()) puts the control's leading value
+# under the label's column and the treatment's in the other cell
+# (label_column_lines()), and no line of the block puts them the other way
+# round; "swapped": the other way round only; else NA (no such line, or
+# both, as under a label over both columns; or equal leading values, which
+# cannot tell the arms apart). By leading values ("NE [17.7; NE]" is NE);
+# the whole arm values must still be in the quotes.
 arm_value_columns <- function(row, label, quotes, lines) {
   control <- leading_value(row[["arm_control"]])
   treatment <- leading_value(row[["arm_treatment"]])
-  if (!nzchar(control)) {
+  if (!nzchar(control) || identical(control, treatment)) {
+    return(NA_character_)
+  }
+  block <- row_block_lines(row, quotes, lines)
+  if (length(block) == 0) {
     return(NA_character_)
   }
   found <- purrr::map(
@@ -774,9 +831,12 @@ arm_value_columns <- function(row, label, quotes, lines) {
     c(index = "index", under = "under", other = "other"),
     \(field) unlist(purrr::map(found, field))
   )
+  # A line whose two cells start with the same value tells no arm apart.
   tied_lines <- function(control, treatment) {
     unique(columns$index[columns$under == control &
-                           (!nzchar(treatment) | columns$other == treatment)])
+                           columns$under != columns$other &
+                           (!nzchar(treatment) | columns$other == treatment) &
+                           columns$index %in% block])
   }
   arm_values <- purrr::discard(
     list(row[["arm_control"]], row[["arm_treatment"]]), is_absent
@@ -790,7 +850,7 @@ arm_value_columns <- function(row, label, quotes, lines) {
     }))
   }
   given <- tied_lines(control, treatment)
-  swapped <- if (nzchar(treatment) && treatment != control) {
+  swapped <- if (nzchar(treatment)) {
     tied_lines(treatment, control)
   } else {
     integer()
@@ -802,6 +862,144 @@ arm_value_columns <- function(row, label, quotes, lines) {
   } else {
     NA_character_
   }
+}
+
+# A value, or an NR, NE, NA or NC, as an interval prints it.
+efficacy_value_token <- "(?:[0-9]+(?:\\.[0-9]+)?|NR|NE|NA|NC)"
+
+# An interval as tables print one: "(0.37, 0.68)", "[0.36; 0.70]",
+# "[41.6 %, 60.0 %]".
+efficacy_interval <- paste0(
+  "[\\(\\[]\\s*", efficacy_value_token, "\\s*%?\\s*(?:,|;|-|–|to)\\s*",
+  efficacy_value_token, "\\s*%?\\s*[\\)\\]]"
+)
+
+# The lines printing the row's value with its CI (`lines`:
+# efficacy_layout_lines()): the value as a number of its own and both CI
+# bounds after it on the line or on the next line (ALEX's "HR 0.50" over
+# "[95 % CI] [0.36; 0.70]"). A row without a CI: a line holding its value
+# that a quote holding it reads (quote_reads_line()).
+row_value_lines <- function(row, quotes, lines) {
+  value <- row[["value"]]
+  if (is_absent(value)) {
+    return(integer())
+  }
+  bounds <- purrr::discard(list(row[["ci_low"]], row[["ci_high"]]), is_absent)
+  pattern <- bounded_number(escape_regex(value))
+  holding <- quotes[purrr::map_lgl(quotes, quote_holds_number, value = value)]
+  holds_ci <- function(text) {
+    all(purrr::map_lgl(bounds, contains_bounded, text = text))
+  }
+  candidates <- which(grepl(pattern, lines, perl = TRUE))
+  purrr::keep(candidates, function(index) {
+    line <- lines[index]
+    if (length(bounds) < 2) {
+      return(any(purrr::map_lgl(holding, quote_reads_line, line = line)))
+    }
+    after <- substring(line, regexpr(pattern, line, perl = TRUE))
+    below <- if (index < length(lines)) lines[index + 1L] else ""
+    holds_ci(after) || holds_ci(below)
+  })
+}
+
+# Whether a line ends a table's block of rows (line_block()): the next table
+# or figure, a header line printing the arms' sizes in n notation (also over
+# a group of rows of its own, ALEX's "Duration of response (INV) n = 115 n =
+# 126"), a line of three values (a third arm), or a heading: a line of one
+# cell, or of no value, that does not go on with the row above
+# (label_continuation(); `previous`: the line above).
+block_break <- function(line, previous = "") {
+  cells <- layout_cells(line)
+  values <- nzchar(leading_values(cells$text))
+  if (grepl(efficacy_table_end, line, perl = TRUE) ||
+        any(size_cell(cells$text)) || sum(values) >= 3) {
+    return(TRUE)
+  }
+  tokens <- layout_tokens(normalise_spacing(line))[[1]]
+  if (length(cells$text) >= 2 && any(quote_value_positions(tokens))) {
+    return(FALSE)
+  }
+  !label_continuation(line, previous)
+}
+
+# Whether a line of one cell goes on with a row of the line above rather than
+# heading the rows below: a label or cell wrapped onto it, starting with a
+# bracket or a lower-case letter ("(months)", "event") or closing a bracket
+# opened above ("CI)b", "27.0)"), or a footnote mark printed apart ("b"),
+# and starting no further left than the line above (a heading stands out to
+# the left of its rows).
+label_continuation <- function(line, previous) {
+  cells <- layout_cells(line)
+  above <- layout_cells(previous)$first
+  if (length(cells$text) != 1 || length(above) == 0 ||
+        cells$first < above[1]) {
+    return(FALSE)
+  }
+  text <- cells$text
+  count <- function(mark) {
+    lengths(regmatches(text, gregexpr(mark, text, fixed = TRUE)))
+  }
+  grepl("^[(a-z]", text, perl = TRUE) || count(")") > count("(") ||
+    grepl("^[a-z*†‡§¶#]{1,2}$", text, perl = TRUE)
+}
+
+# The lines around `index` up to the nearest block break on each side
+# (block_break()).
+line_block <- function(index, lines) {
+  before <- function(at) if (at > 1L) lines[at - 1L] else ""
+  first <- index
+  while (first > 1L && !block_break(lines[first - 1L], before(first - 1L))) {
+    first <- first - 1L
+  }
+  last <- index
+  while (last < length(lines) && !block_break(lines[last + 1L], lines[last])) {
+    last <- last + 1L
+  }
+  first:last
+}
+
+# Whether a line prints one effect with its interval: one value cell, with an
+# interval after it on the line, or under it on the next line, which holds no
+# value cell (ALEX's "HR 0.47" over "[95 % CI] [0.34, 0.65]"). A p-value
+# ("p-Value 0.002") has none.
+effect_line <- function(index, lines) {
+  cells <- layout_cells(lines[index])
+  value <- which(nzchar(leading_values(cells$text)))
+  if (length(value) != 1) {
+    return(FALSE)
+  }
+  rest <- substring(lines[index], cells$first[value])
+  if (grepl(efficacy_interval, rest, perl = TRUE)) {
+    return(TRUE)
+  }
+  if (index == length(lines)) {
+    return(FALSE)
+  }
+  below <- layout_cells(lines[index + 1L])
+  !any(nzchar(leading_values(below$text))) &&
+    any(grepl(efficacy_interval, below$text, perl = TRUE) &
+          below$first <= cells$last[value] & below$last >= cells$first[value])
+}
+
+# The lines of the row's own block (review of the gold analysis's fixes,
+# 2026-10-02: arm values tied from any line under the label, another
+# endpoint's, another table's, another trial's): around each line printing
+# the row's value with its CI (row_value_lines()), the lines of its table up
+# to a block break (line_block(), as a table prints an endpoint's rows under
+# its heading). A block printing another effect (effect_line(): a table
+# without headings between its endpoints) gives none, as its arm values may
+# be either effect's.
+row_block_lines <- function(row, quotes, lines) {
+  blocks <- purrr::map(row_value_lines(row, quotes, lines), function(index) {
+    block <- line_block(index, lines)
+    others <- setdiff(block, index)
+    if (any(purrr::map_lgl(others, effect_line, lines = lines))) {
+      integer()
+    } else {
+      block
+    }
+  })
+  sort(unique(as.integer(unlist(blocks))))
 }
 
 # A section's lines as printed, their spacing kept so a cell's columns can be
@@ -929,7 +1127,8 @@ under_place <- function(place, line, first, last) {
 
 # The arm sizes a two-arm table places under their arms' column headers
 # (`lines`: efficacy_layout_lines()). n_control: in n notation under the
-# comparator's column label (a header cell, label_places(); the size at most
+# comparator's column label, one that names the comparator
+# (label_names_comparator(); a header cell, label_places(); the size at most
 # three lines below), with no other size under that place of the label, nor
 # under another place of it next to the control's size, either of which
 # would leave the label's column unclear ("chemotherapy" over "Drugamab +"'s
@@ -944,7 +1143,7 @@ sizes_in_label_columns <- function(row, lines) {
   label <- row[["comparator_column_label"]]
   control <- efficacy_count(row[["n_control"]])
   treatment <- efficacy_count(row[["n_treatment"]])
-  if (is_absent(label) || is.na(control)) {
+  if (is_absent(label) || is.na(control) || !label_names_comparator(row)) {
     return(character())
   }
   places <- label_places(label, lines)
@@ -1422,9 +1621,11 @@ efficacy_quote_page <- function(quote, page_texts) {
 # above the interval (at most three up) with a cell over the interval's
 # columns, that cell is the only one there, holds the value (alone, or as
 # the percentage of a count, "62 (50.8 %)") and has the interval's cell as
-# the only cell under it (gold analysis of 2026-10-02: Alecensa's NP28673
-# and ALINA, Lorviqua's and Libtayo's tables, flagged ci_paired_by_column on
-# the quote's order alone).
+# the only cell under it, a cell holding the interval alone (gold analysis of
+# 2026-10-02: Alecensa's NP28673 and ALINA, Lorviqua's and Libtayo's tables,
+# flagged ci_paired_by_column on the quote's order alone; review of the
+# fixes: KEYNOTE-001's "75%" took the interval of "4.9 (2.8, 8.3)" below
+# it).
 value_over_interval <- function(value, ci_low, ci_high, lines) {
   token <- number_tokens(value)
   if (length(token) != 1) {
@@ -1460,8 +1661,8 @@ interval_under_value <- function(token, span, lines, index) {
     under <- which(
       intervals$first <= cells$last[over] & intervals$last >= cells$first[over]
     )
-    return(length(under) == 1 && intervals$first[under] <= span[1] &&
-             intervals$last[under] >= span[2])
+    return(length(under) == 1 && intervals$first[under] == span[1] &&
+             intervals$last[under] == span[2])
   }
   FALSE
 }

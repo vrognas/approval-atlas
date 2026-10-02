@@ -1511,3 +1511,192 @@ test_that("a count that reproduces the rate may stand before its CI", {
     binding("84.6% (22/26 and 3/4; 95% CI: 65.1, 95.6)", "84.6"), "none"
   )
 })
+
+# Review of the gold analysis's fixes (2026-10-02): the column tie read any
+# line under the label, anywhere in the section. A table under one label
+# with an endpoint per block, as SmPCs print them.
+endpoint_headings <- c(" Progression-free survival", " Overall survival")
+
+endpoint_table <- function(headings = endpoint_headings) {
+  paste(c(
+    "In TRIAL-1, patients with NSCLC were randomised to Drugmab or placebo.",
+    "",
+    "Table 1: Efficacy results in TRIAL-1",
+    "",
+    "                                  Drugmab              Placebo",
+    "                                  n = 100              n = 100",
+    headings[1],
+    "   Median, months (95% CI)     6.0 (5.1, 7.0)       6.0 (4.2, 6.2)",
+    "   Hazard ratio (95% CI)              0.80 (0.60, 1.00)",
+    headings[2],
+    "   Median, months (95% CI)     14.1 (12.0, 16.0)    11.2 (9.9, 12.5)",
+    "   Hazard ratio (95% CI)              0.70 (0.55, 0.90)",
+    ""
+  ), collapse = "\n")
+}
+
+endpoint_row <- function(...) {
+  row <- list(
+    trial = "TRIAL-1", regimen = "Drugmab", comparator = "Placebo",
+    comparator_column_label = "Placebo", effect_type = "hr",
+    endpoint = "Overall survival", value = "0.70", ci_low = "0.55",
+    ci_high = "0.90", arm_treatment = "14.1 (12.0, 16.0)",
+    arm_control = "11.2 (9.9, 12.5)",
+    quotes = list(
+      "Hazard ratio (95% CI) 0.70 (0.55, 0.90)",
+      "Median, months (95% CI) 14.1 (12.0, 16.0) 11.2 (9.9, 12.5)"
+    )
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  row
+}
+
+test_that("arm values tie only within the block of the row's value", {
+  section <- endpoint_table()
+  result <- verify_efficacy_row(endpoint_row(), section)
+  expect_equal(result$status, "exact")
+  expect_false("arms_not_verified" %in% result$flags)
+  # The PFS hazard ratio with the OS medians: another block.
+  borrowed <- endpoint_row(
+    endpoint = "PFS", value = "0.80", ci_low = "0.60", ci_high = "1.00",
+    quotes = list(
+      "Hazard ratio (95% CI) 0.80 (0.60, 1.00)",
+      "Median, months (95% CI) 14.1 (12.0, 16.0) 11.2 (9.9, 12.5)"
+    )
+  )
+  result <- verify_efficacy_row(borrowed, section)
+  expect_true("arms_not_verified" %in% result$flags)
+  # Without headings between the endpoints, a block holds two effects:
+  # nothing in it ties, the row's own medians included.
+  bare <- endpoint_table(c("", ""))
+  expect_true(
+    "arms_not_verified" %in% verify_efficacy_row(borrowed, bare)$flags
+  )
+  expect_true(
+    "arms_not_verified" %in% verify_efficacy_row(endpoint_row(), bare)$flags
+  )
+  # A value the section prints nowhere with its CI anchors no block.
+  lines <- efficacy_layout_lines(section)
+  expect_equal(row_block_lines(endpoint_row(), endpoint_row()$quotes, lines),
+               9:10)
+  unprinted <- endpoint_row(value = "0.71")
+  expect_equal(row_block_lines(unprinted, unprinted$quotes, lines), integer())
+})
+
+# Review of the gold analysis's fixes: equal leading values tied, so a swap
+# of their intervals shipped (NR | NR, 6.0 | 6.0).
+test_that("equal leading values tie nothing", {
+  section <- endpoint_table()
+  pfs <- endpoint_row(
+    endpoint = "Progression-free survival", value = "0.80", ci_low = "0.60",
+    ci_high = "1.00", arm_treatment = "6.0 (5.1, 7.0)",
+    arm_control = "6.0 (4.2, 6.2)",
+    quotes = list(
+      "Hazard ratio (95% CI) 0.80 (0.60, 1.00)",
+      "Median, months (95% CI) 6.0 (5.1, 7.0) 6.0 (4.2, 6.2)"
+    )
+  )
+  lines <- efficacy_layout_lines(section)
+  expect_true(is.na(arm_value_columns(pfs, "Placebo", pfs$quotes, lines)))
+  swapped <- pfs
+  swapped[c("arm_treatment", "arm_control")] <- list(
+    "6.0 (4.2, 6.2)", "6.0 (5.1, 7.0)"
+  )
+  for (row in list(pfs, swapped)) {
+    result <- verify_efficacy_row(row, section)
+    expect_equal(result$status, "exact")
+    expect_true("arms_not_verified" %in% result$flags)
+  }
+})
+
+test_that("a column label must name the comparator, not the treatment", {
+  names_it <- function(label, comparator, regimen = "") {
+    label_names_comparator(list(
+      comparator_column_label = label, comparator = comparator,
+      regimen = regimen
+    ))
+  }
+  expect_true(names_it("Crizotinib", "crizotinib", "Alecensa"))
+  expect_false(names_it("Alecensa", "crizotinib", "Alecensa"))
+  expect_true(names_it(
+    "Paclitaxel + Carboplatin", "Paclitaxel + Carboplatin",
+    "Tislelizumab + Paclitaxel + Carboplatin"
+  ))
+  expect_false(names_it(
+    "Tislelizumab + Paclitaxel + Carboplatin", "Paclitaxel + Carboplatin",
+    "Tislelizumab + Paclitaxel + Carboplatin"
+  ))
+  expect_true(names_it(
+    "Placebo +", "Placebo + Pemetrexed + Platinum Chemotherapy",
+    "Pembrolizumab + Pemetrexed + Platinum Chemotherapy"
+  ))
+  expect_false(names_it("Pembrolizumab +", "Placebo + chemotherapy",
+                        "Pembrolizumab + chemotherapy"))
+  expect_true(names_it("sorafenib arm", "sorafenib"))
+  expect_true(names_it("Arm C", "Arm C", "Arm B"))
+  expect_false(names_it("Arm B", "Arm C", "Arm B"))
+  expect_true(names_it("Platinum-based", "platinumbased chemotherapy"))
+  # No comparator to name: nothing tells the label's arm.
+  expect_false(names_it("Placebo", ""))
+  # The table's arm under a label that names the treatment arm fails.
+  section <- endpoint_table()
+  mislabelled <- endpoint_row(
+    comparator_column_label = "Drugmab", arm_treatment = "11.2 (9.9, 12.5)",
+    arm_control = "14.1 (12.0, 16.0)"
+  )
+  result <- verify_efficacy_row(mislabelled, section)
+  expect_true("arms_not_verified" %in% result$flags)
+  expect_match(result$blanked, "arm_control", all = FALSE)
+})
+
+# Review of the gold analysis's fixes: an interval in a cell with another
+# value before it ("4.9 (2.8, 8.3)") was paired with the value above it.
+test_that("an interval pairs with the value above only in a cell alone", {
+  lines <- c(
+    "   % ongoing at 24 months        75%           71%",
+    "   Median in months (95% CI)     4.9 (2.8, 8.3)  4.7 (2.8, 13.8)",
+    "   Median (months)               15.2          14.9",
+    "   [95 % CI]                     [11.2, 24.9]  [6.9, NE]"
+  )
+  expect_false(value_over_interval("75", "2.8", "8.3", lines))
+  expect_false(value_over_interval("4.9", "2.8", "8.3", lines))
+  expect_true(value_over_interval("15.2", "11.2", "24.9", lines))
+  expect_true(value_over_interval("14.9", "6.9", "NE", lines))
+  expect_false(value_over_interval("14.9", "11.2", "24.9", lines))
+})
+
+# A row's label wrapped onto the next line ("(months)", "CI)") or a footnote
+# mark printed apart goes on with its row, while a heading stands out to the
+# left of its rows: IMbrave150's medians and hazard ratio are one block.
+test_that("a label wrapped below its row does not end the block", {
+  tecentriq <- read_efficacy_section("Tecentriq")
+  row <- list(
+    trial = "IMbrave150", effect_type = "hr", value = "0.58",
+    ci_low = "0.42", ci_high = "0.79", regimen = "Atezolizumab + Bevacizumab",
+    comparator = "Sorafenib", comparator_column_label = "Sorafenib",
+    arm_treatment = "NE", arm_control = "13.2",
+    quotes = c(
+      paste(
+        "Median time to event NE 13.2 (months) 95% CI (NE, NE) (10.4, NE)",
+        "Stratified hazard ratio‡ (95% 0.58 (0.42, 0.79) CI) p-value1 0.0006"
+      ),
+      "Atezolizumab + Bevacizumab Sorafenib OS n=336 n=165"
+    )
+  )
+  result <- verify_efficacy_row(row, tecentriq)
+  expect_equal(result$status, "exact")
+  expect_false("arms_not_verified" %in% result$flags)
+  row[c("arm_treatment", "arm_control")] <- list("13.2", "NE")
+  result <- verify_efficacy_row(row, tecentriq)
+  expect_equal(result$status, "failed")
+  expect_match(result$errors, "arms swapped", all = FALSE)
+  above <- "   Median time to event          NE           13.2"
+  expect_true(label_continuation("   (months)", above))
+  expect_true(label_continuation("   CI)b", above))
+  expect_true(label_continuation("   event", above))
+  expect_true(label_continuation("                    b", above))
+  expect_false(label_continuation(" OS", above))
+  expect_false(label_continuation(" (months)", above))
+  expect_false(label_continuation("   Overall survival", above))
+})

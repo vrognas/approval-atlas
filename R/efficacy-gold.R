@@ -259,10 +259,11 @@ gold_endpoint <- function(endpoint) {
 # Phrases (regular expressions over a label's lower-case words) that make a
 # named endpoint another one: progression or response in the CNS ("CNS
 # progression-free survival", "Time to intracranial progression"), a second
-# progression ("Second PFS", "PFS2") and a subsequent therapy ("PFS after
-# first subsequent therapy"). A qualifier of the analysis or the population
-# does not ("PFS at second interim analysis", "PFS in patients with baseline
-# CNS metastases").
+# progression ("Second PFS", "PFS2"), a subsequent therapy ("PFS after first
+# subsequent therapy") and a time to an event ("Time to objective response"
+# is not ORR; review of the gold analysis's fixes, 2026-10-02). A qualifier of
+# the analysis or the population does not ("PFS at second interim analysis",
+# "PFS in patients with baseline CNS metastases").
 gold_endpoint_qualifiers <- c(
   paste0(
     "(cns|intracranial) (progression|response|objective|overall|duration|",
@@ -270,7 +271,8 @@ gold_endpoint_qualifiers <- c(
   ),
   "second (progression|pfs)",
   "pfs ?2",
-  "subsequent (therapy|treatment|anticancer|line)"
+  "subsequent (therapy|treatment|anticancer|line)",
+  "time to"
 )
 
 # The known endpoints a label names as words, by name or abbreviation
@@ -278,12 +280,13 @@ gold_endpoint_qualifiers <- c(
 # A label with a qualifier names none ("CNS progression-free survival",
 # "Second PFS after start of first subsequent therapy"), nor does one of an
 # endpoint the scorer does not know ("Time to worsening of patient-reported
-# NSCLC symptoms"). A name inside a longer one named there is not read on its
-# own ("Duration of objective response" is DOR, not ORR).
+# NSCLC symptoms"). Where two names share words, the one starting first is
+# read, the longer one at the same word ("Duration of objective response" is
+# DOR, not ORR; "Progression-free survival time" is PFS, not the "survival
+# time" of OS: review of the gold analysis's fixes, 2026-10-02).
 gold_endpoint_mentions <- function(endpoint) {
-  words <- paste0(
-    " ", gsub("[^a-z0-9]+", " ", tolower(gold_text(endpoint))), " "
-  )
+  text <- gsub("[^a-z0-9]+", " ", tolower(gold_text(endpoint)))
+  words <- paste0(" ", text, " ")
   has <- function(phrase) grepl(paste0(" ", phrase, " "), words, fixed = TRUE)
   qualified <- purrr::map_lgl(gold_endpoint_qualifiers, function(phrase) {
     grepl(paste0(" ", phrase, " "), words, perl = TRUE)
@@ -291,17 +294,38 @@ gold_endpoint_mentions <- function(endpoint) {
   if (any(qualified)) {
     return(character())
   }
-  named <- names(gold_endpoint_names)[
-    purrr::map_lgl(names(gold_endpoint_names), has)
-  ]
-  inside <- purrr::map_lgl(named, function(name) {
-    any(named != name & grepl(name, named, fixed = TRUE))
+  spans <- gold_name_spans(
+    names(gold_endpoint_names), strsplit(trimws(text), " ", fixed = TRUE)[[1]]
+  )
+  overlapped <- purrr::map_lgl(seq_len(nrow(spans)), function(index) {
+    first <- spans$first[index]
+    last <- spans$last[index]
+    any(spans$first <= last & spans$last >= first &
+          (spans$first < first | (spans$first == first & spans$last > last)))
   })
   by_abbreviation <- purrr::map_lgl(tolower(gold_known_endpoints), has)
   unique(c(
-    unname(gold_endpoint_names[named[!inside]]),
+    unname(gold_endpoint_names[spans$name[!overlapped]]),
     gold_known_endpoints[by_abbreviation]
   ))
+}
+
+# Where each name (its words one space apart) stands among `words`: a row per
+# place, with the name and its first and last word, in the names' order.
+gold_name_spans <- function(names, words) {
+  purrr::map(names, function(name) {
+    parts <- strsplit(name, " ", fixed = TRUE)[[1]]
+    size <- length(parts)
+    starts <- seq_len(max(0L, length(words) - size + 1L))
+    starts <- starts[purrr::map_lgl(starts, function(start) {
+      identical(words[seq(start, start + size - 1L)], parts)
+    })]
+    dplyr::tibble(
+      name = rep(name, length(starts)), first = starts,
+      last = starts + size - 1L
+    )
+  }) |>
+    purrr::list_rbind()
 }
 
 gold_effect_type <- function(effect_type) {
@@ -896,9 +920,11 @@ gold_pitfalls <- function(extracted, gold, matched) {
 # measured by the acceptance rule's measure (lead_agreement) and, reported
 # only, by production's rule (lead_agreement_production) and over the rows the
 # site would show (lead_agreement_shown, gold_lead_flags()). An extra row
-# beside a missed gold row of its trial and endpoint (near_missed_keys) may be
-# that row with a wrong number its labels kept apart
-# (gold_different_analyses()), so it is listed for a check.
+# beside a missed gold row of its trial and endpoint (near_missed_keys, the
+# rows counted in near_missed_rows) may be that row with a wrong number its
+# labels kept apart (gold_different_analyses(); the labels are the model's
+# own, nothing verifies them), so it is listed for a check and counts
+# against acceptance until checked (gold_acceptance_problems()).
 score_against_gold <- function(extracted, gold, condition = NULL) {
   extracted <- gold_row_table(extracted)
   gold <- gold_row_table(gold)
@@ -913,8 +939,10 @@ score_against_gold <- function(extracted, gold, condition = NULL) {
   wrong <- !gold_same_numbers(extracted, gold, paired, partner)
   pitfalls <- gold_pitfalls(extracted, gold, matched)
   lead <- function(...) gold_lead_agreement(extracted, gold, matched, ...)
+  near <- gold_near_missed(extracted, gold, which(extra), missed)
   list(
     numeric_errors = sum(wrong),
+    near_missed_rows = length(unique(near$extracted)),
     missed_rows = length(missed),
     extra_rows = sum(extra),
     outside_rows = nrow(others),
@@ -930,18 +958,16 @@ score_against_gold <- function(extracted, gold, condition = NULL) {
     numeric_error_keys = extracted$key[paired[wrong]],
     missed_keys = gold$key[missed],
     extra_keys = extracted$key[extra],
-    near_missed_keys = gold_near_missed_keys(
-      extracted, gold, which(extra), missed
-    ),
+    near_missed_keys = gold_near_missed_keys(extracted, gold, near),
     outside_keys = others$key,
     outside_gold_trial_keys = others$key[gold_in_trials(others, gold)]
   )
 }
 
 # Each extra row (`extra`) beside a missed gold row (`missed`) of its
-# medicine, endpoint and trial (gold_trial_names_related()), as "<its key>
-# beside gold <the gold row's key>".
-gold_near_missed_keys <- function(extracted, gold, extra, missed) {
+# medicine, endpoint and trial (gold_trial_names_related()): the pairs, as
+# indices of `extracted` and `gold`.
+gold_near_missed <- function(extracted, gold, extra, missed) {
   pairs <- expand.grid(
     extracted = extra, gold = missed, KEEP.OUT.ATTRS = FALSE
   )
@@ -952,8 +978,14 @@ gold_near_missed_keys <- function(extracted, gold, extra, missed) {
     purrr::map2_lgl(
       extracted$trial_names[e], gold$trial_names[g], gold_trial_names_related
     )
+  list(extracted = e[near], gold = g[near])
+}
+
+# The pairs of gold_near_missed() as "<its key> beside gold <the gold row's
+# key>".
+gold_near_missed_keys <- function(extracted, gold, near) {
   paste0(
-    extracted$key[e[near]], " beside gold ", gold$key[g[near]],
+    extracted$key[near$extracted], " beside gold ", gold$key[near$gold],
     recycle0 = TRUE
   )
 }
@@ -970,10 +1002,13 @@ gold_in_trials <- function(rows, gold) {
 }
 
 # What keeps a model from being chosen (spec, and rulings R14): a numeric
-# error, lead agreement under 0.95, a failed pitfall or one that could not be
-# tested (its avoidance is not shown), more than 5% of the gold rows missed, a
-# call that did not answer (truncated counts), rows dropped at parsing. Empty
-# when it meets the rule.
+# error, or an extra row beside a missed gold row (near_missed_rows: it may be
+# that row with a wrong number its own labels kept apart, so it counts
+# against the zero-error bar until checked by hand; review of the gold
+# analysis's fixes, 2026-10-02), lead agreement under 0.95, a failed pitfall
+# or one that could not be tested (its avoidance is not shown), more than 5%
+# of the gold rows missed, a call that did not answer (truncated counts),
+# rows dropped at parsing. Empty when it meets the rule.
 gold_acceptance_problems <- function(result) {
   score <- result$score
   calls <- result$calls
@@ -981,9 +1016,19 @@ gold_acceptance_problems <- function(result) {
   dropped <- calls[calls$rows_dropped > 0, ]
   failed_pitfalls <- names(score$pitfalls)[score$pitfalls %in% FALSE]
   untested_pitfalls <- names(score$pitfalls)[is.na(score$pitfalls)]
+  near_missed <- score$near_missed_rows %||% 0L
   c(
     if (score$numeric_errors > 0) {
       sprintf("%d numeric error(s)", score$numeric_errors)
+    },
+    if (near_missed > 0) {
+      sprintf(
+        paste(
+          "%d extra row(s) beside a missed gold row, not checked by hand",
+          "(each may be the gold row with a wrong number)"
+        ),
+        near_missed
+      )
     },
     if (score$lead_agreement < 0.95) {
       sprintf("lead agreement %.3f is below 0.95", score$lead_agreement)
@@ -1534,6 +1579,12 @@ gold_report_table <- function(results) {
         \(r) as.character(sum(r$calls$rows_dropped))
       ),
       "Numeric errors" = cell(\(r) as.character(r$score$numeric_errors)),
+      "Extra rows beside a missed gold row (errors until checked)" = cell(
+        function(r) {
+          rows <- r$score$near_missed_rows
+          if (is.null(rows)) "n/a" else as.character(rows)
+        }
+      ),
       "Missed gold rows" = cell(function(r) {
         sprintf("%d of %d", r$score$missed_rows, r$score$gold_rows)
       }),

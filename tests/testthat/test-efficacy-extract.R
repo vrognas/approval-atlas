@@ -1779,3 +1779,146 @@ test_that("a rate with its count before the CI ships", {
     all = FALSE
   )
 })
+
+# Review of the gold analysis's fixes (2026-10-02): the column tie took arm
+# values from any line under the label, another endpoint's, another table's
+# or another trial's, and shipped them. Each is hidden again, as at 3482af1.
+keynote_024_pfs_row <- function(...) {
+  row <- list(
+    trial = "KEYNOTE-024", endpoint = "PFS", regimen = "Pembrolizumab",
+    comparator = "Chemotherapy", comparator_column_label = "Chemotherapy",
+    value = "0.50", ci_low = "0.37", ci_high = "0.68", ci_level = "95",
+    arm_measure = "Median in months", arm_treatment = "10.3",
+    arm_control = "6.0",
+    quotes = list(
+      "Hazard ratio* (95% CI) 0.50 (0.37, 0.68)",
+      "Median in months (95% CI) 10.3 (6.7, NA) 6.0 (4.2, 6.2)"
+    )
+  )
+  overrides <- list(...)
+  row[names(overrides)] <- overrides
+  pages <- fixture_pages("keytruda-pi-5.1.layout.txt")
+  do.call(row_to_site, c(list(pages), row))
+}
+
+expect_arms_hidden <- function(checked, info = NULL) {
+  expect_null(checked$failed, info = info)
+  expect_true("arms_not_verified" %in% checked$record$flags, info = info)
+  for (field in efficacy_arm_fields) {
+    expect_null(checked$record[[field]], info = paste(info, field))
+  }
+  expect_equal(checked$rows$review, "flagged", info = info)
+  expect_equal(nrow(checked$site), 0L, info = info)
+}
+
+test_that("arm values of another endpoint, table or trial never tie", {
+  # Its own medians, in its own block of Table 14, ship.
+  own <- keynote_024_pfs_row()
+  expect_equal(own$record$flags, character())
+  expect_equal(own$site$arm_treatment, "10.3")
+  expect_equal(own$site$arm_control, "6.0")
+  # Its own OS medians, the block below.
+  expect_arms_hidden(keynote_024_pfs_row(
+    arm_treatment = "30.0", arm_control = "14.2",
+    quotes = list(
+      "Hazard ratio* (95% CI) 0.50 (0.37, 0.68)",
+      "Median in months (95% CI) 30.0 14.2"
+    )
+  ), "KEYNOTE-024 OS medians")
+  # KEYNOTE-042's PFS medians, another trial's table under the same label.
+  expect_arms_hidden(keynote_024_pfs_row(
+    arm_treatment = "6.5", arm_control = "6.4",
+    quotes = list(
+      "Hazard ratio* (95% CI) 0.50 (0.37, 0.68)",
+      "Median in months (95% CI) 6.5 (5.9, 8.5) 6.4 (6.2, 7.2)"
+    )
+  ), "KEYNOTE-042 PFS medians")
+  # ALEX's PFS (IRC) hazard ratio with the ORR responders of Table 5.
+  expect_arms_hidden(alex_irc_row(
+    arm_treatment = "126 (82.9 %)", arm_control = "114 (75.5 %)",
+    arm_measure = "Median (months)",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]",
+      "Responders n (%) 114 (75.5 %) 126 (82.9 %)"
+    )
+  ), "ALEX ORR responders")
+  # ALEX's OS hazard ratio with the duration of response medians below it,
+  # under their own heading with their own sizes.
+  expect_arms_hidden(alex_irc_row(
+    endpoint = "Overall survival", is_primary = "no", value = "0.78",
+    ci_low = "0.56", ci_high = "1.08", arm_treatment = "42.3",
+    arm_control = "11.1",
+    quotes = list(
+      "HR 0.78 [95 % CI] [0.56; 1.08]", "Median (months) 11.1 42.3"
+    )
+  ), "ALEX DOR medians")
+})
+
+# Review of the gold analysis's fixes: the tie trusted the model's label, so
+# the treatment's header given as the comparator's, with arms and sizes read
+# by column position, shipped every value on the wrong arm.
+test_that("a label that does not name the comparator ties nothing", {
+  header <- "Crizotinib Alecensa n = 151 n = 152"
+  mislabelled <- alex_irc_row(
+    comparator_column_label = "Alecensa", arm_treatment = "10.4",
+    arm_control = "25.7", n_treatment = "151", n_control = "152",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]", header, "Median (months) 10.4 25.7"
+    )
+  )
+  expect_arms_hidden(mislabelled, "the treatment's header")
+  # Labelled right, the same quotes ship arms and sizes on their arms.
+  right <- alex_irc_row(
+    n_treatment = "152", n_control = "151",
+    quotes = list(
+      "HR 0.50 [95 % CI] [0.36; 0.70]", header, "Median (months) 10.4 25.7"
+    )
+  )
+  expect_equal(right$record$flags, character())
+  expect_equal(right$site$arm_treatment, "25.7")
+  expect_equal(right$site$n_treatment, 152L)
+  expect_equal(right$site$n_control, 151L)
+  # Sizes alone under a mislabel: the row ships without them.
+  sizes <- alex_irc_row(
+    comparator_column_label = "Alecensa", arm_treatment = "",
+    arm_control = "", n_treatment = "151", n_control = "152",
+    quotes = list("HR 0.50 [95 % CI] [0.36; 0.70]", header)
+  )
+  expect_equal(sizes$record$flags, character())
+  expect_equal(nrow(sizes$site), 1L)
+  expect_true(is.na(sizes$site$n_treatment))
+  expect_true(is.na(sizes$site$n_control))
+  expect_true(is.na(sizes$site$comparator_column_label))
+})
+
+# Review of the gold analysis's fixes: a CI the layout prints in the cell of
+# another value was paired with the value above it.
+test_that("an interval in another value's cell is not the value's CI", {
+  pages <- fixture_pages("keytruda-pi-5.1.layout.txt")
+  keynote_001 <- function(...) {
+    row_to_site(
+      pages,
+      trial = "KEYNOTE-001", regimen = "Pembrolizumab", ci_level = "95",
+      ...
+    )
+  }
+  borrowed <- keynote_001(
+    endpoint = "% ongoing at 24 months", effect_type = "single_arm_rate",
+    value = "75", ci_low = "2.8", ci_high = "8.3",
+    quotes = list(paste(
+      "% ongoing at 24 months¶ 75% 71% PFS Median in months (95% CI) 4.9",
+      "(2.8, 8.3)"
+    ))
+  )
+  expect_match(
+    borrowed$failed$errors[[1]], "value and CI not in one quote",
+    all = FALSE
+  )
+  own <- keynote_001(
+    endpoint = "PFS", effect_type = "single_arm_median", value = "4.9",
+    ci_low = "2.8", ci_high = "8.3",
+    quotes = list("Median in months (95% CI) 4.9 (2.8, 8.3)")
+  )
+  expect_null(own$failed)
+  expect_equal(nrow(own$site), 1L)
+})
