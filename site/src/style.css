@@ -2865,8 +2865,7 @@ input::placeholder {
 /* Prose at most about 70 characters wide (design sweep 2026-10-01, A3: the (i) panels' notes ran
    175-185 characters a line at 1440; the takeaways, captions, notes, About and the footer too). */
 .card-info p,
-#register-note,
-#undated-authorized {
+#register-note {
   max-width: 70ch;
 }
 
