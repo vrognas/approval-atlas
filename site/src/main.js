@@ -1451,10 +1451,12 @@ function startDashboard(meta, [
     }
     // One Download CSV on the Medicines tab, the table card's (owner decision 2026-10-01, design
     // sweep B2: the page header's stood on the same screen); the page header's on the other tabs.
-    // Focus on it (Back or Forward onto the tab) goes to the table's.
+    // Focus on it (Back or Forward onto the tab) goes to the table's. It keeps its box there, unseen
+    // (.tab-off, visibility: hidden), as the lead beside it would widen, rewrap and move the tab strip
+    // under the pointer (fix-up: 22-46px at 721-834px).
     const pageDownload = $("#page-download");
     if (tab === "medicines" && document.activeElement === pageDownload) $("#table-download").focus({ preventScroll: true });
-    pageDownload.hidden = tab === "medicines";
+    pageDownload.classList.toggle("tab-off", tab === "medicines");
     const current = tabButtons.find((button) => button.dataset.tab === tab);
     if (tabShown !== tab) {
       tabShown = tab;

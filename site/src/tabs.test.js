@@ -100,3 +100,14 @@ test("tabs: a tap selects the tab and shows its panel at once, its render after 
   const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
   assert.match(css, /\.tab-panel\[aria-busy="true"\] \{\s*animation: tab-busy 1ms linear 150ms forwards;/);
 });
+
+// Owner decision 2026-10-01 (design sweep B2) and its fix-up: on the Medicines tab the page header's
+// Download CSV is unseen but keeps its box (hidden, it let the lead beside it widen and rewrap, and
+// the tab strip moved 22-46px under the pointer at 721-834px).
+test("tabs: the page header's Download CSV keeps its box on the Medicines tab", () => {
+  const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(main, /pageDownload\.classList\.toggle\("tab-off", tab === "medicines"\);/);
+  assert.doesNotMatch(main, /pageDownload\.hidden/);
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(css, /\.page-head \.download\.tab-off \{\s*visibility: hidden;\s*\}/);
+});

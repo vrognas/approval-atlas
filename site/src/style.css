@@ -810,6 +810,14 @@ button {
   background: var(--input);
 }
 
+/* On the Medicines tab the table card's Download CSV is the one (owner decision 2026-10-01, B2). The
+   page header's keeps its box there, unseen (out of the tab order and the accessibility tree), so the
+   lead beside it keeps its width: hidden, it rewrapped and moved the tab strip under the pointer
+   (fix-up: 22-46px at 721-834px). Phones hide it on every tab (below). */
+.page-head .download.tab-off {
+  visibility: hidden;
+}
+
 .download-icon {
   width: 15px;
   height: 15px;
