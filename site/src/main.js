@@ -8,6 +8,7 @@ import {
   byStatusOrder,
   countTiles,
   isAuthorizedNow,
+  isUndatedAuthorized,
   newestFirst,
   sortBreakdownRows,
 } from "./approvals.js";
@@ -2548,7 +2549,8 @@ function startDashboard(meta, [
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
     const authorizedNow = filtered.filter(isAuthorizedNow);
     sheet.update(filtered.length);
-    const undatedAuthorized = filtered.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
+    // The headline's dek counts the undated authorized medicines among those matching every filter.
+    const undatedAuthorized = filtered.filter(isUndatedAuthorized);
     // By default, the medicines of other statuses matching the other filters, which the headline's
     // quiet line offers to include.
     const statusHidden = isDefaultStatus(state.status) ? filterProducts(products, predicates, "status").length - filtered.length : 0;
@@ -2569,15 +2571,17 @@ function startDashboard(meta, [
         setTakeaway("#over-time-takeaway", overTimeTakeaway(series, {
           status: !isDefaultStatus(state.status), years: state.from !== null || state.to !== null,
         }));
+        // The (i) panel's two exclusion notes count the chart's own medicines (history: the status and
+        // year filters ignored), so a status or year filter changes neither (review of L7).
         const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
         d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
+        showCount("#undated-authorized", history.filter(isUndatedAuthorized).length, UI.undatedAuthorized);
       });
       // What the tiles' shares are of: the authorized medicines (the default), all of them (every
       // status) or those matching the filters.
       const tileScope = narrowed ? "filtered" : isDefaultStatus(state.status) ? "authorized" : "all";
       safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered), UI.tileShare(tileScope)));
       showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
-      showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
       renderPreviews(filtered, authorizedNow, narrowed);
     } else if (tab === "protection") {
       safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, narrowed));

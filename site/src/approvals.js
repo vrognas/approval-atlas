@@ -118,6 +118,12 @@ export function isAuthorizedNow(product) {
   return product.medicine_status === "Authorised" && product.authorized_from !== null;
 }
 
+// Status Authorised without an approval date: not currently authorized, and in no point of the
+// "Authorized over time" series (6 on 2026-09-28).
+export function isUndatedAuthorized(product) {
+  return product.medicine_status === "Authorised" && product.authorized_from === null;
+}
+
 // A search-index row (ema_search_index.json) currently authorized, as isAuthorizedNow() reads an
 // ema_medicines row: status Authorised with an approval date (a data-file test keeps them alike).
 export function isListedAuthorizedNow(row) {

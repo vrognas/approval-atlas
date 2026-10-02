@@ -13,6 +13,7 @@ import {
   distinctSorted,
   isAuthorizedNow,
   isListedAuthorizedNow,
+  isUndatedAuthorized,
   newestFirst,
   sortBreakdownRows,
   statusDate,
@@ -210,6 +211,12 @@ test("isAuthorizedNow needs status Authorised and an approval date", () => {
   assert.equal(isAuthorizedNow(medicine("P1", {})), true);
   assert.equal(isAuthorizedNow(medicine("P2", { authorized_from: null })), false);
   assert.equal(isAuthorizedNow(medicine("P3", { medicine_status: "Withdrawn" })), false);
+});
+
+test("isUndatedAuthorized needs status Authorised and no approval date", () => {
+  assert.equal(isUndatedAuthorized(medicine("P1", {})), false);
+  assert.equal(isUndatedAuthorized(medicine("P2", { authorized_from: null })), true);
+  assert.equal(isUndatedAuthorized(medicine("P3", { medicine_status: "Withdrawn", authorized_from: null })), false);
 });
 
 test("authorizedFirst lists the currently authorized search-index rows, counted as the headline does", () => {
