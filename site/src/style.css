@@ -6064,6 +6064,13 @@ table.activity {
   font-weight: 400;
 }
 
+/* The lead's link and its "(est.)" on one line (review of C3b): after the link, an inline block on
+   phones, a line could break before the no-break space of "(est.)". The link's text is short
+   ("until 2031–2032"), so the pair always fits a 320px phone's line. */
+.lead-keep {
+  white-space: nowrap;
+}
+
 /* A medicine not authorized now (owner decision 2026-10-01, C3b): the protection lead in the body
    type, as the copies lines under it, with its status after it ("…; Skysona is withdrawn."); its
    label and "(est.)" as the rest of the sentence. */

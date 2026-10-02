@@ -802,14 +802,17 @@ export function createLookup(panel, {
     // (it is no answer to "is it protected?" for a medicine that cannot be sold), then its status:
     // "Market protection until 2031–2032 (est.); Skysona is withdrawn."
     const authorizedNow = statusKind(row.medicine_status) === "authorized";
+    const link = el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
+      labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
+      shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link));
+    const estimate = glanceIsEstimate(protectionRow) ? el("span", { class: "lead-estimate" }, UI.card.estimate) : null;
     return el("div", { class: "protection-lead" },
       el("p", { class: authorizedNow ? "answer-value" : "lead-plain" },
         labelled ? [el("span", { class: "lead-label", "aria-hidden": "true" }, label), " "] : null,
-        el("a", { href: "#protection", class: "lead-link", onclick: jumpToProtection },
-          labelled ? el("span", { class: "visually-hidden" }, `${label} `) : null,
-          shown, el("span", { class: "visually-hidden" }, UI.protection.glance.link)),
-        // Its no-break space keeps it on the line of the years (design sweep 2026-10-01, C1).
-        glanceIsEstimate(protectionRow) ? el("span", { class: "lead-estimate" }, UI.card.estimate) : null,
+        // "(est.)" on the line of the years (design sweep 2026-10-01, C1), in one span with the link
+        // that does not wrap: after the link, an inline block on phones, a line could break before
+        // its no-break space (review of C3b: 44 of the 46 leads with one at 320).
+        estimate ? el("span", { class: "lead-keep" }, link, estimate) : link,
         authorizedNow ? null : UI.protection.glance.notAuthorized(row.name_of_medicine, row.medicine_status)),
       // A copy: its reference's years, as secondary text (QA 2026-09-29, #1).
       glance.reference ? el("p", { class: "lead-note" }, glance.reference) : null,

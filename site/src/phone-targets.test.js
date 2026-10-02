@@ -103,6 +103,15 @@ test("phones: a not-authorized medicine's protection lead keeps its 44px area ov
   assert.match(declarations(phones, "a.lead-link"), /min-height: 44px;.*margin: -10px 0/);
 });
 
+test("the protection lead's (est.) stays on the line of its years", () => {
+  // Review of C3b: after the link, an inline block on phones, a line could break before the no-break
+  // space of "(est.)", which then began the next line (44 of the 46 leads with one at 320; Wegovy's
+  // and Rinvoq's at 360 and 375). The link and its "(est.)" go in one span that does not wrap.
+  const lookup = readFileSync(new URL("./lookup.js", import.meta.url), "utf8");
+  assert.match(lookup, /estimate \? el\("span", \{ class: "lead-keep" \}, link, estimate\) : link/);
+  assert.match(declarations(flat(css), ".lead-keep"), /white-space: nowrap/);
+});
+
 test("phones: the activity table's company column is narrow, its name under the badge", () => {
   assert.match(declarations(phones, '.activity th[scope="row"]'), /width: 7\.5rem;.*max-width: 7\.5rem/);
   assert.match(declarations(phones, '.activity th[scope="row"] button'), /grid-template-areas: "badge total" "name name"/);
