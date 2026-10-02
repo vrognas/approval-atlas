@@ -1473,11 +1473,12 @@ export const UI = {
   // MeSH explainers of the therapeutic areas (owner request 2026-09-28; mesh-notes.js): a tooltip
   // wherever a term or tree node shows, "{name} (MeSH {tree numbers}): {the scope note's lead}"
   // (three numbers, then how many more), and on a condition page NLM's full scope note with its
-  // tree numbers and the credit NLM asks for (the MeSH version: meta.json).
+  // tree numbers and the credit NLM asks for (the MeSH version: meta.json), behind a closed
+  // disclosure named by definition (owner decision 2026-10-01, L2).
   mesh: {
     tip: (name, numbers, lead) => `${name}${numbers.length ? ` (MeSH ${UI.mesh.numbers(numbers)})` : ""}: ${lead}`,
     numbers: (numbers) => (numbers.length > 3 ? `${numbers.slice(0, 3).join(", ")} and ${formatCount(numbers.length - 3)} more` : numbers.join(", ")),
-    definition: "MeSH definition: ",
+    definition: "MeSH definition",
     treeNumbers: (numbers) => `${numbers.length === 1 ? "Tree number" : "Tree numbers"} ${numbers.join(", ")}.`,
     source: (version) => `From MeSH®${version ? ` (${version})` : ""}, courtesy of the U.S. National Library of Medicine.`,
   },

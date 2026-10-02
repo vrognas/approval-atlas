@@ -1619,7 +1619,8 @@ test("MeSH explainers: the tooltip, and a condition page's definition with its t
   assert.equal(mesh.tip("Neoplasms", ["C04"], "New abnormal growth of tissue."), "Neoplasms (MeSH C04): New abnormal growth of tissue.");
   assert.equal(mesh.tip("X", [], "Y."), "X: Y.");
   assert.equal(mesh.numbers(["A01", "B02", "C03", "D04", "E05"]), "A01, B02, C03 and 2 more");
-  assert.equal(mesh.definition, "MeSH definition: ");
+  // The disclosure's summary (owner decision 2026-10-01, L2).
+  assert.equal(mesh.definition, "MeSH definition");
   assert.equal(mesh.treeNumbers(["C04.588.180", "C17.800.090.500"]), "Tree numbers C04.588.180, C17.800.090.500.");
   assert.equal(mesh.treeNumbers(["C04"]), "Tree number C04.");
   assert.equal(mesh.source("MeSH 2026"), "From MeSH® (MeSH 2026), courtesy of the U.S. National Library of Medicine.");

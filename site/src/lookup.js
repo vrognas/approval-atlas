@@ -1059,14 +1059,18 @@ export function createLookup(panel, {
   }
 
   // A condition page's MeSH definition: NLM's full scope note, its tree numbers and the credit NLM
-  // asks for (with the MeSH version); nothing without a note (or while the notes load).
+  // asks for (with the MeSH version), in a closed disclosure (owner decision 2026-10-01, L2: as a
+  // paragraph it put Psoriasis's first medicine below a 390x664 screen); nothing without a note (or
+  // while the notes load). Kept open across re-renders and history (data-key), its summary focused
+  // again after a re-render (data-focus-key).
   function meshDefinition(ui) {
     const notes = need("meshNotes");
     const note = ready(notes) ? notes.byUi.get(ui) : null;
     if (!note?.scope_note) return null;
-    return el("p", { class: "mesh-definition" },
-      el("span", { class: "mesh-definition-label" }, UI.mesh.definition), note.scope_note, " ",
-      el("span", { class: "muted" }, note.tree_numbers?.length ? `${UI.mesh.treeNumbers(note.tree_numbers)} ` : null, UI.mesh.source(meshVersion)));
+    return el("details", { class: "mesh-definition", "data-key": "mesh-definition" },
+      el("summary", { "data-focus-key": "mesh-definition" }, UI.mesh.definition),
+      el("p", null, note.scope_note, " ",
+        el("span", { class: "muted" }, note.tree_numbers?.length ? `${UI.mesh.treeNumbers(note.tree_numbers)} ` : null, UI.mesh.source(meshVersion))));
   }
 
   // entries: search-index rows (+ snippet, + terms: the narrower conditions a row is tagged with, +

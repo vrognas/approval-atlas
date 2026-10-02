@@ -112,6 +112,16 @@ test("the protection lead's (est.) stays on the line of its years", () => {
   assert.match(declarations(flat(css), ".lead-keep"), /white-space: nowrap/);
 });
 
+test("a condition page's MeSH definition is a closed disclosure, its summary 44px on phones", () => {
+  // Owner decision 2026-10-01 (L2): as a paragraph it put Psoriasis's first medicine below a 390x664
+  // screen. Closed (no open attribute), kept open across re-renders and history by its data-key.
+  const lookup = readFileSync(new URL("./lookup.js", import.meta.url), "utf8");
+  assert.match(lookup, /el\("details", \{ class: "mesh-definition", "data-key": "mesh-definition" \},\s+el\("summary", \{ "data-focus-key": "mesh-definition" \}, UI\.mesh\.definition\)/);
+  // Its padding in the 12px gaps around it, so it reaches neither the dek nor Show all statuses.
+  assert.match(declarations(phones, ".card .mesh-definition"), /margin-block: 12px/);
+  assert.match(declarations(phones, ".mesh-definition > summary"), /padding-block: max\(0px, \(44px - 1lh\) \/ 2\);.*margin-block: min\(0px, \(1lh - 44px\) \/ 2\)/);
+});
+
 test("phones: the activity table's company column is narrow, its name under the badge", () => {
   assert.match(declarations(phones, '.activity th[scope="row"]'), /width: 7\.5rem;.*max-width: 7\.5rem/);
   assert.match(declarations(phones, '.activity th[scope="row"] button'), /grid-template-areas: "badge total" "name name"/);

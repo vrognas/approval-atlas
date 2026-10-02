@@ -6348,15 +6348,31 @@ table.activity {
 }
 
 /* A condition page's MeSH definition (NLM's scope note, its tree numbers and credit), small, under
-   the deks. */
+   the deks, in a closed disclosure (owner decision 2026-10-01, L2: as a paragraph it took 189px at
+   390, so Psoriasis's first medicine was below a 390x664 screen). Its summary link-coloured and
+   underlined, as the other link-coloured summaries (below), 24px tall, its padding in its own line's
+   room (the negative margin keeps the line); 44px on phones. */
 .card .mesh-definition {
   max-width: 72ch;
   margin: 8px 0 12px;
   font-size: var(--font-size-14);
 }
 
-.mesh-definition-label {
-  font-weight: 600;
+.mesh-definition > summary {
+  width: fit-content;
+  padding-block: 1.5px;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: -1.5px;
+  margin-block: min(0px, (1lh - 24px) / 2);
+  color: var(--link);
+}
+
+.mesh-definition > summary:hover {
+  color: var(--link-hover);
+}
+
+.card .mesh-definition > p {
+  margin: 4px 0 0;
 }
 
 /* The SmPC, EPAR and plain-language overview (step 4, #15) as full-width secondary buttons; side
@@ -6627,7 +6643,8 @@ details[open] > summary::after,
 .more-title,
 .indication > summary,
 .efficacy-more > summary,
-.company-note > summary {
+.company-note > summary,
+.mesh-definition > summary {
   text-decoration: underline;
   text-decoration-color: var(--link-underline);
   text-underline-offset: 3px;
@@ -7279,6 +7296,24 @@ mark {
 
   .block-indication .indication > p,
   .block-indication .indication + .block-facts {
+    margin-top: 12px;
+  }
+
+  /* A condition page's "MeSH definition" (L2): 44px tall, its padding in the 12px gaps above and
+     below (the negative margins keep its line), so it reaches neither the dek above nor "Show all
+     statuses" below; opened, the definition starts 12px under its line, clear of it. */
+  .card .mesh-definition {
+    margin-block: 12px;
+  }
+
+  .mesh-definition > summary {
+    padding-block: 11.5px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+    margin-block: -11.5px;
+    margin-block: min(0px, (1lh - 44px) / 2);
+  }
+
+  .card .mesh-definition > p {
     margin-top: 12px;
   }
 
