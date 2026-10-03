@@ -1,6 +1,6 @@
 {
   "source_url": "https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json",
-  "source_timestamp": "2026-10-02T06:02:04Z",
+  "source_timestamp": "2026-10-03T06:11:43Z",
   "row_counts": {
     "ema_medicines": 2351,
     "ema_medicine_therapeutic_areas": 3967,
@@ -11,7 +11,7 @@
     "ema_therapeutic_area_branches": 1183,
     "ema_therapeutic_area_subtree": 3107,
     "ema_authorized_series": 382,
-    "ema_medicine_documents": 13068,
+    "ema_medicine_documents": 13071,
     "ema_medicine_primary_documents": 5576,
     "mesh_entry_terms": 8453,
     "mesh_descriptor_areas": 5017,
@@ -32,19 +32,19 @@
     "ema_medicine_efficacy": 0
   },
   "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
-  "snapshot_date": "2026-10-02",
+  "snapshot_date": "2026-10-03",
   "opinion_to_decision": {
     "median_days": 57,
     "p90_days": 69,
     "medicines": 440,
-    "opinions_from": "2021-10-02"
+    "opinions_from": "2021-10-03"
   },
   "sources": [
     {
       "name": "European Medicines Agency (EMA) medicines data",
       "url": "https://www.ema.europa.eu/en/documents/report/medicines-output-medicines_json-report_en.json",
-      "version": "2026-10-02T06:02:04Z",
-      "retrieved": "2026-10-02",
+      "version": "2026-10-03T06:11:43Z",
+      "retrieved": "2026-10-03",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA."
     },
@@ -68,20 +68,20 @@
     {
       "name": "European Medicines Agency (EMA) EPAR documents index",
       "url": "https://www.ema.europa.eu/en/documents/report/documents-output-epar_documents_json-report_en.json",
-      "version": "2026-10-02T05:49:46Z",
-      "retrieved": "2026-10-02",
+      "version": "2026-10-03T05:51:46Z",
+      "retrieved": "2026-10-03",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
-      "last_modified": "Fri, 02 Oct 2026 03:52:15 GMT"
+      "last_modified": "Sat, 03 Oct 2026 03:55:45 GMT"
     },
     {
       "name": "European Medicines Agency (EMA) orphan designations",
       "url": "https://www.ema.europa.eu/en/documents/report/medicines-output-orphan_designations-json-report_en.json",
-      "version": "2026-10-02T06:02:49Z",
-      "retrieved": "2026-10-02",
+      "version": "2026-10-03T06:21:22Z",
+      "retrieved": "2026-10-03",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA.",
-      "last_modified": "Fri, 02 Oct 2026 04:02:49 GMT"
+      "last_modified": "Sat, 03 Oct 2026 04:21:22 GMT"
     },
     {
       "name": "Union Register of medicinal products (European Commission)",
@@ -96,7 +96,7 @@
       "name": "WHOCC new ATC codes and alterations (ATC/DDD Index 2026)",
       "url": "https://atcddd.fhi.no/filearchive/documents/atc_ddd_new_and_alterations_2026_final.xlsx",
       "version": "ATC/DDD Index 2026",
-      "retrieved": "2026-10-02",
+      "retrieved": "2026-10-03",
       "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
       "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
       "last_modified": "Mon, 19 Jan 2026 09:36:19 GMT"
@@ -105,7 +105,7 @@
       "name": "WHOCC new ATC codes and alterations (ATC/DDD Index 2025)",
       "url": "https://atcddd.fhi.no/filearchive/documents/atc_ddd_new_and_alterations_2025_final.xlsx",
       "version": "ATC/DDD Index 2025",
-      "retrieved": "2026-10-02",
+      "retrieved": "2026-10-03",
       "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
       "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
       "last_modified": "Mon, 15 Dec 2025 10:36:19 GMT"
@@ -114,7 +114,7 @@
       "name": "WHOCC temporary ATC codes (next ATC/DDD Index)",
       "url": "https://atcddd.fhi.no/filearchive/documents/temporary_atc_and_ddd.xlsx",
       "version": "Mon, 17 Aug 2026 07:56:13 GMT",
-      "retrieved": "2026-10-02",
+      "retrieved": "2026-10-03",
       "licence": "© WHO Collaborating Centre for Drug Statistics Methodology, Oslo; reference to the WHOCC required, no commercial distribution, no changes",
       "attribution": "ATC codes and names © WHO Collaborating Centre for Drug Statistics Methodology, Oslo, Norway (https://atcddd.fhi.no), reproduced verbatim; not endorsed by the WHOCC.",
       "last_modified": "Mon, 17 Aug 2026 07:56:13 GMT"
@@ -141,7 +141,7 @@
       "name": "European Medicines Agency (EMA) product information (SmPC section 5.1, ATC code)",
       "url": "https://www.ema.europa.eu/en/medicines",
       "version": "214 product information documents checked",
-      "retrieved": "2026-09-29",
+      "retrieved": "2026-10-03",
       "licence": "© European Medicines Agency; reuse with acknowledgement",
       "attribution": "Source: European Medicines Agency (EMA), https://www.ema.europa.eu/en/medicines/download-medicine-data. © EMA. Filtered to human medicines and reshaped; not affiliated with or endorsed by EMA."
     },
