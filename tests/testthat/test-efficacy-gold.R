@@ -14,8 +14,11 @@ gold_index <- function(rows, medicine, trial_start, endpoint = NULL) {
 }
 
 # A gold row as the extractor schema states it: its own words for the effect
-# and the analysis, the role and population match the pilot never recorded.
+# and the analysis, the role and population match the pilot never recorded
+# (a subgroup's, as the gold's population text names one, else the whole
+# trial's: the scorer compares them, gold_population_class()).
 as_extracted <- function(row, role = "primary") {
+  subgroup <- gold_population_class(row) %in% "subgroup"
   list(
     medicine = row$medicine,
     trial = row$trial,
@@ -23,7 +26,11 @@ as_extracted <- function(row, role = "primary") {
     indication = row$setting,
     is_primary = row$is_primary,
     analysis_role = role,
-    population_match = "whole_trial_matches",
+    population_match = if (subgroup) {
+      "subgroup_matches"
+    } else {
+      "whole_trial_matches"
+    },
     effect_type = switch(row$effect_type,
       HR = "hr",
       "rate (single arm)" = "single_arm_rate",
@@ -1854,4 +1861,417 @@ test_that("the report counts the flagged rows, hidden until reviewed", {
   expect_true(any(
     table == "| Gold rows found only by a flagged row | 2 of 3 |"
   ))
+})
+
+# Gold analysis of 2026-10-02 (.remember/efficacy/gold-analysis-20261002.md):
+# all 7 numeric errors of the four runs paired a true row of another
+# population, assessment or analysis with a gold row whose own row was absent.
+test_that("a true row of another population is no numeric error", {
+  rows <- gold()
+  alina <- gold_index(rows, "Alecensa", "ALINA")
+  # ADAURA, Sonnet medium: the whole trial's row (stage IB-IIIA) paired with
+  # the gold's stage II-IIIA row.
+  whole <- modifyList(as_extracted(rows[[alina]]), list(
+    population = "Stage IB (>= 4 cm) - IIIA (ITT)",
+    population_match = "whole_trial_matches", ci_high = "0.43"
+  ))
+  score <- score_against_gold(list(whole), rows[alina])
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$extra_rows, 1L)
+  # Listed beside the gold row it may stand for, so a human can check.
+  expect_length(score$near_missed_keys, 1)
+  expect_match(score$near_missed_keys, "alecensa\\|alina\\|DFS.*alecensa")
+  # The gold's population with a wrong number is still a numeric error.
+  same <- modifyList(whole, list(
+    population = "stage II-IIIA", population_match = "subgroup_matches"
+  ))
+  score <- score_against_gold(list(same), rows[alina])
+  expect_equal(score$numeric_errors, 1L)
+  expect_length(score$near_missed_keys, 0)
+  # A whole-trial gold row (JMEN, IMpower150, Alimta): a subgroup's row.
+  oak <- gold_index(rows, "Tecentriq", "OAK")
+  subgroup <- modifyList(as_extracted(rows[[oak]]), list(
+    population = "PD-L1 >= 50%", population_match = "subgroup_matches",
+    value = "0.41", ci_low = "0.27", ci_high = "0.64"
+  ))
+  expect_equal(score_against_gold(list(subgroup), rows[oak])$numeric_errors, 0L)
+  other <- modifyList(subgroup, list(population_match = "other"))
+  expect_equal(score_against_gold(list(other), rows[oak])$numeric_errors, 0L)
+  # A population the gold does not class pairs as before.
+  unclassed <- modifyList(rows[[oak]], list(
+    population = "patients", value = "0.9"
+  ))
+  expect_equal(
+    score_against_gold(list(subgroup), list(unclassed))$numeric_errors, 1L
+  )
+})
+
+test_that("a row of another assessment or a sensitivity analysis is no error", {
+  rows <- gold()
+  pfs <- gold_index(rows, "Keytruda", "KEYNOTE-024", "PFS")
+  # AURA3, Sonnet high: the BICR sensitivity analysis paired with the gold's
+  # investigator-assessed primary row (here the other way round).
+  investigator <- modifyList(as_extracted(rows[[pfs]]), list(
+    assessment = "investigator", value = "0.48", ci_low = "0.36",
+    ci_high = "0.64"
+  ))
+  expect_equal(
+    score_against_gold(list(investigator), rows[pfs])$numeric_errors, 0L
+  )
+  independent <- modifyList(investigator, list(assessment = "IRC"))
+  expect_equal(
+    score_against_gold(list(independent), rows[pfs])$numeric_errors, 1L
+  )
+  # A sensitivity or subgroup analysis is not the gold's analysis.
+  for (analysis in c("sensitivity analysis of PFS", "Subgroup analyses")) {
+    row <- modifyList(independent, list(analysis = analysis))
+    score <- score_against_gold(list(row), rows[pfs])
+    expect_equal(score$numeric_errors, 0L, info = analysis)
+    expect_equal(score$missed_rows, 1L, info = analysis)
+  }
+  # The gold's own numbers still pair whatever the labels say.
+  right <- modifyList(as_extracted(rows[[pfs]]), list(
+    assessment = "investigator", analysis = "sensitivity analysis"
+  ))
+  score <- score_against_gold(list(right), rows[pfs])
+  expect_equal(score$missed_rows, 0L)
+  expect_equal(score$numeric_errors, 0L)
+})
+
+test_that("assessments, analyses and populations are read into classes", {
+  expect_equal(gold_assessment_class("Investigator-assessed"), "investigator")
+  expect_equal(gold_assessment_class("INV"), "investigator")
+  for (text in c("BICR", "IRC", "blinded independent central review", "IRF")) {
+    expect_equal(gold_assessment_class(text), "independent", info = text)
+  }
+  expect_true(is.na(gold_assessment_class("")))
+  expect_true(is.na(gold_assessment_class("pathology review")))
+  expect_equal(gold_analysis_kind("sensitivity analysis"), "sensitivity")
+  expect_equal(gold_analysis_kind("a subgroup analysis"), "subgroup")
+  expect_true(is.na(gold_analysis_kind("primary analysis")))
+  class_of <- function(population, match = NULL) {
+    gold_population_class(list(
+      population = population, population_match = match
+    ))
+  }
+  for (text in c("ITT", "ITT (TPS >= 50%)", "mITT", "all randomised (ITT)",
+                 "Overall previously treated population", "Cohort A",
+                 "efficacy population", "independently reviewed population")) {
+    expect_equal(class_of(text), "whole", info = text)
+  }
+  for (text in c("stage II-IIIA", "TPS >= 50% population",
+                 "PD-L1 >= 1% (the EU indication)",
+                 "patients who received adjuvant chemotherapy",
+                 "one prior ALK TKI", "PD-L1 >= 50% subgroup")) {
+    expect_equal(class_of(text), "subgroup", info = text)
+  }
+  for (text in c("", "BICR-measurable population", "T+PC arm vs PC arm")) {
+    expect_true(is.na(class_of(text)), info = text)
+  }
+  # The extractor's population match decides over its words.
+  expect_equal(class_of("stage II-IIIA", "whole_trial_matches"), "whole")
+  expect_equal(class_of("ITT", "subgroup_matches"), "subgroup")
+  expect_equal(class_of("ITT", "other"), "subgroup")
+  expect_equal(class_of("ITT", "whole_trial_broader"), "whole")
+  expect_true(is.na(class_of("ITT", "not_stated")))
+})
+
+# The analysis's probe: label-aware pairing hides no wrong number of a gold
+# row stated as the gold states it.
+test_that("every gold row given a wrong value is still a numeric error", {
+  rows <- gold()
+  wrong <- purrr::map(rows, function(row) {
+    modifyList(row, list(value = paste0(row$value, "9")))
+  })
+  score <- score_against_gold(wrong, rows)
+  expect_equal(score$numeric_errors, length(rows))
+  # As the extractor states them, the analysis role left unstated.
+  extracted <- purrr::map(wrong, as_extracted, role = NA_character_)
+  expect_equal(
+    score_against_gold(extracted, rows)$numeric_errors, length(rows)
+  )
+})
+
+test_that("endpoints are read as the SmPCs print them", {
+  expect_equal(gold_endpoint("Objective response"), "ORR")
+  expect_equal(gold_endpoint("Objective response (CR + PR)"), "ORR")
+  expect_equal(gold_endpoint("Overall response"), "ORR")
+  expect_equal(gold_endpoint("Survival Time"), "OS")
+  expect_equal(gold_endpoint("Pathologic complete response"), "PCR")
+  expect_equal(gold_endpoint("Major pathologic response"), "MPR")
+  # A name inside a longer one is not read on its own.
+  expect_equal(gold_endpoint("Duration of objective response"), "DOR")
+  expect_equal(gold_endpoint_mentions("Duration of overall response"), "DOR")
+  expect_equal(gold_endpoint("Objective response rate"), "ORR")
+  # LIBRETTO-001 and Alimta's second-line trial, Opus high: kept with the
+  # gold's numbers, never paired.
+  libretto <- synthetic_row(
+    medicine = "Retsevmo", trial = "LIBRETTO-001", endpoint = "ORR",
+    value = "61.5", ci_low = "55.2", ci_high = "67.6"
+  )
+  printed <- modifyList(libretto, list(endpoint = "Objective response"))
+  expect_equal(
+    score_against_gold(list(printed), list(libretto))$missed_rows, 0L
+  )
+  docetaxel <- synthetic_row(
+    medicine = "Alimta", trial = "Phase 3 study, ALIMTA vs docetaxel",
+    endpoint = "OS", value = "0.99", ci_low = ".82", ci_high = "1.20",
+    population = "ITT"
+  )
+  survival_time <- modifyList(docetaxel, list(
+    trial = "", endpoint = "Survival Time"
+  ))
+  score <- score_against_gold(list(survival_time), list(docetaxel))
+  expect_equal(score$missed_rows, 0L)
+  expect_equal(score$numeric_errors, 0L)
+})
+
+test_that("the ALEX pitfall compares the arms' leading numbers", {
+  rows <- gold()
+  extracted <- purrr::map(rows, as_extracted)
+  alex <- gold_index(rows, "Alecensa", "ALEX", "PFS")
+  # Opus high on 2026-10-02: the medians without their CIs, the arms right.
+  extracted[[alex]][c("arm_treatment", "arm_control")] <- list("NE", "11.1")
+  expect_true(
+    score_against_gold(extracted, rows)$pitfalls[["alex_column_order"]]
+  )
+  extracted[[alex]][c("arm_treatment", "arm_control")] <- list("11.1", "NE")
+  score <- score_against_gold(extracted, rows)
+  expect_false(score$pitfalls[["alex_column_order"]])
+  expect_match(score$pitfall_notes, "swapped", all = FALSE)
+  # Other numbers are no pass either.
+  extracted[[alex]][c("arm_treatment", "arm_control")] <- list("34.8", "10.9")
+  expect_false(
+    score_against_gold(extracted, rows)$pitfalls[["alex_column_order"]]
+  )
+  expect_equal(gold_leading_number("NE [17.7; NE]"), "NE")
+  expect_equal(gold_leading_number(" 11.1 [9.1; 13.1]"), "11.1")
+  expect_equal(gold_leading_number("62 (50.8 %)"), "62")
+  expect_equal(gold_leading_number("not reached"), "")
+})
+
+test_that("rows of conditions EMA names by abbreviation are left out", {
+  gold_rows <- list(synthetic_row(
+    medicine = "Keytruda", trial = "KEYNOTE-024", endpoint = "PFS",
+    value = "0.50", ci_low = "0.37", ci_high = "0.68"
+  ))
+  for (indication in c(
+    "locally recurrent unresectable or metastatic TNBC",
+    "unresectable, locally advanced or metastatic OSCC",
+    "advanced or metastatic ESCC", "recurrent or metastatic NPC"
+  )) {
+    row <- modifyList(gold_rows[[1]], list(value = "0.9"))
+    row$indication <- indication
+    score <- score_against_gold(
+      list(row), gold_rows, condition = gold_condition
+    )
+    expect_equal(score$outside_rows, 1L, info = indication)
+    expect_equal(score$numeric_errors, 0L, info = indication)
+  }
+})
+
+# A primary endpoint's two rows in one setting: the whole trial's first, then
+# the subgroup matching the indication, which production leads with.
+two_lead_rows <- function() {
+  list(
+    synthetic_row(
+      trial = "STUDYX", setting = "1L", endpoint = "OS", value = "0.50",
+      is_primary = TRUE, population = "ITT", analysis = "primary analysis"
+    ),
+    synthetic_row(
+      trial = "STUDYX", setting = "1L", endpoint = "OS", value = "0.40",
+      ci_low = "0.20", ci_high = "0.60", is_primary = TRUE,
+      population = "PD-L1 >= 50% subgroup", analysis = "primary analysis"
+    )
+  )
+}
+
+test_that("lead agreement is reported by production's rule and shown rows", {
+  rows <- two_lead_rows()
+  extracted <- purrr::map(rows, as_extracted)
+  expect_equal(extracted[[2]]$population_match, "subgroup_matches")
+  score <- score_against_gold(extracted, rows)
+  expect_equal(score$lead_agreement, 1)
+  # Production leads with the subgroup that matches the indication.
+  expect_equal(score$lead_agreement_production, 0)
+  extracted[[2]]$population_match <- "whole_trial_broader"
+  score <- score_against_gold(extracted, rows)
+  expect_equal(score$lead_agreement_production, 1)
+  expect_equal(score$lead_agreement_shown, 1)
+  # A flagged row is never shown, so it never leads on the site.
+  extracted[[1]]$flags <- list("quote_across_lines")
+  score <- score_against_gold(extracted, rows)
+  expect_equal(score$lead_agreement, 1)
+  expect_equal(score$lead_agreement_production, 1)
+  expect_equal(score$lead_agreement_shown, 0)
+  table <- gold_report_table(list(list(
+    model = "claude-sonnet-5-5", effort = "high", score = score,
+    calls = dplyr::tibble(
+      medicine = "Alecensa", status = "ok", reason = NA_character_,
+      rows_kept = 2L, rows_failed = 0L, rows_dropped = 0L
+    ),
+    rows_kept = 2L, rows_failed = 0L,
+    usage = list(input_tokens = 10, output_tokens = 20), cost = 0.1
+  )))
+  expect_true(any(
+    table == "| Lead agreement, production's rule (reported) | 1.000 |"
+  ))
+  expect_true(any(
+    table == "| Lead agreement, shown rows only (reported) | 0.000 |"
+  ))
+})
+
+test_that("the gold evaluation checks the indication as production does", {
+  medicine <- list(
+    medicine = "Drugamab", ema_product_number = "EMEA/H/C/000001",
+    indication = "Drugamab is indicated for adults with NSCLC.",
+    section = "In TRIAL-9, PFS: HR 0.60 (0.45, 0.80)."
+  )
+  row <- list(
+    trial = "TRIAL-9", endpoint = "PFS", is_primary = TRUE,
+    indication = "adults with melanoma", value = "0.60", ci_low = "0.45",
+    ci_high = "0.80", quotes = "HR 0.60 (0.45, 0.80)."
+  )
+  flags <- function(row) {
+    unlist(gold_verified_rows(list(row), medicine)$rows[[1]]$flags)
+  }
+  expect_true("indication_not_in_source" %in% flags(row))
+  row$indication <- "adults with NSCLC"
+  expect_false("indication_not_in_source" %in% flags(row))
+})
+
+test_that("the report lists no unanswered call when every call answered", {
+  rows <- gold()
+  result <- list(
+    model = "claude-sonnet-5-5", effort = "high", failed = list(),
+    dropped_rows = character(), score = score_against_gold(rows, rows),
+    calls = dplyr::tibble(
+      medicine = "Alecensa", status = "ok", reason = NA_character_,
+      rows_dropped = 0L
+    )
+  )
+  details <- gold_report_details(result)
+  expect_false(any(grepl("did not answer", details, fixed = TRUE)))
+  expect_false(any(grepl(":  ()", details, fixed = TRUE)))
+  result$calls$status <- "truncated"
+  result$calls$reason <- "max_tokens"
+  details <- gold_report_details(result)
+  heading <- grep("did not answer", details, fixed = TRUE)
+  expect_equal(details[heading + 1], "  - Alecensa: truncated (max_tokens)")
+})
+
+test_that("the report lists extra rows beside a missed gold row", {
+  rows <- gold()
+  alina <- gold_index(rows, "Alecensa", "ALINA")
+  whole <- modifyList(as_extracted(rows[[alina]]), list(
+    population_match = "whole_trial_matches", ci_high = "0.43"
+  ))
+  result <- list(
+    model = "claude-sonnet-5-5", effort = "high", failed = list(),
+    dropped_rows = character(),
+    score = score_against_gold(list(whole), rows[alina]),
+    calls = dplyr::tibble(
+      medicine = "Alecensa", status = "ok", reason = NA_character_,
+      rows_dropped = 0L
+    )
+  )
+  details <- gold_report_details(result)
+  heading <- grep(
+    "Extra rows beside a missed gold row of their trial", details,
+    fixed = TRUE
+  )
+  expect_length(heading, 1)
+  expect_match(details[heading + 1], "alecensa\\|alina\\|DFS")
+  # And among the reasons it is not accepted, until checked.
+  expect_true(any(grepl(
+    "1 extra row(s) beside a missed gold row, not checked", details,
+    fixed = TRUE
+  )))
+})
+
+# Review of the gold analysis's fixes (2026-10-02): the labels that keep a
+# true row of another population or analysis apart are the model's own, so
+# a wrong number labelled so left the zero-error bar. Each such row is listed
+# beside the gold row it may stand for and counts against acceptance until
+# checked by hand.
+test_that("a wrong number under another row's labels still fails acceptance", {
+  rows <- gold()
+  alina <- gold_index(rows, "Alecensa", "ALINA")[1]
+  one <- rows
+  one[[alina]] <- modifyList(one[[alina]], list(
+    value = "0.99", analysis = "subgroup analysis"
+  ))
+  score <- score_against_gold(one, rows)
+  expect_equal(score$numeric_errors, 0L)
+  expect_equal(score$missed_rows, 1L)
+  expect_equal(score$near_missed_rows, 1L)
+  result <- list(
+    score = score,
+    calls = dplyr::tibble(medicine = "A", status = "ok", rows_dropped = 0L)
+  )
+  problems <- gold_acceptance_problems(result)
+  expect_match(problems, "beside a missed gold row", all = FALSE)
+  expect_false(gold_model_passes(result))
+  # Gold against itself: none.
+  expect_equal(score_against_gold(rows, rows)$near_missed_rows, 0L)
+})
+
+# The analysis's probe, with the labels a model may state wrongly: every gold
+# row given a wrong value is a numeric error or an extra row listed beside it.
+test_that("a wrong value is caught whatever labels the model states", {
+  rows <- gold()
+  wrong <- purrr::map(rows, function(row) {
+    modifyList(row, list(value = paste0(row$value, "9")))
+  })
+  stated <- function(extra) {
+    purrr::map(wrong, function(row) {
+      modifyList(as_extracted(row, role = NA_character_), extra)
+    })
+  }
+  labels <- c(
+    purrr::map(
+      c("whole_trial_matches", "whole_trial_broader", "subgroup_matches",
+        "other", "not_stated"),
+      \(match) list(population_match = match)
+    ),
+    list(
+      list(analysis = "sensitivity analysis"),
+      list(analysis = "subgroup analysis"),
+      list(assessment = "investigator"),
+      list(assessment = "IRC"),
+      list(
+        population_match = "subgroup_matches", analysis = "subgroup analysis",
+        assessment = "BICR"
+      )
+    )
+  )
+  for (extra in labels) {
+    info <- paste(names(extra), unlist(extra), collapse = ", ")
+    score <- score_against_gold(stated(extra), rows)
+    expect_equal(
+      score$numeric_errors + score$near_missed_rows, length(rows),
+      info = info
+    )
+    result <- list(
+      score = score,
+      calls = dplyr::tibble(medicine = "A", status = "ok", rows_dropped = 0L)
+    )
+    expect_false(gold_model_passes(result), info = info)
+  }
+})
+
+test_that("a time to an endpoint and a longer name are read as printed", {
+  expect_equal(
+    gold_endpoint("Time to objective response"), "TIME TO OBJECTIVE RESPONSE"
+  )
+  expect_equal(gold_endpoint("Time to response"), "TIME TO RESPONSE")
+  expect_equal(gold_endpoint("Progression-free survival time"), "PFS")
+  expect_equal(gold_endpoint("Overall survival time"), "OS")
+  expect_equal(gold_endpoint("Survival Time"), "OS")
+  expect_equal(gold_endpoint("Duration of objective response"), "DOR")
+  expect_equal(
+    gold_endpoint_mentions("Objective response rate and duration of response"),
+    c("ORR", "DOR")
+  )
 })
