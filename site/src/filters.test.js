@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { authorizedSeries, buildProducts } from "./approvals.js";
+import { authorizedSeries, buildProducts, isUndatedAuthorized } from "./approvals.js";
 import { DEFAULT_STATE } from "./url.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, parseAtcQuery, splitAtcValues } from "./filters.js";
 
@@ -208,6 +208,15 @@ test(
     assert.ok(shown.length > 1500 && shown.length < products.length, `${shown.length} of ${products.length}`);
     const series = read("ema_authorized_series.json");
     assert.deepEqual(authorizedSeries(filterProducts(products, predicates, OVER_TIME_EXCEPT), series.map((row) => row.date)), series);
+    // The (i) panel's undated note counts the chart's medicines: a status or year filter changes it
+    // as little as it changes the chart (review of L7: it vanished under ?status=Withdrawn).
+    const undated = (patch) => filterProducts(products, makePredicates({ ...structuredClone(DEFAULT_STATE), ...patch }, []), OVER_TIME_EXCEPT)
+      .filter(isUndatedAuthorized).length;
+    const byDefault = undated({});
+    assert.equal(byDefault, shown.filter(isUndatedAuthorized).length);
+    for (const patch of [{ status: [] }, { status: ["Withdrawn"] }, { from: 2015 }, { to: 2010 }]) {
+      assert.equal(undated(patch), byDefault, JSON.stringify(patch));
+    }
   },
 );
 

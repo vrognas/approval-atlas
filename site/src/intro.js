@@ -9,6 +9,7 @@
 // Owner decision 2026-09-29: three onboarding cards (icon on a tint, bold title, one plain sentence,
 // an example to try) and one quiet line on scope and use, in place of the two lists.
 import { UI } from "./labels.js";
+import { closeIcon } from "./links.js";
 import { DEFAULT_STATE, FILTER_KEYS, areaState, encodeUrl, filterIsSet, lookupView } from "./url.js";
 
 const STORAGE_KEY = "approval-atlas:intro-closed";
@@ -188,7 +189,8 @@ export function createIntro(card, link, { link: exampleLink, tryLine }) {
   // the page's h1 (audit 2026-09-30, S2).
   const title = element("p", "visually-hidden", copy.title);
   title.id = "intro-title";
-  const close = element("button", "intro-close", "×");
+  const close = element("button", "intro-close");
+  close.append(closeIcon());
   close.type = "button";
   close.setAttribute("aria-label", copy.close);
   close.title = copy.closeHint;

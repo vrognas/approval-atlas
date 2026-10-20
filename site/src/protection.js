@@ -91,7 +91,7 @@ export const glanceIsEstimate = (row) => Boolean(row) && !isCopy(row) && row.sta
 // phase 4): { value: "Market protection until 2031–2032" | "Market protection ended" | "Market
 // protection unclear" (the years of the market protection range while protected, else the status;
 // named since the Laws of UX second pass, 2026-09-30), reference: null,
-// orphan: the latest orphan market exclusivity still running ("Orphan exclusivity until 2033
+// orphan: the latest orphan market exclusivity still running ("Orphan market exclusivity until 2033
 // (est.)", no "(est.)" when the Union Register publishes that end) or null }; null without a row.
 // A copy: value "Follows Ibrance" (a reference by name, else "None of its own"), reference: the
 // reference's years while it is protected ("Ibrance's: until 2026–2027"), else null.

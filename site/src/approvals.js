@@ -1,7 +1,7 @@
 // Pure data helpers: no DOM, no D3, so they run under node:test.
 import { buildAreaTree } from "./areas.js";
-import { atcCode, atcPrefixes } from "./atc.js";
-import { NOT_STATED } from "./labels.js";
+import { atcCode, atcExplanation, atcPrefixes } from "./atc.js";
+import { NOT_STATED, UI, holderName } from "./labels.js";
 
 export const MEDICINE_TYPES = ["Advanced therapy", "Biosimilar", "Generic", "Other"];
 
@@ -79,8 +79,9 @@ export function buildProducts(medicines, {
     const modalities = modalitiesByProduct.get(medicine.ema_product_number) ?? [];
     return {
       ...medicine,
-      mah: medicine.marketing_authorisation_developer_applicant_holder ?? NOT_STATED,
-      holder_ema: medicine.marketing_authorisation_developer_applicant_holder ?? null,
+      // EMA's holder name as shown (holderName(): a broken encoding fixed, C8), as companies.js reads it.
+      mah: holderName(medicine.marketing_authorisation_developer_applicant_holder) ?? NOT_STATED,
+      holder_ema: holderName(medicine.marketing_authorisation_developer_applicant_holder) ?? null,
       holder_register: company?.holder_register ?? null,
       holder_basis: company?.holder_basis ?? null,
       company_key: company?.company_key ?? null,
@@ -117,11 +118,23 @@ export function isAuthorizedNow(product) {
   return product.medicine_status === "Authorised" && product.authorized_from !== null;
 }
 
+// Status Authorised without an approval date: not currently authorized, and in no point of the
+// "Authorized over time" series (6 on 2026-09-28).
+export function isUndatedAuthorized(product) {
+  return product.medicine_status === "Authorised" && product.authorized_from === null;
+}
+
+// A search-index row (ema_search_index.json) currently authorized, as isAuthorizedNow() reads an
+// ema_medicines row: status Authorised with an approval date (a data-file test keeps them alike).
+export function isListedAuthorizedNow(row) {
+  return row.medicine_status === "Authorised" && Boolean(row.marketing_authorisation_date);
+}
+
 // A lookup list of search-index rows (ema_search_index.json): the currently authorized ones (as
 // isAuthorizedNow(): status Authorised with an approval date, so a list's count matches its
 // headline's), or every status when showAll is set or none is currently authorized.
 export function authorizedFirst(rows, showAll) {
-  const authorized = rows.filter((row) => row.medicine_status === "Authorised" && Boolean(row.marketing_authorisation_date));
+  const authorized = rows.filter(isListedAuthorizedNow);
   const everyStatus = showAll || authorized.length === 0;
   return { current: authorized.length, everyStatus, shown: everyStatus ? rows : authorized };
 }
@@ -183,6 +196,18 @@ const BREAKDOWN_VALUES = {
 // Products with no value for the breakdown, so the page can say they are not shown.
 export function breakdownExcluded(products, by) {
   return products.filter((product) => BREAKDOWN_VALUES[by](product).length === 0).length;
+}
+
+// The explanation of the class the breakdown is drilled into (current; by: its mode), shown under
+// its path (owner decision 2026-10-01: on a touch screen a tap drills, and the first new bar shows
+// no tip, so no bar explained the class tapped): an ATC class's at levels 1-4 (explanations:
+// atc.js buildAtcExplanations()), a modality's or group's explainer, else null (areas: their MeSH
+// notes are long and their condition page has them; companies have none).
+export function breakdownExplanation(by, current, explanations) {
+  if (current === null || current === undefined) return null;
+  if (by === "atc") return atcExplanation(current, explanations);
+  if (by === "mod") return UI.modalityTips[current] ?? null;
+  return null;
 }
 
 // Breakdown rows (areas.js areaBreakdownRows() or companies.js companyBreakdownRows() output, or

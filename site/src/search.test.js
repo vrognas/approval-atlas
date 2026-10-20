@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
+  DESKTOP_GROUP_LIMIT,
   PHONE_GROUP_LIMIT,
   SPELLING_VARIANTS,
   buildConditions,
@@ -10,23 +11,30 @@ import {
   conditionPhrases,
   didYouMean,
   editDistance,
+  euNumberIndex,
+  euNumberStarted,
   findWholeWord,
   foldSearchText,
   foldWithMap,
   knownSubstance,
   makeSnippet,
   matchesWords,
+  medicineByNumber,
+  medicineNumber,
+  numberAnswer,
   queryWords,
   relaxedQueries,
   searchWithFallback,
   searchWords,
   spellingVariant,
   submitChoice,
+  keepShownList,
   suggest,
   suggestAtcClasses,
   textMatches,
   textPhrases,
 } from "./search.js";
+import { substanceAuthorizedCount } from "./copies.js";
 
 // The R rule (fold_search_text in R/mesh.R): str_to_lower; str_replace_all("ae|oe", "e");
 // "[\\-\\x{2010}-\\x{2015}]" -> " "; str_squish.
@@ -235,8 +243,88 @@ test("buildConditions finds a descriptor by its name", () => {
 });
 
 test("suggest needs at least 2 characters", () => {
-  assert.deepEqual(suggest(index, conditions, "k"), { medicines: [], substances: [], conditions: [] });
+  assert.deepEqual(suggest(index, conditions, "k"), { medicines: [], substances: [], conditions: [], numbered: null });
 });
+
+// Design sweep 2026-10-01 (C7): "EU/1/21/1608", "EMEA/H/C/005422" and "005422" found nothing.
+test("medicineNumber reads an EMA product number or a pack's EU number as typed", () => {
+  const wegovy = { kind: "ema", number: "EMEA/H/C/005422" };
+  assert.deepEqual(medicineNumber("EMEA/H/C/005422"), wegovy);
+  assert.deepEqual(medicineNumber(" emea / h / c / 005422 "), wegovy);
+  assert.deepEqual(medicineNumber("005422"), wegovy);
+  const eu = { kind: "eu", number: "EU/1/21/1608" };
+  assert.deepEqual(medicineNumber("EU/1/21/1608"), eu);
+  assert.deepEqual(medicineNumber("eu/1/21/1608/001"), eu); // a pack's own number
+  assert.deepEqual(medicineNumber("EU / 1 / 21 / 1608"), eu);
+  assert.deepEqual(medicineNumber("EU/1/96/023"), { kind: "eu", number: "EU/1/96/023" });
+  for (const text of ["5422", "0054221", "wegovy", "EU/1/21", "EU/3/21/1608", "L04AC", "glp 1"]) assert.equal(medicineNumber(text), null, text);
+  // Typing one: the search asks for the register's EU numbers from "EU/" on.
+  for (const text of ["EU/", " eu / 1", "EU/1/21/1608"]) assert.equal(euNumberStarted(text), true, text);
+  for (const text of ["EU", "eurneffy", "005422", "EMEA/H/C/005422"]) assert.equal(euNumberStarted(text), false, text);
+});
+
+test("a typed number names its medicine: by EMA product number at once, by EU number once the register is in", () => {
+  const rows = [{ ema_product_number: "EMEA/H/C/005422", name_of_medicine: "Wegovy", substances: "semaglutide", substance_keys: ["semaglutide"], medicine_status: "Authorised", marketing_authorisation_date: "2022-01-06", medicine_type: "Other" }];
+  const numbered = buildLookupIndex(rows, []);
+  const register = new Map([["EMEA/H/C/005422", { ema_product_number: "EMEA/H/C/005422", eu_number: "EU/1/21/1608" }], ["EMEA/H/C/000001", { ema_product_number: "EMEA/H/C/000001", eu_number: null }]]);
+  const euNumbers = euNumberIndex(register);
+  assert.equal(euNumberIndex(register), euNumbers); // built once per dataset
+  assert.deepEqual(Object.fromEntries(euNumbers), { "EU/1/21/1608": "EMEA/H/C/005422" });
+  assert.equal(suggest(numbered, null, "EMEA/H/C/005422").numbered.row.name_of_medicine, "Wegovy");
+  assert.deepEqual(suggest(numbered, null, "005422").numbered.number, "EMEA/H/C/005422");
+  const found = suggest(numbered, null, "EU/1/21/1608/001", { euNumbers });
+  assert.equal(found.numbered.row.name_of_medicine, "Wegovy");
+  assert.equal(found.numbered.number, "EU/1/21/1608");
+  assert.equal(suggest(numbered, null, "EU/1/21/1608").numbered, null); // the register not in yet
+  assert.equal(medicineByNumber(numbered, "EU/1/99/9999", euNumbers), null);
+  assert.equal(medicineByNumber(numbered, "EMEA/H/C/999999"), null);
+  // Not also listed by name.
+  assert.deepEqual(suggest(numbered, null, "wegovy").numbered, null);
+});
+
+// C7 review: Glivec's EU number EU/1/01/198 (no row in the register file) and Wegovy's, with the
+// register file failed or still loading, were all "No medicine in the EMA data has the EU number …".
+test("numberAnswer says what a typed number tells, and for an EU number only once the register's numbers are in", () => {
+  const rows = [
+    { ema_product_number: "EMEA/H/C/005422", name_of_medicine: "Wegovy", substances: "semaglutide", substance_keys: ["semaglutide"], medicine_status: "Authorised", marketing_authorisation_date: "2022-01-06", medicine_type: "Other" },
+    { ema_product_number: "EMEA/H/C/000406", name_of_medicine: "Glivec", substances: "imatinib", substance_keys: ["imatinib"], medicine_status: "Authorised", marketing_authorisation_date: "2001-11-07", medicine_type: "Other" },
+  ];
+  const numbered = buildLookupIndex(rows, []);
+  // Glivec has no register row, so its EU number is not among the register's.
+  const euNumbers = euNumberIndex(new Map([["EMEA/H/C/005422", { ema_product_number: "EMEA/H/C/005422", eu_number: "EU/1/21/1608" }]]));
+  const wegovy = numbered.byNumber.get("EMEA/H/C/005422");
+  assert.equal(numberAnswer(numbered, "wegovy", euNumbers), null);
+  assert.deepEqual(numberAnswer(numbered, "EU/1/21/1608/001", euNumbers), { kind: "eu", number: "EU/1/21/1608", row: wegovy, state: "found" });
+  assert.deepEqual(numberAnswer(numbered, "EU/1/01/198", euNumbers), { kind: "eu", number: "EU/1/01/198", row: null, state: "notFound" });
+  // The register's numbers loading (undefined) or failed (null): nothing is known of an EU number.
+  assert.deepEqual(numberAnswer(numbered, "EU/1/21/1608", undefined), { kind: "eu", number: "EU/1/21/1608", row: null, state: "loading" });
+  assert.deepEqual(numberAnswer(numbered, "EU/1/21/1608", null), { kind: "eu", number: "EU/1/21/1608", row: null, state: "unavailable" });
+  // An EMA product number needs no register: the search index lists every medicine.
+  for (const euState of [undefined, null, euNumbers]) {
+    assert.equal(numberAnswer(numbered, "000406", euState).row.name_of_medicine, "Glivec");
+    assert.equal(numberAnswer(numbered, "EMEA/H/C/999999", euState).state, "notFound");
+  }
+  // medicineByNumber() and suggest() name the medicine found only.
+  assert.equal(medicineByNumber(numbered, "EU/1/21/1608", undefined), null);
+  assert.equal(suggest(numbered, null, "EU/1/21/1608", { euNumbers: undefined }).numbered, null);
+  assert.deepEqual(medicineByNumber(numbered, "EU/1/21/1608", euNumbers), { row: wegovy, kind: "eu", number: "EU/1/21/1608" });
+});
+
+const registerFile = new URL("../public/data/ema_medicine_register_status.json", import.meta.url);
+test(
+  "on the real data, every EU number reads as one and names a medicine of the search index (C7)",
+  { skip: existsSync(registerFile) && existsSync(new URL("../public/data/ema_search_index.json", import.meta.url)) ? false : "data files not found" },
+  () => {
+    const rows = JSON.parse(readFileSync(registerFile, "utf8"));
+    const searchIndex = buildLookupIndex(JSON.parse(readFileSync(new URL("../public/data/ema_search_index.json", import.meta.url), "utf8")), []);
+    const euNumbers = euNumberIndex(new Map(rows.map((row) => [row.ema_product_number, row])));
+    const unread = rows.filter((row) => row.eu_number && medicineNumber(row.eu_number)?.number !== row.eu_number);
+    assert.deepEqual(unread, []);
+    const missing = rows.filter((row) => row.eu_number && medicineByNumber(searchIndex, `${row.eu_number}/001`, euNumbers)?.row.ema_product_number !== row.ema_product_number);
+    assert.deepEqual(missing.map((row) => row.eu_number), []);
+    assert.deepEqual([...searchIndex.byNumber.keys()].filter((number) => medicineNumber(number)?.number !== number), []);
+  },
+);
 
 test("medicine names match by word start; exact and prefix matches first, then authorized, then name", () => {
   assert.deepEqual(suggest(index, null, "hu").medicines.map((m) => m.name_of_medicine), ["Humira", "Hulio", "Hulk"]);
@@ -250,11 +338,72 @@ test("substances match INN items and carry their product count", () => {
   assert.deepEqual(suggest(index, null, "ADALIMUMAB").substances.map((s) => [s.name, s.products.length]), [["adalimumab", 3]]);
 });
 
+// Bug hunt 2026-10-01 (lookup.md #8): the suggestions' meta counts medicines with status
+// Authorised in every group; substances counted every status ("17 medicines" beside "52 authorized").
+// main.js counts a substance suggestion by substanceAuthorizedCount() (copies.test.js: every spelling).
+test("substances suggested are counted by their authorized medicines, as conditions and companies", () => {
+  const authorized = (substance) => substanceAuthorizedCount(substance.key, index.substances, new Map());
+  assert.deepEqual(suggest(index, null, "ADALIMUMAB").substances.map((s) => [s.name, authorized(s)]), [["adalimumab", 2]]);
+  assert.equal(authorized(index.substances.get("pembrolizumab")), 1);
+  // Through another name too (#19: "adrenaline" for epinephrine).
+  assert.deepEqual(suggest(index, null, "adrenaline").substances.map((s) => [s.name, s.synonym, authorized(s)]), [["epinephrine", "adrenaline", 1]]);
+});
+
 test("conditions: every word must start a word of one entry term; words under 4 characters match whole", () => {
-  assert.deepEqual(suggest(index, conditions, "hiv").conditions.map((c) => c.ui), ["D5"]);
+  // A one-word 3-letter query also matches a first word's start (owner decision 2026-10-01, below):
+  // "hivx" (D6), after the whole word.
+  assert.deepEqual(suggest(index, conditions, "hiv").conditions.map((c) => c.ui), ["D5", "D6"]);
+  assert.deepEqual(suggest(index, conditions, "hiv inf").conditions, []);
   assert.deepEqual(suggest(index, conditions, "rheum arth").conditions.map((c) => c.ui), ["D4"]);
   assert.deepEqual(suggest(index, conditions, "depressive disorders").conditions, []);
   assert.deepEqual(suggest(index, conditions, "hiv").medicines, []);
+});
+
+// Owner decision 2026-10-01 (design sweep L8): no condition was suggested before the 4th letter.
+test("conditions: a one-word 3-letter query matches a term's first word by its start, ranked after whole words", () => {
+  const terms = [
+    { entry_term: "psoriasis", mesh_descriptor_ui: "C1" },
+    { entry_term: "arthritis, psoriatic", mesh_descriptor_ui: "C2" },
+    { entry_term: "psoriatic arthritis", mesh_descriptor_ui: "C2" },
+    { entry_term: "influenza, human", mesh_descriptor_ui: "C3" },
+    { entry_term: "human flu", mesh_descriptor_ui: "C3" },
+    { entry_term: "fluorosis, dental", mesh_descriptor_ui: "C4" },
+    { entry_term: "lupus erythematosus, cutaneous", mesh_descriptor_ui: "C5" },
+  ];
+  const named = [["C1", "Psoriasis"], ["C2", "Arthritis, Psoriatic"], ["C3", "Influenza, Human"], ["C4", "Fluorosis, Dental"], ["C5", "Lupus Erythematosus, Cutaneous"]];
+  const own = buildLookupIndex(searchRows, terms);
+  const ownConditions = buildConditions(own, {
+    descriptorAreaRows: named.map(([ui, name]) => ({ mesh_descriptor_ui: ui, mesh_descriptor_name: name, therapeutic_area_mesh: name })),
+    // Fluorosis has more authorized medicines than influenza: the whole word still ranks first.
+    areaRows: [["P1", "Psoriasis"], ["P2", "Arthritis, Psoriatic"], ["P4", "Fluorosis, Dental"], ["P5", "Fluorosis, Dental"]].map(([number, term]) => ({ ema_product_number: number, therapeutic_area_mesh: term })),
+    branchRows: [],
+  });
+  const found = (query) => suggest(own, ownConditions, query).conditions.map((c) => [c.ui, c.synonym, c.prefix]);
+  // The name's first word, else an entry term's (named in the meta line).
+  assert.deepEqual(found("pso"), [["C1", null, true], ["C2", "psoriatic arthritis", true]]);
+  assert.deepEqual(found("PSO"), found("pso"));
+  assert.deepEqual(found("flu"), [["C3", "human flu", false], ["C4", null, true]]);
+  // Only a first word: "ery" starts the second word of C5's term.
+  assert.deepEqual(found("ery"), []);
+  // Two letters, several words, a digit: the rule as before (short words whole).
+  for (const query of ["ps", "pso art", "art pso", "h1n", "fl1"]) assert.deepEqual(found(query), [], query);
+  // From 4 letters any word's start matches, as before.
+  assert.deepEqual(found("psor").map(([ui]) => ui).sort(), ["C1", "C2"]);
+  assert.deepEqual(found("eryt").map(([ui]) => ui), ["C5"]);
+  // A 3-letter start names no condition (exact), and a match by it is a guess: weak, as a derived
+  // monogram, so Enter never opens it, not even as the only suggestion (fix-up of L8: "kah" opened
+  // Multiple Myeloma through "kahler disease", "fai" Renal Insufficiency through "failures, renal";
+  // Enter ran the indication-text search for them before, and does again).
+  assert.equal(suggest(own, ownConditions, "pso").conditions.some((c) => c.exact), false);
+  // The condition options as main.js suggestionGroups() makes them.
+  const groupsFor = (query) => [{ key: "conditions", options: suggest(own, ownConditions, query).conditions.map((c) => ({ label: c.name, value: c.ui, named: c.exact, weak: c.prefix })) }];
+  assert.deepEqual(found("lup"), [["C5", null, true]]);
+  assert.equal(submitChoice(groupsFor("lup"), "lup"), null);
+  assert.deepEqual(groupsFor("flu")[0].options.map((option) => [option.value, option.weak]), [["C3", false], ["C4", true]]);
+  // From 4 letters the only suggestion opens, as before.
+  assert.deepEqual(submitChoice(groupsFor("lupu"), "lupu"), { group: "conditions", value: "C5" });
+  const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(main, /value: condition\.ui, named: condition\.exact, weak: condition\.prefix,/);
 });
 
 test("conditions rank exact folded match > descriptor-name match > authorized count", () => {
@@ -396,6 +545,77 @@ test("submitChoice: 'ALL' and 'CAR' open no company through a derived monogram",
   assert.equal(submitChoice(all, "ALL"), null);
   const car = [{ key: "medicines", options: [{ label: "Carvykti", value: "M3" }] }, { key: "companies", options: [{ label: "Carisma Therapeutics", value: "g.carisma", weak: true }] }];
   assert.equal(submitChoice(car, "CAR"), null);
+});
+
+// Bug hunt 2026-10-01 (lookup.md #2): with the conditions, drug classes or companies still loading,
+// Enter opens a suggestion the query names at once (a brand typed in the first seconds), but not
+// the only one: another may come with the data ("roche": Bondenza now, the company Roche then).
+test("submitChoice with onlyNamed: the suggestion the query names, never the only one", () => {
+  const one = [{ key: "medicines", options: [{ label: "Bondenza (previously Ibandronic Acid Roche)", value: "P1" }] }];
+  assert.deepEqual(submitChoice(one, "roche"), { group: "medicines", value: "P1" });
+  assert.equal(submitChoice(one, "roche", { onlyNamed: true }), null);
+  const groups = [
+    { key: "medicines", options: [{ label: "Humira", value: "P2" }] },
+    { key: "classes", options: [{ label: "L04AC Interleukin Inhibitors", value: "L04AC" }] },
+    { key: "companies", options: [{ label: "MSD (Merck & Co.)", value: "g.msd", named: true }] },
+  ];
+  assert.deepEqual(submitChoice(groups, "humira", { onlyNamed: true }), { group: "medicines", value: "P2" });
+  assert.deepEqual(submitChoice(groups, "L04ac", { onlyNamed: true }), { group: "classes", value: "L04AC" });
+  assert.deepEqual(submitChoice(groups, "msd", { onlyNamed: true }), { group: "companies", value: "g.msd" });
+});
+
+// Bug hunt 2026-10-01 (lookup.md #2) and its review: data arriving under an open list rebuilt it
+// with the new groups above the options shown ("Roche" above Bondenza, 70px down; "msd": a tap
+// aimed at Vorinostat MSD opened Sanofi's company page), and the "Loading…" note above the options
+// went (the text search 32px up), so a tap aimed at an option in that moment hit another. Nothing
+// shown moves now: the groups and options shown keep their places, new groups come below them,
+// where the "Loading…" line was, even one naming the query; the next keystroke sorts as usual.
+test("keepShownList: what the list shows stays in place; new groups and notes come below it", () => {
+  const option = (label, extra = {}) => ({ label, value: label, ...extra });
+  const group = (key, ...labels) => ({ key, options: labels.map((label) => option(label)) });
+  const text = group("text", "Search indication texts for “roche”");
+  const keys = (list) => list.groups.map((entry) => entry.key);
+  const labels = (list) => list.groups.map((entry) => `${entry.key}: ${entry.options.map((item) => item.meta ? `${item.label} (${item.meta})` : item.label).join(", ")}`);
+  const notes = { loadingNote: "Loading…", quietNote: "No matches" };
+  // Nothing shown (a keystroke): as given, "Loading…" under the list while data loads.
+  const loading = { groups: [group("medicines", "Bondenza"), text], note: null, loading: true };
+  assert.deepEqual(keepShownList(null, loading, notes), { groups: loading.groups, note: null, end: "Loading…" });
+  assert.deepEqual(keepShownList(null, { ...loading, note: "No matches", loading: false }, notes), { groups: loading.groups, note: "No matches", end: null });
+  // The companies arrive with the group the query names: below the text search, not above Bondenza.
+  const shown = { groups: loading.groups, note: null };
+  const roche = { groups: [{ key: "companies", options: [option("Roche", { value: "g.roche", named: true })] }, group("medicines", "Bondenza"), text], note: null, loading: false };
+  assert.deepEqual(keys(keepShownList(shown, roche, notes)), ["medicines", "text", "companies"]);
+  assert.equal(keepShownList(shown, roche, notes).end, null);
+  // Still loading another dataset: "Loading…" stays last, under the new group.
+  assert.equal(keepShownList(shown, { ...roche, loading: true }, notes).end, "Loading…");
+  // A class named by its code, a condition by its name: the same.
+  const psoriasis = { groups: [group("conditions", "Psoriasis"), text], note: null, loading: false };
+  assert.deepEqual(keys(keepShownList({ groups: [text], note: null }, psoriasis, notes)), ["text", "conditions"]);
+  // A group shown keeps its options and their order: updated in place (an opinion in the meta),
+  // one gone now kept as shown, one new to it left for the next keystroke; a group gone now
+  // (did you mean, once something matches) kept as shown.
+  const medicines = { key: "medicines", options: [option("Kinselby", { meta: "Opinion" }), option("Keytruda", { meta: "Authorized" })] };
+  const fuzzy = group("fuzzy", "Keytruda");
+  const next = {
+    groups: [{ key: "medicines", options: [option("Keytruda", { meta: "Authorized" }), option("Kinselby", { meta: "Opinion (negative)" }), option("Kisplyx")] }, group("conditions", "Keratitis"), text],
+    note: null,
+    loading: false,
+  };
+  assert.deepEqual(labels(keepShownList({ groups: [medicines, fuzzy, text], note: null }, next, notes)), [
+    "medicines: Kinselby (Opinion (negative)), Keytruda (Authorized)",
+    "fuzzy: Keytruda",
+    "text: Search indication texts for “roche”",
+    "conditions: Keratitis",
+  ]);
+  // The note shown above the options stays (as it reads now); one the list did not show comes
+  // below it, but "No matches", which the status says and a "Did you mean" heading shows.
+  const retried = { groups: [group("medicines", "Ozempic"), text], note: "Showing results for “ozempic”", loading: false };
+  assert.equal(keepShownList({ groups: retried.groups, note: "Showing results for “ozempic”" }, retried, notes).note, "Showing results for “ozempic”");
+  assert.deepEqual(keepShownList({ groups: [fuzzy, text], note: null }, { groups: [fuzzy, text], note: "No matches", loading: false }, notes), { groups: [fuzzy, text], note: null, end: null });
+  const known = "Paracetamol (ATC N02BE01): no medicine with it went through EMA's central procedure, but it may be authorized nationally.";
+  assert.deepEqual(keepShownList({ groups: [text], note: null }, { groups: [text], note: known, loading: false }, notes), { groups: [text], note: null, end: known });
+  // Empty groups are no groups.
+  assert.deepEqual(keys(keepShownList({ groups: [text], note: null }, { groups: [text, { key: "classes", options: [] }], note: null, loading: false }, notes)), ["text"]);
 });
 
 test("suggest: 'IL-17' no longer finds Lutetium Billev (previously Illuzyce); 'glp1' reads as GLP-1", () => {
@@ -597,4 +817,18 @@ test("collapseGroups: at most 3 per group on phones, the named match first, expa
   assert.equal(hidden("medicines", expanded), 2);
   // Nothing is lost: shown plus hidden is every option.
   for (const group of collapsed) assert.equal(group.options.length + group.hidden, groups.find((other) => other.key === group.key).options.length);
+});
+
+// Owner decision 2026-10-01 (design sweep L8): desktop listed up to 8 per group ("ins": 29 options).
+test("collapseGroups: at most 5 per group on desktop, a group of 6 shown whole", () => {
+  assert.equal(DESKTOP_GROUP_LIMIT, 5);
+  const option = (label) => ({ label, value: label });
+  const groups = [
+    { key: "medicines", options: ["Instanyl", "Insulatard", "Insulin aspart Sanofi", "Insulin lispro Sanofi", "Insuman", "Insulin Aspart Injection", "Insulin Human 30/70 Mix Marvel", "Insulin Human Long Marvel"].map(option) },
+    { key: "substances", options: ["a", "b", "c", "d", "e", "f"].map(option) },
+    { key: "companies", options: ["Instituto Grifols S.A.", "Insmed Netherlands B.V."].map(option) },
+  ];
+  const collapsed = collapseGroups(groups, "ins", { limit: DESKTOP_GROUP_LIMIT });
+  assert.deepEqual(collapsed.map((group) => [group.key, group.options.length, group.hidden]), [["medicines", 5, 3], ["substances", 6, 0], ["companies", 2, 0]]);
+  assert.deepEqual(collapsed[0].options.map((entry) => entry.label), ["Instanyl", "Insulatard", "Insulin aspart Sanofi", "Insulin lispro Sanofi", "Insuman"]);
 });

@@ -11,6 +11,14 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f3f3ee" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1b1c19" media="(prefers-color-scheme: dark)" />
+    <!-- Two of the files the search needs first (main.js FIRST_FILES), asked for with the page rather
+         than once the script has run (bug hunt 2026-10-01: on Slow 4G they started 2.9 s in, after
+         the theme script, the script and the stylesheet). They download while the theme script's
+         round trip leaves the line idle; the MeSH terms (77 KB) would not fit there and would share
+         the bandwidth with the stylesheet, delaying the first paint, so main.js asks for them.
+         crossorigin: the same request as main.js's fetch(), so it reuses this response. -->
+    <link rel="preload" href="/data/meta.json" as="fetch" crossorigin />
+    <link rel="preload" href="/data/ema_search_index.json" as="fetch" crossorigin />
     <!-- The viewer's chosen theme (data-theme) before the first paint: a classic script, as the CSP
          allows no inline script and a module runs after the first paint; before the stylesheet,
          so it runs as soon as it arrives. theme.js (the header's button) does the rest. -->
@@ -79,6 +87,9 @@
 
       <section id="result" class="result" aria-label="Lookup result" hidden></section>
 
+      <!-- Shown from the first paint, before main.js runs (a first visit on a slow connection waits
+           for the bundle); labels.test.js keeps it equal to labels.js UI.page.loading, which
+           renderAbout() sets again. -->
       <p id="app-loading" class="muted">Loading charts…</p>
 
       <div id="app" hidden>
@@ -102,7 +113,8 @@
               </div>
               <p id="explore-note" class="page-dek" hidden></p>
             </div>
-            <!-- The table card has the same button (main.js); the table's caption says what it saves. -->
+            <!-- The table card has the same button (main.js); the table's caption says what it saves.
+                 Unseen on the Medicines tab, keeping its box, where the table's is the one (owner decision 2026-10-01). -->
             <button id="page-download" class="more download" type="button" aria-describedby="table-caption"><svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span id="page-download-text"></span></button>
           </div>
           <p id="filter-result" class="visually-hidden" role="status"></p>
@@ -119,6 +131,8 @@
                 <p id="popover-note" class="popover-note"></p>
               </div>
               <div id="popover-body" class="popover-body"></div>
+              <!-- Touch screens: the tip a tap shows in the body (setupTips() in main.js). -->
+              <p class="tip-strip" aria-hidden="true" hidden></p>
               <div class="popover-foot">
                 <button id="popover-clear" class="text-button" type="button"></button>
                 <button id="popover-done" class="popover-done" type="button"></button>
@@ -165,6 +179,9 @@
               <div id="over-time-info" class="card-info" hidden>
                 <p id="over-time-subtitle" class="muted"></p>
                 <p id="over-time-note" class="muted"></p>
+                <!-- Beside the other exclusion note (owner decision 2026-10-01, L7: it was a loose
+                     paragraph under the tiles). -->
+                <p id="undated-authorized" class="muted" hidden></p>
               </div>
               <ul id="over-time-legend" class="legend"></ul>
               <div id="over-time" class="chart"></div>
@@ -173,7 +190,6 @@
           </div>
         </div>
         <p id="register-note" class="muted" hidden></p>
-        <p id="undated-authorized" class="muted" hidden></p>
 
         <!-- Previews of the other tabs (overview-previews.js): three small cards side by side when
              there is room (their frame is a size container). -->
@@ -218,6 +234,7 @@
           <p id="pc-takeaway" class="card-takeaway"></p>
           <div id="pc-info" class="card-info" hidden>
             <p id="pc-note" class="muted"></p>
+            <p id="pc-count" class="muted" hidden></p>
           </div>
           <div id="pc-body"></div>
         </section>
@@ -322,16 +339,20 @@
         <section class="chart-card" aria-labelledby="chart-title">
           <div class="card-head">
             <div class="card-title">
-              <h2 id="chart-title">Medicines by year of approval</h2>
+              <h2 id="chart-title" tabindex="-1"></h2>
               <button class="info-button" type="button" aria-expanded="false" aria-controls="chart-info" aria-describedby="chart-title"><svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" /><path d="M8 7.25v4M8 4.75v.25" /></svg></button>
             </div>
             <button class="view-options-button" type="button" aria-expanded="false" aria-controls="chart-options" aria-describedby="chart-title"><svg class="view-options-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 4h7M13 4h1M2 12h1M7 12h7" /><circle cx="11" cy="4" r="2" /><circle cx="5" cy="12" r="2" /></svg><span class="view-options-text"></span><svg class="view-options-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg></button>
           </div>
           <p id="chart-takeaway" class="card-takeaway"></p>
+          <!-- Under the default status filter (owner decision 2026-10-01, L4): the chart counts the
+               medicines still authorized, so older years lose those withdrawn since; its button widens
+               the status filter. -->
+          <p id="chart-scope" class="card-scope" hidden><span id="chart-scope-text"></span> <button id="chart-scope-widen" class="lead-button" type="button"></button></p>
           <div id="chart-options" class="view-options" hidden>
             <div class="card-tools">
               <span id="chart-stack-label" class="tools-label"></span>
-              <div id="chart-stack" class="segmented" role="group" aria-labelledby="chart-stack-label">
+              <div id="chart-stack" class="segmented segmented-small" role="group" aria-labelledby="chart-stack-label">
                 <button type="button" data-stack="type"></button>
                 <button type="button" data-stack="atc"></button>
                 <button type="button" data-stack="mah"></button>
@@ -361,13 +382,14 @@
           <!-- "Download CSV" (main.js, csv.js): every medicine the table lists; the caption says which. -->
           <div class="card-head">
             <h2 id="table-title">Medicines</h2>
-            <button id="table-download" class="more" type="button" aria-describedby="table-caption"></button>
+            <!-- The page header's button's look (design sweep 2026-10-01, B2): one Download CSV look. -->
+            <button id="table-download" class="more download" type="button" aria-describedby="table-caption"><svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span id="table-download-text"></span></button>
           </div>
           <p id="table-caption" class="table-caption"></p>
           <div class="table-scroll">
             <table id="medicines-table"></table>
           </div>
-          <button id="table-more" class="more" type="button" hidden></button>
+          <button id="table-more" class="text-button" type="button" hidden></button>
         </section>
         </div>
       </div>
@@ -435,13 +457,18 @@
     </div>
 
     <!-- Phones and tablets: a bottom sheet (showModal) with the section of one chip. -->
-    <dialog id="sheet" class="sheet" aria-labelledby="sheet-title">
+    <dialog id="sheet" class="sheet" aria-labelledby="sheet-title" aria-describedby="sheet-note">
       <div class="sheet-head">
         <h2 id="sheet-title" tabindex="-1"></h2>
+        <!-- Under the title, as the popover's (design sweep 2026-10-01, B11): what the counts count.
+             A row of its own across the head, so Clear and × stay on the title's line. -->
+        <p id="sheet-note" class="popover-note"></p>
         <button id="sheet-clear" class="text-button" type="button"></button>
-        <button id="sheet-close" class="sheet-close" type="button">×</button>
+        <button id="sheet-close" class="sheet-close" type="button"></button>
       </div>
       <div id="sheet-body" class="sheet-body"></div>
+      <!-- Touch screens: the tip a tap shows in the body (setupTips() in main.js). -->
+      <p class="tip-strip" aria-hidden="true" hidden></p>
       <div class="sheet-foot">
         <button id="sheet-done" class="primary" type="button"></button>
       </div>

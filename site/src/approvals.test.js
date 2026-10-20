@@ -7,15 +7,19 @@ import {
   authorizedSeries,
   byStatusOrder,
   breakdownExcluded,
+  breakdownExplanation,
   buildProducts,
   buildSubstanceIndex,
   countTiles,
   distinctSorted,
   isAuthorizedNow,
+  isListedAuthorizedNow,
+  isUndatedAuthorized,
   newestFirst,
   sortBreakdownRows,
   statusDate,
 } from "./approvals.js";
+import { UI } from "./labels.js";
 import { NOT_CLASSIFIED, buildModalityTree } from "./modalities.js";
 
 const medicines = [
@@ -211,6 +215,12 @@ test("isAuthorizedNow needs status Authorised and an approval date", () => {
   assert.equal(isAuthorizedNow(medicine("P3", { medicine_status: "Withdrawn" })), false);
 });
 
+test("isUndatedAuthorized needs status Authorised and no approval date", () => {
+  assert.equal(isUndatedAuthorized(medicine("P1", {})), false);
+  assert.equal(isUndatedAuthorized(medicine("P2", { authorized_from: null })), true);
+  assert.equal(isUndatedAuthorized(medicine("P3", { medicine_status: "Withdrawn", authorized_from: null })), false);
+});
+
 test("authorizedFirst lists the currently authorized search-index rows, counted as the headline does", () => {
   // Epsilon is Authorised without an approval date: not currently authorized, so not listed.
   const { current, everyStatus, shown } = authorizedFirst(medicines, false);
@@ -272,6 +282,25 @@ test(
   },
 );
 
+// Bug hunt 2026-10-01 (lookup.md #2): the drug-class suggestions' counts come from the search index,
+// not ema_medicines.json (515 KB gzipped, the last search file to arrive on slow Wi-Fi).
+test("isListedAuthorizedNow: a search-index row authorized with an approval date", () => {
+  assert.deepEqual(medicines.filter(isListedAuthorizedNow).map((row) => row.ema_product_number), ["EMEA/H/C/000001", "EMEA/H/C/000003"]);
+});
+
+const indexFile = new URL("ema_search_index.json", dataDir);
+test(
+  "the search index's currently authorized rows are ema_medicines.json's (isAuthorizedNow())",
+  { skip: existsSync(indexFile) ? false : "site/public/data/ema_search_index.json not found: run the pipeline first" },
+  () => {
+    const numbers = (rows) => rows.map((row) => row.ema_product_number).sort();
+    const indexRows = JSON.parse(readFileSync(indexFile, "utf8"));
+    const all = JSON.parse(readFileSync(new URL("ema_medicines.json", dataDir), "utf8"));
+    assert.equal(indexRows.length, all.length);
+    assert.deepEqual(numbers(indexRows.filter(isListedAuthorizedNow)), numbers(all.filter(isAuthorizedNow)));
+  },
+);
+
 test("breakdownExcluded counts the products a breakdown cannot show", () => {
   const products = buildProducts(
     [medicine("P1", { marketing_authorisation_developer_applicant_holder: null }), medicine("P2", {}), medicine("P3", {})],
@@ -303,6 +332,27 @@ test("breakdownExcluded counts the products a breakdown cannot show", () => {
   assert.equal(breakdownExcluded(smpc, "atc"), 1);
   // Companies part 2: the company breakdown shows company groups; a medicine without a holder has none.
   assert.equal(breakdownExcluded(products, "mah"), 1);
+});
+
+// Owner decision 2026-10-01 (phone follow-up): a tap drills the breakdown and the first new bar
+// shows no tip, so the drilled class's explanation is shown under the path instead.
+test("breakdownExplanation: the drilled ATC class's or modality's explanation, else null", () => {
+  const explanations = new Map([["L04AC", "Block interleukins."], ["L", "Treat cancer."]]);
+  assert.equal(breakdownExplanation("atc", "L04AC", explanations), "Block interleukins.");
+  assert.equal(breakdownExplanation("atc", "L", explanations), "Treat cancer.");
+  // Level 5 has none (its substance's name says what it is), nor a class without one, nor the top.
+  assert.equal(breakdownExplanation("atc", "L04AC05", new Map([["L04AC05", "x"]])), null);
+  assert.equal(breakdownExplanation("atc", "L04AB", explanations), null);
+  assert.equal(breakdownExplanation("atc", null, explanations), null);
+  assert.equal(breakdownExplanation("atc", "L04AC"), null);
+  // Modalities: their explainer (UI.modalityTips), a group's and a modality's alike.
+  assert.equal(breakdownExplanation("mod", "antibody", explanations), UI.modalityTips.antibody);
+  assert.equal(breakdownExplanation("mod", "bispecific_antibody", explanations), UI.modalityTips.bispecific_antibody);
+  assert.equal(breakdownExplanation("mod", "no_such_modality", explanations), null);
+  assert.equal(breakdownExplanation("mod", null, explanations), null);
+  // Areas and companies: none (the area bars' MeSH notes are long; companies have no explainer).
+  assert.equal(breakdownExplanation("area", "C04", explanations), null);
+  assert.equal(breakdownExplanation("mah", "g.roche", explanations), null);
 });
 
 // Phase 4c: the breakdown's Sort control (UI state).

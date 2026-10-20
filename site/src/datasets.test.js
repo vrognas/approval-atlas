@@ -164,6 +164,45 @@ test("retry() leaves complete datasets, loads in progress and datasets never nee
   assert.equal(requests.has("register.json"), false);
 });
 
+// Bug hunt 2026-10-01 (lookup.md #2): while a dataset the search suggests from is loading, the
+// search says "Loading…" and Enter waits for it (search-box.js), so it must know when they are in.
+test("settled: resolves once none of the named datasets is loading (built or failed), after onLoad", async () => {
+  const calls = {};
+  const loadFile = (name) => new Promise((resolve, reject) => {
+    calls[name] = { resolve, reject };
+  });
+  const loaded = [];
+  const datasets = createDatasets(DEFINITIONS, loadFile, (name) => loaded.push(name));
+  // None asked for: nothing to wait for.
+  let done = false;
+  datasets.settled(["register", "protection"]).then(() => {
+    done = true;
+  });
+  await settle();
+  assert.equal(done, true);
+  datasets.need("register");
+  datasets.need("protection");
+  const order = [];
+  datasets.settled(["register", "protection"]).then(() => order.push(`settled after ${loaded.join(", ")}`));
+  calls["register.json"].reject(new Error("404"));
+  await settle();
+  assert.equal(datasets.peek("register"), FAILED);
+  assert.deepEqual(order, []); // protection still loading
+  calls["protection.json"].resolve([1]);
+  calls["orphan.json"].resolve([2]);
+  calls["copies.json"].resolve([3]);
+  await settle();
+  // The listeners (the search box's refresh) have run when it settles.
+  assert.deepEqual(order, ["settled after register, protection"]);
+  // Loaded: at once.
+  done = false;
+  datasets.settled(["register", "protection"]).then(() => {
+    done = true;
+  });
+  await settle();
+  assert.equal(done, true);
+});
+
 // main.js: the files a shared medicine link holds back wait for the small primary-documents file,
 // but no longer than the time given (review of the primary documents, 2026-09-30).
 test("settledOrAfter waits for the promise, or the time given when it takes longer", async () => {

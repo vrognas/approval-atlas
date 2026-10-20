@@ -1,10 +1,11 @@
 // Results timeline: x = approval date (UTC), one lane per medicine type present, one dot per
 // medicine (dodged), thin lines joining a substance family. Hover or tap shows a tooltip; tapping
-// a dot pins it so its name link can be followed. The result list below is the non-visual equivalent.
+// a dot pins it so its name link can be followed, and a tap outside the chart closes it. The result
+// list below is the non-visual equivalent.
 import * as d3 from "d3";
 import { placeTooltip } from "./chart.js";
 import { UI, formatDate, statusLabel } from "./labels.js";
-import { families, layoutLanes } from "./timeline-layout.js";
+import { dotClick, families, layoutLanes } from "./timeline-layout.js";
 
 const RADIUS = 4;
 const STEP = 10; // dot diameter plus its 2px surface ring
@@ -22,10 +23,23 @@ function summary(dots, lanes) {
   return UI.timeline.summary(dots.length, years[0], years[1], counts);
 }
 
+// Per chart drawn (its svg), the listener that closes its pinned tip on a tap outside; ended once the
+// chart is gone (a later render, another view: the lookup rebuilds its cards).
+const closers = new Map();
+
+function endClosers() {
+  for (const [chart, closer] of closers) {
+    if (chart.isConnected) continue;
+    closer.abort();
+    closers.delete(chart);
+  }
+}
+
 // items: [{ id, name, date, type, family, status, holder, mentioned }]; link(item) -> <a> that opens the card.
 export function renderTimeline(container, items, { link }) {
   const root = d3.select(container);
   root.selectChildren().remove();
+  endClosers();
   const dated = items.filter((item) => item.date !== null);
   const undated = items.length - dated.length;
   if (dated.length === 0) {
@@ -137,16 +151,31 @@ export function renderTimeline(container, items, { link }) {
     if (!pinned) hide();
   });
   // A click on the dot the hover shows pins its tip where it is, so the pointer can reach its link.
-  svg.on("click", (event) => {
+  function click(event, hoveredDot) {
     const dot = nearest(event);
-    if (dot && dot === hovered) {
+    const action = dotClick(dot, pinned, hoveredDot);
+    if (action === "pin") {
       pinned = dot;
       hovered = null;
       tip.classed("pinned", true);
-    } else if (dot && dot !== pinned) show(dot, true);
+    } else if (action === "show") show(dot, true);
     else hide();
+  }
+  svg.on("click", (event) => click(event, hovered));
+  // The pinned tip takes taps (its link): one elsewhere on it reaches the dot it covers there, else
+  // closes it (bug hunt 2026-10-01: a dot under the tip could not be tapped).
+  tip.on("click", (event) => {
+    if (!event.target.closest("a")) click(event, null);
   });
   tip.on("keydown", (event) => {
     if (event.key === "Escape") hide();
   });
+  // A tap or click outside the chart and its tip closes a pinned tip (bug hunt 2026-10-01: it stayed
+  // over the list below).
+  const outside = new AbortController();
+  closers.set(svg.node(), outside);
+  document.addEventListener("pointerdown", (event) => {
+    if (!svg.node().isConnected) endClosers();
+    else if (pinned && !container.contains(event.target)) hide();
+  }, { capture: true, signal: outside.signal });
 }

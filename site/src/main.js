@@ -3,11 +3,13 @@ import {
   MEDICINE_TYPES,
   authorizedSeries,
   breakdownExcluded,
+  breakdownExplanation,
   buildProducts,
   buildSubstanceIndex,
   byStatusOrder,
   countTiles,
   isAuthorizedNow,
+  isUndatedAuthorized,
   newestFirst,
   sortBreakdownRows,
 } from "./approvals.js";
@@ -25,7 +27,7 @@ import { renderChart, renderLegend, renderStackLegend, typeColor } from "./chart
 import { buildCompanies, companyBreakdownRows, matchesCompany, namesBehind, suggestCompanies, toggleCompany } from "./companies.js";
 import { createCompanyTree, renderCompanyPath } from "./company-tree.js";
 import { createConditionsCard } from "./conditions-card.js";
-import { equivalentSetKey } from "./copies.js";
+import { equivalentSetKey, substanceAuthorizedCount } from "./copies.js";
 import { csvFileName, medicinesCsv } from "./csv.js";
 import { FAILED, settledOrAfter } from "./datasets.js";
 import { createFacetPanel } from "./facet-panel.js";
@@ -54,8 +56,9 @@ import {
   yearStackMode,
   yearStacks,
 } from "./facets.js";
-import { renderFilterChips, renderFilterSummary } from "./filter-bar.js";
+import { STRIP_FADE, fadeEdges, renderFilterChips, renderFilterSummary, revealOnFocus, revealScroll, watchEdgeFade } from "./filter-bar.js";
 import { OVER_TIME_EXCEPT, filterProducts, makePredicates, splitAtcValues } from "./filters.js";
+import { createHistoryScroll, placeAt, restoreStep, scrollWithout } from "./history-scroll.js";
 import { companyBadge, holderDisplay } from "./holders.js";
 import { createIntro } from "./intro.js";
 import { SOURCES, UI, atcClassLabel, atcName, statusLabel } from "./labels.js";
@@ -70,18 +73,21 @@ import { renderProtectionCalendar } from "./protection-calendar-card.js";
 import { LATER, calendarBuckets, protectionEnding } from "./protection-calendar.js";
 import { createSearchBox } from "./search-box.js";
 import { createRecent, keptOpenedClass, openedClass, recentEntry, recentLookupState } from "./recent.js";
-import { MIN_QUERY, buildLookupIndex, didYouMean, foldSearchText, knownSubstance, searchWithFallback, suggest, suggestAtcClasses } from "./search.js";
+import {
+  MIN_QUERY, buildLookupIndex, didYouMean, euNumberStarted, foldSearchText, knownSubstance, numberAnswer, searchWithFallback, suggest, suggestAtcClasses,
+} from "./search.js";
 import { createPopover, nextOpenChip } from "./popover.js";
 import { createSheet } from "./sheet.js";
 import { tabsKeydown } from "./tabs.js";
 import { createTable } from "./table.js";
 import { createThemeToggle } from "./theme.js";
 import { renderTiles } from "./tiles.js";
-import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipCovers, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 import {
   DEFAULT_LOOKUP,
   DEFAULT_STATE,
   FILTER_KEYS,
+  STATUS_ALL,
   activeFilterCount,
   classState,
   decodeLookup,
@@ -92,6 +98,7 @@ import {
   patchFilterParams,
   patchIsSet,
   scheduleUrlWrite,
+  setHistoryWriter,
   togglePatch,
   withoutLookup,
 } from "./url.js";
@@ -129,6 +136,10 @@ const REGISTER_FILE = "ema_medicine_register_status.json";
 const BREAKDOWN_FILTER = { atc: "atc", area: "area", mah: "mah", mod: "mod" };
 // Desktop from this width: a chip opens its popover; below it, a bottom sheet.
 const DESKTOP = window.matchMedia("(min-width: 1024px)");
+// Phones (style.css's phone block): a tap on the Medicines tab draws the table's first rows first
+// (design sweep 2026-10-01, L3).
+const PHONE = window.matchMedia("(max-width: 720px)");
+const TABLE_FIRST_ROWS = 20;
 // The facet section (index.html #facet-{id}) each filter chip opens, and the filter keys it sets.
 const CHIP_SECTIONS = { type: "type", mod: "modality", atc: "atc", area: "area", mah: "mah", status: "status", years: "years" };
 const CHIP_KEYS = { type: ["type"], mod: ["mod"], atc: ["atc"], area: ["area"], mah: ["mah"], status: ["status"], years: ["from", "to"] };
@@ -248,7 +259,14 @@ let lookup = null;
 // Whether a chip's filter popover is open (set once the dashboard exists): the intro card stays as
 // it is shown until it closes (intro.js introVisible() held).
 let filtersOpen = () => false;
+// Closes an open filter popover or sheet without handing focus back to its chip (set once the
+// dashboard exists): Back or Forward shows another view, which the open filters would edit unseen.
+// True when one was open.
+let closeFiltersNow = () => false;
 let frame = 0;
+// History entries pushed or popped so far: an Enter waiting for the search's data (search-box.js)
+// is dropped when one comes first (bug hunt 2026-10-01).
+let navigations = 0;
 const urlNote = $("#url-note");
 // Filter edits (not the first render, the breakdown's mode, the tab or lookups) announce the new
 // headline, debounced (url.js FILTER_KEYS: every state key but the views, by and tab).
@@ -262,6 +280,120 @@ let scrollAnchor = null;
 const keepInPlace = (element) => {
   scrollAnchor = { element, top: element.getBoundingClientRect().top };
 };
+
+// Scroll positions per history entry (history-scroll.js): the page restores them itself. A new view
+// (a push) scrolls to its heading, which takes focus (render()); Back and Forward return to where
+// the view was left, once it has rendered (a reload too, once the dashboard has). Until then scroll
+// anchoring is off (html.restoring-scroll), as it would move the page by the height of a card put
+// back above (lookup.md #1); a wheel, touch, key or pointer press ends a restore still waiting, so
+// the page never jumps under the user. A place is kept by the part at the middle of the screen (the
+// result or the overview), with the result's open disclosures, which the card made anew reopens
+// (lookup.js render(): More details, the full indication).
+const TOP = placeAt(0, 0, { result: null, overview: null });
+// The place a Back, Forward or reload goes to once rendered (restoreScroll()), else null.
+let pendingScroll = null;
+// The parts a place is kept by: the lookup result and the overview (#app), by their document tops.
+function pageMarks() {
+  const documentTop = (element) => element.getBoundingClientRect().top + window.scrollY;
+  const result = $("#result");
+  const app = $("#app");
+  return {
+    result: result.hidden ? null : { top: documentTop(result), height: result.offsetHeight },
+    overview: app.hidden ? null : documentTop(app),
+  };
+}
+// The band the medicines table's in-flow ATC tip (a phone's tapped badge: setupTips()) adds to its
+// row, in document pixels, else null. It does not come back with its view (no badge has focus then),
+// so a place leaves it out (scrollWithout(); review of the in-flow tip, 2026-10-02: Back put the
+// medicine tapped two rows under it 182px higher). Its line comes right before the areas' and the
+// indication toggle's (style.css), each line a row gap apart.
+function flowTipBand() {
+  const row = document.querySelector("#medicines-table tr[data-flow-tip]");
+  if (!row) return null;
+  const tip = getComputedStyle(row, "::after");
+  const height = parseFloat(tip.height);
+  if (tip.content === "none" || tip.content === "normal" || !Number.isFinite(height)) return null;
+  const style = getComputedStyle(row);
+  const band = height + (parseFloat(style.rowGap) || 0);
+  const after = [...row.querySelectorAll(":scope > :is(td.area, td.indication-cell)")]
+    .map((cell) => cell.getBoundingClientRect()).filter((box) => box.height > 0);
+  const end = after.length > 0 ? Math.min(...after.map((box) => box.top))
+    : row.getBoundingClientRect().bottom - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
+  return { top: end - band + window.scrollY, height: band };
+}
+// While a restore waits, the place it goes to (a second Back, a reload before it).
+function pagePlace() {
+  if (pendingScroll !== null) return pendingScroll;
+  const result = $("#result");
+  const open = result.hidden ? [] : [...result.querySelectorAll("details[open][data-key]")].map((details) => details.dataset.key);
+  const band = flowTipBand();
+  const active = band && document.activeElement !== document.body ? document.activeElement?.getBoundingClientRect() : null;
+  const focus = active ? { top: active.top + window.scrollY, bottom: active.bottom + window.scrollY } : null;
+  return placeAt(scrollWithout(window.scrollY, window.innerHeight, band, focus), window.innerHeight, pageMarks(), open);
+}
+const historyScroll = createHistoryScroll(window, pagePlace);
+setHistoryWriter(historyScroll);
+// The disclosures the next render's lookup card reopens (Back, Forward, a reload), then null.
+let reopenKeys = historyScroll.initial?.open ?? null;
+// Back or Forward closed a filter popover or sheet, whose chip took focus back: settled after the
+// restore (settleFocus()).
+let refocus = false;
+function stopRestoring() {
+  pendingScroll = null;
+  refocus = false;
+  document.documentElement.classList.remove("restoring-scroll");
+}
+function startRestoring(place) {
+  pendingScroll = place;
+  document.documentElement.classList.add("restoring-scroll");
+}
+// The chip a closed sheet gave focus back to can be out of view in the view shown (the restored card
+// at the top, the chip below it), and a closed popover leaves focus on the page: focus goes to the
+// view's heading when in view, else to the page (dashboard.md #2 review).
+function settleFocus() {
+  const inView = (element) => {
+    const box = element.getBoundingClientRect();
+    return box.bottom > 0 && box.top < window.innerHeight;
+  };
+  const active = document.activeElement;
+  if (active && active !== document.body && inView(active)) return;
+  const heading = lookupView(state).kind !== null ? $("#result").querySelector("h1") : $("#headline");
+  if (heading && inView(heading)) heading.focus({ preventScroll: true });
+  else active?.blur();
+}
+// After a render (the lookup's own too, as its data arrives): final once the dashboard is there and
+// the lookup view's data has loaded (the page's height then holds, short of later data: the page's
+// end will do).
+function restoreScroll() {
+  if (pendingScroll === null) return;
+  const step = restoreStep(pendingScroll, pageMarks(), {
+    maxScroll: document.documentElement.scrollHeight - window.innerHeight,
+    viewportHeight: window.innerHeight,
+    final: dashboard !== null && !lookup?.loading(),
+  });
+  if (!step) return;
+  const settle = refocus;
+  window.scrollTo(0, step.y);
+  stopRestoring();
+  if (settle) settleFocus();
+}
+if (historyScroll.initial !== null) startRestoring(historyScroll.initial);
+// A second after the page stops scrolling, the entry notes where it is; and the tab, when the page
+// is left or hidden (a reload within that second; at most one history write a second).
+let scrollSaveTimer = 0;
+window.addEventListener("scroll", () => {
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(historyScroll.save, 1000);
+}, { passive: true });
+window.addEventListener("pagehide", historyScroll.leave);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") historyScroll.leave();
+});
+for (const type of ["wheel", "touchstart", "keydown", "pointerdown"]) {
+  window.addEventListener(type, () => {
+    if (pendingScroll !== null) stopRestoring();
+  }, { capture: true, passive: true });
+}
 
 function applyUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -292,7 +424,8 @@ function updateTitle() {
 
 function render() {
   placeTopbar();
-  lookup.render(state);
+  lookup.render(state, false, reopenKeys);
+  reopenKeys = null;
   const lookupOpen = lookupView(state).kind !== null;
   $(".answer").hidden = lookupOpen; // the lookup result is the answer; one headline per screen
   // Below a lookup result, the dashboard is the overview of every medicine: its heading says so and
@@ -334,23 +467,35 @@ function render() {
     headline.focus({ preventScroll: true });
     headline.scrollIntoView({ block: "nearest" });
   }
+  restoreScroll();
 }
 
-function scheduleRender() {
+// afterPaint: the render waits for the frame after the next paint (a tab's tap, design sweep
+// 2026-10-01, L3: the tab shows selected at once, its cards follow). Renders asked for meanwhile
+// are that one.
+function scheduleRender(afterPaint = false) {
   if (!frame) frame = requestAnimationFrame(() => {
+    if (afterPaint) {
+      setTimeout(() => {
+        frame = 0;
+        render();
+      }, 0);
+      return;
+    }
     frame = 0;
     render();
   });
 }
 
-function setState(patch, push = false) {
+function setState(patch, push = false, afterPaint = false) {
   // Navigations (push) move focus to the new headline instead.
   if (!push && FILTER_KEYS.some((key) => key in patch)) announceFilters = true;
+  if (push) navigations += 1;
   state = { ...state, ...patch };
   // Before the dashboard has loaded, filter changes go into the URL's kept filter part.
   if (!dashboard) pendingFilters = patchFilterParams(pendingFilters, patch);
   urlNote.hidden = true;
-  scheduleRender();
+  scheduleRender(afterPaint);
   scheduleUrlWrite(state, push, dashboard ? null : pendingFilters);
 }
 
@@ -470,8 +615,9 @@ function renderTypeTips() {
 
 // The tooltips (data-tip, style.css) are dismissible (WCAG 1.4.13): Escape hides them (and does
 // nothing else, so a popover's Escape waits for the next press) until the pointer reaches another
-// carrier or focus moves; a pointer click on a tip only hides it, as it lies over other controls,
-// and a pointer click on a MeSH explainer's carrier hides it too (step 4 review: it covered the next
+// carrier or focus moves (on touch screens a swipe does too); a pointer click on a tip only hides it,
+// as it lies over other controls, and a pointer click on a MeSH explainer's carrier hides it too
+// (step 4 review: it covered the next
 // rows, so checking one row and moving to the next took two clicks). On mouse hover (owner decision
 // 2026-09-29) a tip opens at the pointer: fixed (.tip-at-pointer, --pointer-tip-x/-y, CSSOM),
 // 12px below and right of where the pointer entered its carrier, or, for a MeSH explainer, where it
@@ -479,10 +625,10 @@ function renderTypeTips() {
 // leaving the carrier toward it holds it, so the pointer can move onto it. Keyboard focus and touch
 // taps anchor it to its carrier: a carrier whose tip is anchored to its row (static: lookup rows, the
 // ATC, area and modality trees in a popover or sheet) puts the tip under its own line (--tip-top); a
-// tip starting at
-// its carrier that would cross the viewport's right edge (a status near the right of a phone) or its
-// scroll box's (the medicines table) moves left (--tip-left), and goes above it where the box has no
-// room below (.tip-above).
+// tip starting at its carrier that would cross the viewport's right edge (a status near the right of
+// a phone) or its scroll box's (the medicines table) moves left (--tip-left), and goes above it where
+// the box has no room below (.tip-above). On touch screens a tip in a sheet or popover shows in its
+// strip instead (updateStrips()).
 function setupTips() {
   const root = document.documentElement;
   let hiddenOn = null; // the carrier under the pointer when the tips were hidden
@@ -491,8 +637,9 @@ function setupTips() {
   // label's checkbox, the first new bar), neither of which shows them again.
   let clickedAt = null;
   const carrierOf = (target) => (target instanceof Element ? target.closest("[data-tip]") : null);
-  const showing = () => [...document.querySelectorAll("[data-tip]:is(:hover, :focus-within, .tip-hold)")]
-    .some((carrier) => getComputedStyle(carrier, "::after").content !== "none");
+  // Whether a tip shows (of a carrier for which also is true).
+  const showing = (also = () => true) => [...document.querySelectorAll("[data-tip]:is(:hover, :focus-within, .tip-hold)")]
+    .some((carrier) => also(carrier) && getComputedStyle(carrier, "::after").content !== "none");
   const pointAt = (event) => ({ x: event.clientX, y: event.clientY });
   // Touch screens (phones) and touch input anchor tips to their carriers, as before.
   const touchScreen = window.matchMedia("(hover: none)");
@@ -516,12 +663,16 @@ function setupTips() {
     hiddenOn = null;
     clickedAt = null;
     root.classList.remove("tips-hidden");
+    scheduleStrips();
   }
-  function hide(at = null) {
+  // under: the carrier the tips stay hidden on while the pointer is there (the one under it; none
+  // after a swipe, so a tap on the carrier shows its tip again).
+  function hide(at = null, under = document.querySelector("[data-tip]:hover")) {
     release();
-    hiddenOn = document.querySelector("[data-tip]:hover");
+    hiddenOn = under;
     clickedAt = at;
     root.classList.add("tips-hidden");
+    scheduleStrips();
   }
   // A tip in a scroll box (clip) is no wider than the box (--tip-max, style.css), else as wide as
   // its style allows.
@@ -677,6 +828,8 @@ function setupTips() {
     if (carrier === hiddenOn) return;
     if (clickedAt && event.clientX === clickedAt.x && event.clientY === clickedAt.y) return;
     reveal();
+    // A tap or the pointer on it: a quiet tip (focusQuietly()) shows again.
+    carrier.classList.remove("tip-quiet");
     if (touch(event)) anchor(carrier);
     else if (!returning && (fresh || pointed?.carrier !== carrier)) placeAtPointer(carrier, pointAt(event));
   });
@@ -690,6 +843,7 @@ function setupTips() {
       && event.timeStamp - entered.at < pauseOf(carrier)) moveTip(point);
   }, { passive: true });
   document.addEventListener("focusin", (event) => {
+    scheduleStrips();
     const visible = event.target.matches(":focus-visible");
     if (clickedAt && !visible) return;
     reveal();
@@ -697,6 +851,88 @@ function setupTips() {
     // Focus a pointer click gives keeps the tip where the pointer opened it.
     if (carrier && (visible || !carrier.classList.contains("tip-at-pointer"))) anchor(carrier);
   });
+  document.addEventListener("focusout", (event) => {
+    const carrier = carrierOf(event.target);
+    if (carrier && !carrier.contains(event.relatedTarget)) carrier.classList.remove("tip-quiet");
+    scheduleStrips();
+  });
+  // Touch screens: in a sheet or popover the tip a tap (or focus) shows is drawn in the strip above
+  // the foot, not at its carrier (style.css), so it covers no row (bug hunt 2026-10-01, fix-up: under
+  // a tree row it hid the next two rows, above it the search field and the parent row). The strip
+  // takes its height from the body: a sheet keeps the height it had when its strip first showed
+  // until it closes (it grows upward from the bottom of the screen, so its rows would move up under
+  // the finger), and a tapped row the strip leaves under the body's visible bottom is scrolled back
+  // into view (revealBy()). Updated in the next frame, never during a tap: a body shrinking between
+  // mousedown (focus) and mouseup would send the click elsewhere, to the sheet's backdrop handler
+  // even, which closes it.
+  const STRIP_BODY = ".sheet-body, .popover-body";
+  const inStrip = (carrier) => touchScreen.matches && carrier.closest(STRIP_BODY) !== null;
+  const shown = (carrier) => getComputedStyle(carrier, "::after").content !== "none";
+  let stripFrame = 0;
+  const stripCarriers = new WeakMap(); // strip: the carrier whose tip it shows
+  function scheduleStrips() {
+    if (!stripFrame) stripFrame = requestAnimationFrame(updateStrips);
+  }
+  function updateStrips() {
+    stripFrame = 0;
+    for (const strip of document.querySelectorAll(".tip-strip")) {
+      const dialog = strip.closest("dialog");
+      const body = dialog.querySelector(STRIP_BODY);
+      // The innermost focused carrier whose tip shows (not a MeSH explainer's a tap leaves hidden).
+      const carrier = dialog.open && touchScreen.matches
+        ? [...body.querySelectorAll("[data-tip]:focus-within")].findLast(shown) : null;
+      if (!dialog.open) dialog.style.removeProperty("height");
+      if (!carrier) {
+        strip.hidden = true;
+        stripCarriers.delete(strip);
+        continue;
+      }
+      if (dialog.classList.contains("sheet") && !dialog.style.height) dialog.style.setProperty("height", `${dialog.offsetHeight}px`);
+      strip.textContent = carrier.dataset.tip;
+      strip.hidden = false;
+      if (stripCarriers.get(strip) === carrier) continue;
+      stripCarriers.set(strip, carrier);
+      body.scrollTop += revealBy(carrier.getBoundingClientRect(), scrollArea(body));
+    }
+    updateFlow();
+  }
+  // Touch screens: the medicines table's focused ATC badge (a tapped segment) shows its tip in flow,
+  // a line of its stacked row's own under the badge's line, which makes the row taller (owner
+  // decision 2026-10-01: drawn under the badge it covered the next rows): the badge lends its tip to
+  // its row (data-flow-tip, drawn by style.css). Only a stacked row (a phone's: display flex); the
+  // wide table keeps the tip anchored. Set in the next frame like the strips, so a tap elsewhere
+  // lands before the row shrinks back.
+  const FLOW_CARRIERS = "#medicines-table td.atc .code[data-tip]";
+  // The row a badge's tip is in flow in, read from the layout now (review of the in-flow tip: a
+  // rotation since makes the table wide, the tip anchored over the rows again), else null.
+  const flowRow = (carrier) => {
+    const row = touchScreen.matches && carrier.matches(FLOW_CARRIERS) ? carrier.closest("tr") : null;
+    return row && getComputedStyle(row).display === "flex" ? row : null;
+  };
+  function updateFlow() {
+    const focused = document.querySelector(`${FLOW_CARRIERS}:focus-within`);
+    const row = focused ? flowRow(focused) : null;
+    for (const other of document.querySelectorAll("#medicines-table tr[data-flow-tip]")) if (other !== row) delete other.dataset.flowTip;
+    if (row) row.dataset.flowTip = focused.dataset.tip;
+  }
+  document.addEventListener("close", scheduleStrips, true);
+  // Touch screens: a swipe (the page or a scroll box scrolling under the finger) hides the tips, so
+  // a tapped one never hangs over the rows scrolled to (bug hunt 2026-10-01: an ATC segment's 212px
+  // tip covered the medicines table's next rows); the next tap on a carrier, or focus moving, shows
+  // them again. A tap's own small movement is no swipe (isSwipe()). A tip in a strip or in flow (the
+  // medicines table's ATC badge on a phone) covers nothing: a swipe leaves it (tipCovers()).
+  let touchStart = null;
+  document.addEventListener("touchstart", (event) => {
+    const [first] = event.touches;
+    touchStart = event.touches.length === 1 ? { x: first.clientX, y: first.clientY } : null;
+  }, { capture: true, passive: true });
+  document.addEventListener("touchmove", (event) => {
+    const [first] = event.touches;
+    if (!touchStart || !first || !isSwipe(touchStart, { x: first.clientX, y: first.clientY })) return;
+    touchStart = null;
+    const covers = (carrier) => tipCovers({ inStrip: inStrip(carrier), inFlow: flowRow(carrier) !== null });
+    if (!root.classList.contains("tips-hidden") && showing(covers)) hide(null, null);
+  }, { capture: true, passive: true });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || root.classList.contains("tips-hidden") || !showing()) return;
     event.preventDefault();
@@ -742,14 +978,39 @@ function setupTips() {
   }, true);
 }
 
+// Focus a script moves after a tap elsewhere (the drilled breakdown's first new bar): on touch
+// screens, where focus alone shows a tip, its tip waits for a tap on it or keyboard focus (.tip-quiet,
+// style.css; setupTips() drops the class when the pointer reaches it or focus leaves it). Bug hunt
+// 2026-10-01: after a drill, L01's tip covered L04 and L03, so L read as having two subclasses.
+function focusQuietly(element) {
+  element?.closest("[data-tip]")?.classList.add("tip-quiet");
+  element?.focus();
+}
+
 // Filled before any data loads, so it shows even when the data files are missing: the top bar's
 // source line (the data's date follows with meta.json), the search field's name and placeholder, the
 // page heading, the filter bar's name, the footer and the About disclosure (without the data's
 // versions and dates until meta.json has loaded: renderFooter(meta)).
+// The wordmark's date line, the date in a run that does not wrap (A10: at 320px the line broke inside
+// the date, "30 Sep / 2026"; now before it).
+function renderDataDate(date) {
+  const [lead, day] = UI.dataDateRuns(date);
+  const node = document.querySelector("#data-date");
+  if (!day) {
+    node.textContent = lead;
+    return;
+  }
+  const run = document.createElement("span");
+  run.className = "brand-day";
+  run.textContent = day;
+  node.replaceChildren(lead, run);
+}
+
 function renderAbout() {
-  d3.select("#data-date").text(UI.dataDate(null));
+  renderDataDate(null);
   d3.select("#page-title").text(UI.page.title(SOURCES));
   d3.select("#page-scope").text(UI.page.scope(SOURCES));
+  d3.select("#app-loading").text(UI.page.loading);
   d3.select("#filter-bar-label").text(UI.filters.label);
   d3.select("#lookup-label").text(UI.lookup.label);
   d3.select("#lookup-input").attr("placeholder", UI.lookup.placeholder);
@@ -803,8 +1064,10 @@ function showOfflineNote(meta) {
 // until loaded.
 // Step 2: a condition's exact entry term names it ("ADHD", #4); a substance found through another
 // name says so and is named by it ("adrenaline", #19); a company found only through a derived
-// monogram is weak (#4: Enter never opens it as the only suggestion).
-function suggestionGroups(result, classes, companies, medicines) {
+// monogram is weak (#4: Enter never opens it as the only suggestion). substanceCount(substance):
+// its medicines authorized under all its spellings, as its card counts (copies.js
+// substanceAuthorizedCount()).
+function suggestionGroups(result, classes, companies, medicines, substanceCount) {
   const copy = UI.lookup;
   const companyGroup = {
     key: "companies",
@@ -817,24 +1080,28 @@ function suggestionGroups(result, classes, companies, medicines) {
     {
       key: "medicines",
       label: copy.groups.medicines,
-      options: result.medicines.map((row) => ({
+      // First the medicine a typed EU or EMA product number names (C7), named: Enter opens it.
+      options: [...(result.numbered ? [result.numbered] : []), ...result.medicines.map((row) => ({ row }))].map(({ row, number = null }) => ({
         label: row.name_of_medicine,
-        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4), medicines?.get(row.ema_product_number)?.opinion_status),
+        meta: copy.medicineMeta(row.medicine_status, row.marketing_authorisation_date?.slice(0, 4), medicines?.get(row.ema_product_number)?.opinion_status, number),
         value: row.ema_product_number,
+        named: number !== null,
       })),
     },
     {
       key: "substances",
       label: copy.groups.substances,
       options: result.substances.map((substance) => ({
-        label: substance.name, meta: copy.substanceMeta(substance.products.length, substance.synonym), value: substance.key, named: substance.named,
+        label: substance.name, meta: copy.substanceMeta(substanceCount(substance), substance.synonym), value: substance.key, named: substance.named,
       })),
     },
     {
       key: "conditions",
       label: copy.groups.conditions,
+      // A condition found only by a 3-letter start of its first word (owner decision 2026-10-01, L8)
+      // is a guess, weak as a derived monogram: Enter never opens it as the only suggestion.
       options: result.conditions.map((condition) => ({
-        label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui, named: condition.exact,
+        label: condition.name, meta: copy.conditionMeta(condition.synonym, condition.authorized), value: condition.ui, named: condition.exact, weak: condition.prefix,
       })),
     },
     {
@@ -848,12 +1115,12 @@ function suggestionGroups(result, classes, companies, medicines) {
 
 // A "did you mean" entry (didYouMean()) as an option: a medicine or substance opens its card, a
 // WHO substance with no medicine through EMA runs the text search for its name (which says so).
-function fuzzyOption(entry) {
+function fuzzyOption(entry, substanceCount) {
   const copy = UI.lookup;
   if (entry.kind === "medicine") {
     return { label: entry.label, meta: copy.medicineMeta(entry.row.medicine_status, entry.row.marketing_authorisation_date?.slice(0, 4)), value: entry.value, pick: "medicines" };
   }
-  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(entry.substance.products.length), value: entry.value, pick: "substances" };
+  if (entry.kind === "substance") return { label: entry.label, meta: copy.substanceMeta(substanceCount(entry.substance)), value: entry.value, pick: "substances" };
   return { label: atcName(entry.label), meta: copy.whoMeta(entry.code), value: entry.value, pick: "text" };
 }
 
@@ -862,22 +1129,36 @@ function fuzzyOption(entry) {
 // matches, "No matches" (or that the WHO substance named has no medicine through EMA, #2) and up
 // to 3 close names (#5); always last, the indication-text search for the typed text (#14).
 // run(text): suggestionGroups() for a query. atcClasses: atc_classes.json rows, [] until loaded.
-function searchSuggestions(index, query, run, atcClasses) {
+// substanceCount(substance): a substance option's authorized count. loading (bug hunt 2026-10-01,
+// lookup.md #2): the conditions, drug classes or companies are still loading: more suggestions can
+// come ("Loading…" under the list, search-box.js), so nothing found is no "No matches" yet; the
+// close names guessed from the search index show meanwhile (review: they waited for the data).
+// euNumbers: the register's EU numbers as search.js numberAnswer() takes them (undefined while they
+// load, null when they failed).
+function searchSuggestions(index, query, run, atcClasses, substanceCount, loading = false, euNumbers = null) {
   const text = query.trim();
-  if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text };
+  if (foldSearchText(text).length < MIN_QUERY) return { groups: [], note: null, query: text, loading: false };
   const copy = UI.lookup;
   const { groups, shownFor } = searchWithFallback(text, run);
   const found = groups.some((group) => group.options.length > 0);
   let note = shownFor ? copy.showingFor(shownFor) : null;
   const extra = [];
   if (!found) {
-    const known = knownSubstance(index, text, atcClasses);
-    note = known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+    // A number none was found for says so (C7): only once that can be known, i.e. for an EU number
+    // once the register's numbers are in (while they load, the list is loading; when they failed,
+    // the usual note shows: C7 review); a WHO substance with no medicine through EMA likewise.
+    const number = numberAnswer(index, text, euNumbers);
+    if (number?.state === "loading") loading = true;
+    if (!loading) {
+      const known = number ? null : knownSubstance(index, text, atcClasses);
+      note = number?.state === "notFound" ? copy.empty.numberNote(number.kind, number.number)
+        : known ? copy.empty.known(atcName(known.name), known.code) : copy.noMatches;
+    }
     const fuzzy = didYouMean(index, text, atcClasses);
-    if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map(fuzzyOption) });
+    if (fuzzy.length) extra.push({ key: "fuzzy", label: copy.groups.fuzzy, options: fuzzy.map((entry) => fuzzyOption(entry, substanceCount)) });
   }
   extra.push({ key: "text", label: null, name: copy.groups.text, options: [{ label: copy.searchText(text), value: text }] });
-  return { groups: [...groups, ...extra], note, query: shownFor ?? text };
+  return { groups: [...groups, ...extra], note, query: shownFor ?? text, loading };
 }
 
 // Search icon (decorative) inside the search bar.
@@ -892,15 +1173,17 @@ function addSearchIcon() {
 }
 
 // "Try Keytruda (brand) · semaglutide (active substance) · …": links that open those lookups, each
-// followed by the kind of thing it is (kept on one line with its link).
+// followed by the kind of thing it is and the separator, kept on one line with its link (bug hunt
+// 2026-10-01: a separator of its own began the second line at 390px).
 function renderTryLinks() {
   const line = d3.select("#lookup-try");
   line.append("span").text(UI.lookup.tryLead);
+  const last = UI.lookup.examples.length - 1;
   for (const [position, example] of UI.lookup.examples.entries()) {
-    if (position > 0) line.append("span").attr("aria-hidden", "true").text("·");
     const item = line.append("span").attr("class", "try-item");
     item.append(() => lookup.link(example.label, example.atc ? classState(example.atc) : example.patch));
     item.append("span").attr("class", "try-kind").text(` ${UI.lookup.exampleKind(example.kind)}`);
+    if (position < last) item.append("span").attr("class", "try-sep").attr("aria-hidden", "true").text("·");
   }
 }
 
@@ -910,7 +1193,7 @@ function startLookup([meta, searchRows, entryTermRows]) {
       firstFile = null;
     });
   }
-  d3.select("#data-date").text(UI.dataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10)));
+  renderDataDate(meta.snapshot_date ?? meta.source_timestamp.slice(0, 10));
   renderFooter(meta);
   showOfflineNote(meta);
 
@@ -923,6 +1206,8 @@ function startLookup([meta, searchRows, entryTermRows]) {
     index,
     loadFile,
     navigate,
+    // "Show all statuses" is in the URL (show=all), as filter edits replace the entry.
+    onShowAll: (checked) => setState({ show: checked ? STATUS_ALL : null }),
     snapshotDate: meta.snapshot_date,
     meshVersion: meta.sources?.find((source) => /mesh/i.test(source.name))?.version ?? null,
     decision: days(medianDays) ? { median: medianDays, p90: days(p90Days) } : null,
@@ -938,28 +1223,47 @@ function startLookup([meta, searchRows, entryTermRows]) {
     companies: (value) => ({ co: value }), // the company page
     text: (value) => ({ q: value }), // the indication-text search
   };
+  const noEquivalents = new Map();
+  // A typed EU number (C7) needs the Union Register's numbers: the register dataset, asked for as
+  // soon as one is being typed ("EU/"; an open list keeps its order, so it must be in by the last
+  // digit) and waited for only then (an EMA product number is in the search index).
+  const numberSets = (text) => (euNumberStarted(text) ? ["register"] : []);
   const searchBox = createSearchBox(input, $("#lookup-listbox"), $("#lookup-status"), {
     suggestionsFor: (query) => {
       const atc = lookup.atcClasses();
       const companies = lookup.companies();
+      // Under all its spellings once the equivalents have loaded, as its card counts.
+      const equivalents = lookup.equivalents() ?? noEquivalents;
+      const substanceCount = (substance) => substanceAuthorizedCount(substance.key, index.substances, equivalents);
+      const sets = numberSets(query);
+      const euNumbers = sets.length ? lookup.euNumbers() : null; // undefined while loading, null when failed
       const run = (text) => suggestionGroups(
-        suggest(index, lookup.conditions(), text),
+        suggest(index, lookup.conditions(), text, { euNumbers }),
         atc ? suggestAtcClasses(text, atc.classes, atc.counts) : [],
         companies ? suggestCompanies(companies, text) : [],
         lookup.medicines(),
+        substanceCount,
       );
-      return searchSuggestions(index, query, run, atc?.classes ?? []);
+      return searchSuggestions(index, query, run, atc?.classes ?? [], substanceCount, lookup.searchLoading(sets), euNumbers);
     },
     onPick: (group, value) => navigate(PICKS[group](value)),
     onSubmit: (text) => navigate({ q: text }),
     recent,
+    // Enter waits for these (bug hunt 2026-10-01), unless a navigation comes first.
+    pending: () => {
+      const sets = numberSets(input.value);
+      return lookup.searchLoading(sets) ? lookup.searchSettled(sets) : null;
+    },
+    navigations: () => navigations,
   });
   // Conditions, drug classes and companies join the suggestions once their background data has
   // loaded (and a condition or company page's title its name); so do EMA's opinions (a negative
-  // one is named in a medicine's meta line).
+  // one is named in a medicine's meta line) and the EU numbers (C7).
   lookup.onData((name) => {
-    if (["conditions", "atc", "atcCounts", "companies", "medicines"].includes(name)) searchBox.refresh();
+    if (["conditions", "atc", "atcCounts", "companies", "medicines", "equivalents", "register"].includes(name)) searchBox.refresh();
     if (name === "conditions" || name === "companies") updateTitle();
+    // A restore waiting for the card's data: once the lookup has rendered it (after the listeners).
+    queueMicrotask(restoreScroll);
   });
   // The wordmark opens the overview: every lookup and filter cleared, one history entry.
   $("#home-link").addEventListener("click", (event) => {
@@ -969,13 +1273,31 @@ function startLookup([meta, searchRows, entryTermRows]) {
     navigate(structuredClone(DEFAULT_STATE));
   });
   d3.select("#explore-note").text(UI.explore.note);
-  // medicines: the dashboard loads the same file (one request, loadFile()).
-  for (const name of ["conditions", "atc", "atcCounts", "companies", "medicines"]) lookup.need(name);
+  // medicines: the dashboard loads the same file (one request, loadFile()); equivalents (small):
+  // the substance suggestions' counts under every spelling.
+  for (const name of ["conditions", "atc", "atcCounts", "companies", "medicines", "equivalents"]) lookup.need(name);
 
   applyUrl();
   searchBox.setText(state.q);
   scheduleUrlWrite(state, false, pendingFilters);
-  window.addEventListener("popstate", () => {
+  // Back or Forward: open filters close (dashboard.md #2), and the view returns to where it was left
+  // (the top when unknown) once rendered, its card's disclosures open as they were. A fragment
+  // navigation (Chrome fires popstate for location.hash and #links), or Back and Forward over one,
+  // shows the same view: nothing to close or render, the entry's place when known (the browser
+  // scrolls to a new fragment itself).
+  window.addEventListener("popstate", (event) => {
+    navigations += 1;
+    const { place, hashOnly } = historyScroll.popped(event.state);
+    if (hashOnly) {
+      if (place) {
+        startRestoring(place);
+        restoreScroll();
+      }
+      return;
+    }
+    refocus = closeFiltersNow();
+    reopenKeys = place?.open ?? [];
+    startRestoring(place ?? TOP);
     applyUrl();
     searchBox.setText(state.q);
     scheduleRender();
@@ -1120,16 +1442,32 @@ function startDashboard(meta, [
   const plainClick = (event) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
   let focusTab = false;
   let tabShown = null;
+  // A tap on a tab (design sweep 2026-10-01, L3, Doherty Threshold: on a phone's CPU the Medicines
+  // tab painted nothing for up to 1.9 s): the tab shows selected and its panel at once, its cards
+  // render after that paint, and the medicines table adds its first rows first (phones).
+  let quickTab = false;
   function showTab(tab, focus = false) {
     focusTab = focus;
-    if (tab === state.tab) scheduleRender();
-    else setState({ tab }, true);
+    if (tab === state.tab) {
+      scheduleRender();
+      return;
+    }
+    renderTabs(tab);
+    quickTab = true;
+    setState({ tab }, true, true);
   }
   for (const button of tabButtons) {
     button.textContent = UI.tabs.names[button.dataset.tab];
+    // Its name again for style.css's hidden bold copy, which keeps the tab as wide shown or not (A10).
+    button.dataset.label = UI.tabs.names[button.dataset.tab];
     button.addEventListener("click", () => showTab(button.dataset.tab));
   }
   $("#tabs").addEventListener("keydown", tabsKeydown);
+  // Phones: the strip's edges fade where more tabs lie beyond them, as the chip row's (design sweep
+  // 2026-10-01, L6: at 390px By year and Medicines were hidden behind a hard cut), and a tab the keys
+  // focus scrolls clear of them.
+  watchEdgeFade($("#tabs"));
+  revealOnFocus($("#tabs"), "[role=tab]");
   for (const link of previewTabLinks) {
     link.textContent = UI.previews.tabLink(UI.tabs.names[link.dataset.tabLink]);
     link.addEventListener("click", (event) => {
@@ -1141,23 +1479,40 @@ function startDashboard(meta, [
   // The tabs and their panels follow the state: the tab shown aria-selected and the tab stop (the
   // others tabindex -1). The previews' links keep the rest of the view (filters, lookup) in their
   // hrefs, so a new browser tab opens the same view on that tab. Phones: the strip scrolls
-  // sideways, the tab shown kept in it.
-  function renderTabs() {
-    const hrefOf = (tab) => `?${encodeUrl({ ...state, tab })}`;
+  // sideways, the tab shown kept in it. tab: the tab to show (a tap shows it before the state's
+  // render, showTab()). A panel whose cards were drawn for another view is busy until they are
+  // drawn again (dimmed after 150 ms, style.css), so its old counts show undimmed for 150 ms at most.
+  const panelView = () => encodeUrl({ ...state, tab: DEFAULT_STATE.tab });
+  function renderTabs(tab = state.tab) {
+    const hrefOf = (to) => `?${encodeUrl({ ...state, tab: to })}`;
     for (const button of tabButtons) {
-      const current = button.dataset.tab === state.tab;
+      const current = button.dataset.tab === tab;
       button.setAttribute("aria-selected", String(current));
       button.tabIndex = current ? 0 : -1;
     }
     for (const link of previewTabLinks) link.href = hrefOf(link.dataset.tabLink);
-    for (const panel of tabPanels) panel.hidden = panel.dataset.tabPanel !== state.tab;
-    const current = tabButtons.find((button) => button.dataset.tab === state.tab);
-    if (tabShown !== state.tab) {
-      tabShown = state.tab;
+    for (const panel of tabPanels) {
+      panel.hidden = panel.dataset.tabPanel !== tab;
+      if (!panel.hidden && panel.dataset.drawnFor !== panelView()) panel.setAttribute("aria-busy", "true");
+    }
+    // One Download CSV on the Medicines tab, the table card's (owner decision 2026-10-01, design
+    // sweep B2: the page header's stood on the same screen); the page header's on the other tabs.
+    // Focus on it (Back or Forward onto the tab) goes to the table's. It keeps its box there, unseen
+    // (.tab-off, visibility: hidden), as the lead beside it would widen, rewrap and move the tab strip
+    // under the pointer (fix-up: 22-46px at 721-834px).
+    const pageDownload = $("#page-download");
+    if (tab === "medicines" && document.activeElement === pageDownload) $("#table-download").focus({ preventScroll: true });
+    pageDownload.classList.toggle("tab-off", tab === "medicines");
+    const current = tabButtons.find((button) => button.dataset.tab === tab);
+    if (tabShown !== tab) {
+      tabShown = tab;
       const nav = $("#tabs");
       const start = current.offsetLeft - nav.offsetLeft;
-      if (start < nav.scrollLeft || start + current.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = Math.max(0, start - 16);
+      // Clear of the edges' fades (L6), as the chip row shows its active chip.
+      const left = revealScroll(nav.scrollLeft, nav.clientWidth, nav.scrollWidth, start, start + current.offsetWidth, STRIP_FADE);
+      if (left !== null) nav.scrollLeft = left;
     }
+    fadeEdges($("#tabs"));
     if (focusTab) {
       focusTab = false;
       $("#tabs").scrollIntoView({ block: "start" });
@@ -1189,6 +1544,11 @@ function startDashboard(meta, [
   const closeFilters = () => {
     popover.close({ restoreFocus: false });
     sheet.close({ restoreFocus: false });
+  };
+  closeFiltersNow = () => {
+    const open = popover.isOpen() || sheet.isOpen();
+    closeFilters();
+    return open;
   };
   DESKTOP.addEventListener("change", () => {
     // A chip opens a popover from 1024px, a sheet below: the other one closes.
@@ -1368,6 +1728,20 @@ function startDashboard(meta, [
       statusStackButton.focus();
     });
   d3.select("#chart-stack-hint-after").text(UI.years.stack.statusHint.after);
+  // Under the default status filter (owner decision 2026-10-01, L4): the scope line under the
+  // takeaway; its button widens the status filter and moves focus to the card's title, which then
+  // names every status's medicines.
+  d3.select("#chart-scope-text").text(UI.years.scope.text);
+  d3.select("#chart-scope-widen")
+    .text(UI.years.scope.include)
+    .attr("aria-label", UI.years.scope.includeLabel)
+    .on("click", () => {
+      setState({ status: [] });
+      // The title as the render will set it, before focus moves there (review of L4: the render
+      // follows a frame later, so a screen reader read the old title).
+      showYearsScope(false);
+      $("#chart-title").focus();
+    });
 
   const substanceIndex = buildSubstanceIndex(substanceRows);
   const areaBranches = termBranches(branchRows);
@@ -1416,7 +1790,7 @@ function startDashboard(meta, [
     });
     saveFile(text, csvFileName(dataDate), "text/csv;charset=utf-8");
   };
-  $("#table-download").textContent = UI.csv.button;
+  $("#table-download-text").textContent = UI.csv.button;
   $("#page-download-text").textContent = UI.csv.button;
   for (const button of [$("#table-download"), $("#page-download")]) button.addEventListener("click", downloadCsv);
 
@@ -1662,6 +2036,14 @@ function startDashboard(meta, [
     else if (by === "mah") renderCompanyPath(path, { companies, current, onSelect: openCompany });
     else if (by === "mod") renderModalityPath(path, { tree: modalityTree, current, onSelect: openModality });
     else renderAtcPath(path, { current, names: atcNames, onSelect: openAtc, label: UI.atc.path });
+    // The drilled class's explanation under the path (owner decision 2026-10-01: after a tap drills,
+    // the first new bar shows no tip, so on a touch screen nothing explained it), describing the
+    // path's current item too.
+    const explanation = breakdownExplanation(by, current, atcExplanations);
+    if (explanation) {
+      d3.select(container).append("p").attr("id", "breakdown-explanation").attr("class", "breakdown-explanation").text(explanation);
+      path.querySelector("[aria-current]")?.setAttribute("aria-describedby", "breakdown-explanation");
+    }
     if (focused !== undefined) container.querySelector(`[data-focus-key="${CSS.escape(focused)}"]`)?.focus();
   }
 
@@ -1778,8 +2160,9 @@ function startDashboard(meta, [
     // Products without any ATC code, therapeutic area or holder matter at the top level only (the
     // modalities' not classified are a static row).
     showCount("#breakdown-excluded", excluded && !tree.current ? breakdownExcluded(population, by) : 0, excluded);
-    // Drilling down or going up rebuilds the controls: keep focus in the card.
-    if (hadFocus && !card.contains(document.activeElement)) (card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"))?.focus();
+    // Drilling down or going up rebuilds the controls: keep focus in the card, quietly (no tip on a
+    // touch screen: it covered the next bars; keyboard focus still shows it).
+    if (hadFocus && !card.contains(document.activeElement)) focusQuietly(card.querySelector("#breakdown button") ?? card.querySelector("#breakdown-path button"));
   }
 
   // "Who is active where": the top holders of the medicines shown by ATC group (the classes one
@@ -1884,7 +2267,9 @@ function startDashboard(meta, [
     if (stackMode === "type") {
       return {
         keysOf: (product) => [product.medicine_type],
-        series: MEDICINE_TYPES.map((type) => ({ key: type, label: type, color: typeColor(type) })),
+        // Bottom to top in the types' one display order (design sweep 2026-10-01, B5: Other, the
+        // largest, on the baseline, as in the breakdown's bars, its legend and the type filter).
+        series: TYPE_ORDER.map((type) => ({ key: type, label: type, color: typeColor(type) })),
         by: UI.years.by.type,
         counting: UI.years.counting.type,
       };
@@ -1979,7 +2364,15 @@ function startDashboard(meta, [
     };
   }
 
+  // By default (authorized only) the chart counts the medicines still authorized: its title and
+  // scope line say so (owner decision 2026-10-01, L4).
+  function showYearsScope(authorizedOnly) {
+    $("#chart-title").textContent = authorizedOnly ? UI.years.titleAuthorized : UI.years.title;
+    $("#chart-scope").hidden = !authorizedOnly;
+  }
+
   function renderYears(withoutDateFilter) {
+    showYearsScope(isDefaultStatus(state.status));
     stackMode = yearStackMode(stackMode, state.status);
     offerStatusStack(statusStackAvailable(state.status));
     d3.selectAll("#chart-stack button").attr("aria-pressed", function pressed() {
@@ -2030,12 +2423,18 @@ function startDashboard(meta, [
     const protection = lookup.need("protection");
     if (protection === undefined || protection === FAILED) {
       setTakeaway("#pc-takeaway", null);
+      d3.select("#pc-count").text("").attr("hidden", "");
       renderProtectionCalendar($("#pc-body"), { status: protection === FAILED ? "failed" : "loading" });
       return;
     }
     const { rows, orphanOnly, unclear, unclearLatest } = protectionEnding(authorizedNow, protection, dataDate);
-    // Its takeaway: how many may lose market protection (est.) within two years.
+    // Its takeaway: how many may lose market protection (est.) within two years. How many of the
+    // currently authorized have it running goes in the (i) panel (design sweep 2026-10-01, C2: a
+    // 16px sentence under the 15px takeaway repeated its count).
     setTakeaway("#pc-takeaway", protectionTakeaway(rows, calendarFirstYear));
+    d3.select("#pc-count")
+      .text(rows.length ? UI.protectionCalendar.summary(rows.length, authorizedNow.length, anyFilter) : "")
+      .attr("hidden", rows.length ? null : "");
     renderProtectionCalendar($("#pc-body"), {
       status: "ready",
       buckets: calendarBuckets(rows, calendarFirstYear, 5),
@@ -2043,7 +2442,6 @@ function startDashboard(meta, [
       unclearLatest,
       orphanOnly,
       running: rows.length,
-      authorized: authorizedNow.length,
       filtered: anyFilter,
       selected: calendarYear,
       showAll: calendarShowAll,
@@ -2085,7 +2483,7 @@ function startDashboard(meta, [
     safely($("#preview-conditions"), () => {
       const rows = conditionRanking(filtered, PREVIEW_ROWS);
       if (!Array.isArray(rows)) {
-        renderPreview(body("preview-conditions"), { line: rows === FAILED ? UI.lookup.notAvailable : UI.lookup.loading });
+        renderPreview(body("preview-conditions"), { line: rows === FAILED ? UI.lookup.notAvailable : UI.lookup.loading, error: rows === FAILED });
         return;
       }
       const ranked = rows.filter((row) => row.treatments > 0);
@@ -2103,7 +2501,7 @@ function startDashboard(meta, [
     safely($("#preview-protection"), () => {
       const protection = lookup.protection();
       if (protection === undefined || protection === FAILED) {
-        renderPreview(body("preview-protection"), { line: protection === FAILED ? UI.lookup.notAvailable : UI.protectionCalendar.loading });
+        renderPreview(body("preview-protection"), { line: protection === FAILED ? UI.lookup.notAvailable : UI.protectionCalendar.loading, error: protection === FAILED });
         return;
       }
       const { rows } = protectionEnding(authorizedNow, protection, dataDate);
@@ -2130,7 +2528,7 @@ function startDashboard(meta, [
       note?.remove();
     } catch (error) {
       console.error(error);
-      if (!note) d3.select(container).append("p").attr("class", "muted card-error").text(UI.lookup.notAvailable);
+      if (!note) d3.select(container).append("p").attr("class", "muted state-error card-error").text(UI.lookup.notAvailable);
     }
   }
   const cardOf = (selector) => $(selector).closest(".chart-card");
@@ -2213,7 +2611,8 @@ function startDashboard(meta, [
     const filtered = predicates.date ? withoutDateFilter.filter(predicates.date) : withoutDateFilter;
     const authorizedNow = filtered.filter(isAuthorizedNow);
     sheet.update(filtered.length);
-    const undatedAuthorized = filtered.filter((product) => product.medicine_status === "Authorised" && product.authorized_from === null);
+    // The headline's dek counts the undated authorized medicines among those matching every filter.
+    const undatedAuthorized = filtered.filter(isUndatedAuthorized);
     // By default, the medicines of other statuses matching the other filters, which the headline's
     // quiet line offers to include.
     const statusHidden = isDefaultStatus(state.status) ? filterProducts(products, predicates, "status").length - filtered.length : 0;
@@ -2234,15 +2633,17 @@ function startDashboard(meta, [
         setTakeaway("#over-time-takeaway", overTimeTakeaway(series, {
           status: !isDefaultStatus(state.status), years: state.from !== null || state.to !== null,
         }));
+        // The (i) panel's two exclusion notes count the chart's own medicines (history: the status and
+        // year filters ignored), so a status or year filter changes neither (review of L7).
         const excluded = history.filter((product) => product.series_exclusion === "ended_without_end_date");
         d3.select("#over-time-note").text(UI.overTime.excluded(excluded.length));
+        showCount("#undated-authorized", history.filter(isUndatedAuthorized).length, UI.undatedAuthorized);
       });
       // What the tiles' shares are of: the authorized medicines (the default), all of them (every
       // status) or those matching the filters.
       const tileScope = narrowed ? "filtered" : isDefaultStatus(state.status) ? "authorized" : "all";
       safely($("#tiles"), () => renderTiles($("#tiles"), countTiles(filtered), UI.tileShare(tileScope)));
       showCount("#register-note", authorizedNow.filter(registerDiffers).length, UI.register.notAuthorized);
-      showCount("#undated-authorized", undatedAuthorized.length, UI.undatedAuthorized);
       renderPreviews(filtered, authorizedNow, narrowed);
     } else if (tab === "protection") {
       safely(cardOf("#pc-body"), () => renderCalendarCard(authorizedNow, narrowed));
@@ -2255,8 +2656,14 @@ function startDashboard(meta, [
       safely(cardOf("#chart"), () => renderYears(withoutDateFilter));
     } else {
       const undated = filtered.filter((product) => product.year === null).length;
-      safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area));
+      // A tap on the tab, on a phone: the first rows first, the rest of the page after each paint.
+      const first = quickTab && PHONE.matches ? TABLE_FIRST_ROWS : null;
+      safely(cardOf("#medicines-table"), () => table(tableRows, UI.table.caption(filtered.length, undated), register, atcSelection().codes, lookup.documents(), lookup.meshNotes(), state.area, first));
     }
+    quickTab = false;
+    const panel = tabPanels.find((element) => element.dataset.tabPanel === tab);
+    panel.dataset.drawnFor = panelView();
+    panel.removeAttribute("aria-busy");
     // The widths the charts were drawn at (the ResizeObserver below re-renders only on a change).
     for (const selector of CHART_SELECTORS) {
       const element = $(selector);
@@ -2289,6 +2696,9 @@ function startDashboard(meta, [
   loadFile(REGISTER_FILE).then((rows) => {
     register = new Map(rows.map((row) => [row.ema_product_number, row]));
     scheduleRender();
+    // The search's EU numbers from the same file (C7: built now, a typed one finds its medicine in
+    // the list's first render, not under the text search when it arrives).
+    lookup.need("register");
   }, () => {});
   // The table's PI and EPAR links: the primary documents (small, shared with the cards; the
   // documents index where that file is missing) in the background; the therapeutic area groups'

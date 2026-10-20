@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { atPointer, pointerBridge, tipAbove, tipBounds, tipClick, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
+import { atPointer, isSwipe, pointerBridge, revealBy, tipAbove, tipBounds, tipClick, tipCovers, tipHeightEstimate, tipMaxWidth, tipShift, towardTip } from "./tips.js";
 
 // Owner decision 2026-09-29: on mouse hover a tip opens at the pointer (just below and right of
 // it), inside the viewport (and a scroll box that clips it), flipped above or left without room.
@@ -159,4 +159,39 @@ test("tipHeightEstimate: lines of about half an em per character, with padding a
   assert.equal(tipHeightEstimate(260, 352), 6 * 18 + 14);
   assert.equal(tipHeightEstimate(20, 256), 18 + 14);
   assert.equal(tipHeightEstimate(0, 256), 18 + 14);
+});
+
+// Bug hunt 2026-10-01 (dashboard #3): on touch screens a swipe hides the tips, so a tapped one never
+// hangs over the rows scrolled to; a tap's own small movement does not.
+test("isSwipe: a touch that moved more than 10px from where it started", () => {
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 400 }), false);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 104, y: 407 }), false);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 389 }), true);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 89, y: 400 }), true);
+  assert.equal(isSwipe({ x: 100, y: 400 }, { x: 100, y: 395 }, 4), true);
+});
+
+// Owner decision 2026-10-01: on a phone the medicines table's ATC badge tip a tap shows is in flow,
+// a line of its row's own, so like a tip in a sheet's strip it covers nothing, and a swipe leaves
+// it (hiding it would shrink the row under the finger).
+test("tipCovers: a shown tip lies over the page unless it is in a strip or in flow", () => {
+  assert.equal(tipCovers({ inStrip: false, inFlow: false }), true);
+  assert.equal(tipCovers({ inStrip: true, inFlow: false }), false);
+  assert.equal(tipCovers({ inStrip: false, inFlow: true }), false);
+});
+
+// Bug hunt 2026-10-01 (dashboard #3), fix-up: on touch screens a tip a tap shows in a sheet or
+// popover goes to a strip above its foot, which takes its height from the body; a tapped row the
+// strip leaves under the body's visible bottom is scrolled back into view.
+test("revealBy: how far a box scrolls down so a row ends 8px inside it, never past the row's top", () => {
+  const clip = { top: 100, bottom: 420 };
+  // Under the strip: by what the box lost there, plus 8px.
+  assert.equal(revealBy({ top: 400, bottom: 448 }, clip), 36);
+  // Shows already.
+  assert.equal(revealBy({ top: 300, bottom: 348 }, clip), 0);
+  assert.equal(revealBy({ top: 360, bottom: 412 }, clip), 0);
+  // Taller than the box: from its top.
+  assert.equal(revealBy({ top: 200, bottom: 800 }, clip), 92);
+  // Above the box: left as it is.
+  assert.equal(revealBy({ top: 40, bottom: 88 }, clip), 0);
 });

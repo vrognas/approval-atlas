@@ -6,22 +6,22 @@
 // the same control (a removed pill's chip gets it: its open button).
 import { statusTip, typeTip } from "./badges.js";
 import { UI } from "./labels.js";
+import { closeIcon } from "./links.js";
 import { modalityTip } from "./modalities.js";
 
 // The explanation of a chip naming one value (chip.tip), by its filter.
 const TIPS = { type: typeTip, status: statusTip, mod: modalityTip };
 const SVG = "http://www.w3.org/2000/svg";
 
-// A 14px stroke icon (aria-hidden): "add" (a circled plus) or "remove" (an x).
-function icon(kind) {
+// A 14px stroke icon (aria-hidden): a circled plus. The remove buttons' x is links.js closeIcon(),
+// the one close glyph.
+function addIcon() {
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", "0 0 16 16");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
-  svg.setAttribute("class", `chip-icon chip-icon-${kind}`);
-  const shapes = kind === "add"
-    ? [["circle", { cx: "8", cy: "8", r: "6.25" }], ["path", { d: "M8 5v6M5 8h6" }]]
-    : [["path", { d: "M4 4l8 8M12 4l-8 8" }]];
+  svg.setAttribute("class", "chip-icon chip-icon-add");
+  const shapes = [["circle", { cx: "8", cy: "8", r: "6.25" }], ["path", { d: "M8 5v6M5 8h6" }]];
   for (const [tag, attributes] of shapes) {
     const shape = svg.appendChild(document.createElementNS(SVG, tag));
     for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
@@ -42,13 +42,90 @@ export function edgeFade(scrollLeft, scrollWidth, clientWidth) {
   return { start: scrollLeft > 1, end: scrollLeft + clientWidth < scrollWidth - 1 };
 }
 
-// The row's fade classes (style.css), after a render, a scroll or a resize.
-function fadeEdges(row) {
+// The row's fade classes (style.css), after a render, a scroll or a resize. Also the tab strip's
+// (main.js; design sweep 2026-10-01, L6).
+export function fadeEdges(row) {
   const { start, end } = edgeFade(row.scrollLeft, row.scrollWidth, row.clientWidth);
   row.classList.toggle("scroll-start", start);
   row.classList.toggle("scroll-end", end);
 }
 const faded = new WeakSet();
+
+// Keeps an element's fade classes in step with its scrolling and its size (the tab strip).
+export function watchEdgeFade(element) {
+  element.addEventListener("scroll", () => fadeEdges(element), { passive: true });
+  new ResizeObserver(() => fadeEdges(element)).observe(element);
+  fadeEdges(element);
+}
+
+// Pure: the scrollLeft that shows a chip (start and end in the row's scroll coordinates) margin clear
+// of the row's edges (their fades); one too wide for that centred, one wider than the row from its
+// start; null when it already shows (design sweep 2026-10-01, L5: ?mah=g.roche at 390px left the
+// Company chip at 554-658px, off the row, and the headline does not name Roche).
+export function revealScroll(scrollLeft, clientWidth, scrollWidth, start, end, margin) {
+  const width = end - start;
+  let left = scrollLeft;
+  if (width + 2 * margin > clientWidth) {
+    if (start >= left && end <= left + clientWidth) return null;
+    left = width > clientWidth ? start : start - (clientWidth - width) / 2;
+  } else {
+    if (end + margin > left + clientWidth) left = end + margin - clientWidth;
+    if (start - margin < left) left = start - margin;
+  }
+  left = Math.max(0, Math.min(left, scrollWidth - clientWidth));
+  return Math.abs(left - scrollLeft) < 1 ? null : left;
+}
+
+// The active chips the row last showed, so it scrolls only when they change (and on the first render).
+const shownActive = new WeakMap();
+// The width of the edges' fade (style.css: the chip row's and the tab strip's mask).
+export const STRIP_FADE = 40;
+
+// Scrolls a sideways-scrolling row (phones) so its item shows clear of the edges' fades
+// (revealScroll()). Not scrollIntoView, which would move the page too.
+function revealItem(row, item, behavior) {
+  if (row.scrollWidth <= row.clientWidth) return;
+  const rowBox = row.getBoundingClientRect();
+  const box = item.getBoundingClientRect();
+  const start = box.left - rowBox.left - row.clientLeft + row.scrollLeft;
+  const left = revealScroll(row.scrollLeft, row.clientWidth, row.scrollWidth, start, start + box.width, STRIP_FADE);
+  if (left !== null) row.scrollTo({ left, behavior });
+}
+
+// Phones (the row scrolls sideways): the first active chip into view, when the active chips changed
+// and no control of the row has focus (focus brings its own control into view: revealOnFocus()).
+// Smooth but under reduced motion, and on the first render. A row not laid out yet (hidden) waits
+// for its first size (the ResizeObserver below).
+function revealActive(row, focused = row.contains(document.activeElement)) {
+  const pills = [...row.querySelectorAll(".filter-chip-active")];
+  const active = pills.map((pill) => pill.dataset.chip).join(" ");
+  if (shownActive.get(row) === active || row.clientWidth === 0) return;
+  const first = !shownActive.has(row);
+  shownActive.set(row, active);
+  const chip = focused ? null : pills[0];
+  if (!chip) return;
+  const instant = first || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  revealItem(row, chip, instant ? "auto" : "smooth");
+}
+
+// Pure: the item of a sideways-scrolling row (selector: a chip, a tab) to bring clear of the edges'
+// fades when focus moves to target, or null. Only focus that shows (:focus-visible: the keyboard's):
+// a tap or a click focuses its control too, and a scroll between its press and its release would put
+// another control under the pointer and lose the click. A chip's remove button reveals its whole pill.
+export function focusRevealItem(target, selector) {
+  if (!target?.matches?.(":focus-visible")) return null;
+  return target.closest?.(selector) ?? null;
+}
+
+// Keyboard focus on a chip or tab under the row's edge fade (design sweep 2026-10-01, L6 fix-up:
+// Chrome leaves a partly shown control where it is, so ArrowRight to Companies at 390px left "Com"
+// and its focus ring in the fade): the row scrolls it clear of the fades at once, as focus moves.
+export function revealOnFocus(row, selector) {
+  row.addEventListener("focusin", (event) => {
+    const item = focusRevealItem(event.target, selector);
+    if (item && row.contains(item)) revealItem(row, item, "auto");
+  });
+}
 
 // row: the chips' container (#filter-chips). chips: filterChips(). openKey: the chip whose popover
 // is open (aria-expanded), or null. onOpen(key), onRemove(chip).
@@ -64,7 +141,7 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
     open.setAttribute("aria-expanded", String(openKey === chip.key));
     open.addEventListener("click", () => onOpen(chip.key));
     if (!chip.active) {
-      open.append(icon("add"), name);
+      open.append(addIcon(), name);
       return open;
     }
     // Read as "Medicine type: Biosimilar" (the "|" is aria-hidden; a hidden colon stands in).
@@ -88,7 +165,7 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
     remove.dataset.focusKey = `${chip.key}:remove`;
     remove.setAttribute("aria-label", UI.filters.remove(chip.key, chip.value));
     remove.title = UI.filters.remove(chip.key, chip.value);
-    remove.append(icon("remove"));
+    remove.append(closeIcon());
     remove.addEventListener("click", () => onRemove(chip));
     pill.append(open, remove);
     return pill;
@@ -96,9 +173,14 @@ export function renderFilterChips(row, chips, { openKey, onOpen, onRemove }) {
   row.replaceChildren(...nodes);
   if (!faded.has(row)) {
     faded.add(row);
+    revealOnFocus(row, ".filter-chip");
     row.addEventListener("scroll", () => fadeEdges(row), { passive: true });
-    new ResizeObserver(() => fadeEdges(row)).observe(row);
+    new ResizeObserver(() => {
+      revealActive(row);
+      fadeEdges(row);
+    }).observe(row);
   }
+  revealActive(row, Boolean(focused));
   fadeEdges(row);
   if (!focused) return;
   const chipKey = focused.split(":")[0];

@@ -1,5 +1,6 @@
 // Filter and lookup state <-> URL query string. Encode/decode are pure; the writer touches history.
 import { splitAtcValues } from "./filters.js";
+import { holderName } from "./labels.js";
 
 export const BREAKDOWNS = ["atc", "area", "mah", "mod"];
 // F · Spacious, phase 2: the dashboard's tabs, in their order (Serial Position / Pareto: Protection
@@ -159,13 +160,16 @@ export function decodeState(params, domain) {
 
   // Companies (companies part 2): group and company keys, and EMA holder names from older links; a
   // value a row stands for loads as that row's (a company shown as its group), and a value within
-  // another selected one is dropped, as toggleCompany().
+  // another selected one is dropped, as toggleCompany(). A holder name as EMA's file spells it with a
+  // broken encoding (links from before the site showed it fixed: design sweep C8 review) loads as
+  // the name shown (labels.js holderName()).
   const mahAbove = domain.mahAncestors ?? (() => new Set());
   const mahCanonical = domain.mahCanonical ?? ((value) => [value]);
   const mahs = [];
-  for (const value of sortedDistinct(params.getAll("mah"))) {
+  for (const raw of sortedDistinct(params.getAll("mah"))) {
+    const value = holderName(raw);
     if (domain.mahs.has(value)) mahs.push(...mahCanonical(value));
-    else dropped.push({ key: "mah", value });
+    else dropped.push({ key: "mah", value: raw });
   }
   state.mah = sortedDistinct(mahs).filter((value) => !mahs.some((other) => mahAbove(value).has(other)));
 
@@ -216,14 +220,20 @@ export const areaState = (key) => ({ ...structuredClone(DEFAULT_STATE), area: [k
 
 // Lookup keys: free text, EMA product number, substance_key, MeSH descriptor UI, company group or
 // company key (companies part 2). Kept verbatim: an unknown value shows a "not found" result
-// instead of being dropped.
-export const LOOKUP_KEYS = ["q", "med", "sub", "cond", "co"];
+// instead of being dropped. show: "Show all statuses" on a condition, text-search or company page
+// (STATUS_ALL, else null; navigation fixes 2026-10-01: a reload and a shared link keep it).
+export const LOOKUP_KEYS = ["q", "med", "sub", "cond", "co", "show"];
 export const LOOKUP_QUERY_MAX = 100;
-export const DEFAULT_LOOKUP = Object.freeze({ q: "", med: null, sub: null, cond: null, co: null });
+export const DEFAULT_LOOKUP = Object.freeze({ q: "", med: null, sub: null, cond: null, co: null, show: null });
+// The lookup views with a "Show all statuses" choice.
+const SHOW_ALL_VIEWS = ["condition", "text", "company"];
+export const showsEveryStatus = (state) => state.show === STATUS_ALL && SHOW_ALL_VIEWS.includes(lookupView(state).kind);
 
 export function decodeLookup(params) {
   const value = (key) => params.get(key)?.trim() || null;
-  return { q: (value("q") ?? "").slice(0, LOOKUP_QUERY_MAX), med: value("med"), sub: value("sub"), cond: value("cond"), co: value("co") };
+  const lookup = { q: (value("q") ?? "").slice(0, LOOKUP_QUERY_MAX), med: value("med"), sub: value("sub"), cond: value("cond"), co: value("co"), show: STATUS_ALL };
+  if (value("show") !== STATUS_ALL || !showsEveryStatus(lookup)) lookup.show = null;
+  return lookup;
 }
 
 // The one result the page shows for a lookup state.
@@ -259,28 +269,50 @@ export function patchFilterParams(params, patch) {
 // filter domain is still loading (so a shared link's filters survive the first lookups).
 export function encodeUrl(state, filterParams = null) {
   const params = new URLSearchParams();
-  for (const key of LOOKUP_KEYS) if (state[key]) params.set(key, state[key]);
+  for (const key of LOOKUP_KEYS) if (key === "show" ? showsEveryStatus(state) : state[key]) params.set(key, state[key]);
   for (const [key, value] of filterParams ?? encodeState(state)) params.append(key, value);
   return params;
 }
 
-// At most one history write per animation frame (Chrome silently drops bursts of
-// replaceState calls). Filter edits replace the entry; an opened result or drug class pushes one.
+// The history writer: main.js's (history-scroll.js: each entry keeps its scroll position), else
+// plain history calls.
+const plainWriter = {
+  push: (url) => window.history.pushState(null, "", url),
+  replace: (url) => window.history.replaceState(window.history.state, "", url),
+};
+let writer = plainWriter;
+export function setHistoryWriter(next) {
+  writer = next ?? plainWriter;
+}
+
+function writeUrl(state, push, filterParams) {
+  const query = encodeUrl(state, filterParams).toString();
+  const search = query ? `?${query}` : "";
+  if (search === window.location.search) return;
+  const url = `${window.location.pathname}${search}${window.location.hash}`;
+  if (push) writer.push(url);
+  else writer.replace(url);
+}
+
+// Filter edits replace the entry, at most once per animation frame (Chrome silently drops bursts of
+// replaceState calls). An opened result or drug class pushes one at once (one per click): the entry
+// left keeps where the page was before the new view's render scrolls to its heading (navigation
+// fixes 2026-10-01: pushed after that render, every Back landed at the top), and a replace still
+// pending is dropped (the push has the latest state).
 let pendingWrite = null;
 export function scheduleUrlWrite(state, push = false, filterParams = null) {
-  if (pendingWrite) {
-    pendingWrite = { state, push: pendingWrite.push || push, filterParams };
+  if (push) {
+    pendingWrite = null;
+    writeUrl(state, true, filterParams);
     return;
   }
-  pendingWrite = { state, push, filterParams };
+  const scheduled = pendingWrite !== null;
+  pendingWrite = { state, filterParams };
+  if (scheduled) return;
   requestAnimationFrame(() => {
-    const { state: latest, push: shouldPush, filterParams: latestFilters } = pendingWrite;
+    if (!pendingWrite) return; // a push wrote it meanwhile
+    const { state: latest, filterParams: latestFilters } = pendingWrite;
     pendingWrite = null;
-    const query = encodeUrl(latest, latestFilters).toString();
-    const search = query ? `?${query}` : "";
-    if (search === window.location.search) return;
-    const url = `${window.location.pathname}${search}${window.location.hash}`;
-    if (shouldPush) window.history.pushState(null, "", url);
-    else window.history.replaceState(null, "", url);
+    writeUrl(latest, false, latestFilters);
   });
 }

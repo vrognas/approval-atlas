@@ -12,6 +12,21 @@
   color-scheme: light;
   --font: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Type scale (design sweep 2026-10-01, B11): every font size on the scale is one of these, by its
+     size in px at the default 16px root (type-scale.test.js). Literal: the search placeholders'
+     fit sizes, the ATC code badges' 12.5px mono, the charts' SVG text in px, em sizes. */
+  --font-size-11: 0.6875rem;
+  --font-size-12: 0.75rem;
+  --font-size-13: 0.8125rem;
+  --font-size-14: 0.875rem;
+  --font-size-15: 0.9375rem;
+  --font-size-16: 1rem;
+  --font-size-17: 1.0625rem;
+  --font-size-20: 1.25rem;
+  --font-size-24: 1.5rem;
+  --font-size-26: 1.625rem;
+  --font-size-30: 1.875rem;
+  --font-size-36: 2.25rem;
   --page: #f3f3ee;
   --surface: #fafaf7;
   --raised: #eaeae3;
@@ -85,7 +100,8 @@
   --co-krka-1: #daf1e3; --co-krka-mid: #409661; --co-krka-text: #1d5d36;
   --co-csl-1: #f2d9da; --co-csl-mid: #b33d41; --co-csl-text: #5e1c1e;
   --co-gedeon-richter-1: #dae3f1; --co-gedeon-richter-mid: #385d94; --co-gedeon-richter-text: #1c375e;
-  /* Medicine types (marks use the mids; stacked bottom to top Other, Generic, Biosimilar, Advanced therapy). */
+  /* Medicine types (marks use the mids; stacked bottom to top Other, Generic, Biosimilar, Advanced
+     therapy, the one display order: facets.js TYPE_ORDER). */
   --type-other: var(--blue-mid);
   --type-generic: var(--gold-mid);
   --type-biosimilar: var(--teal-mid);
@@ -302,6 +318,14 @@ body {
   font: 16px/1.5 var(--font);
 }
 
+/* Back or Forward until the view is back where it was left (main.js restoreScroll()): no scroll
+   anchoring, which moved the page by the height of a card put back above the overview (8,000 to
+   10,000px down on phones). Otherwise it keeps the page still as data renders above. */
+.restoring-scroll,
+.restoring-scroll body {
+  overflow-anchor: none;
+}
+
 a {
   color: var(--link);
   text-decoration-color: var(--link-underline);
@@ -326,21 +350,26 @@ input[type="checkbox"] {
    search centred (560px at most), "What is this?" and the theme button; on the surface with a
    hairline under it. Below 1024px two rows (wordmark and buttons, then the search full width),
    sticky with the first row scrolling away, so the search stays at the top (main.js sets
-   --topbar-hide, how far it scrolls first, and --topbar-shown, what stays). */
+   --topbar-hide, how far it scrolls first, and --topbar-shown, what stays). The surface and hairline
+   span the page, its content the page column (design sweep 2026-10-01, A4: 1200px at most, 32px
+   gutters, 16px on phones; it sat 8px outside the column at 1280, 88px at 1440 and 16px at 721-1023),
+   and the search is centred on it: equal side tracks, the search narrower than 560px only where the
+   sides would be under 232px (the wordmark's about 195px and the gap; 1024-1099px). */
 .topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 1fr minmax(0, min(560px, 100% - 464px)) 1fr;
   grid-template-areas: "brand search actions" "note note note";
   align-items: center;
   column-gap: 32px;
   grid-template-rows: minmax(64px, auto) auto;
-  padding: 0 32px;
+  padding: 0 max(32px, (100% - 1200px) / 2);
   border-bottom: 1px solid var(--grid);
   background: var(--surface);
 }
 
 .brand {
   grid-area: brand;
+  justify-self: start;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -365,7 +394,7 @@ input[type="checkbox"] {
 }
 
 .brand-name {
-  font-size: 1.0625rem;
+  font-size: var(--font-size-17);
   line-height: 1.25rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -374,14 +403,21 @@ input[type="checkbox"] {
 
 .brand-date {
   color: var(--ink-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   line-height: 1rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* The date itself never breaks (A10; main.js renderDataDate()): where the line wraps (320px phones,
+   below), it wraps before the date. */
+.brand-day {
+  white-space: nowrap;
+}
+
 .topbar-actions {
   grid-area: actions;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -397,7 +433,7 @@ input[type="checkbox"] {
 h1,
 #page-title {
   margin: 0;
-  font-size: 1.875rem;
+  font-size: var(--font-size-30);
   line-height: 2.25rem;
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -412,7 +448,7 @@ h1,
   width: 36px;
   height: 36px;
   padding: 0;
-  border: 1px solid var(--grid);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: var(--input);
   color: var(--ink);
@@ -443,7 +479,7 @@ h1,
   background: none;
   color: var(--link);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 500;
   text-decoration: underline;
   text-decoration-color: var(--link-underline);
@@ -507,7 +543,11 @@ footer {
     grid-template-rows: auto;
     grid-template-areas: "brand actions" "search search" "note note";
     column-gap: 8px;
-    padding: 8px 16px 12px;
+    padding: 8px 32px 12px;
+  }
+
+  .brand {
+    justify-self: stretch;
   }
 
   /* Focused from the keyboard (Tab wrapping from the page's end, Shift+Tab from the search), the
@@ -525,11 +565,20 @@ footer {
   html {
     scroll-padding-top: calc(var(--topbar-shown, 72px) + 8px);
   }
+
+  /* While the search has focus, nothing else needs to clear the bar: the browser scrolls the caret
+     into view outside that padding on each keystroke, which the stuck field never reaches, so the
+     page behind moved up 53px per character typed from a scrolled page (bug hunt 2026-10-01; a
+     scroll-margin on the field does not apply to the caret). */
+  html:has(#lookup-input:focus) {
+    scroll-padding-top: 0;
+  }
 }
 
 @media (max-width: 720px) {
   main,
-  footer {
+  footer,
+  .topbar {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -540,7 +589,7 @@ footer {
 
   h1,
   #page-title {
-    font-size: 1.625rem;
+    font-size: var(--font-size-26);
     line-height: 2rem;
   }
 
@@ -571,24 +620,24 @@ footer {
   }
 
   .brand-name {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
 
   .brand-date {
-    font-size: 0.6875rem;
+    font-size: var(--font-size-11);
     line-height: 0.875rem;
     white-space: normal;
   }
 
   .inline-button {
     padding: 0 4px;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
   }
 }
 
 h2 {
   margin: 0 0 4px;
-  font-size: 1rem;
+  font-size: var(--font-size-16);
   line-height: 1.5rem;
   font-weight: 600;
 }
@@ -596,11 +645,17 @@ h2 {
 .muted {
   margin: 4px 0;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .muted:empty {
   display: none;
+}
+
+/* "Not available right now." in the ink, so a failure does not read as "Loading…" (design sweep
+   2026-10-01, B11). */
+.muted.state-error {
+  color: var(--ink);
 }
 
 .visually-hidden {
@@ -616,14 +671,19 @@ button {
   font: inherit;
 }
 
-/* Secondary buttons: transparent with a strong border. */
+/* Secondary buttons: transparent with an outline. Every outlined control is 32px (compact: View
+   options) or 36px (default: this, Download CSV, "Up one level", the theme button), 44px on phones,
+   and outlined in --field-border (3:1; --axis is for chart axes), as the segmented controls and the
+   PI, EPAR and condition page links (design sweep 2026-10-01, B6: 32/36/42px in three outline
+   colours). */
 .more {
-  min-height: 40px;
-  padding: 8px 14px;
-  border: 1px solid var(--axis);
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
+  font-size: var(--font-size-14);
   font-weight: 500;
   cursor: pointer;
 }
@@ -635,7 +695,7 @@ button {
   border: 0;
   background: none;
   color: var(--link);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 500;
   text-decoration: underline;
   text-decoration-color: var(--link-underline);
@@ -694,7 +754,7 @@ button {
 .page-scope {
   margin: -4px 0 2px;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 1.125rem;
   text-wrap: balance;
 }
@@ -708,7 +768,7 @@ button {
    below that it takes two balanced lines. */
 @media (max-width: 399px) {
   .page-scope {
-    font-size: 0.75rem;
+    font-size: var(--font-size-12);
   }
 }
 
@@ -717,7 +777,7 @@ button {
 .page-lead {
   margin: 0;
   color: var(--ink-secondary);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   line-height: 1.375rem;
 }
 
@@ -730,9 +790,10 @@ button {
 }
 
 .page-dek {
+  max-width: 72ch;
   margin: 0;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   line-height: 1.375rem;
 }
 
@@ -746,10 +807,15 @@ button {
   flex: none;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
-  padding: 6px 14px;
   background: var(--input);
-  font-size: 0.875rem;
+}
+
+/* On the Medicines tab the table card's Download CSV is the one (owner decision 2026-10-01, B2). The
+   page header's keeps its box there, unseen (out of the tab order and the accessibility tree), so the
+   lead beside it keeps its width: hidden, it rewrapped and moved the tab strip under the pointer
+   (fix-up: 22-46px at 721-834px). Phones hide it on every tab (below). */
+.page-head .download.tab-off {
+  visibility: hidden;
 }
 
 .download-icon {
@@ -757,7 +823,7 @@ button {
   height: 15px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -767,7 +833,7 @@ button {
   margin: 8px 0 0;
   max-width: 820px;
   color: var(--ink-secondary);
-  font-size: 1.0625rem;
+  font-size: var(--font-size-17);
   line-height: 1.625rem;
 }
 
@@ -834,7 +900,7 @@ button {
   display: block;
   margin-top: 4px;
   color: var(--ink-secondary);
-  font-size: 1.0625rem;
+  font-size: var(--font-size-17);
   font-weight: 500;
   line-height: 1.5rem;
   letter-spacing: 0;
@@ -848,7 +914,7 @@ button {
 .card h1 {
   margin: 0;
   max-width: 820px;
-  font-size: 1.875rem;
+  font-size: var(--font-size-30);
   line-height: 2.25rem;
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -857,27 +923,31 @@ button {
 
 @media (min-width: 721px) {
   .page-lead {
-    font-size: 1rem;
+    font-size: var(--font-size-16);
     line-height: 1.5rem;
   }
 
   .card h1 {
-    font-size: 2.25rem;
+    font-size: var(--font-size-36);
     line-height: 2.75rem;
     letter-spacing: -0.02em;
   }
 
   .dek {
-    font-size: 1.1875rem;
+    font-size: var(--font-size-20);
     line-height: 1.75rem;
   }
 }
 
+/* One eyebrow style (design sweep 2026-10-01, B11: the kicker was 14px/600 over the blocks' 13px/700
+   titles): the cards' block titles' (.card .block-title), 13px/700, 0.06em, upper case. 700 is for
+   eyebrows only; pressed controls and run-in heads are 600, as the tabs and segmented controls. */
 .kicker {
   margin: 0 0 8px;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--font-size-13);
+  font-weight: 700;
+  line-height: 1.25rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -913,7 +983,7 @@ button {
   max-width: 100%;
   min-height: 32px;
   border-radius: 999px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 500;
   line-height: 1.25rem;
 }
@@ -948,10 +1018,38 @@ button {
   stroke-linecap: round;
 }
 
-.chip-icon-remove {
+/* The one close glyph (links.js closeIcon(); design sweep 2026-10-01, B11: a text "×" at 24px and
+   18px beside this SVG): 16px, sized by its button below. */
+.close-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.chip-remove .close-icon {
   width: 12px;
   height: 12px;
-  stroke-width: 2;
+}
+
+.sheet-close .close-icon,
+.intro-close .close-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.activity-parent-button .close-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* UI icons draw one stroke (B11: 0.98 to 2px, as each viewBox scaled its own): 1.5px on screen at any
+   size; a pressed sort arrow 2px. The intro's illustrations keep their 2px. */
+:is(.theme-icon, .chip-icon, .close-icon, .download-icon, .view-options-icon, .view-options-chevron, .info-icon, .link-icon, .sort-icon, .search-icon, .intro-arrow) :is(path, circle, line, polyline, rect) {
+  vector-effect: non-scaling-stroke;
 }
 
 .filter-chip-active {
@@ -1022,7 +1120,7 @@ button {
   gap: 0 4px;
   margin: 0;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .filter-count {
@@ -1034,7 +1132,7 @@ button {
   border-radius: 11px;
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 600;
   line-height: 22px;
   font-variant-numeric: tabular-nums;
@@ -1101,7 +1199,12 @@ button {
     white-space: nowrap;
   }
 
+  /* One line, cut with an ellipsis inside the pill (bug hunt 2026-10-01: "H Systemic Hormonal
+     Preparations, …" ran past the pill, over its x, which then opened the sheet); the button's name
+     keeps the whole value. */
   .chip-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1109,9 +1212,13 @@ button {
     margin-top: 4px;
   }
 
-  /* Phones: the table card's Download CSV only (the page header stays short). */
+  /* Phones: the table card's Download CSV only (the page header stays short), 44px tall. */
   .page-head .download {
     display: none;
+  }
+
+  .more {
+    min-height: 44px;
   }
 
   .filter-clear {
@@ -1159,7 +1266,7 @@ button {
 
 .popover-head h2 {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   line-height: 1.25rem;
 }
 
@@ -1170,7 +1277,7 @@ button {
 .popover-note {
   margin: 2px 0 0;
   color: var(--ink-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   line-height: 1.125rem;
 }
 
@@ -1250,7 +1357,7 @@ button {
 
 .year-tick {
   fill: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   font-variant-numeric: tabular-nums;
   text-anchor: middle;
 }
@@ -1259,7 +1366,7 @@ button {
   display: flex;
   justify-content: space-between;
   margin: 4px 0 0;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   font-weight: 600;
   line-height: 1.25rem;
   font-variant-numeric: tabular-nums;
@@ -1429,7 +1536,7 @@ button {
   margin: 0 -6px;
   padding: 2px 6px;
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   line-height: 1.25rem;
   cursor: pointer;
 }
@@ -1555,7 +1662,7 @@ input::placeholder {
   gap: 8px;
   min-height: 32px;
   padding: 2px 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   line-height: 1.25rem;
 }
 
@@ -1748,20 +1855,37 @@ input::placeholder {
   background: rgba(0, 0, 0, 0.6);
 }
 
-/* Title, Clear, then a visible 44px close button (no grab handle: the sheet does not swipe). */
+/* Title, Clear, then a visible 44px close button (no grab handle: the sheet does not swipe); under
+   them, across the head, what the counts count (as the popover's head; design sweep B11). The note
+   has a row of its own (fix-up: beside the buttons it centred them between the title and the note,
+   and wrapped at 320px). */
 .sheet-head {
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
   padding: 8px 8px 8px 16px;
   border-bottom: 1px solid var(--grid);
 }
 
-.sheet-head h2 {
-  flex: 1 1 auto;
+.sheet-head h2,
+#sheet-clear,
+.sheet-close {
+  grid-row: 1;
+}
+
+.sheet-head .popover-note {
+  grid-row: 2;
+  grid-column: 1 / -1;
   margin: 0;
-  font-size: 1.25rem;
+  /* Its text 16px from the right edge, as the title's from the left. */
+  padding-right: 8px;
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: var(--font-size-20);
   line-height: 1.75rem;
 }
 
@@ -1778,7 +1902,7 @@ input::placeholder {
   background: none;
   color: var(--ink-secondary);
   font: inherit;
-  font-size: 1.5rem;
+  font-size: var(--font-size-24);
   line-height: 1;
   cursor: pointer;
 }
@@ -1816,7 +1940,7 @@ input::placeholder {
 /* Sheet rows and controls: full-size touch targets. */
 .sheet .facet-row {
   min-height: 48px;
-  font-size: 1rem;
+  font-size: var(--font-size-16);
   line-height: 1.375rem;
 }
 
@@ -1877,7 +2001,7 @@ input::placeholder {
 
 .sheet .atc-static {
   min-height: 48px;
-  font-size: 1rem;
+  font-size: var(--font-size-16);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1930,7 +2054,7 @@ input::placeholder {
   border-radius: 8px;
   background: none;
   color: var(--ink);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 400;
   text-align: left;
   cursor: pointer;
@@ -1962,7 +2086,7 @@ input::placeholder {
 }
 
 .atc-note {
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 [role="listbox"] {
@@ -1983,7 +2107,7 @@ input::placeholder {
 
 [role="option"] {
   padding: 4px 10px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   cursor: pointer;
 }
 
@@ -2001,7 +2125,7 @@ input::placeholder {
 .note {
   margin: 0 0 8px;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 /* The top row (owner decision 2026-09-29, revised the same day): "Authorized over time" across the
@@ -2059,7 +2183,7 @@ input::placeholder {
 
 .tile-label {
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .tile-value {
@@ -2069,7 +2193,7 @@ input::placeholder {
 
 .tile-caption {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 1.125rem;
 }
 
@@ -2085,13 +2209,13 @@ input::placeholder {
 }
 
 .tile-compact .tile-value {
-  font-size: 1.5rem;
+  font-size: var(--font-size-24);
   line-height: 1.75rem;
 }
 
 .tile-share {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2109,19 +2233,36 @@ input::placeholder {
   background: var(--accent);
 }
 
-/* Cards: surface, hairline, no shadow. */
-.chart-card {
-  margin: 24px 0;
-  padding: 24px;
-  border: 1px solid var(--grid);
-  border-radius: 12px;
-  background: var(--surface);
+/* One text inset per kind of framed region (design sweep 2026-10-01, A1: the page had 137, 141 and
+   145px insets at 1440 and 31, 33 and 37px on one phone card): --card-pad for the dashboard's cards
+   (.chart-card, .table-card), --card-pad-compact for every frame inside a lookup card (the medicine
+   card's blocks, More details' summary and sections, .card-section, the result tables), whose phone
+   values are the blocks' own (chosen for the first screen). */
+:root {
+  --card-pad: 24px;
+  --card-pad-compact: 16px;
 }
 
 @media (max-width: 720px) {
-  .chart-card {
-    padding: 16px;
+  :root {
+    --card-pad: 16px;
+    --card-pad-compact: 14px;
   }
+}
+
+@media (max-width: 359px) {
+  :root {
+    --card-pad-compact: 12px;
+  }
+}
+
+/* Cards: surface, hairline, no shadow. */
+.chart-card {
+  margin: 24px 0;
+  padding: var(--card-pad);
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  background: var(--surface);
 }
 
 .card-head {
@@ -2135,7 +2276,7 @@ input::placeholder {
 /* No overflow clip (it would cut the focus ring): the end buttons round their own corners. */
 .segmented {
   display: inline-flex;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
 }
 
@@ -2144,7 +2285,7 @@ input::placeholder {
   border: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 500;
   cursor: pointer;
 }
@@ -2183,6 +2324,15 @@ input::placeholder {
   }
 }
 
+/* The breakdown's mode switch in its card head as tall as View options beside it, 32px (design sweep
+   2026-10-01, A10: 35px); 44px on phones (below). */
+@media (min-width: 721px) {
+  #breakdown-by button {
+    min-height: 30px;
+    padding-block: 0;
+  }
+}
+
 /* Phones: with Modality (M2 phase 2) the five "Stack by" and four "Break down by" segments no
    longer fit in one row (335px at 320px): they wrap, each a chip with its own border. */
 @media (max-width: 599px) {
@@ -2195,7 +2345,7 @@ input::placeholder {
 
   #chart-stack button,
   #breakdown-by button {
-    border: 1px solid var(--axis);
+    border: 1px solid var(--field-border);
     border-radius: 9px;
   }
 }
@@ -2215,14 +2365,14 @@ input::placeholder {
 
 .tools-label {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 500;
 }
 
 .segmented-small button {
   min-height: 28px;
   padding: 2px 10px;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* The tabs (F · Spacious, phase 2; main.js renderTabs(); the WAI-ARIA tabs pattern since
@@ -2243,20 +2393,34 @@ input::placeholder {
   display: none;
 }
 
+/* Each tab as wide as its name in the shown tab's weight (design sweep 2026-10-01, A10: the shown
+   tab's 600 weight widened it 1.8px and moved every later tab): a hidden bold copy of the name
+   (data-label, set by main.js) under it, of no height and no part of its name. */
 .tab {
   display: flex;
   flex: none;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
   min-height: 44px;
   padding: 0;
   border: 0;
   background: none;
   color: var(--ink-secondary);
-  font-size: 0.90625rem;
+  font-size: var(--font-size-15);
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.tab::after {
+  content: attr(data-label);
+  content: attr(data-label) / "";
+  height: 0;
+  overflow: hidden;
+  font-weight: 600;
+  visibility: hidden;
 }
 
 .tab:hover {
@@ -2285,6 +2449,28 @@ input::placeholder {
   margin-top: 16px;
 }
 
+/* Every tab ends the main column's 32px above the footer (design sweep 2026-10-01, A8: a last card's
+   24px margin made it 56px on every tab but the Overview). */
+.tab-panel > :last-child {
+  margin-bottom: 0;
+}
+
+/* A tapped tab's panel shows at once, before its cards are drawn for the current view (design sweep
+   2026-10-01, L3; main.js renderTabs()): its old cards dimmed, but only once that takes 150 ms, so a
+   fast render never blinks (review of L3: a stale panel is busy 19-26 ms at 1440 and 1024, where a
+   dim at once would flash for a frame or two, 55-222 ms on a phone at 4x CPU, Medicines 317-382 ms);
+   old counts show undimmed for 150 ms at most. An animation, as a panel that was hidden has no style
+   to transition from. */
+.tab-panel[aria-busy="true"] {
+  animation: tab-busy 1ms linear 150ms forwards;
+}
+
+@keyframes tab-busy {
+  to {
+    opacity: 0.5;
+  }
+}
+
 /* Phones: the strip scrolls sideways across the gutters (no page scroll), the tabs closer. */
 @media (max-width: 720px) {
   .tabs {
@@ -2294,7 +2480,29 @@ input::placeholder {
   }
 
   .tab {
-    font-size: 0.9375rem;
+    font-size: var(--font-size-15);
+  }
+
+  /* Its edges fade where more tabs lie beyond them, as the chip row's (design sweep 2026-10-01, L6:
+     at 390px "Comp" was cut hard and By year and Medicines hidden, at 320px three tabs; main.js sets
+     .scroll-start / .scroll-end, filter-bar.js edgeFade()). The hairline under the strip stays whole:
+     its bottom 1px is a mask layer of its own. */
+  .tabs:is(.scroll-start, .scroll-end) {
+    mask-size: 100% calc(100% - 1px), 100% 1px;
+    mask-position: top, bottom;
+    mask-repeat: no-repeat;
+  }
+
+  .tabs.scroll-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent), linear-gradient(#000, #000);
+  }
+
+  .tabs.scroll-start {
+    mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent), linear-gradient(#000, #000);
+  }
+
+  .tabs.scroll-start.scroll-end {
+    mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent), linear-gradient(#000, #000);
   }
 }
 
@@ -2335,9 +2543,20 @@ input::placeholder {
   margin: 0;
 }
 
+/* At least 24px tall everywhere (bug hunt 2026-10-01: 21px), 44px on phones and touch screens (a
+   phone in landscape, 844px wide, has no phone rules). */
 .preview-tab-link {
-  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  font-size: var(--font-size-14);
   font-weight: 500;
+}
+
+@media (pointer: coarse) {
+  .preview-tab-link {
+    min-height: 44px;
+  }
 }
 
 .preview-list {
@@ -2346,14 +2565,31 @@ input::placeholder {
   list-style: none;
 }
 
+/* Each row reads along its first line (design sweep 2026-10-01, A5: on a wrapped name the bar and
+   count sat on the two lines' centre, 8.5px below the badge and the first line): the items at the
+   row's top, the label padded to the row's 32px (44px on phones, --preview-pad), the bar and count
+   offset to the first 20px line's centre. */
 .preview-row {
+  --preview-pad: 6px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(2rem, 25%) auto;
-  align-items: center;
+  align-items: start;
   gap: 10px;
   min-height: 32px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   line-height: 1.25rem;
+}
+
+.preview-label:not(:has(> a)) {
+  padding: var(--preview-pad) 0;
+}
+
+.preview-row > .preview-bar {
+  margin-top: calc(var(--preview-pad) + 5px);
+}
+
+.preview-row > .preview-count {
+  padding-top: var(--preview-pad);
 }
 
 /* A company's badge stays beside its name, which wraps beside it; long words hyphenate. */
@@ -2374,25 +2610,49 @@ input::placeholder {
   flex: none;
 }
 
-/* The row gives the 44px height on phones: no taller hit area of its own (the phone rule for
-   holder displays' company links would make a wrapped name 66px, over its neighbours). */
-.preview-row a.company-link {
+/* The row's link fills its row (bug hunt 2026-10-01: a 20px name in a 44px row, so a tap under
+   "Novartis" opened the next row's Intas): a block as wide as the label column, padded to the row's
+   32px (44px on phones) for a one-line name, a wrapped name's row as much taller; no negative
+   margin, so it never reaches over its neighbours (the holder displays' phone rule for company
+   links would). */
+.preview-row .preview-label > a {
+  display: block;
+  flex: 1 1 auto;
   margin: 0;
-  padding: 0;
+  padding: var(--preview-pad) 0;
 }
 
+/* A company row's badge is inside its link (overview-previews.js labelOf(); bug hunt 2026-10-01
+   fix-up: a tap on the badge, or in the gap beside it near the row's edge, opened nothing or the next
+   row's page), so the whole label column is the row's target. The name, beside the badge as before,
+   carries the underline: the link's own would run under the monogram too. Top-aligned, the 20px
+   badge level with the name's first 20px line (baseline-aligned, it sat 1px lower and made the rows
+   1-2px taller than 32px and 44px). */
+.preview-row .preview-label > a.preview-lead-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.preview-lead-link > .preview-name {
+  min-width: 0;
+  text-decoration: underline 1px var(--link-underline);
+  text-underline-offset: 3px;
+}
+
+/* The tab's bars, which the preview previews (design sweep 2026-10-01, B11: 8px on a track, both
+   ends rounded): 10px, no track, the end rounded 3px (.bar-track, .bar-fill). */
 .preview-bar {
   display: block;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--raised);
+  height: 10px;
 }
 
 .preview-fill {
   display: block;
   height: 100%;
   min-width: 2px;
-  border-radius: 4px;
+  border-radius: 0 3px 3px 0;
   background: var(--bar);
 }
 
@@ -2408,12 +2668,11 @@ input::placeholder {
 
 @media (max-width: 720px) {
   .preview-row {
+    --preview-pad: 12px;
     min-height: 44px;
   }
 
   .preview-tab-link {
-    display: inline-flex;
-    align-items: center;
     min-height: 44px;
   }
 }
@@ -2439,7 +2698,7 @@ input::placeholder {
   border-radius: 10px;
   background: transparent;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 500;
   cursor: pointer;
 }
@@ -2484,7 +2743,7 @@ input::placeholder {
   flex: 1 1 100%;
   margin: 0;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 1.25rem;
 }
 
@@ -2551,19 +2810,49 @@ input::placeholder {
   height: 16px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.4;
+  stroke-width: 1.5;
   stroke-linecap: round;
 }
 
 .card-takeaway {
+  max-width: 70ch;
   margin: 4px 0 8px;
   color: var(--ink);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   line-height: 1.375rem;
 }
 
 .card-takeaway:empty {
   display: none;
+}
+
+/* Under a card's takeaway, on a line of its own (owner decision 2026-10-01, L4): what the card
+   leaves out under the default status filter ("Only medicines still authorized: …"), quiet, then
+   the button that widens it (.lead-button: 44px tall on phones, so the line makes room for it and
+   keeps it clear of the legend below). */
+.card-scope {
+  max-width: 70ch;
+  margin: -4px 0 8px;
+  color: var(--muted);
+  font-size: var(--font-size-13);
+  line-height: 1.25rem;
+}
+
+.card-scope[hidden] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .card-scope {
+    margin: 0 0 12px;
+    line-height: 1.375rem;
+  }
+}
+
+/* The By year card's title takes focus after its scope line's button widened the status filter,
+   only to announce it; it is not a control. */
+#chart-title:focus {
+  outline: none;
 }
 
 /* The (i) panel: the card's method description, the View options panel's hairline above it. */
@@ -2579,6 +2868,22 @@ input::placeholder {
 
 .card-info .muted {
   margin: 4px 0;
+}
+
+/* Prose at most about 70 characters wide (design sweep 2026-10-01, A3: the (i) panels' notes ran
+   175-185 characters a line at 1440; the takeaways, captions, notes, About and the footer too). */
+.card-info p {
+  max-width: 70ch;
+}
+
+/* A one-sentence note and the footer's lines (a credits list, the intended use, the licences;
+   footer > p): 80ch, balanced (design sweep recheck 2026-10-02: at 70ch the Union Register note left
+   "Union Register." alone on its second line, and the footer took three lines more than before the
+   cap). The note fits one line at 1440 and 1024; a note or line that wraps never ends on a lone word
+   or two. */
+#register-note {
+  max-width: 80ch;
+  text-wrap: balance;
 }
 
 /* The per-year legend's heading, stacked by status (owner call 2026-09-30: "Status today"). */
@@ -2597,7 +2902,8 @@ input::placeholder {
 
 /* Von Restorff (phase 3): strong colour for status and protection only. In the cards where they are
    decoration (the code already names the class), ATC badges are the neutral slate (their level
-   shades kept: they tell the levels apart); type badges keep their hues, which are the charts' type
+   shades kept: they tell the levels apart; the lookups' result tables and the company page's ATC
+   groups too, design sweep 2026-10-01, B1); type badges keep their hues, which are the charts' type
    colours. Company monograms keep their group's brand or hashed colour everywhere (owner decision
    2026-09-30: "brand colors"). slate-text on slate-1..5 is a checked pair (palette.test.js). */
 .neutral-badges :is(.letter-badge, .code-badge, .atc-badge) {
@@ -2621,18 +2927,22 @@ input::placeholder {
   margin-top: 8px;
 }
 
+/* A bar row's text on the card's text edges, its hover wash and padding reaching 6px into the card's
+   padding (design sweep 2026-10-01, A9: labels and values sat 6px inside the takeaway's and the
+   tables' edges); a row followed by its condition or company page link keeps its right margin. */
 .bar-row {
   display: grid;
   grid-template-columns: minmax(8rem, 38%) 1fr 4.5ch;
   gap: 12px;
   align-items: center;
-  width: 100%;
+  width: calc(100% + 12px);
+  margin-inline: -6px;
   padding: 4px 6px;
   border: 0;
   border-radius: 8px;
   background: none;
   color: var(--ink);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   text-align: left;
 }
 
@@ -2692,7 +3002,7 @@ button.bar-row:hover {
   border-radius: 5px;
   background: var(--hue-1);
   color: var(--hue-text);
-  font: 600 0.6875rem/1 var(--font-mono);
+  font: 600 var(--font-size-11)/1 var(--font-mono);
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -2736,7 +3046,7 @@ td.result-holder .holder-main .company-badge {
 
 .holder-ema {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 400;
   line-height: 1.35;
 }
@@ -2746,7 +3056,7 @@ td.result-holder .holder-main .company-badge {
    stays compact on phones. */
 .company-evidence,
 .company-as-of {
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 1.4;
 }
 
@@ -2755,7 +3065,7 @@ td.result-holder .holder-main .company-badge {
 .company-note > summary {
   padding: 12px 0;
   color: var(--link);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 20px;
 }
 
@@ -2788,7 +3098,7 @@ td.result-holder .holder-main .company-badge {
 
 .company-names .company-holders {
   margin: 2px 0 0 16px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .condition-list.company-mix li {
@@ -2808,22 +3118,53 @@ td.result-holder .holder-main .company-badge {
   min-height: 24px;
 }
 
-.company-page h2 .company-badge {
+/* The company page's headline monogram (design sweep 2026-10-01, A2: an h2 rule since lookup titles
+   became h1, so the 20px badge hung 6-9px below the headline's cap height): sized with the headline,
+   in whole pixels from the type scale (recheck 2026-10-02: in em it added 15.1, 12.6 and 10.9px
+   text and a 4.99px radius): 24px tall with 13px text under the 30px headline (phones), 28px with
+   15px under the 36px one (from 721px), the list badge's 20px and 11px under the 26px one (below
+   360px); raised so its centre sits on the cap height's (within 1px; Geist Mono's text baseline in
+   the box). */
+.company-page h1 .company-badge {
+  min-width: 24px;
   height: 24px;
-  font-size: 0.8125rem;
-  vertical-align: 3px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: var(--font-size-13);
+  vertical-align: 7px;
+}
+
+@media (min-width: 721px) {
+  .company-page h1 .company-badge {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: var(--font-size-15);
+    vertical-align: 8px;
+  }
+}
+
+@media (max-width: 359px) {
+  .company-page h1 .company-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: 5px;
+    font-size: var(--font-size-11);
+    vertical-align: 6px;
+  }
 }
 
 /* The company page's Sources: its Ownership part (the curated notes and the medicines moved to
    their current owner, each with its evidence link). */
 .card h3.sources-part {
   margin: 12px 0 4px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 600;
 }
 
 .company-ownership {
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .company-ownership > li + li {
@@ -2842,17 +3183,28 @@ td.result-holder .holder-main .company-badge {
 .up-level {
   min-height: 36px;
   padding: 6px 12px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   background: transparent;
   color: var(--ink);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 500;
   cursor: pointer;
 }
 
 .up-level:hover {
   background: var(--wash);
+}
+
+/* The drilled class's explanation, on a line of its own under the path (owner decision 2026-10-01:
+   a tap drills, and the first new bar shows no tip; main.js renderBreakdownPath()). Its measure
+   capped at 70ch by a right padding: a max-width would let it share the path's line. */
+.breakdown-explanation {
+  flex: 1 0 100%;
+  margin: 0;
+  padding-right: max(0px, 100% - 70ch);
+  color: var(--ink-secondary);
+  font-size: var(--font-size-14);
 }
 
 /* The class headline's levels with their counts. */
@@ -2903,7 +3255,7 @@ td.result-holder .holder-main .company-badge {
   gap: 12px;
   align-items: center;
   padding: 4px 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .condition-list a {
@@ -2978,7 +3330,7 @@ table.conditions-table {
 
 .conditions-table tbody th {
   color: var(--ink);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 400;
   overflow-wrap: anywhere;
 }
@@ -2994,6 +3346,16 @@ table.conditions-table {
    data-tip), anchored to the cell with keyboard focus or a tap. */
 .conditions-table td.cond-medicines[data-tip] {
   position: relative;
+}
+
+/* The condition links at least 24px tall (axe target-size, recheck 2026-10-02: 18px with a filter
+   set), the negative margin keeping the row; 44px on phones (below). */
+.conditions-table .cond-name a {
+  display: inline-block;
+  padding-block: 3px;
+  margin-block: -3px;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: min(0px, (1lh - 24px) / 2);
 }
 
 .cond-value {
@@ -3141,7 +3503,7 @@ table.conditions-table {
   .conditions-table .cond-treatments,
   .conditions-table .cond-medicines {
     width: auto;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     text-align: left;
   }
 
@@ -3229,7 +3591,7 @@ table.conditions-table {
   .conditions-table .cond-treatments,
   .conditions-table .cond-medicines {
     width: auto;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     text-align: left;
   }
 
@@ -3339,12 +3701,12 @@ table.conditions-table {
 
 .pc-scale {
   margin: 4px 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 .pc-unclear {
   margin: 8px 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* The year, then its orphan segment's count ("4 orphan", a dot in the segment's colour) under it. */
@@ -3356,7 +3718,7 @@ table.conditions-table {
 
 .pc-bar-orphan {
   color: var(--ink-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   font-weight: 400;
 }
 
@@ -3368,7 +3730,7 @@ table.conditions-table {
 }
 
 .pc-orphan-toggle[aria-pressed="true"] {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pc-list {
@@ -3377,7 +3739,7 @@ table.conditions-table {
 
 .pc-list-title {
   margin: 0 0 4px;
-  font-size: 1rem;
+  font-size: var(--font-size-16);
 }
 
 .pc-medicines {
@@ -3392,7 +3754,7 @@ table.conditions-table {
   gap: 2px;
   padding: 8px 0;
   border-top: 1px solid var(--grid);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   overflow-wrap: anywhere;
 }
 
@@ -3428,6 +3790,11 @@ table.conditions-table {
 
 .pc-company-list > li + li {
   margin-top: 6px;
+}
+
+/* "Show {n} more" under a year's list (a text button, design sweep B6; 44px on phones, below). */
+.pc-more {
+  margin-top: 4px;
 }
 
 .pc-company-year {
@@ -3505,7 +3872,7 @@ table.conditions-table {
 
 .readout {
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3517,7 +3884,7 @@ table.conditions-table {
   padding: 0;
   list-style: none;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .legend li {
@@ -3619,7 +3986,7 @@ table.conditions-table {
   border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   pointer-events: none;
 }
 
@@ -3646,30 +4013,44 @@ table.conditions-table {
   color: var(--ink-secondary);
 }
 
+/* Under the numbers a tap shows on a touch screen (chart.js): what a second tap on that year does. */
+.tooltip .tooltip-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--grid);
+  color: var(--ink-secondary);
+}
+
 /* Medicines table: a card whose table runs edge to edge; a size container, so its rows stack when
    the card is narrow (phones; below). */
 .table-card {
-  padding: 20px 0 16px;
+  padding: var(--card-pad) 0 16px;
   container-type: inline-size;
 }
 
-/* The table's caption, above the scroll area so a wide table cannot cut it off. */
+/* The table's caption, above the scroll area so a wide table cannot cut it off. Head, caption,
+   "Show 100 more" and the rows on the other cards' text edge (--card-pad; A1). */
 .table-caption {
-  margin: 0 20px 12px;
+  max-width: 70ch;
+  margin: 0 var(--card-pad) 12px;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .table-card > .card-head {
-  margin: 0 20px 8px;
+  margin: 0 var(--card-pad) 8px;
 }
 
 .table-card > .card-head h2 {
   margin: 0;
 }
 
-.table-card > .more {
-  margin: 12px 20px 0;
+#table-more {
+  margin: 12px var(--card-pad) 0;
+}
+
+#medicines-table :is(th, td):last-child {
+  padding-right: var(--card-pad);
 }
 
 /* Positioned, so visually hidden (absolute) text in cells scrolls with the table instead of
@@ -3689,9 +4070,9 @@ table.conditions-table {
   }
 
   /* The indication under its medicine starts where the Medicine column's text does (the dot column's
-     14px and 24px, then the cell's 12px). */
+     --card-pad less 6px and its 24px, then the cell's 12px: 54px). */
   #medicines-table tr.indication > td {
-    padding-left: 50px;
+    padding-left: calc(var(--card-pad) + 30px);
   }
 }
 
@@ -3729,7 +4110,7 @@ table.conditions-table {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    padding: 12px 16px;
+    padding: 12px var(--card-pad);
   }
 
   #medicines-table tr.indication {
@@ -3788,7 +4169,7 @@ table {
   width: 100%;
   min-width: 1000px;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 caption {
@@ -3826,7 +4207,7 @@ th {
   box-shadow: inset 0 1px var(--grid), inset 0 -1px var(--grid);
   color: var(--ink-secondary);
   font-weight: 600;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* "anywhere" lets long slash-joined names wrap, but it also drops the column's
@@ -3854,7 +4235,7 @@ td.holder-cell {
   display: block;
   margin-top: 2px;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* "PI" and "EPAR" on medicine rows (lookup lists after the name, the table under it): compact
@@ -3877,9 +4258,9 @@ td .doc-links {
   min-width: 24px;
   min-height: 24px;
   padding: 0 7px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -3901,7 +4282,7 @@ td .doc-links {
   vertical-align: -0.05em;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -3915,7 +4296,7 @@ td .doc-links {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
 }
 
@@ -3939,6 +4320,10 @@ td .doc-links {
 .bar-item > .bar-row {
   flex: 1;
   min-width: 0;
+}
+
+.bar-item > .bar-row:not(:last-child) {
+  margin-right: 0;
 }
 
 /* Status: an 8px dot in its status's hue (a .hue-* class: statusHue()), then the label in the
@@ -3977,7 +4362,7 @@ td .doc-links {
   display: block;
   padding-left: 14px;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3987,17 +4372,19 @@ td.status-cell {
 }
 
 /* The medicines table's status dot column (owner decision 2026-09-30; table.js renderStatusDot()):
-   as narrow as its dot, the mark in line with the caption's text (14px, then the carrier's 6px), so
-   the first page's table is 2px wider at min-content than with "Approved · Status" (1,020px against
-   1,018px). The dot's 24px carrier (WCAG 2.5.8) is centred on the medicine name's first line (10px
-   down, the name's 20px line 12px down); its 12px mark is the status's colour (statusColor(), set by
-   table.js) in a shape per status kind (badges.js statusShape()), drawn in currentColor, so forced
-   colors keep the shape in the text colour. The short label shows on phones only (below). */
+   as narrow as its dot, the mark in line with the caption's text (--card-pad less the carrier's 6px:
+   18px since the design sweep's A1, 2026-10-01; 14px against the caption's 20px before), so the
+   first page's table is 2px wider at min-content than with "Approved · Status" (1,020px against
+   1,018px; 1,028px with the card's 24px insets). The dot's 24px carrier (WCAG 2.5.8) is centred on
+   the medicine name's first line (10px down, the name's 20px line 12px down); its 12px mark is the
+   status's colour (statusColor(), set by table.js) in a shape per status kind (badges.js
+   statusShape()), drawn in currentColor, so forced colors keep the shape in the text colour. The
+   short label shows on phones only (below). */
 th.status-dot-head,
 td.status-dot-cell {
   width: 1px;
   padding-right: 0;
-  padding-left: 14px;
+  padding-left: calc(var(--card-pad) - 6px);
 }
 
 td.status-dot-cell {
@@ -4049,7 +4436,7 @@ td.approved-cell {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 :is(.approved-status, .status-dot-label) .nowrap {
@@ -4099,7 +4486,7 @@ td.approved-cell .register-flag {
   border-radius: 999px;
   background: var(--hue-1);
   color: var(--hue-text);
-  font-size: 0.78125rem;
+  font-size: var(--font-size-12);
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -4149,6 +4536,13 @@ a.mesh-tip[data-tip] {
   .mesh-tip:not(.tap-tip):is(a, button, .atc-row)[data-tip]:is(:hover, :focus-within)::after {
     content: none;
   }
+
+  /* Focus a script moved after a tap elsewhere (the drilled breakdown's first new bar; focusQuietly()
+     in main.js): no tip until a tap on the carrier or keyboard focus (bug hunt 2026-10-01: it covered
+     the next bars). */
+  .tip-quiet[data-tip]:not(:focus-visible, :has(:focus-visible))::after {
+    content: none;
+  }
 }
 
 /* --tip-left: moved left when it would cross the viewport's right edge (setupTips()); --tip-max: in a
@@ -4168,7 +4562,7 @@ a.mesh-tip[data-tip] {
   background: var(--surface);
   box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
   color: var(--ink);
-  font: 400 0.8125rem/1.125rem var(--font);
+  font: 400 var(--font-size-13)/1.125rem var(--font);
   letter-spacing: normal;
   text-align: left;
   text-transform: none;
@@ -4245,6 +4639,28 @@ a.mesh-tip[data-tip] {
   right: 0;
   width: auto;
   max-width: none;
+}
+
+/* Touch screens: in a sheet or popover the tip a tap shows (a tree row's, a type or status row's, a
+   static row's) is not drawn at its carrier but in the strip above the foot (setupTips() in main.js),
+   which takes its height from the body, so it covers no row (bug hunt 2026-10-01, fix-up: under a
+   row it hid the next two, above it the search field and the parent row). The pseudo-element keeps
+   its content, so setupTips() reads whether the tip shows. */
+@media (hover: none) {
+  :is(.sheet-body, .popover-body) [data-tip]::after {
+    display: none;
+  }
+}
+
+.tip-strip {
+  flex: none;
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--grid);
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 var(--font-size-13)/1.125rem var(--font);
+  white-space: pre-line;
 }
 
 @media (hover: hover) {
@@ -4441,12 +4857,50 @@ td.atc .code + .code {
   margin-top: 6px;
 }
 
+/* Touch screens, the stacked (phone) table (owner decision 2026-10-01): the ATC badge's tip a tap
+   shows is in flow, a line of the row's own under the badge's line, across the row, which grows
+   taller, as with "Show indication", so it covers no other row (bug hunt 2026-10-01: drawn under
+   the badge, 212px, it covered the next rows). The badge draws none; setupTips() (main.js) copies
+   the focused badge's tip to its row (data-flow-tip) in the next frame, so a tap elsewhere lands
+   before the row shrinks back. Its line comes before the areas' and the indication toggle's (order;
+   main.js flowTipBand() reads it so). Mouse hover, keyboard focus on a mouse device and the wide
+   table are unchanged. */
+@media (hover: none) {
+  @container (max-width: 599px) {
+    #medicines-table td.atc .code[data-tip]::after {
+      display: none;
+    }
+
+    #medicines-table tr[data-flow-tip] > :is(td.area, td.indication-cell) {
+      order: 1;
+    }
+
+    #medicines-table tr[data-flow-tip]::after {
+      content: attr(data-flow-tip);
+      content: attr(data-flow-tip) / "";
+      flex: 1 0 100%;
+      box-sizing: border-box;
+      padding: 6px 10px;
+      border: 1px solid var(--grid);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      font: 400 var(--font-size-13)/1.125rem var(--font);
+      white-space: pre-line;
+    }
+
+    .tips-hidden #medicines-table tr[data-flow-tip]::after {
+      content: none;
+    }
+  }
+}
+
 .flag {
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--raised);
   color: var(--ink);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
 }
 
 .status-cell .flag {
@@ -4523,6 +4977,13 @@ td.area {
   margin-left: -3px;
 }
 
+/* After a card's outlined link chip (B9) the ";" stands 3px further off (B9 review: 1px after the
+   outline, it read as part of the chip, "C08 ▤);"); the dashboard's filled toggles and "+n" keep
+   it close. */
+.area-chips:has(> a.area-chip:last-child) + .term-sep {
+  margin-left: 0;
+}
+
 /* The toolbar holds the chips and "+n" (so its arrow keys reach it; chips review 2026-09-29). */
 .area-chips {
   display: inline-flex;
@@ -4556,7 +5017,7 @@ span.area-chip {
   border-radius: 6px;
   background: var(--slate-2);
   color: var(--slate-text);
-  font: 500 0.75rem/24px var(--font-mono);
+  font: 500 var(--font-size-12)/24px var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -4564,6 +5025,33 @@ span.area-chip {
 :is(button.area-chip:not([aria-disabled="true"]), a.area-chip):hover .area-chip-fill {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* A card's chip, a link to its branch's condition page (owner decision 2026-10-01, B9: it looked the
+   same as the dashboard's filter toggles): it looks like a link, as the condition page links after
+   tree rows and bars (.cond-link): no fill, a --field-border outline (3:1 on the page and surface),
+   link-coloured, the page glyph after its code, underlined on hover. Still 24px tall; the dashboard's
+   toggles keep the slate fill. */
+a.area-chip .area-chip-fill {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px 0 5px;
+  border: 1px solid var(--field-border);
+  background: none;
+  color: var(--link);
+  line-height: 22px;
+}
+
+a.area-chip .area-chip-fill .link-icon {
+  width: 11px;
+  height: 11px;
+  margin: 0;
+}
+
+a.area-chip:hover .area-chip-fill {
+  color: var(--link-hover);
+  text-decoration-color: var(--link-underline);
 }
 
 button.area-chip[aria-pressed="true"] .area-chip-fill {
@@ -4591,7 +5079,7 @@ button.area-chip[aria-disabled="true"] {
 .area-more {
   display: inline-flex;
   color: var(--ink-secondary);
-  font: 500 0.75rem var(--font-mono);
+  font: 500 var(--font-size-12) var(--font-mono);
 }
 
 .area-more-fill {
@@ -4613,13 +5101,19 @@ button.area-chip[aria-disabled="true"] {
   outline-offset: 2px;
 }
 
-/* The medicine card's Status block: its first three conditions, then "and n more", a button that
-   reads as a link and opens More details at the full list (lookup.js areaNames(); F · Spacious,
-   phase 4). */
+/* The medicine card's Indication block: its first three conditions, then "and n more", a button
+   that reads as a link and opens More details at the full list (lookup.js areaNames(); F · Spacious,
+   phase 4). 14px, as the block's other reveal control, "Show full indication" (design sweep B6
+   fix-up: it was 16px under that 14px summary), 24px tall as it is (its 21px line padded, the
+   negative margin keeping the line). */
 .toggle.areas-more {
-  padding: 0;
+  padding: 1.5px 0;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: -1.5px;
+  margin-block: min(0px, (1lh - 24px) / 2);
   color: var(--link);
   font: inherit;
+  font-size: var(--font-size-14);
   text-decoration: underline;
   text-decoration-color: var(--link-underline);
   text-underline-offset: 3px;
@@ -4645,18 +5139,24 @@ button.area-chip[aria-disabled="true"] {
 /* Who is active where (activity.js): the table scrolls sideways inside the card when it is wider
    (the page never does), with the holder column sticky; cells in five accent shades (--heat-1..5,
    each with its own number colour, palette.test.js), empty for none. */
+/* The scroll box reaches 4px into the card's padding on both sides, an unseen gutter (no border or
+   fill) that its clip leaves the first and last columns' focus rings (design sweep recheck
+   2026-10-02, kept on purpose: it adds a left edge at 141 and 29 to the page's metrics; on the text
+   edge with the rings drawn inside instead, they covered the first column's text). */
 .activity-scroll {
   position: relative;
-  margin-top: 8px;
+  margin: 8px -4px 0;
+  padding: 0 4px;
   overflow-x: auto;
 }
 
 table.activity {
   width: auto;
   min-width: 0;
+  margin-left: -2px;
   border-collapse: separate;
   border-spacing: 2px;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 .activity th,
@@ -4675,15 +5175,24 @@ table.activity {
   vertical-align: bottom;
 }
 
+/* "Company" on the card's text edge, above the row headers (A5). */
+.activity thead th:first-child {
+  padding-left: 0;
+}
+
 .activity .activity-col {
   min-width: 40px;
   max-width: 6.5rem;
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   line-height: 1rem;
   text-align: center;
   overflow-wrap: break-word;
 }
 
+/* Scrolled sideways, the sticky column stays where it rests, on the card's text edge (left is
+   measured from the scroll box's content edge), so its focus rings keep the gutter (design sweep
+   recheck fix-up 2026-10-02: at -4px it sat on the box's edge and its rings lost 3px on phones);
+   its ::before covers the gutter beside it, so no cell shows or takes a tap there. */
 .activity th[scope="row"],
 .activity thead th:first-child {
   position: sticky;
@@ -4692,6 +5201,19 @@ table.activity {
   z-index: 1;
   background: var(--surface);
   text-align: left;
+}
+
+/* Under its own content (z-index -1 in the sticky cell's stacking context), so a focus ring is drawn
+   over it. */
+.activity :is(th[scope="row"], thead th:first-child, .activity-sorts td:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: -1;
+  width: 4px;
+  background: var(--surface);
 }
 
 .activity th[scope="row"] {
@@ -4749,13 +5271,21 @@ table.activity {
   box-shadow: inset 0 0 0 2px currentColor;
 }
 
-/* Row headers: the holder, then its matching medicines. */
+/* Row headers: the holder, then its matching medicines, on one baseline, the line centred in the
+   button (design sweep 2026-10-01, A5: at the button's top it sat 4.5px above the row's heat cells;
+   align-content centres the wrapping container's one line, which never wraps: the name's basis is 0)
+   and starting on the card's text edge (no left padding; the table's 2px border spacing taken back
+   by the table's margin and the scroll box reaching 4px into the card's padding, so the focus ring
+   still shows). */
 .activity th[scope="row"] button {
   display: flex;
+  flex-wrap: wrap;
+  align-content: center;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
+  padding-left: 0;
 }
 
 .activity-total {
@@ -4826,7 +5356,7 @@ table.activity {
   width: auto;
   padding: 0 6px;
   color: var(--ink-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   font-weight: 600;
 }
 
@@ -4841,12 +5371,12 @@ table.activity {
   background: var(--accent-wash);
   box-shadow: inset 0 -2px var(--accent);
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
 :is(.activity, .conditions-table) .sort-button[aria-pressed="true"] svg {
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 /* The class the columns split (one ATC class selected): a pressed toggle, badge, name and ×. */
@@ -4856,7 +5386,7 @@ table.activity {
   align-items: center;
   gap: 4px 8px;
   margin: 0 0 8px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .activity-parent-button {
@@ -4873,11 +5403,6 @@ table.activity {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
-}
-
-.activity-parent-remove {
-  font-size: 1.125rem;
-  line-height: 1;
 }
 
 /* The ATC columns' names: only where tooltips cannot show (touch screens, phones). */
@@ -4898,7 +5423,7 @@ table.activity {
   height: 14px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -4912,7 +5437,7 @@ table.activity {
 }
 
 .segmented button[aria-pressed="true"] .sort-icon {
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 /* Pressed toggles (the filter a header sets is the current one; the sort shown): the accent wash
@@ -4931,7 +5456,7 @@ table.activity {
 
 .activity td button[aria-pressed="true"] {
   box-shadow: inset 0 0 0 2px currentColor;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -4975,7 +5500,7 @@ table.activity {
   color: var(--ink-secondary);
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
@@ -5019,7 +5544,7 @@ table.activity {
 
 @media (min-width: 721px) {
   .lookup-box input {
-    font-size: 0.9375rem;
+    font-size: var(--font-size-15);
   }
 }
 
@@ -5040,7 +5565,7 @@ table.activity {
 }
 
 /* Right under the search (whose section keeps its bottom margin). Each example keeps its kind
-   ("(brand)") on its line. */
+   ("(brand)") and the "·" after it on its line, so no line starts with a separator. */
 .try {
   display: flex;
   flex-wrap: wrap;
@@ -5048,11 +5573,36 @@ table.activity {
   gap: 4px 8px;
   margin: 0 0 24px;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .try-item {
   white-space: nowrap;
+}
+
+/* The separator lies in the 20px gap after its example, 8px clear of either side as when it was an
+   item of its own, without counting toward the line's width: the line breaks where it did, and a
+   line's last separator hangs into the page's gutter. "Try" stays 8px from the first example. */
+.try {
+  column-gap: 20px;
+}
+
+.try > :first-child {
+  margin-right: -12px;
+}
+
+.try-sep {
+  display: inline-block;
+  width: 4px;
+  margin: 0 -12px 0 8px;
+  text-align: center;
+}
+
+/* While the search's list is open it covers the line, but not the gutter: a line's last separator
+   there peeked out beside it (design sweep recheck, 2026-10-02: at 390px, 4px right of the list).
+   The line is clipped at its right edge then; nothing else of it lies beyond that edge. */
+body:has(#lookup-input[aria-expanded="true"]) .try {
+  clip-path: inset(-44px 0 -44px -44px);
 }
 
 /* The landing intro (intro.js; user-approved design 2026-09-28; owner decision 2026-09-29: three
@@ -5069,7 +5619,7 @@ table.activity {
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   line-height: 1.1875rem;
 }
 
@@ -5098,7 +5648,7 @@ table.activity {
   background: none;
   color: var(--ink-secondary);
   font: inherit;
-  font-size: 1.5rem;
+  font-size: var(--font-size-24);
   line-height: 1;
   cursor: pointer;
 }
@@ -5168,14 +5718,14 @@ table.activity {
 .intro-card-body {
   flex: 1;
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 1.0625rem;
 }
 
 .intro-card-title {
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 650;
+  font-size: var(--font-size-14);
+  font-weight: 600;
   line-height: 1.125rem;
 }
 
@@ -5184,7 +5734,7 @@ table.activity {
   display: inline;
   margin: 0;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   line-height: 1.0625rem;
 }
 
@@ -5192,7 +5742,7 @@ table.activity {
    tall without taking room in the line (over the lines around it); its focus ring stays on the text. */
 .intro-action {
   position: relative;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 600;
   line-height: 1.0625rem;
   white-space: nowrap;
@@ -5212,18 +5762,21 @@ table.activity {
   vertical-align: -2px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-/* One quiet line under the cards: scope and intended use. */
+/* One quiet line under the cards: scope and intended use; its text at most 70ch wide (design sweep
+   2026-10-01, A3: 178 characters a line at 1440) while its hairline spans the card, so the cap is a
+   right padding (a percentage of the card's width) rather than a max-width. */
 .intro-scope {
   margin: 10px 0 0;
   padding-top: 7px;
+  padding-right: max(0px, 100% - 70ch);
   border-top: 1px solid var(--grid);
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   line-height: 1rem;
 }
 
@@ -5234,11 +5787,12 @@ table.activity {
 }
 
 @container (max-width: 639.98px) {
+  /* The x (the 20px close glyph, B11) level with the first title: 14px down (11px for the text "×"). */
   .intro-close {
     top: 0;
     right: 0;
     align-items: flex-start;
-    padding-top: 11px;
+    padding-top: 14px;
   }
 }
 
@@ -5254,23 +5808,23 @@ table.activity {
   }
 
   .intro-card-title {
-    font-size: 0.9375rem;
+    font-size: var(--font-size-15);
     line-height: 1.25rem;
   }
 
   .intro-card-body,
   .intro-card-text {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     line-height: 1.25rem;
   }
 
   .intro-action {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     line-height: 1.25rem;
   }
 
   .intro-scope {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     line-height: 1.125rem;
   }
 }
@@ -5305,14 +5859,14 @@ table.activity {
   }
 
   .intro-card-title {
-    font-size: 1rem;
+    font-size: var(--font-size-16);
     line-height: 1.375rem;
   }
 
   .intro-card-text {
     display: block;
     margin: 4px 0 8px;
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     line-height: 1.3125rem;
   }
 
@@ -5322,7 +5876,7 @@ table.activity {
     width: fit-content;
     margin: auto 0 -4px;
     padding: 4px 0;
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     line-height: 1.25rem;
   }
 
@@ -5337,7 +5891,7 @@ table.activity {
   .intro-scope {
     margin-top: 18px;
     padding-top: 12px;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     line-height: 1.25rem;
   }
 }
@@ -5356,8 +5910,10 @@ table.activity {
   }
 }
 
+/* A swipe past the list's end scrolls no further: not the page behind it (bug hunt 2026-10-01). */
 .lookup [role="listbox"] {
   max-height: min(440px, 65vh);
+  overscroll-behavior: contain;
 }
 
 [role="listbox"] [role="group"] {
@@ -5370,7 +5926,7 @@ table.activity {
   padding: 6px 10px 2px;
   color: var(--ink-secondary);
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -5385,7 +5941,7 @@ table.activity {
 
 .option-meta {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* Step 2: the list's note (a retried query, or no matches) and, last, the indication-text search
@@ -5393,13 +5949,25 @@ table.activity {
 .listbox-note {
   padding: 8px 10px 4px;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
+}
+
+/* Review of the bug hunt 2026-10-01: "Loading…" (or a note the open list did not show) goes under
+   the options, where suggestions still to come will show, so none of those shown moves. */
+.listbox-note.listbox-end {
+  padding: 6px 10px 8px;
 }
 
 [role="listbox"] .group-text {
   margin-top: 4px;
   border-top: 1px solid var(--grid);
   padding-top: 4px;
+}
+
+/* First in the list (nothing found while data loads): no hairline under the list's own edge. */
+[role="listbox"] .group-text:first-child {
+  margin-top: 0;
+  border-top: 0;
 }
 
 .lookup .group-text [role="option"] {
@@ -5413,11 +5981,11 @@ table.activity {
   color: var(--link);
 }
 
-/* Laws of UX, second pass (2026-09-30): on phones a group's last option can be "Show all n …",
-   expanding it in place; it reads as a link. */
+/* Laws of UX, second pass (2026-09-30): a group's last option can be "Show 5 more …" (phones; on
+   desktop too since owner decision 2026-10-01), expanding it in place; it reads as a link. */
 .lookup [role="option"].option-expand {
   color: var(--link);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 /* Phones (review 2026-09-29): every suggestion a 44px target, its text centred in it. */
@@ -5432,7 +6000,7 @@ table.activity {
 /* Step 2 (#2): an empty indication-text search says why. */
 .empty-state {
   margin: 8px 0 16px;
-  padding: 12px 16px;
+  padding: 12px var(--card-pad-compact);
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5450,7 +6018,7 @@ table.activity {
   margin: 0;
   padding-left: 20px;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .empty-list li + li {
@@ -5472,7 +6040,7 @@ table.activity {
    since the audit of 2026-09-30, S2; h3 below them). */
 .card :is(h2, h3) {
   margin: 16px 0 4px;
-  font-size: 1rem;
+  font-size: var(--font-size-16);
   font-weight: 600;
 }
 
@@ -5490,13 +6058,17 @@ table.activity {
 
 .card-section {
   margin: 16px 0;
-  padding: 16px 20px;
+  padding: 16px var(--card-pad-compact);
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
 }
 
-.card-section > :is(h2, h3):first-child {
+/* The section's heading at its top, also inside the substance card's ATC label row (a flex row, so
+   the h2's margin stayed: 33px from the section's top against 17px for the Approval timeline above
+   it, review of the design sweep's L2). */
+.card-section > :is(h2, h3):first-child,
+.card-section > .ladder-title:first-child > h2 {
   margin-top: 0;
 }
 
@@ -5534,7 +6106,7 @@ table.activity {
 
 .card-block {
   min-width: 0;
-  padding: 14px 16px 16px;
+  padding: 14px var(--card-pad-compact) 16px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
@@ -5544,7 +6116,7 @@ table.activity {
   margin: 0 0 10px;
   line-height: 1.25rem;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -5556,13 +6128,30 @@ table.activity {
 }
 
 /* The Status block's lead: the status pill, "since" and the date, then the qualifier chips, wrapping
-   as whole items. */
+   as whole items, on one baseline (design sweep 2026-10-01, A10: centred, the pill's text sat 6-7px
+   above "since"'s). */
 .card .status-lead {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: 6px 10px;
   margin: 0 0 12px;
+}
+
+/* The pill's baseline its text's (its dot, an empty first item, would otherwise give it one at the
+   dot's foot), the dot still centred. */
+.card .status-lead .status {
+  align-items: baseline;
+}
+
+.card .status-lead .status::before {
+  align-self: center;
+}
+
+/* On the baseline the 26px pill sits 3px below the date's 28px line and would end 1px under it,
+   moving the document buttons 1px down on phones: the line keeps the date's height. */
+.card .status-lead .status-tip {
+  margin-bottom: -1px;
 }
 
 .status-since {
@@ -5590,11 +6179,17 @@ table.activity {
   margin-top: 12px;
 }
 
+/* A fact's label: one style in the blocks and in More details (design sweep 2026-10-01, B10: the
+   same "Company" and "Therapeutic areas" were 13px/500 in the blocks, 14px/600 in More details). */
+.block-facts dt,
+.facts dt {
+  color: var(--ink-secondary);
+  font-size: var(--font-size-13);
+  font-weight: 500;
+}
+
 .block-facts dt {
   margin: 0 0 2px;
-  color: var(--ink-secondary);
-  font-size: 0.8125rem;
-  font-weight: 500;
 }
 
 .block-facts dd {
@@ -5604,7 +6199,7 @@ table.activity {
 /* Von Restorff: the answer's parts (since when, protected until) in the card's strong type; the
    headline's answer word in the status's colour (.tone-authorized, .tone-negative). */
 .answer-value {
-  font-size: 1.25rem;
+  font-size: var(--font-size-20);
   font-weight: 600;
   line-height: 1.75rem;
   font-variant-numeric: tabular-nums;
@@ -5618,20 +6213,43 @@ table.activity {
    "until 2028–2029" stays the answer. */
 .lead-label {
   color: var(--ink-secondary);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   font-weight: 500;
 }
 
 .lead-estimate {
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 400;
+}
+
+/* The lead's link and its "(est.)" on one line (review of C3b): after the link, an inline block on
+   phones, a line could break before the no-break space of "(est.)". The link's text is short
+   ("until 2031–2032"), so the pair always fits a 320px phone's line. */
+.lead-keep {
+  white-space: nowrap;
+}
+
+/* A medicine not authorized now (owner decision 2026-10-01, C3b): the protection lead in the body
+   type, as the copies lines under it, with its status after it ("…; Skysona is withdrawn."); its
+   label and "(est.)" as the rest of the sentence. */
+.card p.lead-plain {
+  margin: 0;
+  font-size: var(--font-size-15);
+  line-height: 1.375rem;
+}
+
+.lead-plain .lead-label,
+.lead-plain .lead-estimate {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .card .lead-note {
   margin: 2px 0 0;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 /* Step 4 (#9): the status's qualifiers (conditional, exceptional circumstances, additional
@@ -5648,27 +6266,40 @@ table.activity {
   display: none;
 }
 
-.status-flags .chip {
+/* One qualifier chip wherever a qualifier shows (design sweep 2026-10-01, B4: the Status lead's
+   chips, the Type fact's PRIME and accelerated assessment, the result tables' markers were drawn
+   three ways): this hairline chip. The ATC flags of the tables ("incomplete", "EMA: R03") keep the
+   raised pill (two classes each: over .chip and .flag, later in the file). */
+.chip.flag-chip,
+.flag.flag-marker {
+  padding: 1px 10px;
   border: 1px solid var(--grid);
   border-radius: 8px;
   background: none;
   color: var(--ink-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.status-flags .chip {
   white-space: normal;
 }
 
-/* A company monogram in a card block (the medicine and substance cards' Status blocks): the neutral
-   slate, so the status pill stays the block's one colour (Von Restorff; owner decision 2026-09-30,
-   Laws of UX second pass); its brand or hashed colour everywhere else (tables, charts, company
-   pages, previews). slate-text on slate-1 is a checked pair (palette.test.js). */
-.card-block .company-badge {
+/* A company monogram in a card block (the medicine and substance cards' Status blocks) and anywhere
+   else in the medicine card (More details' Company fact; owner decision 2026-10-01, B3: one colour
+   per card, it was slate in the block and brand-coloured below): the neutral slate, so the status
+   pill stays the card's one colour (Von Restorff; owner decision 2026-09-30, Laws of UX second
+   pass); its brand or hashed colour everywhere else (tables, charts, company pages, previews).
+   slate-text on slate-1 is a checked pair (palette.test.js). */
+.card-block .company-badge,
+.medicine-card .company-badge {
   --hue-1: var(--slate-1);
   --hue-mid: var(--slate-mid);
   --hue-text: var(--slate-text);
 }
 
 .block-protection .copies {
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   line-height: 1.375rem;
 }
 
@@ -5680,16 +6311,27 @@ table.activity {
   margin: 0;
 }
 
-/* More details: one disclosure after the blocks, the rest of the card (its hint says what). */
+/* More details: one disclosure after the blocks, the rest of the card (its hint says what). One
+   framed region, open or closed (design sweep 2026-10-01, B8: the summary and each section were
+   framed apart, so opened they read as more blocks): the summary its top row, the sections
+   unframed inside it, each under a hairline with its h2. */
 .more-details {
   margin: 12px 0 0;
-}
-
-.more-details > summary {
-  padding: 12px 16px;
   border: 1px solid var(--grid);
   border-radius: 12px;
   background: var(--surface);
+}
+
+.more-details > summary {
+  padding: 12px var(--card-pad-compact);
+  border-radius: 11px;
+}
+
+.more-details > .card-section {
+  margin: 0;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: none;
 }
 
 .more-details > summary:hover .more-title {
@@ -5705,7 +6347,7 @@ table.activity {
   display: block;
   margin-top: 2px;
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* Phones: the product information and EPAR buttons end the first screen (Peak-End), so the blocks
@@ -5721,7 +6363,7 @@ table.activity {
   }
 
   .card-block {
-    padding: 10px 14px 12px;
+    padding: 10px var(--card-pad-compact) 12px;
   }
 
   .card .block-title {
@@ -5745,8 +6387,16 @@ table.activity {
   }
 
   .block-protection .copies {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     line-height: 1.25rem;
+  }
+
+  /* A not-authorized medicine's lead (C3b) in the copies' type; its 24px line and 2px under it keep
+     the 44px link (10px above and below the line) clear of the copies line under it. */
+  .card p.lead-plain {
+    padding-bottom: 2px;
+    font-size: var(--font-size-14);
+    line-height: 1.5rem;
   }
 
   .card .block-protection .protection-lead + .copies {
@@ -5757,6 +6407,50 @@ table.activity {
     min-height: 48px;
     padding: 6px 12px;
     line-height: 1.3;
+  }
+
+  /* Owner decision 2026-10-01 (design sweep L8, Pareto): under the buttons the plain-language
+     overview is a text link (it was a third 52px button), so the Protection lead comes 30px higher.
+     One 20px line 12px under the buttons, without its "PDF · updated" line; an area 12px above and
+     below it makes it 44px tall without taking room (over the gap above it, the block's padding
+     below, 10px here, and its border); its focus ring stays on the line. */
+  .block-documents .doc-button + .doc-button.doc-overview {
+    position: relative;
+    display: block;
+    justify-self: start;
+    min-height: 0;
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    color: var(--link);
+    font-size: var(--font-size-14);
+    line-height: 1.25rem;
+    text-decoration: underline;
+    text-decoration-color: var(--link-underline);
+  }
+
+  .block-documents .doc-button + .doc-button.doc-overview:hover {
+    background: none;
+    color: var(--link-hover);
+  }
+
+  .block-documents .doc-button + .doc-button.doc-overview::before {
+    content: "";
+    position: absolute;
+    inset: -12px 0;
+  }
+
+  .doc-button + .doc-overview .doc-button-title {
+    font-weight: 400;
+  }
+
+  .doc-button + .doc-overview .doc-button-meta {
+    display: none;
+  }
+
+  .card-block.block-documents:has(.doc-button + .doc-overview) {
+    padding-bottom: 10px;
   }
 
   /* The Status block's company in one line (Laws of UX, second pass, 2026-09-30: on a phone with
@@ -5809,7 +6503,7 @@ table.activity {
   }
 
   .card h1 {
-    font-size: 1.625rem;
+    font-size: var(--font-size-26);
     line-height: 2rem;
   }
 
@@ -5821,7 +6515,7 @@ table.activity {
   }
 
   .card-block {
-    padding: 8px 12px 10px;
+    padding: 8px var(--card-pad-compact) 10px;
   }
 
   .card .block-title {
@@ -5835,15 +6529,15 @@ table.activity {
 
   .card .status-lead .status.pill {
     padding: 1px 9px 1px 8px;
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
 
   .card .status-lead .status-since {
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
   }
 
   .card .status-lead .answer-value {
-    font-size: 1.0625rem;
+    font-size: var(--font-size-17);
   }
 }
 
@@ -5854,19 +6548,35 @@ table.activity {
 
 .card .protection-basis {
   margin: 4px 0 8px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 /* A condition page's MeSH definition (NLM's scope note, its tree numbers and credit), small, under
-   the deks. */
+   the deks, in a closed disclosure (owner decision 2026-10-01, L2: as a paragraph it took 189px at
+   390, so Psoriasis's first medicine was below a 390x664 screen). Its summary link-coloured and
+   underlined, as the other link-coloured summaries (below), 24px tall, its padding in its own line's
+   room (the negative margin keeps the line); 44px on phones. */
 .card .mesh-definition {
   max-width: 72ch;
   margin: 8px 0 12px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
-.mesh-definition-label {
-  font-weight: 600;
+.mesh-definition > summary {
+  width: fit-content;
+  padding-block: 1.5px;
+  padding-block: max(0px, (24px - 1lh) / 2);
+  margin-block: -1.5px;
+  margin-block: min(0px, (1lh - 24px) / 2);
+  color: var(--link);
+}
+
+.mesh-definition > summary:hover {
+  color: var(--link-hover);
+}
+
+.card .mesh-definition > p {
+  margin: 4px 0 0;
 }
 
 /* The SmPC, EPAR and plain-language overview (step 4, #15) as full-width secondary buttons; side
@@ -5889,7 +6599,7 @@ table.activity {
   justify-content: center;
   min-height: 52px;
   padding: 8px 14px;
-  border: 1px solid var(--axis);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   color: var(--ink);
   text-decoration: none;
@@ -5906,7 +6616,7 @@ table.activity {
 
 .doc-button-meta {
   color: var(--ink-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* Neutral pill: flags, protection status, "incomplete". */
@@ -5916,7 +6626,7 @@ table.activity {
   border-radius: 999px;
   background: var(--raised);
   color: var(--ink);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -5938,16 +6648,12 @@ table.activity {
   cursor: help;
 }
 
+/* Label and value on one baseline (the 13px label beside a 16px value). */
 .facts {
   display: grid;
   grid-template-columns: max-content 1fr;
+  align-items: baseline;
   gap: 8px 16px;
-}
-
-.facts dt {
-  color: var(--ink-secondary);
-  font-size: 0.875rem;
-  font-weight: 600;
 }
 
 .facts dd {
@@ -5977,7 +6683,7 @@ table.activity {
 }
 
 .modality-source {
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 @media (max-width: 600px) {
@@ -6016,7 +6722,7 @@ table.activity {
 .ladder-head {
   padding-right: 23px;
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   font-weight: 400;
 }
 
@@ -6100,8 +6806,52 @@ table.activity {
   transform: rotate(45deg);
 }
 
+/* One disclosure glyph (design sweep 2026-10-01, B6: the browser's triangle here, View options'
+   chevron there): every summary ends with View options' chevron, pointing down while closed and up
+   while open, in the summary's colour (More details' on its title, as its hint is a line of its
+   own). Drawn with two borders, as the trees' and ladders' chevrons. */
 details > summary {
   cursor: pointer;
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::after,
+.more-details > summary .more-title::after {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  vertical-align: 0.25em;
+  transform: rotate(45deg);
+}
+
+details[open] > summary::after,
+.more-details[open] > summary .more-title::after {
+  vertical-align: 0.05em;
+  transform: rotate(225deg);
+}
+
+.more-details > summary::after {
+  content: none;
+}
+
+/* Link-coloured summaries are underlined, as every other link-coloured control. */
+.more-title,
+.indication > summary,
+.efficacy-more > summary,
+.company-note > summary,
+.mesh-definition > summary {
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 3px;
 }
 
 .indication > summary {
@@ -6113,10 +6863,14 @@ details > summary {
   margin: 0;
 }
 
+/* At least 24px tall (bug hunt 2026-10-01: 21px), its text where it was: the padding within its 4px
+   gap above and none below. 44px on phones (below). */
 .block-indication .indication > summary {
   margin-top: 4px;
+  margin-block: max(0px, 4px - (24px - 1lh) / 2) min(0px, (1lh - 24px) / 2);
+  padding-block: max(0px, (24px - 1lh) / 2);
   color: var(--link);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   font-weight: 400;
 }
 
@@ -6142,7 +6896,7 @@ details > summary {
 
 .efficacy-indication > h3 {
   margin: 0 0 8px;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-15);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -6159,14 +6913,14 @@ details > summary {
 
 .card .efficacy-result .efficacy-effect {
   margin-top: 6px;
-  font-size: 1.0625rem;
+  font-size: var(--font-size-17);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .card .efficacy-result .efficacy-source {
   margin-top: 6px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .efficacy-more {
@@ -6176,7 +6930,7 @@ details > summary {
 .efficacy-more > summary {
   padding: 4px 0;
   color: var(--link);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .efficacy-more > .efficacy-result {
@@ -6193,7 +6947,7 @@ details > summary {
 /* How the ATC code shown differs from EMA's (retired, completed from the product information). */
 .card .ladder-origin {
   margin: 4px 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 .ladder-origin + .atc-ladder {
@@ -6211,7 +6965,7 @@ details > summary {
 
 .doc-sublist {
   padding-left: 16px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .doc-sublist li {
@@ -6223,7 +6977,7 @@ details > summary {
   padding: 0 4px;
   border: 1px solid currentColor;
   border-radius: 3px;
-  font-size: 0.6875rem;
+  font-size: var(--font-size-11);
   vertical-align: 1px;
 }
 
@@ -6238,27 +6992,57 @@ details > summary {
 .protection ul {
   margin: 4px 0;
   padding-left: 20px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
+/* "Show all statuses" (condition, company and text pages) looks as a filter's checkbox row (design
+   sweep 2026-10-01, B7: a native 13px checkbox where the filters' are 16px): the facet row's 16px
+   checkbox without the browser's margin, its padding (the negative margin keeps the checkbox on the
+   page's text edge, A9), the wash on hover and the accent wash while checked; 44px tall with a
+   20px checkbox on phones, as a sheet's rows. As wide as its text, not the line. */
 .toggle-all {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 24px;
-  margin: 8px 0;
-  font-size: 0.875rem;
+  gap: 8px;
+  min-height: 32px;
+  margin: 8px -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: var(--font-size-14);
+  line-height: 1.25rem;
+  cursor: pointer;
 }
 
-.related a {
-  display: inline-block;
-  margin: 2px 0;
-  padding: 0 10px;
-  border: 1px solid var(--axis);
-  border-radius: 999px;
-  font-size: 0.875rem;
-  text-decoration: none;
+.toggle-all:hover {
+  background: var(--wash);
 }
+
+.toggle-all:has(input:checked) {
+  background: var(--accent-wash);
+}
+
+.toggle-all:has(input:checked):hover {
+  background: linear-gradient(var(--wash), var(--wash)), var(--accent-wash);
+}
+
+.toggle-all input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .toggle-all {
+    min-height: 44px;
+  }
+
+  .toggle-all input {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 
 /* Result tables (condition, indication-text and substance results): a surface block, one row per
    medicine with hairlines between them, the matched indication text in a full-width row under its
@@ -6286,12 +7070,12 @@ details > summary {
 }
 
 .result-table :is(th, td):first-child {
-  padding-left: 16px;
+  padding-left: var(--card-pad-compact);
   overflow-wrap: anywhere;
 }
 
 .result-table :is(th, td):last-child {
-  padding-right: 16px;
+  padding-right: var(--card-pad-compact);
 }
 
 .result-table td.status-cell {
@@ -6328,8 +7112,9 @@ details > summary {
 }
 
 .snippet {
+  max-width: 70ch;
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
 }
 
 .card .snippet {
@@ -6359,7 +7144,7 @@ details > summary {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    padding: 12px 16px;
+    padding: 12px var(--card-pad-compact);
     border-bottom: 1px solid var(--grid);
   }
 
@@ -6437,7 +7222,7 @@ details > summary {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    padding: 12px 16px;
+    padding: 12px var(--card-pad-compact);
     border-bottom: 1px solid var(--grid);
   }
 
@@ -6531,15 +7316,16 @@ mark {
 }
 
 .timeline-caption {
+  max-width: 70ch;
   margin: 0 0 8px;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
 }
 
 /* Condition pages (phase 4f): the two kinds of dot, filled (tagged by EMA) and hollow (only
    mentioned in the indication text), as the timeline draws them. */
 .dot-legend {
   margin: 0 0 8px;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   color: var(--ink-secondary);
 }
 
@@ -6566,7 +7352,7 @@ mark {
   border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 4px 16px rgba(40, 40, 40, 0.08);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-13);
   pointer-events: none;
 }
 
@@ -6620,7 +7406,7 @@ mark {
   }
 
   .ladder-name {
-    font-size: 0.9375rem;
+    font-size: var(--font-size-15);
   }
 
   .condition-list a,
@@ -6636,7 +7422,10 @@ mark {
     padding: 12px 0;
   }
 
-  #conditions-more {
+  /* Every list end ("Show {n} more", a text button since the design sweep's B6) 44px tall. */
+  #conditions-more,
+  #table-more,
+  .pc-more {
     min-height: 44px;
   }
 
@@ -6669,6 +7458,96 @@ mark {
     margin-block: min(0px, (1lh - 24px) / 2);
   }
 
+  /* "List them" (design sweep 2026-10-01, L1: 24px, beside 44px controls): an area 10px above and
+     below its 24px box makes it 44px tall without taking room in the line, reaching only into the
+     line's own text above and the 12px before the list it shows; its focus ring stays on the 24px
+     box (review of L1: a 44px box's ring struck through the line above), as the intro's examples. */
+  .pc-orphan-toggle {
+    position: relative;
+  }
+
+  .pc-orphan-toggle::before {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+
+  /* The company page's protection list (bug hunt 2026-10-01: its medicine links were 21px tall, a
+     year's links side by side 8px apart): each link 44px tall, so each line of the list is 44px,
+     its years and commas centred on it. And the links of a never-authorized medicine's Documents
+     block ("EMA medicine page" was 21px): 44px rows. Real heights, as the lines above and below
+     hold other links (a negative margin would reach over them). */
+  :is(.pc-company-list, .block-documents .doc-list) a {
+    display: inline-block;
+    padding-block: 11.5px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+  }
+
+  .pc-company-list > li + li,
+  .block-documents .doc-list > li {
+    margin: 0;
+  }
+
+  /* "Show full indication": 44px tall (it was 21px); it starts where its 4px gap did, the text 7.5px
+     lower, and its lower 11.5px lies in the next part's 12px top margin (the full text's, the
+     therapeutic areas', the pivotal results' line's). */
+  .block-indication .indication > summary {
+    margin-block: 0 -11.5px;
+    margin-block: 0 min(0px, (1lh - 44px) / 2);
+    padding-block: 11.5px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+  }
+
+  .block-indication .indication > p,
+  .block-indication .indication + .block-facts {
+    margin-top: 12px;
+  }
+
+  /* A condition page's "MeSH definition" (L2): 44px tall, its padding in the 12px gaps above and
+     below (the negative margins keep its line), so it reaches neither the dek above nor "Show all
+     statuses" below; opened, the definition starts 12px under its line, clear of it. */
+  .card .mesh-definition {
+    margin-block: 12px;
+  }
+
+  .mesh-definition > summary {
+    padding-block: 11.5px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+    margin-block: -11.5px;
+    margin-block: min(0px, (1lh - 44px) / 2);
+  }
+
+  .card .mesh-definition > p {
+    margin-top: 12px;
+  }
+
+  /* "Limits of the estimate" (design sweep 2026-10-01, L1: 24px beside 44px siblings): 44px tall.
+     Its padding takes no room from the "Patents" line above, whose link it would cover, so the
+     section grows 10px; below it the section's padding (closed) or the open list's top. */
+  .protection > details > summary {
+    padding-block: 10px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+    margin-bottom: -10px;
+    margin-bottom: min(0px, (1lh - 44px) / 2);
+  }
+
+  .protection > details[open] > summary {
+    margin-bottom: 0;
+  }
+
+  .protection > details > ul {
+    margin-top: 0;
+  }
+
+  /* The documents list's "Assessment reports on changes after authorization (n)" (L1): 44px tall on
+     one line (24px before; 48px on two). Its negative margins only take the list items' 4px
+     margins, so it reaches neither the link above nor the one below. */
+  .doc-list > li > details > summary {
+    padding-block: 10px;
+    padding-block: max(0px, (44px - 1lh) / 2);
+    margin-block: -4px;
+  }
+
   /* Branch chips: the button's transparent rim around its fill makes the hit area 44px tall (the
      negative margin keeps the line) and about 42px wide, the fill staying 24px; the rims of
      neighbouring chips meet without overlapping. The rims only take free space (review 2026-09-29:
@@ -6698,6 +7577,11 @@ mark {
     margin-left: -9px;
   }
 
+  /* After a card's outlined link chip, 3px further off, as on desktop (B9 review). */
+  .area-chips:has(> a.area-chip:last-child) + .term-sep {
+    margin-left: -6px;
+  }
+
   .area-chip-fill,
   .area-more-fill {
     position: relative;
@@ -6705,8 +7589,18 @@ mark {
   }
 
   :is(.term a:not(.area-chip), .areas-more),
-  :is(#medicines-table, .result-table) :is(a:not(.area-chip), .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more)) {
+  :is(#medicines-table, .result-table) :is(a:not(.area-chip), .atc-badge, .toggle, [data-tip]:not(.area-chip, .area-more, :where(.result-table .type-cell .badge))) {
     position: relative;
+    z-index: 1;
+  }
+
+  /* The result tables' type badges stay static, so their Type cell holds the tip (it spans the
+     stacked row: 16rem, not the badge's 76px, bug hunt 2026-10-01); raised as flex items (.badges)
+     instead, to 5 while their tip shows (below). Excluded above inside :where(), so the rule keeps
+     its specificity (1,2,0), under the raise's (1,3,0) (fix-up: as a complex selector inside :not()
+     it rose to (1,4,0), and every table tip went under the next rows' controls;
+     result-table.test.js). */
+  .result-table td.type-cell .badge[data-tip] {
     z-index: 1;
   }
 
@@ -6737,12 +7631,16 @@ mark {
 
   /* The medicine card's "and n more" (F · Spacious, phase 4; in the Indication block since
      2026-09-30): on a line of its own, its 44px box starting under the 5px gap below the chips
-     above, so it never covers their fills or the 24px a chip keeps clear (axe target-size). */
+     above, so it never covers their fills or the 24px a chip keeps clear (axe target-size). 44px
+     whatever its line (14px since the B6 fix-up: a 21px line, 11.5px above and below), as "Show
+     full indication". */
   .toggle.areas-more {
     display: block;
     width: fit-content;
-    margin: 0 0 -10px;
-    padding: 10px 0;
+    margin: 0 0 -11.5px;
+    margin-block: 0 min(0px, (1lh - 44px) / 2);
+    padding: 11.5px 0;
+    padding-block: max(0px, (44px - 1lh) / 2);
   }
 
   /* The medicine card's protection lead (step 3; F · Spacious, phase 4). */
@@ -6753,11 +7651,29 @@ mark {
     margin: -10px 0;
   }
 
+  /* A not-authorized medicine's lead (C3b), whose status often takes a second line: an area 10px
+     above and below the link's 24px box makes it 44px tall without taking room in the line,
+     positioned, so painted over that second line's text (review of C3b: the line took the bottom
+     10px of a 44px box's taps); its focus ring stays on the 24px box (a 44px box's struck through
+     the second line), as "List them". */
+  .lead-plain a.lead-link {
+    position: relative;
+    display: inline-block;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .lead-plain a.lead-link::before {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+
   /* The pivotal results' teaser: inline, so it wraps with the text in full (its lines, 24px each,
      are its target); 14px, so it takes fewer lines on a phone. */
   .card .efficacy-teaser {
     margin-top: 12px;
-    font-size: 0.875rem;
+    font-size: var(--font-size-14);
     line-height: 1.5rem;
   }
 
@@ -6787,6 +7703,63 @@ mark {
     min-width: 44px;
   }
 
+  /* The sticky company column 7.5rem wide (bug hunt 2026-10-01: 203px, so at 320px about one heat
+     cell showed beside it; now 2 and a half at 320, 4 at 390): the badge and the total on a line,
+     the name wrapped under them; the company page link 28px wide, its 24px outlined box in a 44px
+     tall target. */
+  .activity th[scope="row"] {
+    width: 7.5rem;
+    min-width: 0;
+    max-width: 7.5rem;
+    padding-right: 4px;
+  }
+
+  .activity th[scope="row"] button {
+    display: grid;
+    grid-template-areas: "badge total" "name name";
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: center;
+    align-items: center;
+    gap: 2px 6px;
+  }
+
+  .activity-row-head .company-badge {
+    grid-area: badge;
+  }
+
+  .activity-row-head .activity-total {
+    grid-area: total;
+    justify-self: end;
+  }
+
+  .activity-row-head .activity-holder {
+    grid-area: name;
+    overflow-wrap: anywhere;
+  }
+
+  .activity-row-head .cond-link {
+    width: 28px;
+    height: 44px;
+    border: 0;
+  }
+
+  .activity-row-head .cond-link:hover {
+    background: none;
+  }
+
+  .activity-row-head .cond-link .link-icon {
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    border: 1px solid var(--field-border);
+    border-radius: 6px;
+  }
+
+  .activity-row-head .cond-link:hover .link-icon {
+    background: var(--wash);
+  }
+
   :is(.activity, .conditions-table) .sort-button {
     width: 44px;
     height: 44px;
@@ -6803,20 +7776,41 @@ mark {
 }
 
 footer {
-  padding-top: 16px;
-  border-top: 1px solid var(--grid);
   color: var(--ink-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-14);
   /* Long URLs in the attribution wrap at 320px instead of scrolling the page. */
   overflow-wrap: anywhere;
 }
 
+/* The footer's hairline on the page column, as the tab strip's (design sweep 2026-10-01, A7: a
+   border on the footer ran 32px past the column at each side, and across the viewport below
+   1264px). */
+footer::before {
+  content: "";
+  display: block;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--grid);
+}
+
 footer p {
+  max-width: 70ch;
   margin: 4px 0;
+}
+
+/* The footer's own three lines (not About's prose): 80ch, balanced, as #register-note. */
+footer > p {
+  max-width: 80ch;
+  text-wrap: balance;
 }
 
 .about {
   margin-bottom: 12px;
+}
+
+/* Prose at most about 70 characters wide (design sweep 2026-10-01, A3: 150-200 at 1440). */
+.about-part,
+.about-sources {
+  max-width: 70ch;
 }
 
 .about > summary {
@@ -6844,7 +7838,7 @@ footer p {
   margin: 0;
   color: var(--ink);
   font-size: inherit;
-  font-weight: 700;
+  font-weight: 600;
   line-height: inherit;
 }
 
@@ -6896,11 +7890,6 @@ code {
   .preview-fill {
     forced-color-adjust: none;
     background: CanvasText;
-  }
-
-  /* The Overview's preview bars: the track outlined (its fill is dropped). */
-  .preview-bar {
-    outline: 1px solid GrayText;
   }
 
   /* The tabs (F · Spacious, phase 2): the strip's hairline and the shown tab's underline are inset

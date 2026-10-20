@@ -211,14 +211,14 @@ test("the calendar's labels: year buttons name the year and the count first (WCA
   assert.equal(copy.yearLabel({ key: "2027", year: 2027 }), "2027");
   assert.equal(copy.yearLabel({ key: LATER, year: 2031 }), "2031 or later");
   assert.equal(copy.yearName("2027", 44, 0), "2027: 44 medicines");
-  assert.equal(copy.yearName("2031 or later", 1, 1), "2031 or later: 1 medicine, 1 with orphan market exclusivity (est.) running later");
+  assert.equal(copy.yearName("2031 or later", 1, 1), "2031 or later: 1 medicine, 1 with orphan market exclusivity\u00a0(est.) running later");
   assert.equal(copy.yearOrphan(4), "4 orphan");
-  assert.equal(copy.range("2027-03-12", "2028-03-12"), "Market protection ends (est.) 12 Mar 2027 – 12 Mar 2028");
-  assert.equal(copy.range("2027-03-12", "2027-03-12"), "Market protection ends (est.) 12 Mar 2027");
+  assert.equal(copy.range("2027-03-12", "2028-03-12"), "Market protection ends\u00a0(est.) 12\u00a0Mar\u00a02027\u00a0– 12\u00a0Mar\u00a02028");
+  assert.equal(copy.range("2027-03-12", "2027-03-12"), "Market protection ends\u00a0(est.) 12\u00a0Mar\u00a02027");
   // The list's heading names the earliest end; the legend names what the segments differ in.
   assert.equal(copy.listTitle("2027", 11), "Earliest estimated end of market protection in 2027: 11 medicines");
   assert.equal(copy.legend.protection, "No later orphan market exclusivity");
-  assert.equal(copy.legend.orphan([{ source: "computed" }]), "Orphan market exclusivity (est.) runs later");
+  assert.equal(copy.legend.orphan([{ source: "computed" }]), "Orphan market exclusivity\u00a0(est.) runs later");
 });
 
 // Owner decision 2026-09-30 ("be specific where you can, else estimate"): a label covering several
@@ -228,16 +228,16 @@ test("the calendar's labels: a label over several orphan ends is marked by their
   const copy = UI.protectionCalendar;
   const computed = { end: "2031-01-01", source: "computed" };
   const register = { end: "2031-01-01", source: "register" };
-  assert.equal(copy.legend.orphan([computed, computed]), "Orphan market exclusivity (est.) runs later");
+  assert.equal(copy.legend.orphan([computed, computed]), "Orphan market exclusivity\u00a0(est.) runs later");
   assert.equal(copy.legend.orphan([register]), "Orphan market exclusivity runs later");
-  assert.equal(copy.legend.orphan([register, computed]), "Orphan market exclusivity (partly est.) runs later");
-  assert.equal(copy.legend.orphan([]), "Orphan market exclusivity (est.) runs later");
+  assert.equal(copy.legend.orphan([register, computed]), "Orphan market exclusivity\u00a0(partly est.) runs later");
+  assert.equal(copy.legend.orphan([]), "Orphan market exclusivity\u00a0(est.) runs later");
   assert.equal(copy.yearName("2029", 3, 2, [register, register]), "2029: 3 medicines, 2 with orphan market exclusivity running later");
-  assert.equal(copy.yearName("2029", 3, 2, [register, computed]), "2029: 3 medicines, 2 with orphan market exclusivity (partly est.) running later");
+  assert.equal(copy.yearName("2029", 3, 2, [register, computed]), "2029: 3 medicines, 2 with orphan market exclusivity\u00a0(partly est.) running later");
   assert.equal(copy.orphanOnlyLine(2, 2029, 2031, [register, register]),
     "2 more medicines have orphan market exclusivity running after their estimated market protection, ending 2029–2031. Not counted above.");
-  assert.equal(copy.orphanOnlyTitle(2, [computed, register]), "Orphan market exclusivity (partly est.) after market protection: 2 medicines");
-  assert.equal(copy.orphanOnlyTitle(2, [computed, computed]), "Orphan market exclusivity (est.) after market protection: 2 medicines");
+  assert.equal(copy.orphanOnlyTitle(2, [computed, register]), "Orphan market exclusivity\u00a0(partly est.) after market protection: 2 medicines");
+  assert.equal(copy.orphanOnlyTitle(2, [computed, computed]), "Orphan market exclusivity\u00a0(est.) after market protection: 2 medicines");
 });
 
 test("calendarBuckets: each year keeps its medicines' orphan ends, whose sources mark its labels", () => {
@@ -272,15 +272,15 @@ test("real data: every orphan exclusivity end says whether it is the register's 
 
 // Orphan market exclusivity ends computed from the link date (every one after the data date on
 // 2026-09-28) are estimates, as the medicine card marks them; the register's own ends are not.
-test("the calendar's labels: orphan market exclusivity ends say (est.) unless the register publishes them", () => {
+test("the calendar's labels: orphan market exclusivity ends say\u00a0(est.) unless the register publishes them", () => {
   const copy = UI.protectionCalendar;
-  assert.equal(copy.orphan({ end: "2029-11-20", source: "computed" }), "Orphan market exclusivity (est.) runs later, until 20 Nov 2029");
-  assert.equal(copy.orphan({ end: "2029-11-20", source: "register" }), "Orphan market exclusivity runs later, until 20 Nov 2029");
-  assert.equal(copy.company.orphan({ end: "2029-11-20", source: "computed" }), "orphan market exclusivity (est.) until 2029");
+  assert.equal(copy.orphan({ end: "2029-11-20", source: "computed" }), "Orphan market exclusivity\u00a0(est.) runs later, until 20\u00a0Nov\u00a02029");
+  assert.equal(copy.orphan({ end: "2029-11-20", source: "register" }), "Orphan market exclusivity runs later, until 20\u00a0Nov\u00a02029");
+  assert.equal(copy.company.orphan({ end: "2029-11-20", source: "computed" }), "orphan market exclusivity\u00a0(est.) until 2029");
   assert.equal(copy.company.orphan({ end: "2029-11-20", source: "register" }), "orphan market exclusivity until 2029");
-  assert.equal(copy.company.orphanOnly({ end: "2029-11-20", source: "computed" }), "orphan market exclusivity (est.) only");
+  assert.equal(copy.company.orphanOnly({ end: "2029-11-20", source: "computed" }), "orphan market exclusivity\u00a0(est.) only");
   assert.equal(copy.company.orphanOnly({ end: "2029-11-20", source: "register" }), "orphan market exclusivity only");
-  assert.equal(copy.orphanOnlyUntil({ end: "2029-11-20", source: "computed" }), "Orphan market exclusivity (est.) until 20 Nov 2029");
+  assert.equal(copy.orphanOnlyUntil({ end: "2029-11-20", source: "computed" }), "Orphan market exclusivity\u00a0(est.) until 20\u00a0Nov\u00a02029");
 });
 
 test("the calendar's labels: the unclear line names the latest year, the empty year counts only what is counted", () => {
@@ -288,11 +288,11 @@ test("the calendar's labels: the unclear line names the latest year, the empty y
   assert.equal(copy.unclear(38, 2027), "38 more medicines may lose market protection by 2027: their earliest estimated end has passed, their latest has not. Not counted above.");
   assert.equal(copy.unclear(1, 2026), "1 more medicine may lose market protection by 2026: its earliest estimated end has passed, its latest has not. Not counted above.");
   assert.equal(copy.empty("2028", false), "No medicine counted here has its earliest estimated end in 2028.");
-  assert.equal(copy.empty("2028", true), "No medicine matching the filters counted here has its earliest estimated end in 2028.");
-  assert.equal(copy.orphanOnlyLine(20, 2027, 2036), "20 more medicines have orphan market exclusivity (est.) running after their estimated market protection, ending 2027–2036. Not counted above.");
-  assert.equal(copy.orphanOnlyLine(1, 2029, 2029), "1 more medicine has orphan market exclusivity (est.) running after its estimated market protection, ending 2029. Not counted above.");
-  assert.equal(copy.orphanOnlyTitle(20), "Orphan market exclusivity (est.) after market protection: 20 medicines");
-  assert.equal(copy.ended("2018-06-20"), "Market protection ended (est.) 20 Jun 2018");
+  assert.equal(copy.empty("2028", true), "No medicine matching these filters counted here has its earliest estimated end in 2028.");
+  assert.equal(copy.orphanOnlyLine(20, 2027, 2036), "20 more medicines have orphan market exclusivity\u00a0(est.) running after their estimated market protection, ending 2027–2036. Not counted above.");
+  assert.equal(copy.orphanOnlyLine(1, 2029, 2029), "1 more medicine has orphan market exclusivity\u00a0(est.) running after its estimated market protection, ending 2029. Not counted above.");
+  assert.equal(copy.orphanOnlyTitle(20), "Orphan market exclusivity\u00a0(est.) after market protection: 20 medicines");
+  assert.equal(copy.ended("2018-06-20"), "Market protection ended\u00a0(est.) 20\u00a0Jun\u00a02018");
   // The caption repeats the medicine card's caveats (copies not yet checked, the range, national authorizations).
   for (const note of [copy.note, copy.company.note]) {
     assert.match(note, /earlier national authorizations are not counted/);
